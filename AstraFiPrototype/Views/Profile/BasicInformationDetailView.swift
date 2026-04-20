@@ -124,7 +124,7 @@ struct BasicInformationDetailView: View {
             let ratio = profile.basicDetails.monthlyIncomeAfterTax / oldIncome
             profile.basicDetails.monthlyIncomeAfterTax = newIncome * ratio
         } else {
-            profile.basicDetails.monthlyIncomeAfterTax = newIncome * 0.8
+            profile.basicDetails.monthlyIncomeAfterTax = newIncome * (1.0 - AppStateManager.defaultTaxRate)
         }
 
         profile.basicDetails.monthlyIncome = newIncome

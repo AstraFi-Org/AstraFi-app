@@ -9,20 +9,24 @@ final class CompleteAssessmentData {
     var password = ""
     var age = ""
     var gender: Gender = .male
-    var adultDependents = 1
-    var childDependents = 0
     var incomeType: IncomeType = .fixed
     var income = ""
-    var incomeAfterTax = ""
-    var isSetuSelected = false
-
-    var minMonthlyIncome = ""
-    var maxMonthlyIncome = ""
-    var taxPercentage = ""
-
     var expenditure = ""
-    var hasEmergencyFund = false
     var emergencyFundAmount = ""
+
+    // Insurance Flow
+    var isInsured = false
+    var numberOfDependents = ""
+    var areDependentsInsured = false
+    var dependentInsuranceEntries: [AssessmentInsuranceEntry] = []
+    
+    struct DependentProfile: Identifiable, Equatable {
+        let id = UUID()
+        var relation: String = ""
+        var age: String = ""
+        var disease: String = ""
+    }
+    var dependentProfiles: [DependentProfile] = []
 
     var investmentEntries: [AssessmentInvestmentEntry] = []
     var loanEntries: [AssessmentLoanEntry] = []

@@ -7,28 +7,37 @@ struct TrackerView: View {
     @Environment(\.colorScheme) private var colorScheme
 
     var body: some View {
-        ScrollView {
-            VStack(spacing: 24) {
-                NetWorthCard(
-                    netWorth: viewModel.netWorth,
-                    growthAmount: viewModel.growthAmount,
-                    accounts: viewModel.accounts
-                )
-                TrackerInvestmentsSection(investments: viewModel.investments)
-                if !viewModel.yourPlans.isEmpty {
-                    TrackerYourPlansSection(plans: viewModel.yourPlans)
+        ScrollView(showsIndicators: false) {
+            VStack(spacing: 0) {
+                auraHeaderView
+                    .padding(.horizontal, AppTheme.auraPadding)
+                    .padding(.top, 20)
+                    .padding(.bottom, 8)
+
+                VStack(spacing: AppTheme.auraInterCardSpacing + 2) {
+                    NetWorthCard(
+                        netWorth: viewModel.netWorth,
+                        growthAmount: viewModel.growthAmount,
+                        accounts: viewModel.accounts
+                    )
+
+                    TrackerInvestmentsSection(investments: viewModel.investments)
+
+                    if !viewModel.yourPlans.isEmpty {
+                        TrackerYourPlansSection(plans: viewModel.yourPlans)
+                    }
+
+                    TrackerGoalsSection(goals: viewModel.goals)
+                    TrackerLoansSection()
+                    TrackerMoneyFlowSection()
+                    TrackerFundAllocationSection(allocations: viewModel.fundAllocations)
                 }
-                TrackerGoalsSection(goals: viewModel.goals)
-                TrackerLoansSection()
-                TrackerMoneyFlowSection(moneyFlowData: viewModel.moneyFlowData)
-                TrackerFundAllocationSection(allocations: viewModel.fundAllocations)
+                .padding(.horizontal, AppTheme.auraPadding)
+                .padding(.bottom, 40)
             }
-            .padding(.horizontal, 16)
-            .padding(.bottom, 30)
         }
         .background(AppTheme.appBackground(for: colorScheme))
-        .navigationTitle("Tracker")
-        .navigationBarTitleDisplayMode(.large)
+        .navigationBarHidden(true)
         .onAppear {
             viewModel.syncWithProfile(appState.currentProfile)
         }
@@ -36,7 +45,26 @@ struct TrackerView: View {
             viewModel.syncWithProfile(newProfile)
         }
     }
+
+    // MARK: - Header
+    private var auraHeaderView: some View {
+        HStack(alignment: .center, spacing: 12) {
+            VStack(alignment: .leading, spacing: 3) {
+                Text("Tracker")
+                    .font(.system(size: 34, weight: .bold, design: .rounded))
+                    .foregroundStyle(.primary)
+                Text("Your financial pulse")
+                    .font(.system(size: 13, weight: .medium, design: .rounded))
+                    .foregroundStyle(.secondary)
+                Spacer()
+            }
+
+            Spacer()
+
+        }
+    }
 }
+
 
 #Preview {
     NavigationStack {
@@ -45,4 +73,3 @@ struct TrackerView: View {
             .environment(AppStateManager())
     }
 }
-

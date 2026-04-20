@@ -1,12 +1,17 @@
 import SwiftUI
 
 
-@Observable
+@Observable @MainActor
 final class AppStateManager {
 
+    // MARK: - Financial Constants
+    static let defaultTaxRate: Double = 0.0
+
+    private var isSyncing = false
+    
     var isLoading: Bool = true
     var isAssessmentSkipped: Bool = false
-
+    
     static func withSampleData() -> AppStateManager {
         let mgr = AppStateManager()
         let cal = Calendar.current
@@ -16,11 +21,11 @@ final class AppStateManager {
         func yearsFromNow(_ n: Int) -> Date {
             cal.date(byAdding: .year, value: n, to: Date()) ?? Date()
         }
-
+        
         let goalHome = AstraGoal(goalName: "Home Purchase", targetAmount: 7200000, currentAmount: 5500000, targetDate: yearsFromNow(3))
         let goalCar  = AstraGoal(goalName: "Car",       targetAmount: 2200000, currentAmount: 1800000, targetDate: yearsFromNow(1))
         let goalEdu  = AstraGoal(goalName: "Education", targetAmount: 1200000, currentAmount: 400000,  targetDate: yearsFromNow(6))
-
+        
         mgr.currentProfile = AstraUserProfile(
             signUp: AstraSignUp(signUpName: "Akash Kashyap", email: "akash@example.com", password: ""),
             basicDetails: AstraBasicDetails(
@@ -113,10 +118,10 @@ final class AppStateManager {
         )
         return mgr
     }
-
+    
     func setupEmptyProfile(name: String = "User") {
         let signUp = AstraSignUp(signUpName: name, email: "", password: "")
-
+        
         let basic = AstraBasicDetails(
             name: name, age: 0, gender: .male, maritalStatus: .single,
             adultDependents: 0, childDependents: 0,
@@ -126,25 +131,25 @@ final class AppStateManager {
             activeInvestment: false,
             riskTolerance: .low, investmentHorizon: .shortTerm
         )
-
+        
         let assets = AstraAssets(
             savingsAccountAmount: 0, stocksHoldingAmount: 0,
             mutualFundHoldingAmount: 0, otherInvestmentAmount: 0,
             propertyAmount: 0, vehiclesAmount: 0,
             depositsAmount: 0, jewelleryAmount: 0
         )
-
+        
         let liabilities = AstraLiabilities(
             homeLoanAmount: 0, vehicleLoanAmount: 0,
             creditCardBills: 0, educationLoanAmount: 0,
             otherLoanAmount: 0, otherDebtAmount: 0
         )
-
+        
         let report = AstraFinancialHealthReport(
             netWorth: 0, savingsRate: 0, debtToIncomeRatio: 0,
             investmentScore: 0, emergencyFundMonths: 0
         )
-
+        
         self.currentProfile = AstraUserProfile(
             signUp: signUp,
             basicDetails: basic,
@@ -160,121 +165,149 @@ final class AppStateManager {
             isSetuConnected: false
         )
     }
-
+    
     var hasCompletedOnboarding: Bool = false
-
+    
     var isAuthenticated: Bool = false
-
+    
     var showDashboard: Bool = false
-
+    
     var tempName: String = ""
     var tempEmail: String = ""
     var tempPassword: String = ""
-
+    
     var currentProfile: AstraUserProfile?
     var savedPlans: [InvestmentPlanModel] = []
-
+    
     func savePlan(_ plan: InvestmentPlanModel) {
         savedPlans.append(plan)
-
     }
-
+    
+    func saveAssessmentToHistory(score: Int, status: String, insights: [String], assessmentInsights: FinancialAssessmentInsights? = nil) {
+        if var profile = currentProfile {
+            let newAssessment = AstraHealthAssessment(
+                date: Date(),
+                score: score,
+                status: status,
+                keyInsights: insights,
+                insights: assessmentInsights
+            )
+            
+            // Check if we already have an assessment for this month/year and update it
+            let cal = Calendar.current
+            if let index = profile.monthlyHealthAssessments.firstIndex(where: {
+                cal.isDate($0.date, equalTo: Date(), toGranularity: .month) &&
+                cal.isDate($0.date, equalTo: Date(), toGranularity: .year)
+            }) {
+                profile.monthlyHealthAssessments[index] = newAssessment
+            } else {
+                profile.monthlyHealthAssessments.append(newAssessment)
+            }
+            
+            currentProfile = profile
+        }
+    }
+    
     init() {
         Task {
             await syncMutualFundNAVs()
         }
     }
-
+    
     var mfService = MFService.shared
-
+    
     func updateProfile(from assessmentData: CompleteAssessmentData) {
         let signUp = AstraSignUp(
             signUpName: assessmentData.name,
             email: assessmentData.email.isEmpty ? "user@example.com" : assessmentData.email,
             password: assessmentData.password
         )
-
-        let isVariable = assessmentData.incomeType == .variable
-        let rawMin = Double(assessmentData.minMonthlyIncome) ?? 0
-        let rawMax = Double(assessmentData.maxMonthlyIncome) ?? 0
-        let calculatedIncome = isVariable ? (rawMin + rawMax) / 2 : (Double(assessmentData.income) ?? 0)
-        let incomeValue = calculatedIncome.isFinite ? calculatedIncome : 0
-
-        let rawTaxRate = Double(assessmentData.taxPercentage) ?? 0
-        let taxRate = rawTaxRate.isFinite ? rawTaxRate : 0
-
-        let calculatedIncomeAfterTax = isVariable ? (incomeValue * (1 - taxRate / 100)) : (Double(assessmentData.incomeAfterTax) ?? 0)
-        let incomeAfterTaxValue = calculatedIncomeAfterTax.isFinite ? calculatedIncomeAfterTax : 0
-
+        
+        let rawIncome = Double(assessmentData.income) ?? 0
+        let incomeValue = rawIncome.isFinite ? rawIncome : 0
+        let incomeAfterTaxValue = incomeValue // Removed 20% default tax estimate
+        
         let rawExpenses = Double(assessmentData.expenditure) ?? 0
         let expensesValue = rawExpenses.isFinite ? rawExpenses : 0
-
+        
         let rawEmergency = Double(assessmentData.emergencyFundAmount) ?? 0
         let emergencyValue = rawEmergency.isFinite ? rawEmergency : 0
-
+        
         let basic = AstraBasicDetails(
             name: assessmentData.name,
             age: Int(assessmentData.age) ?? 0,
             gender: assessmentData.gender == .male ? .male : .female,
-            maritalStatus: .single, 
-            adultDependents: assessmentData.adultDependents,
-            childDependents: assessmentData.childDependents,
+            maritalStatus: .single,
+            adultDependents: self.currentProfile?.basicDetails.adultDependents ?? Int(assessmentData.numberOfDependents) ?? 1,
+            childDependents: 0,
             incomeType: assessmentData.incomeType == .fixed ? .fixed : .variable,
             monthlyIncome: incomeValue,
-            monthlyIncomeAfterTax: incomeAfterTaxValue,
+            monthlyIncomeAfterTax: incomeValue, // Removed 20% default tax estimate
             monthlyExpenses: expensesValue,
             emergencyFundAmount: emergencyValue,
             activeInvestment: !assessmentData.investmentEntries.isEmpty,
-            riskTolerance: .medium,
-            investmentHorizon: .mediumTerm
+            riskTolerance: Self.deriveRiskTolerance(
+                savingsRate: incomeAfterTaxValue > 0 ? (incomeAfterTaxValue - expensesValue) / incomeAfterTaxValue : 0,
+                investmentCount: assessmentData.investmentEntries.count
+            ),
+            investmentHorizon: Self.deriveInvestmentHorizon(
+                age: Int(assessmentData.age) ?? 30,
+                dependents: Int(assessmentData.numberOfDependents) ?? 0
+            )
         )
-
+        
         let profileInvestments = assessmentData.investmentEntries.map { entry in
             let rawAmt = Double(entry.amount) ?? 0
-            return AstraInvestment(
+            var inv = AstraInvestment(
                 investmentType: mapInvestmentType(entry.type),
                 investmentName: entry.fundName,
                 investmentAmount: rawAmt.isFinite ? rawAmt : 0,
                 startDate: entry.startDate,
                 mode: entry.mode == .sip ? .sip : .lumpsum,
                 schemeCode: entry.schemeCode,
-                isin: entry.isin
+                isin: entry.isin,
+                symbol: entry.symbol,
+                quantity: Double(entry.quantity),
+                livePrice: entry.livePrice
             )
+            
+            // Map transaction history
+            inv.installments = entry.transactions.map { tx in
+                AstraInvestmentTransaction(
+                    id: tx.id,
+                    date: tx.date,
+                    type: tx.type.lowercased() == "sell" ? .sell : .buy,
+                    amount: tx.amount,
+                    nav: tx.nav,
+                    units: tx.units
+                )
+            }
+            return inv
         }
-
+        
         let profileLoans = assessmentData.loanEntries.map { entry in
-            let rawAmt = Double(entry.amount) ?? 0
+            let rawAmt  = Double(entry.amount)       ?? 0
             let rawRate = Double(entry.interestRate) ?? 0
-            let rawEMI = Double(entry.emiAmount)
+            // The assessment field is labelled "Tenure (Months)" — store as-is.
+            // Do NOT multiply by 12; that would turn 15 months into 180 months.
+            let tenureMonths = Int(entry.tenure) ?? 0
 
             var loan = AstraLoan(
                 loanType: mapLoanType(entry.type),
-                lender: mapLender(entry.bank),
-                loanAmount: rawAmt.isFinite ? rawAmt : 0,
+                lender: .other,
+                loanAmount: rawAmt.isFinite  ? rawAmt  : 0,
                 interestRate: rawRate.isFinite ? rawRate : 0,
                 interestType: entry.interestType,
-                compoundingFrequency: entry.compoundingFrequency,
-                emiAmount: (rawEMI?.isFinite ?? false) ? rawEMI : nil,
-                emiFrequency: entry.emiFrequency,
-                loanStartDate: entry.startDate,
-                firstEMIDate: entry.firstEMIDate,
-                loanTenureMonths: (Int(entry.timePeriod) ?? 0) * 12,
-                installmentsPaid: Int(entry.installmentsPaid) ?? 0
+                compoundingFrequency: entry.frequency,
+                loanStartDate: Date(),
+                loanTenureMonths: tenureMonths
             )
-
-            loan.prepaymentPenaltyPercentage = Double(entry.prepaymentPenalty) ?? 0
-            loan.isFloatingRate = entry.isFloatingRate
-            loan.processingFee = Double(entry.processingFee) ?? 0
-            loan.insurancePremium = Double(entry.insuranceCost) ?? 0
-            loan.latePaymentPenalty = Double(entry.latePaymentPenalty) ?? 0
-            loan.otherCharges = Double(entry.otherCharges) ?? 0
-            loan.moratoriumMonths = Int(entry.moratoriumDuration) ?? 0
-            loan.interestAccrualDuringMoratorium = entry.interestAccrualDuringMoratorium
-            loan.trackTaxBenefits = entry.trackTaxBenefits
-
+            // Preserve the custom name the user typed (e.g. "My Car Loan").
+            // Falls back to loanType.rawValue in the UI via displayName.
+            loan.loanName = entry.loanName.trimmingCharacters(in: .whitespacesAndNewlines)
             return loan
         }
-
+        
         let profileInsurances = assessmentData.insuranceEntries.map { entry in
             var ins = AstraInsurance(
                 insuranceType: mapInsuranceType(entry.currentType),
@@ -285,11 +318,11 @@ final class AppStateManager {
                 startDate: entry.startDate,
                 expiryDate: entry.expiryDate
             )
-
+            
             ins.basePremium = Double(entry.basePremium) ?? (ins.annualPremium * 0.8)
             ins.taxesGST = Double(entry.taxesGST) ?? (ins.annualPremium * 0.18)
             ins.premiumFrequency = entry.premiumFrequency
-
+            
             switch entry.details {
             case .life(let d):
                 ins.lifeDetails = AstraLifeInsuranceDetails(
@@ -328,7 +361,7 @@ final class AppStateManager {
                     daycareProcedures: true,
                     networkHospitalsCount: 0
                 )
-
+                
             case .motor(let d):
                 ins.motorDetails = AstraMotorInsuranceDetails(
                     vehicleModel: d.vehicleModel,
@@ -337,42 +370,42 @@ final class AppStateManager {
                     roadsideAssistance: d.roadsideAssistance
                 )
             case .travel(_):
-
+                
                 break
             }
-
+            
             return ins
         }
-
+        
         let assets = AstraAssets(
             stocksHoldingAmount: profileInvestments.filter { $0.investmentType == .stocks }.map { $0.investmentAmount }.reduce(0, +),
             mutualFundHoldingAmount: profileInvestments.filter { $0.investmentType == .mutualFund }.map { $0.investmentAmount }.reduce(0, +),
             otherInvestmentAmount: profileInvestments.filter { [.cryptocurrency, .other, .nps, .ppf, .bonds].contains($0.investmentType) }.map { $0.investmentAmount }.reduce(0, +),
             propertyAmount: profileInvestments.filter { $0.investmentType == .realEstate }.map { $0.investmentAmount }.reduce(0, +),
-            vehiclesAmount: 0, 
+            vehiclesAmount: 0,
             depositsAmount: profileInvestments.filter { $0.investmentType == .deposits }.map { $0.investmentAmount }.reduce(0, +),
             jewelleryAmount: profileInvestments.filter { $0.investmentType == .physicalGold }.map { $0.investmentAmount }.reduce(0, +)
         )
-
+        
         let liabilities = AstraLiabilities(
             homeLoanAmount: profileLoans.filter { $0.loanType == .homeLoan }.map { $0.loanAmount }.reduce(0, +),
             vehicleLoanAmount: profileLoans.filter { $0.loanType == .carLoan }.map { $0.loanAmount }.reduce(0, +),
-            creditCardBills: profileLoans.filter { $0.loanType == .other && $0.lender == .other }.map { $0.loanAmount }.reduce(0, +), 
+            creditCardBills: profileLoans.filter { $0.loanType == .other && $0.lender == .other }.map { $0.loanAmount }.reduce(0, +),
             educationLoanAmount: profileLoans.filter { $0.loanType == .educationLoan }.map { $0.loanAmount }.reduce(0, +),
             otherLoanAmount: profileLoans.filter { ![.homeLoan, .carLoan, .educationLoan].contains($0.loanType) }.map { $0.loanAmount }.reduce(0, +)
         )
-
+        
         let totalAs = assets.totalAssets
         let totalLi = liabilities.totalLiabilities
         let netWorth = totalAs - totalLi
-
+        
         let savingsRate = incomeAfterTaxValue > 0 ? ((incomeAfterTaxValue - expensesValue) / incomeAfterTaxValue) * 100 : 0
-
+        
         let totalEMIs = profileLoans.reduce(0.0) { $0 + $1.calculatedEMI }
         let dti = incomeValue > 0 ? (totalEMIs / incomeValue) : 0
-
+        
         let efMonths = expensesValue > 0 ? (emergencyValue / expensesValue) : 0
-
+        
         let report = AstraFinancialHealthReport(
             netWorth: netWorth,
             savingsRate: savingsRate,
@@ -380,37 +413,86 @@ final class AppStateManager {
             investmentScore: Int(min(100, (savingsRate * 0.5) + (efMonths * 10))),
             emergencyFundMonths: efMonths
         )
-
-        let initialScore = 400 + Int(report.investmentScore * 4) 
+        
+        let initialScore = 400 + Int(report.investmentScore * 4)
         let status = initialScore >= 750 ? "Excellent" : initialScore >= 650 ? "Good" : "Needs Work"
         let firstAssessment = AstraHealthAssessment(
             date: Date(),
             score: initialScore,
             status: status,
-            keyInsights: ["First assessment generated from initial data", 
+            keyInsights: ["First assessment generated from initial data",
                           "Emergency fund covers \(String(format: "%.1f", efMonths)) months",
                           "Savings rate stands at \(Int(savingsRate))%"]
         )
-
-        self.currentProfile = AstraUserProfile(
-            signUp: signUp,
-            basicDetails: basic,
-            assets: assets,
-            liabilities: liabilities,
-            investments: profileInvestments,
-            loans: profileLoans,
-            insurances: profileInsurances,
-            goals: [],
-            financialHealthReport: report,
-            monthlyHealthAssessments: [firstAssessment],
-            isSetuConnected: assessmentData.isSetuSelected
-        )
-
+        
+        let newInvestments = profileInvestments
+        let newLoans = profileLoans
+        let newInsurances = profileInsurances
+        
+        if var existingProfile = self.currentProfile {
+            // MERGE LOGIC
+            
+            // Merge Investments
+            for newInv in newInvestments {
+                if !existingProfile.investments.contains(where: { 
+                    $0.investmentName.lowercased() == newInv.investmentName.lowercased() && 
+                    abs($0.investmentAmount - newInv.investmentAmount) < 1.0 
+                }) {
+                    existingProfile.investments.append(newInv)
+                }
+            }
+            
+            // Merge Loans
+            for newLoan in newLoans {
+                if !existingProfile.loans.contains(where: { 
+                    abs($0.loanAmount - newLoan.loanAmount) < 1.0 && 
+                    $0.loanType == newLoan.loanType
+                }) {
+                    existingProfile.loans.append(newLoan)
+                }
+            }
+            
+            // Merge Insurances
+            for newIns in newInsurances {
+                if !existingProfile.insurances.contains(where: { 
+                    $0.policyNumber == newIns.policyNumber || 
+                    ($0.insuranceType == newIns.insuranceType && abs($0.sumAssured - newIns.sumAssured) < 1.0)
+                }) {
+                    existingProfile.insurances.append(newIns)
+                }
+            }
+            
+            // Update basic details but preserve existing fields if they were more detailed
+            existingProfile.basicDetails.monthlyIncome = incomeValue
+            existingProfile.basicDetails.monthlyIncomeAfterTax = incomeValue
+            existingProfile.basicDetails.monthlyExpenses = expensesValue
+            existingProfile.basicDetails.emergencyFundAmount = emergencyValue
+            
+            self.currentProfile = existingProfile
+        } else {
+            // NEW PROFILE
+            self.currentProfile = AstraUserProfile(
+                signUp: signUp,
+                basicDetails: basic,
+                assets: assets,
+                liabilities: liabilities,
+                investments: profileInvestments,
+                loans: profileLoans,
+                insurances: profileInsurances,
+                goals: [],
+                financialHealthReport: report,
+                monthlyHealthAssessments: [firstAssessment],
+                isSetuConnected: false
+            )
+        }
+        
+        recalculateFinancials() // Ensure all scores are updated with merged data
+        
         Task {
             await syncMutualFundNAVs()
         }
     }
-
+    
     private func mapInvestmentType(_ type: AssessmentInvestmentEntry.InvestmentType) -> AstraInvestmentType {
         switch type {
         case .mutualFund: return .mutualFund
@@ -423,7 +505,7 @@ final class AppStateManager {
         case .nps: return .nps
         }
     }
-
+    
     private func mapLoanType(_ type: AssessmentLoanEntry.LoanType) -> AstraLoanType {
         switch type {
         case .homeLoan: return .homeLoan
@@ -434,7 +516,7 @@ final class AppStateManager {
         case .creditCard: return .other
         }
     }
-
+    
     private func mapLender(_ name: String) -> AstraLoanLender {
         switch name {
         case "SBI": return .stateBankOfIndia
@@ -446,7 +528,7 @@ final class AppStateManager {
         default: return .other
         }
     }
-
+    
     private func mapInsuranceType(_ type: AssessmentInsuranceEntry.InsuranceType) -> AstraInsuranceType {
         switch type {
         case .health: return .health
@@ -458,10 +540,32 @@ final class AppStateManager {
         case .ulip: return .ulip
         }
     }
+    
+    // MARK: - Derived profile attributes from assessment data
+
+    /// Derives risk tolerance from savings behaviour and investment activity.
+    /// No hardcoded "medium" default — inferred from real data.
+    private static func deriveRiskTolerance(savingsRate: Double, investmentCount: Int) -> AstraRiskTolerance {
+        switch (savingsRate, investmentCount) {
+        case (let s, let c) where s >= 0.35 && c >= 3: return .high
+        case (let s, _)     where s >= 0.20:            return .medium
+        default:                                         return .low
+        }
+    }
+
+    /// Derives investment horizon from age and number of dependents.
+    /// Younger users with few dependents → long-term; older or more dependents → shorter.
+    private static func deriveInvestmentHorizon(age: Int, dependents: Int) -> AstraInvestmentHorizon {
+        switch (age, dependents) {
+        case (let a, _) where a < 35: return .longTerm
+        case (let a, let d) where a < 50 && d <= 2: return .mediumTerm
+        default: return .shortTerm
+        }
+    }
 
     func recalculateFinancials() {
         guard var profile = currentProfile else { return }
-
+        
         var newAssets = profile.assets
         newAssets.stocksHoldingAmount = profile.investments.filter { $0.investmentType == .stocks }.map { $0.currentValue }.reduce(0, +)
         newAssets.mutualFundHoldingAmount = profile.investments.filter { $0.investmentType == .mutualFund }.map { $0.currentValue }.reduce(0, +)
@@ -470,26 +574,28 @@ final class AppStateManager {
         newAssets.jewelleryAmount = profile.investments.filter { $0.investmentType == .physicalGold }.map { $0.currentValue }.reduce(0, +)
         newAssets.otherInvestmentAmount = profile.investments.filter { [.cryptocurrency, .other, .nps, .ppf, .bonds].contains($0.investmentType) }.map { $0.currentValue }.reduce(0, +)
         profile.assets = newAssets
-
+        
         var newLiabilities = profile.liabilities
         newLiabilities.homeLoanAmount = profile.loans.filter { $0.loanType == .homeLoan }.map { $0.loanAmount }.reduce(0, +)
         newLiabilities.vehicleLoanAmount = profile.loans.filter { $0.loanType == .carLoan }.map { $0.loanAmount }.reduce(0, +)
         newLiabilities.educationLoanAmount = profile.loans.filter { $0.loanType == .educationLoan }.map { $0.loanAmount }.reduce(0, +)
         newLiabilities.otherLoanAmount = profile.loans.filter { ![.homeLoan, .carLoan, .educationLoan].contains($0.loanType) }.map { $0.loanAmount }.reduce(0, +)
         profile.liabilities = newLiabilities
-
+        
         let totalAs = profile.assets.totalAssets
         let totalLi = profile.liabilities.totalLiabilities
         let netWorth = totalAs - totalLi
-
+        
         let incomeAfterTax = profile.basicDetails.monthlyIncomeAfterTax
         let expenses = profile.basicDetails.monthlyExpenses
         let savingsRate = incomeAfterTax > 0 ? ((incomeAfterTax - expenses) / incomeAfterTax) * 100 : 0
-
+        
         let totalEMIs = profile.loans.reduce(0.0) { $0 + $1.calculatedEMI }
         let dti = profile.basicDetails.monthlyIncome > 0 ? (totalEMIs / profile.basicDetails.monthlyIncome) : 0
-        let efMonths = expenses > 0 ? (profile.basicDetails.emergencyFundAmount / expenses) : 0
-
+        
+        let efTarget = profile.basicDetails.monthlyIncome * 6.0
+        let efMonths = efTarget > 0 ? (profile.basicDetails.emergencyFundAmount / efTarget) * 6.0 : 0
+        
         profile.financialHealthReport = AstraFinancialHealthReport(
             netWorth: netWorth,
             savingsRate: savingsRate,
@@ -497,19 +603,36 @@ final class AppStateManager {
             investmentScore: Int(min(100, (savingsRate * 0.5) + (efMonths * 10))),
             emergencyFundMonths: efMonths
         )
-
+        
+        // Sync goal currentAmount with dynamic total
+        for i in 0..<profile.goals.count {
+            let gid = profile.goals[i].id
+            let linked = profile.investments.filter { $0.associatedGoalID == gid }
+            let linkedTotal = linked.reduce(0.0) { $0 + $1.currentValue }
+            profile.goals[i].currentAmount = linkedTotal + profile.goals[i].manualSavingsContribution
+        }
+        
         self.currentProfile = profile
     }
-
+    
     func updateCashflow(_ cashflow: CashflowEntry) {
         if var profile = currentProfile {
             profile.cashflowData = cashflow
-            profile.basicDetails.monthlyExpenses = cashflow.total
+            
+            // Sync totals with basic details
+            profile.basicDetails.monthlyExpenses = cashflow.totalExpenses
+            
+            let detailedIncome = cashflow.totalIncome
+            if detailedIncome > 0 {
+                profile.basicDetails.monthlyIncome = detailedIncome
+                profile.basicDetails.monthlyIncomeAfterTax = detailedIncome
+            }
+            
             currentProfile = profile
             recalculateFinancials()
         }
     }
-
+    
     func addGoal(_ goal: AstraGoal) {
         if var profile = currentProfile {
             profile.goals.append(goal)
@@ -517,7 +640,7 @@ final class AppStateManager {
             recalculateFinancials()
         }
     }
-
+    
     func updateGoal(_ goal: AstraGoal) {
         if var profile = currentProfile,
            let index = profile.goals.firstIndex(where: { $0.id == goal.id }) {
@@ -526,7 +649,7 @@ final class AppStateManager {
             recalculateFinancials()
         }
     }
-
+    
     func deleteGoal(at indexSet: IndexSet) {
         if var profile = currentProfile {
             profile.goals.remove(atOffsets: indexSet)
@@ -534,7 +657,7 @@ final class AppStateManager {
             recalculateFinancials()
         }
     }
-
+    
     func deleteGoal(_ goal: AstraGoal) {
         if var profile = currentProfile,
            let index = profile.goals.firstIndex(where: { $0.id == goal.id }) {
@@ -543,7 +666,7 @@ final class AppStateManager {
             recalculateFinancials()
         }
     }
-
+    
     func addInvestment(_ investment: AstraInvestment) {
         if var profile = currentProfile {
             profile.investments.append(investment)
@@ -554,7 +677,7 @@ final class AppStateManager {
             }
         }
     }
-
+    
     func updateInvestment(_ investment: AstraInvestment) {
         if var profile = currentProfile,
            let index = profile.investments.firstIndex(where: { $0.id == investment.id }) {
@@ -566,7 +689,7 @@ final class AppStateManager {
             }
         }
     }
-
+    
     func deleteInvestment(at indexSet: IndexSet) {
         if var profile = currentProfile {
             profile.investments.remove(atOffsets: indexSet)
@@ -574,7 +697,7 @@ final class AppStateManager {
             recalculateFinancials()
         }
     }
-
+    
     func deleteInvestment(_ investment: AstraInvestment) {
         if var profile = currentProfile,
            let index = profile.investments.firstIndex(where: { $0.id == investment.id }) {
@@ -583,7 +706,14 @@ final class AppStateManager {
             recalculateFinancials()
         }
     }
-
+    
+    func updateEmergencyFundAllocation(_ allocation: AstraEmergencyFundAllocation) {
+        if var profile = currentProfile {
+            profile.emergencyFundAllocation = allocation
+            currentProfile = profile
+        }
+    }
+    
     func addLoan(_ loan: AstraLoan) {
         if var profile = currentProfile {
             profile.loans.append(loan)
@@ -591,7 +721,7 @@ final class AppStateManager {
             recalculateFinancials()
         }
     }
-
+    
     func updateLoan(_ loan: AstraLoan) {
         if var profile = currentProfile,
            let index = profile.loans.firstIndex(where: { $0.id == loan.id }) {
@@ -600,7 +730,7 @@ final class AppStateManager {
             recalculateFinancials()
         }
     }
-
+    
     func deleteLoan(at indexSet: IndexSet) {
         if var profile = currentProfile {
             profile.loans.remove(atOffsets: indexSet)
@@ -608,7 +738,7 @@ final class AppStateManager {
             recalculateFinancials()
         }
     }
-
+    
     func deleteLoan(_ loan: AstraLoan) {
         if var profile = currentProfile,
            let index = profile.loans.firstIndex(where: { $0.id == loan.id }) {
@@ -617,7 +747,7 @@ final class AppStateManager {
             recalculateFinancials()
         }
     }
-
+    
     func addInsurance(_ insurance: AstraInsurance) {
         if var profile = currentProfile {
             profile.insurances.append(insurance)
@@ -625,7 +755,7 @@ final class AppStateManager {
             recalculateFinancials()
         }
     }
-
+    
     func updateInsurance(_ insurance: AstraInsurance) {
         if var profile = currentProfile,
            let index = profile.insurances.firstIndex(where: { $0.id == insurance.id }) {
@@ -634,7 +764,7 @@ final class AppStateManager {
             recalculateFinancials()
         }
     }
-
+    
     func deleteInsurance(at indexSet: IndexSet) {
         if var profile = currentProfile {
             profile.insurances.remove(atOffsets: indexSet)
@@ -642,88 +772,159 @@ final class AppStateManager {
             recalculateFinancials()
         }
     }
-
+    
     func investments(for goalID: UUID) -> [AstraInvestment] {
         currentProfile?.investments.filter { $0.associatedGoalID == goalID } ?? []
     }
-
+    
     func totalCollected(for goalID: UUID) -> Double {
+        guard let goal = currentProfile?.goals.first(where: { $0.id == goalID }) else { return 0 }
         let linked = investments(for: goalID)
-        return linked.reduce(0) { total, inv in
-            if inv.mode == .sip {
-
-                let calendar = Calendar.current
-                let components = calendar.dateComponents([.month], from: inv.startDate, to: Date())
-                let months = max(components.month ?? 0, 1)
-                return total + (inv.investmentAmount * Double(months))
-            } else {
-                return total + inv.investmentAmount
-            }
-        }
+        let linkedTotal = linked.reduce(0.0) { $0 + $1.currentValue }
+        return linkedTotal + goal.manualSavingsContribution
     }
-
+    
     func syncMutualFundNAVs(force: Bool = false) async {
+        guard !isSyncing else { return }
+        isSyncing = true
+        
+        defer { isSyncing = false }
+        
         await mfService.fetchMFData(force: force)
-
+        
         guard var profile = currentProfile else { return }
         var updated = false
-
+        
+        // Update Stock Prices
+        let stockSymbols = profile.investments.compactMap { $0.investmentType == .stocks ? $0.symbol : nil }
+        if !stockSymbols.isEmpty {
+            let stockPrices = await StockService.shared.fetchLivePrices(symbols: stockSymbols)
+            for i in 0..<profile.investments.count {
+                if let symbol = profile.investments[i].symbol, let price = stockPrices[symbol] {
+                    profile.investments[i].livePrice = price
+                    profile.investments[i].lastUpdated = Date()
+                    updated = true
+                }
+            }
+        }
+        
         for i in 0..<profile.investments.count {
-            if profile.investments[i].investmentType == .mutualFund {
-
-                if profile.investments[i].schemeCode == nil {
-                    if let code = mfService.findSchemeCode(for: profile.investments[i].investmentName) {
+            let inv = profile.investments[i]
+            
+            // 1. Update Market Price/NAV
+            if inv.investmentType == .mutualFund {
+                if inv.schemeCode == nil {
+                    if let code = mfService.findSchemeCode(for: inv.investmentName) {
                         profile.investments[i].schemeCode = code
-                        updated = true
                     }
                 }
-
+                
                 guard let code = profile.investments[i].schemeCode else { continue }
-
+                
                 if let liveScheme = mfService.getScheme(by: code) {
                     profile.investments[i].lastNAV = liveScheme.nav
                     profile.investments[i].lastUpdated = Date()
                     updated = true
                 }
-
-                let history = await mfService.fetchHistoricalGraphData(schemeCode: code)
-                if !history.isEmpty {
-
-                    if profile.investments[i].lastNAV == nil || profile.investments[i].lastNAV == 0 {
-                        if let latestNAVStr = history.last?.nav, let lNAV = Double(latestNAVStr) {
-                            profile.investments[i].lastNAV = lNAV
-                            profile.investments[i].lastUpdated = Date()
-                            updated = true
-                        }
+                
+                // 2. Populate Missing Installments / Recalculate Units
+                // ✅ Bug Fix: Previously this only ran when installments were EMPTY.
+                // That meant if you had 1 installment from March, April's SIP was
+                // never added (guard was false). Now we check if a new installment
+                // is due: the expected count (months since startDate) vs actual count.
+                let expectedCount: Int = {
+                    let cal = Calendar.current
+                    var count = 0
+                    var d = inv.startDate
+                    let today = Date()
+                    while d <= today {
+                        count += 1
+                        guard let next = cal.date(byAdding: .month, value: 1, to: d) else { break }
+                        d = next
                     }
+                    return count
+                }()
+                let actualCount = profile.investments[i].installments.count
+                let needsRecalc = profile.investments[i].installments.isEmpty || (inv.mode == .sip && actualCount < expectedCount)
 
-                    if profile.investments[i].purchaseNAV == nil || profile.investments[i].purchaseNAV == 0 {
-
-                        let df = DateFormatter(); df.dateFormat = "dd-MM-yyyy"
-                        let targetDate = profile.investments[i].startDate
-
-                        if let histNAV = await mfService.fetchHistoricalNAV(schemeCode: code, date: targetDate) {
+                if needsRecalc {
+                    if inv.mode == .sip {
+                        let (sipUnits, _, simulatedInstallments) = await mfService.calculateHistoricalSIPUnits(
+                            schemeCode: code,
+                            monthlyAmount: inv.investmentAmount,
+                            startDate: inv.startDate
+                        )
+                        profile.investments[i].installments = simulatedInstallments
+                        profile.investments[i].units = sipUnits
+                        // Recalculate weighted-average purchase NAV
+                        let totalPaid = simulatedInstallments.reduce(0.0) { $0 + $1.amount }
+                        let totalUnits2 = simulatedInstallments.reduce(0.0) { $0 + $1.units }
+                        if totalUnits2 > 0 {
+                            profile.investments[i].purchaseNAV = totalPaid / totalUnits2
+                        }
+                        updated = true
+                    } else {
+                        // Lumpsum
+                        if let histNAV = await mfService.fetchHistoricalNAV(schemeCode: code, date: inv.startDate) {
+                            let units = inv.investmentAmount / histNAV
+                            profile.investments[i].installments = [
+                                AstraInvestmentTransaction(date: inv.startDate, type: .buy, amount: inv.investmentAmount, nav: histNAV, units: units)
+                            ]
+                            profile.investments[i].units = units
                             profile.investments[i].purchaseNAV = histNAV
                             updated = true
                         }
                     }
                 }
+            } else if inv.investmentType == .stocks {
+                guard let symbol = inv.symbol else { continue }
+                
+                // Live price is already updated in the batch call above
+                
+                // Populate Missing Installments for Stocks
+                if profile.investments[i].installments.isEmpty {
+                    if inv.mode == .sip {
+                        let (sipUnits, _, simulatedInstallments) = await StockService.shared.calculateHistoricalSIPUnits(
+                            symbol: symbol,
+                            monthlyAmount: inv.investmentAmount,
+                            startDate: inv.startDate
+                        )
+                        profile.investments[i].installments = simulatedInstallments
+                        profile.investments[i].quantity = sipUnits
 
-                if let pNAV = profile.investments[i].purchaseNAV, pNAV > 0 {
-                    let units = profile.investments[i].investmentAmount / pNAV
-                    if profile.investments[i].units != units {
-                        profile.investments[i].units = units
+                        // Bug 1 Fix: compute weighted-average entry price for SIP
+                        let totalPaid = simulatedInstallments.reduce(0.0) { $0 + $1.amount }
+                        let totalUnits = simulatedInstallments.reduce(0.0) { $0 + $1.units }
+                        if totalUnits > 0 {
+                            profile.investments[i].purchaseNAV = totalPaid / totalUnits
+                        }
+                        updated = true
+                    } else {
+                        // Lumpsum
+                        let (units, _, simulatedInstallments) = await StockService.shared.calculateLumpsumUnits(
+                            symbol: symbol,
+                            amount: inv.investmentAmount,
+                            startDate: inv.startDate
+                        )
+                        profile.investments[i].installments = simulatedInstallments
+                        profile.investments[i].quantity = units
+
+                        // Bug 1 Fix: set purchaseNAV for lumpsum from the transaction NAV
+                        if let tx = simulatedInstallments.first {
+                            profile.investments[i].purchaseNAV = tx.nav
+                        }
                         updated = true
                     }
                 }
             }
         }
-
-        if updated {
-            await MainActor.run {
-                self.currentProfile = profile
-                self.recalculateFinancials()
+    
+            if updated {
+                await MainActor.run {
+                    self.currentProfile = profile
+                    self.recalculateFinancials()
+                }
             }
         }
-    }
+    
 }

@@ -5,14 +5,14 @@ struct TrackerGoalsSection: View {
     @Environment(AppStateManager.self) var appState
 
     var body: some View {
-        VStack(spacing: 12) {
+        VStack(spacing: 16) {
             HStack {
-                Text("Your Goals").font(.system(size: 22, weight: .bold))
+                Text("Your Goals").font(.auraHeader(size: 22))
                 Spacer()
-                NavigationLink(destination: GoalsView()) {
+                NavigationLink(destination: GoalListView()) {
                     Image(systemName: "chevron.right")
-                        .font(.system(size: 14, weight: .bold))
-                        .foregroundColor(.accentColor)
+                        .font(.title3)
+                        .foregroundColor(AppTheme.auraIndigo)
                 }
             }
             if goals.isEmpty {
@@ -46,31 +46,38 @@ struct GoalCard: View {
     @Environment(\.colorScheme) private var colorScheme
 
     var body: some View {
-        VStack(spacing: 12) {
+        VStack(spacing: 16) {
             HStack {
-                Text(goal.name)
-                    .font(.system(size: 17, weight: .semibold))
+                VStack(alignment: .leading, spacing: 4) {
+                    Text(goal.name).font(.auraHeader(size: 17)).foregroundColor(AppTheme.auraIndigo)
+                    Text(goal.associatedFund).font(.auraCaption()).foregroundColor(.secondary)
+                }
                 Spacer()
+                Text(goal.targetAmount).font(.auraDigital(size: 18)).foregroundColor(AppTheme.auraIndigo)
             }
+            
             VStack(spacing: 8) {
-                GoalSummaryDetailedRow(label: "Associated fund", value: goal.associatedFund)
-                GoalSummaryDetailedRow(label: "Target Amt", value: goal.targetAmount)
-                GoalSummaryDetailedRow(label: "Collected Amt", value: goal.collectedAmount)
-                GoalSummaryDetailedRow(label: "Time Period", value: goal.timePeriod)
+                HStack {
+                    Text("Collected").font(.auraCaption()).foregroundColor(.secondary)
+                    Spacer()
+                    Text(goal.collectedAmount).font(.auraDigital(size: 14)).foregroundColor(AppTheme.auraIndigo)
+                }
+                
+                // Apple-native progress bar
+                ProgressView(value: min(max(0, goal.progress), 1))
+                    .progressViewStyle(.linear)
+                    .tint(AppTheme.auraIndigo)
             }
         }
-        .padding(16)
-        .background(AppTheme.cardBackground)
-        .cornerRadius(12)
-        .shadow(color: AppTheme.adaptiveShadow, radius: 4, x: 0, y: 2)
+        .auraCardStyle(radius: 24)
     }
 }
 
 #Preview {
     NavigationStack {
         TrackerGoalsSection(goals: [
-            Goal(name: "New Car", associatedFund: "Axis Bluechip", targetAmount: "₹15.0L", collectedAmount: "₹4.5L", timePeriod: "2 Years"),
-            Goal(name: "Home Downpayment", associatedFund: "HDFC Top 100", targetAmount: "₹50.0L", collectedAmount: "₹12.0L", timePeriod: "4 Years")
+            Goal(name: "New Car", associatedFund: "Axis Bluechip", targetAmount: "₹15.0L", collectedAmount: "₹4.5L", timePeriod: "2 Years", progress: 0.3),
+            Goal(name: "Home Downpayment", associatedFund: "HDFC Top 100", targetAmount: "₹50.0L", collectedAmount: "₹12.0L", timePeriod: "4 Years", progress: 0.24)
         ])
         .environment(AppStateManager())
         .padding()

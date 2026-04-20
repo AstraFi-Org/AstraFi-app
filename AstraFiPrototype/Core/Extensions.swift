@@ -19,31 +19,34 @@ extension Double {
     func toCurrency(compact: Bool = false) -> String {
         guard self.isFinite else { return "₹0" }
         let absValue = abs(self)
+        let sign = self < 0 ? "-" : ""
+        
         if absValue >= 10000000 {
-            let crores = self / 10000000
-            return String(format: "%@₹%.2f Cr", self < 0 ? "-" : "", abs(crores))
+            let crores = absValue / 10000000
+            return String(format: "%@₹%.2f Cr", sign, crores)
         } else if absValue >= 100000 {
-            let lakhs = self / 100000
+            let lakhs = absValue / 100000
             if compact {
-                return String(format: "%@₹%.1fL", self < 0 ? "-" : "", abs(lakhs))
+                return String(format: "%@₹%.1f L", sign, lakhs) // space before L for aesthetic
             }
-            return String(format: "%@₹%.2f L", self < 0 ? "-" : "", abs(lakhs))
+            return String(format: "%@₹%.2f L", sign, lakhs)
         } else if absValue >= 1000 {
-
             if compact {
                 let thousands = absValue / 1000
-                return String(format: "%@₹%.1fK", self < 0 ? "-" : "", thousands)
+                return String(format: "%@₹%.1f K", sign, thousands)
             }
             let formatter = NumberFormatter()
             formatter.numberStyle = .currency
             formatter.currencySymbol = "₹"
             formatter.maximumFractionDigits = 0
+            formatter.locale = Locale(identifier: "en_IN")
             return formatter.string(from: NSNumber(value: self)) ?? "₹0"
         } else {
             let formatter = NumberFormatter()
             formatter.numberStyle = .currency
             formatter.currencySymbol = "₹"
             formatter.maximumFractionDigits = 0
+            formatter.locale = Locale(identifier: "en_IN")
             return formatter.string(from: NSNumber(value: self)) ?? "₹0"
         }
     }

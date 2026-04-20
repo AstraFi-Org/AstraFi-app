@@ -20,6 +20,7 @@ class TrackerViewModel {
     var savingsRate: Double = 0
     var totalInvestmentValue: Double = 0
     var moneyFlowData: [MoneyFlowData] = []
+    var moneyFlowChartData: [MoneyFlowChartItem] = []
     var fundAllocations: [FundAllocation] = []
 
     var yourPlans: [InvestmentPlanModel] = []
@@ -47,7 +48,7 @@ class TrackerViewModel {
         let targetAmount = input.targetAmount
         let targetString = targetAmount.contains("₹") ? targetAmount : "₹" + targetAmount
         let goalName = input.purposeOfInvestment
-        let newGoal = Goal(name: goalName.isEmpty ? "New Goal" : goalName, associatedFund: planName, targetAmount: targetString, collectedAmount: "₹0", timePeriod: input.timePeriod + " Years")
+        let newGoal = Goal(name: goalName.isEmpty ? "New Goal" : goalName, associatedFund: planName, targetAmount: targetString, collectedAmount: "₹0", timePeriod: input.timePeriod + " Years", progress: 0)
         goals.append(newGoal)
         followedPlanNames.insert(planName)
     }
@@ -105,8 +106,64 @@ class TrackerViewModel {
             self.netWorth = nw.isFinite ? nw : 0
             self.growthAmount = 0 
             self.moneyFlowData = currentMoneyFlow
+            self.moneyFlowChartData = self.calculateMoneyFlowChartData(profile, df: df)
             self.fundAllocations = newAllocations
         }
+    }
+    
+    private func calculateMoneyFlowChartData(_ profile: AstraUserProfile, df: DateFormatter) -> [MoneyFlowChartItem] {
+        var items: [MoneyFlowChartItem] = []
+        
+        // Add current month from cashflowData
+        let calendar = Calendar.current
+        let currentMonth = df.shortMonthSymbols[calendar.component(.month, from: Date()) - 1]
+        
+        if let cashflow = profile.cashflowData {
+            if cashflow.incomeSources.isEmpty {
+                // Fallback to assessment income
+                items.append(MoneyFlowChartItem(month: currentMonth, type: "Income", category: "Fixed Salary", amount: profile.basicDetails.monthlyIncome))
+            } else {
+                for source in cashflow.incomeSources {
+                    items.append(MoneyFlowChartItem(month: currentMonth, type: "Income", category: source.name, amount: source.amount))
+                }
+            }
+            
+            if cashflow.expenseSources.isEmpty {
+                // Fallback to flat expenses
+                items.append(MoneyFlowChartItem(month: currentMonth, type: "Expense", category: "Rent/EMI", amount: cashflow.rent))
+                items.append(MoneyFlowChartItem(month: currentMonth, type: "Expense", category: "Groceries", amount: cashflow.groceries))
+                items.append(MoneyFlowChartItem(month: currentMonth, type: "Expense", category: "Utilities", amount: cashflow.utilities))
+                items.append(MoneyFlowChartItem(month: currentMonth, type: "Expense", category: "Entertainment", amount: cashflow.entertainment))
+                let others = cashflow.transport + cashflow.shopping + cashflow.dining + cashflow.misc
+                if others > 0 {
+                    items.append(MoneyFlowChartItem(month: currentMonth, type: "Expense", category: "Others", amount: others))
+                }
+            } else {
+                for exp in cashflow.expenseSources {
+                    items.append(MoneyFlowChartItem(month: currentMonth, type: "Expense", category: exp.name, amount: exp.amount))
+                }
+            }
+        }
+        
+        // Add historical snapshots (up to last 3 months for simplicity in chart)
+        let sortedKeys = profile.monthlyCashflowSnapshots.keys.sorted().suffix(3)
+        for key in sortedKeys {
+            guard let snap = profile.monthlyCashflowSnapshots[key] else { continue }
+            // Extract month from "yyyy-MM"
+            let components = key.split(separator: "-")
+            if components.count == 2, let m = Int(components[1]) {
+                let mName = df.shortMonthSymbols[m - 1]
+                
+                for src in snap.incomeSources {
+                    items.append(MoneyFlowChartItem(month: mName, type: "Income", category: src.name, amount: src.amount))
+                }
+                for exp in snap.expenseSources {
+                    items.append(MoneyFlowChartItem(month: mName, type: "Expense", category: exp.name, amount: exp.amount))
+                }
+            }
+        }
+        
+        return items
     }
 
     private func calculateAccounts(_ profile: AstraUserProfile) -> [Account] {
@@ -163,7 +220,7 @@ class TrackerViewModel {
             let monthlyPrincipal = loan.loanAmount / Double(tenure)
             let paidAmountValue = Double(loan.installmentsPaid) * monthlyPrincipal
             return Loan(
-                name: loan.loanType.rawValue,
+                name: loan.displayName,
                 timePeriod: "\(tenure / 12) Years",
                 status: "Active",
                 totalAmount: "₹\(loan.loanAmount.safeInt)",
@@ -206,29 +263,27 @@ class TrackerViewModel {
 
     private func calculateGoals(_ profile: AstraUserProfile, df: DateFormatter) -> [Goal] {
         return profile.goals.map { g in
-            let linkedFund = profile.investments.first(where: { $0.associatedGoalID == g.id })?.investmentName ?? "None"
+            let linked = profile.investments.filter { $0.associatedGoalID == g.id }
+            let linkedFund = linked.first?.investmentName ?? "None"
+            let totalColl = self.calculateTotalCollected(for: g.id, profile: profile)
+            let progressRatio = g.targetAmount > 0 ? min(totalColl / g.targetAmount, 1.0) : 0
+            
             return Goal(
                 name: g.goalName,
-                associatedFund: linkedFund,
+                associatedFund: linked.count > 1 ? "\(linked.count) Assets" : linkedFund,
                 targetAmount: g.targetAmount.toCurrency(),
-                collectedAmount: g.currentAmount.toCurrency(),
-                timePeriod: df.string(from: g.targetDate)
+                collectedAmount: totalColl.toCurrency(),
+                timePeriod: df.string(from: g.targetDate),
+                progress: progressRatio
             )
         }
     }
 
     private func calculateTotalCollected(for goalID: UUID, profile: AstraUserProfile) -> Double {
+        guard let goal = profile.goals.first(where: { $0.id == goalID }) else { return 0 }
         let linked = profile.investments.filter { $0.associatedGoalID == goalID }
-        return linked.reduce(0) { total, inv in
-            if inv.mode == .sip {
-                let calendar = Calendar.current
-                let components = calendar.dateComponents([.month], from: inv.startDate, to: Date())
-                let months = max(components.month ?? 0, 1)
-                return total + (inv.investmentAmount * Double(months))
-            } else {
-                return total + inv.investmentAmount
-            }
-        }
+        let linkedTotal = linked.reduce(0.0) { $0 + $1.currentValue }
+        return linkedTotal + goal.manualSavingsContribution
     }
 
     private func calculateAllocations(_ profile: AstraUserProfile, totalAssets: Double) -> [FundAllocation] {

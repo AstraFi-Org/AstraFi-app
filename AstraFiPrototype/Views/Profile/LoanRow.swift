@@ -26,7 +26,7 @@ struct LoanRow: View {
     private var loanDetails: some View {
         VStack(alignment: .leading, spacing: 6) {
             HStack {
-                Text(loan.loanType.rawValue.capitalized)
+                Text(loan.displayName)
                     .font(.headline)
                 Spacer()
                 Text("₹\(Int(loan.loanAmount))")
@@ -35,7 +35,7 @@ struct LoanRow: View {
                     .foregroundColor(.red)
             }
             HStack {
-                Text(loan.lender.rawValue)
+                Text(loan.displayLender)
                     .font(.caption)
                     .foregroundColor(.secondary)
                 Spacer()
