@@ -93,7 +93,7 @@ struct EnhancedGoalCard: View {
     .padding()
 }
 
-struct LegendItem: View {
+struct LegendItem2: View {
     let color: Color; let label: String
     var body: some View {
         HStack(spacing: 4) { Circle().fill(color).frame(width: 7, height: 7).padding(2); Text(label).foregroundColor(.secondary) }
