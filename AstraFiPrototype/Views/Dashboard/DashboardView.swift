@@ -98,15 +98,15 @@ struct DashboardView: View {
             
             // ── Bottom row: stats
             HStack {
-                _PortfolioStat(label: "Active", value: "\(activeCount)", icon: "briefcase.fill")
+                PortfolioStat(label: "Active", value: "\(activeCount)", icon: "briefcase.fill")
                 Divider()
                     .background(.white.opacity(0.25))
                     .frame(height: 28)
-                _PortfolioStat(label: "Invested", value: totalInvested.toShortCurrency(), icon: "indianrupeesign.circle.fill")
+                PortfolioStat(label: "Invested", value: totalInvested.toShortCurrency(), icon: "indianrupeesign.circle.fill")
                 Divider()
                     .background(.white.opacity(0.25))
                     .frame(height: 28)
-                _PortfolioStat(
+                PortfolioStat(
                     label: investments.isEmpty ? "Allocation" : "Optimised",
                     value: investments.isEmpty ? "—" : "✓",
                     icon: "chart.pie.fill"
@@ -136,7 +136,7 @@ struct DashboardView: View {
         .shadow(color: Color(hex: "#007AFF").opacity(0.35), radius: 20, x: 0, y: 10)
     }
     
-    private struct _PortfolioStat: View {
+    private struct PortfolioStat: View {
         let label: String
         let value: String
         let icon: String
@@ -213,7 +213,7 @@ struct DashboardView: View {
             
             VStack(alignment: .leading, spacing: 12) {
                 if concerns.isEmpty {
-                    _ActionRow(
+                    ActionRow(
                         icon: "checkmark.shield.fill",
                         color: Color(hex: "#30D158"),
                         title: "All vitals are healthy",
@@ -221,7 +221,7 @@ struct DashboardView: View {
                     )
                 } else {
                     ForEach(concerns.prefix(3)) { concern in
-                        _ActionRow(
+                        ActionRow(
                             icon: concernIcon(for: concern.parameter),
                             color: concern.status == .concern ? Color(hex: "#FF453A") : Color(hex: "#FF9F0A"),
                             title: concern.title,
@@ -263,7 +263,7 @@ struct DashboardView: View {
         }
     }
     
-    private struct _ActionRow: View {
+    private struct ActionRow: View {
         let icon: String
         let color: Color
         let title: String
@@ -295,13 +295,13 @@ struct DashboardView: View {
     // MARK: Goals Section
     private var goalsSection: some View {
         VStack(alignment: .leading, spacing: 14) {
-            SectionHeader(title: "Dream Goals", destination: AnyView(GoalListView()))
+            SectionHeader(title: "Goals", destination: AnyView(GoalListView()))
             
             if goals.isEmpty {
                 emptyStateCard(
                     icon: "flag.2.crossed.fill",
                     title: "No goals set",
-                    message: "Complete your assessment to set financial goals.",
+                    message: "Plan your financial goals.",
                     accentColor: .orange
                 )
             } else {
@@ -332,7 +332,7 @@ struct DashboardView: View {
                 emptyStateCard(
                     icon: "building.columns.fill",
                     title: "No loans recorded",
-                    message: "Add your loans during assessment to track EMIs here.",
+                    message: "Add your loans to track EMIs here.",
                     accentColor: Color(hex: "#BF5AF2")
                 )
             } else {
