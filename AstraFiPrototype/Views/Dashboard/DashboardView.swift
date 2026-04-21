@@ -11,53 +11,47 @@ struct DashboardView: View {
     private var loans: [AstraLoan] { profile?.loans ?? [] }
     
     var body: some View {
-        NavigationStack{
-            ScrollView(showsIndicators: false) {
-                VStack(spacing: AppTheme.auraInterCardSpacing) {
-                    //auraHeaderView
-                    investmentSummaryCard
-                    
-                    if investments.isEmpty {
-                        emptyStateCard(
-                            icon: "sparkles",
-                            title: "Begin Your AstraFi Journey",
-                            message: "Complete your assessment to unlock personalised financial insights.",
-                            accentColor: AppTheme.auraGold
-                        )
-                    } else {
-                        nextStepCard
-                    }
-                    
-                    goalsSection
-                    upcomingEMISection
+        ScrollView(showsIndicators: false) {
+            VStack(spacing: AppTheme.auraInterCardSpacing) {
+                investmentSummaryCard
+                
+                if investments.isEmpty {
+                    emptyStateCard(
+                        icon: "sparkles",
+                        title: "Begin Your AstraFi Journey",
+                        message: "Complete your assessment to unlock personalised financial insights.",
+                        accentColor: AppTheme.auraGold
+                    )
+                } else {
+                    nextStepCard
                 }
-                .padding(.horizontal, AppTheme.auraPadding)
-                .padding(.bottom, 48)
+                
+                goalsSection
+                upcomingEMISection
             }
-            .navigationTitle("Home")
-            .toolbarTitleDisplayMode(.inlineLarge)
-            .background(AppTheme.appBackground(for: colorScheme))
-            .toolbar {
+            .padding(.horizontal, AppTheme.auraPadding)
+            .padding(.bottom, 48)
+        }
+        .navigationTitle("Home")
+        .navigationBarTitleDisplayMode(.large)
+        .background(AppTheme.appBackground(for: colorScheme))
+        .toolbar {
+            ToolbarItem(placement: .navigationBarTrailing) {
                 Button {
                     withAnimation(.spring(response: 0.3, dampingFraction: 0.5)) { bellAnimate.toggle() }
                 } label: {
                     Image(systemName: "bell.fill")
                 }
                 .rotationEffect(.degrees(bellAnimate ? -15 : 0))
-                
+            }
+            ToolbarItem(placement: .navigationBarTrailing) {
                 NavigationLink(destination: ProfileView()) {
                     Image(systemName: "person.circle")
                 }
             }
-            //.navigationBarHidden(true)
         }
     }
     
-    // MARK: Header
-//    private var auraHeaderView: some View {
-//        HStack(alignment: .center)
-//        .padding(.top, 16)
-//    }
     
     // MARK: Portfolio Hero Card
     private var investmentSummaryCard: some View {
@@ -71,20 +65,20 @@ struct DashboardView: View {
             // ── Top section: Portfolio value
             VStack(alignment: .leading, spacing: 4) {
                 Text("Total Portfolio")
-                    .font(.system(size: 13, weight: .semibold, design: .rounded))
+                    .font(.system(size: 13, weight: .semibold))
                     .foregroundStyle(.white.opacity(0.75))
                 
                 Text(currentVal.toCurrency())
-                    .font(.system(size: 38, weight: .bold, design: .rounded))
+                    .font(.system(size: 38, weight: .bold))
                     .foregroundStyle(.white)
                 
                 HStack(spacing: 6) {
                     Image(systemName: returnsPositive ? "arrow.up.right" : "arrow.down.right")
                         .font(.system(size: 11, weight: .bold))
                     Text(totalReturns.toCurrency())
-                        .font(.system(size: 13, weight: .semibold, design: .rounded))
+                        .font(.system(size: 13, weight: .semibold))
                     Text(returnsPositive ? "total returns" : "total loss")
-                        .font(.system(size: 13, design: .rounded))
+                        .font(.system(size: 13))
                         .opacity(0.8)
                 }
                 .padding(.horizontal, 10)
@@ -154,10 +148,10 @@ struct DashboardView: View {
                     .foregroundStyle(.white.opacity(0.7))
                 VStack(alignment: .leading, spacing: 1) {
                     Text(value)
-                        .font(.system(size: 14, weight: .bold, design: .rounded))
+                        .font(.system(size: 14, weight: .bold))
                         .foregroundStyle(.white)
                     Text(label)
-                        .font(.system(size: 10, design: .rounded))
+                        .font(.system(size: 10))
                         .foregroundStyle(.white.opacity(0.65))
                 }
             }
@@ -178,9 +172,9 @@ struct DashboardView: View {
             }
             VStack(spacing: 6) {
                 Text(title)
-                    .font(.system(size: 17, weight: .semibold, design: .rounded))
+                    .font(.system(size: 17, weight: .semibold))
                 Text(message)
-                    .font(.system(size: 14, design: .rounded))
+                    .font(.system(size: 14))
                     .foregroundStyle(.secondary)
                     .multilineTextAlignment(.center)
             }
@@ -201,9 +195,9 @@ struct DashboardView: View {
             HStack {
                 VStack(alignment: .leading, spacing: 2) {
                     Text("Action Required")
-                        .font(.system(size: 18, weight: .bold, design: .rounded))
+                        .font(.system(size: 18, weight: .bold))
                     Text(concerns.isEmpty ? "All vitals healthy" : "\(concerns.count) item\(concerns.count > 1 ? "s" : "") need attention")
-                        .font(.system(size: 12, design: .rounded))
+                        .font(.system(size: 12))
                         .foregroundStyle(.secondary)
                 }
                 Spacer()
@@ -240,7 +234,7 @@ struct DashboardView: View {
             NavigationLink(destination: PlannerView()) {
                 HStack(spacing: 8) {
                     Text("View Full Analysis")
-                        .font(.system(size: 14, weight: .semibold, design: .rounded))
+                        .font(.system(size: 14, weight: .semibold))
                     Spacer()
                     Image(systemName: "arrow.right")
                         .font(.system(size: 12, weight: .bold))
@@ -287,9 +281,9 @@ struct DashboardView: View {
                 }
                 VStack(alignment: .leading, spacing: 3) {
                     Text(title)
-                        .font(.system(size: 14, weight: .semibold, design: .rounded))
+                        .font(.system(size: 14, weight: .semibold))
                     Text(subtitle)
-                        .font(.system(size: 13, design: .rounded))
+                        .font(.system(size: 13))
                         .foregroundStyle(.secondary)
                         .fixedSize(horizontal: false, vertical: true)
                 }
@@ -380,12 +374,12 @@ private struct SectionHeader: View {
     var body: some View {
         HStack {
             Text(title)
-                .font(.system(size: 20, weight: .bold, design: .rounded))
+                .font(.system(size: 20, weight: .bold))
             Spacer()
             NavigationLink(destination: destination) {
                 HStack(spacing: 4) {
                     Text("See all")
-                        .font(.system(size: 13, weight: .semibold, design: .rounded))
+                        .font(.system(size: 13, weight: .semibold))
                     Image(systemName: "chevron.right")
                         .font(.system(size: 10, weight: .bold))
                 }
