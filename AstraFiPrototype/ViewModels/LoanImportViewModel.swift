@@ -17,18 +17,36 @@ class LoanImportViewModel {
                 try await processCSV(at: url)
             } else {
                 let results = try await LoanParserManager.shared.parseLoanPDF(at: url)
-                if results.isEmpty {
-                    errorMessage = "No loans were detected in this PDF."
-                } else {
-                    self.parsedLoans = results
-                    self.showReviewList = true
-                }
+                handleResults(results)
             }
         } catch {
             errorMessage = error.localizedDescription
         }
 
         isLoading = false
+    }
+    
+    func processLoanImage(_ image: UIImage) async {
+        isLoading = true
+        errorMessage = nil
+        
+        do {
+            let results = try await LoanParserManager.shared.parseLoanImage(image)
+            handleResults(results)
+        } catch {
+            errorMessage = error.localizedDescription
+        }
+        
+        isLoading = false
+    }
+    
+    private func handleResults(_ results: [ParsedLoan]) {
+        if results.isEmpty {
+            errorMessage = "No loans were detected in this document."
+        } else {
+            self.parsedLoans = results
+            self.showReviewList = true
+        }
     }
 
     private func processCSV(at url: URL) async throws {

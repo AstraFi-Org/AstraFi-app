@@ -1,6 +1,13 @@
 import Foundation
 import SwiftUI
 
+struct UserInvestment: Identifiable {
+    let id = UUID()
+    let name: String
+    let amount: Int
+    let category: String
+}
+
 struct PortfolioBlueprint: Codable, Equatable {
     var allocations: [AssetAllocation]
     var blendedCAGR: Double           

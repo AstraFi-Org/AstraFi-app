@@ -12,8 +12,26 @@ struct AstraUserProfile: Codable, Identifiable, Equatable {
     var goals: [AstraGoal]
     var financialHealthReport: AstraFinancialHealthReport?
     var cashflowData: CashflowEntry? = nil
+    var monthlyCashflowSnapshots: [String: CashflowEntry] = [:] // Key: "yyyy-MM"
     var monthlyHealthAssessments: [AstraHealthAssessment] = []
     var isSetuConnected: Bool = false
+    var emergencyFundAllocation: AstraEmergencyFundAllocation?
+}
+
+struct AstraEmergencyFundAllocation: Codable, Equatable {
+    var treasuryBills: Double = 0      // Percentage (0-100)
+    var commercialPapers: Double = 0   // Percentage (0-100)
+    var savingsAccount: Double = 100   // Percentage (0-100) - Start with 100% in savings
+    var sweepInFD: Double = 0          // Percentage (0-100)
+    
+    var isAllocatedByUser: Bool = false
+}
+
+extension Sequence where Element: Identifiable {
+    func removeDuplicates() -> [Element] {
+        var set = Set<Element.ID>()
+        return filter { set.insert($0.id).inserted }
+    }
 }
 
 struct AstraHealthAssessment: Codable, Identifiable, Equatable {
@@ -22,6 +40,7 @@ struct AstraHealthAssessment: Codable, Identifiable, Equatable {
     var score: Int
     var status: String 
     var keyInsights: [String]
+    var insights: FinancialAssessmentInsights?
 }
 
 struct AstraSignUp: Codable, Equatable {
@@ -87,6 +106,30 @@ struct AstraInvestment: Codable, Identifiable, Equatable {
     var lastUpdated: Date?
     var units: Double?
     var purchaseNAV: Double?
+
+    // Stock specific fields
+    var symbol: String?
+    var quantity: Double?
+    var livePrice: Double?
+    var priceChange: Double?
+    var priceChangePercentage: Double?
+    var createdAt: Date = Date()
+    
+    var installments: [AstraInvestmentTransaction] = []
+}
+
+struct AstraInvestmentTransaction: Codable, Identifiable, Equatable {
+    var id: UUID = UUID()
+    var date: Date
+    var type: TransactionType = .buy
+    var amount: Double
+    var nav: Double
+    var units: Double
+    
+    enum TransactionType: String, Codable {
+        case buy = "Buy"
+        case sell = "Sell"
+    }
 }
 
 enum AstraInvestmentType: String, Codable, CaseIterable {
@@ -109,16 +152,104 @@ enum AstraInvestmentMode: String, Codable {
 }
 
 extension AstraInvestment {
-    var currentValue: Double {
-        if let units = units, let nav = lastNAV {
-            return units * nav
+    var totalInvestedAmount: Double {
+        if !installments.isEmpty {
+            return installments.reduce(0.0) { result, tx in
+                if tx.type == .buy {
+                    return result + tx.amount
+                } else {
+                    return result - tx.amount
+                }
+            }
         }
+        
+        if mode == .sip {
+            let calendar = Calendar.current
+            let today = Date()
 
+            // Count only SIP instalments that have actually been triggered.
+            // Each instalment fires on the same day-of-month as startDate.
+            // We walk month-by-month and only count a month if that instalment
+            // date is on or before today.
+            var count = 0
+            var checkDate = startDate
+            while checkDate <= today {
+                count += 1
+                guard let next = calendar.date(byAdding: .month, value: 1, to: checkDate) else { break }
+                checkDate = next
+            }
+            return investmentAmount * Double(count)
+        }
         return investmentAmount
     }
 
+    var currentValue: Double {
+        let currentUnits: Double
+        if !installments.isEmpty {
+            currentUnits = installments.reduce(0.0) { result, tx in
+                if tx.type == .buy {
+                    return result + tx.units
+                } else {
+                    return result - tx.units
+                }
+            }
+        } else {
+            currentUnits = units ?? quantity ?? 0
+        }
+        
+        let price = livePrice ?? lastNAV ?? 0
+        return currentUnits * price
+    }
+
     var currentGain: Double {
-        currentValue - investmentAmount
+        currentValue - totalInvestedAmount
+    }
+
+    var tenureInYears: Double {
+        let diff = Calendar.current.dateComponents([.day], from: startDate, to: Date()).day ?? 0
+        return max(0.1, Double(diff) / 365.0)
+    }
+    
+    var absoluteProfitRatio: Double {
+        guard totalInvestedAmount > 0 else { return 0 }
+        return currentGain / totalInvestedAmount
+    }
+    
+    var expectedAnnualRate: Double {
+        // Calculate CAGR if tenure is significant (> 6 months)
+        let tenure = tenureInYears
+        let profitRatio = absoluteProfitRatio
+        
+        var rate: Double
+        if tenure >= 0.5 {
+            // Formula: (1 + r)^t = 1 + profitRatio => r = (1 + profitRatio)^(1/t) - 1
+            rate = pow(1.0 + profitRatio, 1.0 / tenure) - 1.0
+            
+            // Sanity check: cap extreme values (e.g. -20% to +40%)
+            if rate.isFinite {
+                 rate = max(-0.2, min(0.4, rate))
+            } else {
+                rate = defaultRateForType
+            }
+        } else {
+            // Fallback to asset class defaults for new investments
+            rate = defaultRateForType
+        }
+        
+        return rate
+    }
+    
+    private var defaultRateForType: Double {
+        switch investmentType {
+        case .stocks:         return 0.15
+        case .mutualFund:     return 0.12
+        case .cryptocurrency: return 0.20
+        case .deposits, .bonds, .ppf: return 0.07
+        case .goldETF, .physicalGold: return 0.09
+        case .realEstate:     return 0.08
+        case .nps:            return 0.10
+        default:              return 0.10
+        }
     }
 }
 
@@ -140,6 +271,9 @@ struct MFScheme: Identifiable, Codable, Equatable {
 
 struct AstraLoan: Codable, Identifiable, Equatable {
     var id: UUID = UUID()
+    /// Custom name entered by user in assessment (e.g. "Personal Loan", "Car EMI").
+    /// Empty string = display uses loanType.rawValue as fallback.
+    var loanName: String = ""
     var loanType: AstraLoanType
     var lender: AstraLoanLender
     var loanAmount: Double
@@ -171,21 +305,33 @@ struct AstraLoan: Codable, Identifiable, Equatable {
     var payments: [AstraLoanPayment] = []
 
     var trackTaxBenefits: Bool = false
+
+    /// Title shown in UI — user's custom name if entered, else the loan type label.
+    var displayName: String {
+        loanName.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty
+            ? loanType.rawValue
+            : loanName.trimmingCharacters(in: .whitespacesAndNewlines)
+    }
+
+    /// Subtitle shown in UI — bank name if selected, else the loan type (avoids showing "Other").
+    var displayLender: String {
+        lender == .other ? loanType.rawValue : lender.rawValue
+    }
 }
 
-enum AstraInterestType: String, Codable, CaseIterable {
+enum AstraInterestType: String, Codable, CaseIterable, Hashable {
     case simple = "Simple"
     case compound = "Compound"
 }
 
-enum AstraCompoundingFrequency: String, Codable, CaseIterable {
+enum AstraCompoundingFrequency: String, Codable, CaseIterable, Hashable {
     case none = "None"
     case monthly = "Monthly"
     case quarterly = "Quarterly"
     case yearly = "Yearly"
 }
 
-enum AstraEMIFrequency: String, Codable, CaseIterable {
+enum AstraEMIFrequency: String, Codable, CaseIterable, Hashable {
     case monthly = "Monthly"
     case biWeekly = "Bi-weekly"
 }
@@ -255,7 +401,7 @@ enum AstraInsuranceType: String, Codable, CaseIterable {
     case other = "Other"
 }
 
-enum AstraPremiumFrequency: String, Codable, CaseIterable {
+enum AstraPremiumFrequency: String, Codable, CaseIterable, Hashable {
     case monthly = "Monthly"
     case quarterly = "Quarterly"
     case halfYearly = "Half-Yearly"
@@ -409,15 +555,17 @@ struct AstraGoal: Codable, Identifiable, Equatable {
     var id: UUID = UUID()
     var goalName: String
     var targetAmount: Double
-    var currentAmount: Double
+    var currentAmount: Double // This will now represent the cached total or be superseded
+    var manualSavingsContribution: Double = 0
     var startDate: Date = Date()
     var targetDate: Date
 
-    init(id: UUID = UUID(), goalName: String, targetAmount: Double, currentAmount: Double, startDate: Date = Date(), targetDate: Date) {
+    init(id: UUID = UUID(), goalName: String, targetAmount: Double, currentAmount: Double, manualSavingsContribution: Double = 0, startDate: Date = Date(), targetDate: Date) {
         self.id = id
         self.goalName = goalName
         self.targetAmount = targetAmount
         self.currentAmount = currentAmount
+        self.manualSavingsContribution = manualSavingsContribution
         self.startDate = startDate
         self.targetDate = targetDate
     }
@@ -486,11 +634,38 @@ struct CashflowEntry: Codable, Equatable {
     var entertainment: Double = 0
     var misc:          Double = 0
 
-    var total: Double {
-        rent + groceries + utilities + dining + transport + shopping + entertainment + misc
+    struct DetailedItem: Identifiable, Codable, Equatable {
+        let id: UUID
+        var name: String
+        var amount: Double
+        
+        init(id: UUID = UUID(), name: String, amount: Double) {
+            self.id = id
+            self.name = name
+            self.amount = amount
+        }
+    }
+    
+    var incomeSources: [DetailedItem] = []
+    var expenseSources: [DetailedItem] = []
+
+    var totalIncome: Double {
+        incomeSources.reduce(0) { $0 + $1.amount }
+    }
+    
+    var totalExpenses: Double {
+        if !expenseSources.isEmpty {
+            return expenseSources.reduce(0) { $0 + $1.amount }
+        }
+        return rent + groceries + utilities + dining + transport + shopping + entertainment + misc
     }
 
+    var total: Double { totalExpenses }
+
     var breakdown: [(String, Double)] {
+        if !expenseSources.isEmpty {
+            return expenseSources.map { ($0.name, $0.amount) }
+        }
         let items: [(String, Double)] = [
             ("EMIs and Rent",        rent + transport),
             ("Living Expenses",      dailyHouseholdCombined),

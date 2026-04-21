@@ -12,7 +12,7 @@ struct AppRootView: View {
                 FinalTab()
 
             } else if appState.isAuthenticated {
-                WelcomeOnboardingView()
+                StartAssesmentView()
 
             } else if appState.hasCompletedOnboarding {
                 NavigationStack {

@@ -7,28 +7,31 @@ struct TrackerView: View {
     @Environment(\.colorScheme) private var colorScheme
 
     var body: some View {
-        ScrollView {
-            VStack(spacing: 24) {
+        ScrollView(showsIndicators: false) {
+            VStack(spacing: AppTheme.auraInterCardSpacing + 2) {
                 NetWorthCard(
                     netWorth: viewModel.netWorth,
                     growthAmount: viewModel.growthAmount,
                     accounts: viewModel.accounts
                 )
+
                 TrackerInvestmentsSection(investments: viewModel.investments)
+
                 if !viewModel.yourPlans.isEmpty {
                     TrackerYourPlansSection(plans: viewModel.yourPlans)
                 }
+
                 TrackerGoalsSection(goals: viewModel.goals)
                 TrackerLoansSection()
-                TrackerMoneyFlowSection(moneyFlowData: viewModel.moneyFlowData)
+                TrackerMoneyFlowSection()
                 TrackerFundAllocationSection(allocations: viewModel.fundAllocations)
             }
-            .padding(.horizontal, 16)
-            .padding(.bottom, 30)
+            .padding(.horizontal, AppTheme.auraPadding)
+            .padding(.bottom, 40)
         }
-        .background(AppTheme.appBackground(for: colorScheme))
         .navigationTitle("Tracker")
         .navigationBarTitleDisplayMode(.large)
+        .background(AppTheme.appBackground(for: colorScheme))
         .onAppear {
             viewModel.syncWithProfile(appState.currentProfile)
         }
@@ -38,6 +41,7 @@ struct TrackerView: View {
     }
 }
 
+
 #Preview {
     NavigationStack {
         TrackerView()
@@ -45,4 +49,3 @@ struct TrackerView: View {
             .environment(AppStateManager())
     }
 }
-

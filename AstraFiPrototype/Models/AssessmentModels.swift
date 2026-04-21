@@ -14,51 +14,56 @@ struct AssessmentInvestmentEntry: Identifiable {
     var isin: String?
     var units: String = ""
 
-    enum InvestmentType: String, CaseIterable, Identifiable {
+    var frequency: AssessmentSIPFrequency = .monthly
+
+    var symbol: String?
+    var quantity: String = ""
+    var livePrice: Double?
+    var currentValue: Double?
+    var totalInvested: Double?
+    var growthRate: Double?
+    
+    var customData: [String: String] = [:]
+    var transactions: [AssessmentInvestmentTransaction] = []
+
+    struct AssessmentInvestmentTransaction: Identifiable, Codable, Equatable {
+        var id: UUID = UUID()
+        var date: Date
+        var type: String // "Buy" or "Sell"
+        var amount: Double
+        var nav: Double
+        var units: Double
+    }
+
+    enum InvestmentType: String, CaseIterable, Identifiable, Hashable {
         case mutualFund = "Mutual Fund", stocks = "Stocks / Equity", bonds = "Bonds / Debt", realEstate = "Real Estate", gold = "Gold", crypto = "Cryptocurrency", ppf = "PPF", nps = "NPS"
         var id: String { rawValue }
     }
 
-    enum InvestmentMode: String, CaseIterable {
+    enum InvestmentMode: String, CaseIterable, Hashable {
         case lumpsum = "LumpSum", sip = "SIP" ,swp = "SWP"
+    }
+
+    enum AssessmentSIPFrequency: String, CaseIterable, Identifiable, Hashable {
+        case weekly = "Weekly", monthly = "Monthly", quarterly = "Quarterly", yearly = "Yearly"
+        var id: String { rawValue }
     }
 }
 
 struct AssessmentLoanEntry: Identifiable {
     let id = UUID()
     var type: LoanType = .homeLoan
-    var bank: String = ""
     var amount: String = ""
-    var startDate: Date = Date()
-    var firstEMIDate: Date = Date()
-    var showStartDatePicker: Bool = false
-    var showFirstEMIDatePicker: Bool = false
-
     var interestRate: String = ""
+    var tenure: String = ""
+    var moratorium: String = ""
+    var insurancePremium: String = ""
+    var loanName: String = ""
     var interestType: AstraInterestType = .compound
-    var compoundingFrequency: AstraCompoundingFrequency = .monthly
+    var frequency: AstraCompoundingFrequency = .monthly
+    var customData: [String: String] = [:]
 
-    var emiAmount: String = ""
-    var emiFrequency: AstraEMIFrequency = .monthly
-
-    var timePeriod: String = ""
-    var installmentsPaid: String = ""
-
-    var prepaymentPenalty: String = ""
-
-    var isFloatingRate: Bool = false
-
-    var processingFee: String = ""
-    var insuranceCost: String = ""
-    var latePaymentPenalty: String = ""
-    var otherCharges: String = ""
-
-    var moratoriumDuration: String = ""
-    var interestAccrualDuringMoratorium: Bool = true
-
-    var trackTaxBenefits: Bool = false
-
-    enum LoanType: String, CaseIterable, Identifiable {
+    enum LoanType: String, CaseIterable, Identifiable, Hashable {
         case homeLoan = "Home Loan", carLoan = "Car Loan", educationLoan = "Education Loan", businessLoan = "Business Loan", personalLoan = "Personal Loan", creditCard = "Credit Card"
         var id: String { rawValue }
     }
@@ -99,7 +104,7 @@ struct AssessmentInsuranceEntry: Identifiable {
         details = details.switched(to: newType)
     }
 
-    enum InsuranceDetails {
+    enum InsuranceDetails: Hashable {
         case life(LifeDetails)
         case health(HealthDetails)
         case motor(MotorDetails)
@@ -141,7 +146,7 @@ struct AssessmentInsuranceEntry: Identifiable {
         var asULIP:            ULIPDetails?            { if case .ulip(let d)            = self { return d }; return nil }
     }
 
-    enum InsuranceType: String, CaseIterable, Identifiable {
+    enum InsuranceType: String, CaseIterable, Identifiable, Hashable {
         case life = "Life Insurance", health = "Health Insurance", criticalIllness = "Critical Illness", term = "Term Insurance", motor = "Motor Insurance", travel = "Travel Insurance", ulip = "ULIP"
         var id: String { rawValue }
 
@@ -160,14 +165,14 @@ struct AssessmentInsuranceEntry: Identifiable {
         }
     }
 
-    struct LifeDetails {
+    struct LifeDetails: Hashable {
         var nomineeName: String = ""
         var maturityBenefit: String = ""
         var deathBenefit: String = ""
         var lifeInsuranceType: String = "Endowment"
     }
 
-    struct HealthDetails {
+    struct HealthDetails: Hashable {
         var planType: String = "Individual"
         var roomRentLimit: String = ""
         var prePostHospitalization: String = ""
@@ -175,7 +180,7 @@ struct AssessmentInsuranceEntry: Identifiable {
         var networkHospitalsCount: String = ""
     }
 
-    struct MotorDetails {
+    struct MotorDetails: Hashable {
         var vehicleModel: String = ""
         var vehicleNumber: String = ""
         var idv: String = ""
@@ -183,25 +188,25 @@ struct AssessmentInsuranceEntry: Identifiable {
         var roadsideAssistance: Bool = false
     }
 
-    struct TermDetails {
+    struct TermDetails: Hashable {
         var nomineeName: String = ""
         var deathBenefit: String = ""
         var returnOfPremium: Bool = false
     }
 
-    struct CriticalIllnessDetails {
+    struct CriticalIllnessDetails: Hashable {
         var illnessesCovered: String = ""
         var waitingPeriodDays: String = ""
     }
 
-    struct TravelDetails {
+    struct TravelDetails: Hashable {
         var destination: String = ""
         var tripDurationDays: String = ""
         var coversMedical: Bool = true
         var coversCancellation: Bool = false
     }
 
-    struct ULIPDetails {
+    struct ULIPDetails: Hashable {
         var nomineeName: String = ""
         var fundType: String = ""
         var surrenderValue: String = ""

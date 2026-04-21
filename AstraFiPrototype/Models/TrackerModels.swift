@@ -29,6 +29,7 @@ struct Goal: Identifiable {
     let targetAmount: String
     let collectedAmount: String
     let timePeriod: String
+    let progress: Double // Percentage between 0 and 1
 }
 
 struct Loan: Identifiable {
@@ -48,6 +49,22 @@ struct MoneyFlowData: Identifiable {
     let savings: Double
     let emergencyFund: Double
     let expenses: Double
+}
+
+struct MoneyFlowChartItem: Identifiable, Codable {
+    let id: UUID
+    let month: String
+    let type: String // "Income" or "Expense"
+    let category: String
+    let amount: Double
+    
+    init(id: UUID = UUID(), month: String, type: String, category: String, amount: Double) {
+        self.id = id
+        self.month = month
+        self.type = type
+        self.category = category
+        self.amount = amount
+    }
 }
 
 struct FundAllocation: Identifiable {
