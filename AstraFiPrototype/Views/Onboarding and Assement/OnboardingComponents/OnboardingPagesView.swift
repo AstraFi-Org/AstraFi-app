@@ -29,54 +29,54 @@ struct OnboardingPagesView: View {
     @State private var currentPage = 0
 
     var body: some View {
-        ZStack {
-            Color(.systemBackground).ignoresSafeArea()
+        NavigationStack {
+            ZStack {
+                Color(.systemBackground).ignoresSafeArea()
 
-            VStack {
+                VStack {
 
-                // Skip Button — goes straight to Sign In/Sign Up
-                HStack {
+                    PageView(page: onboardingPages[currentPage])
+                        .animation(.easeInOut, value: currentPage)
+
+                    // Page indicators
+                    HStack(spacing: 8) {
+                        ForEach(0..<onboardingPages.count, id: \.self) { index in
+                            Capsule()
+                                .fill(index == currentPage ? Color.blue : Color.gray.opacity(0.3))
+                                .frame(width: index == currentPage ? 20 : 8, height: 8)
+                        }
+                    }
+                    .animation(.easeInOut, value: currentPage)
+                    .padding(.bottom, 30)
+
+                    // Next / Get Started button
+                    Button(action: next) {
+                        Text(currentPage == onboardingPages.count - 1 ? "Get Started" : "Next")
+                            .font(.system(size: 17, weight: .semibold))
+                            .foregroundColor(.white)
+                            .frame(maxWidth: .infinity)
+                            .padding()
+                            .background(Color.blue)
+                            .clipShape(Capsule())
+                    }
+                    .padding(.horizontal)
+
                     Spacer()
+                }
+            }
+            .navigationTitle("") // keep it clean
+            .navigationBarTitleDisplayMode(.inline)
+            .toolbar {
+                ToolbarItem(placement: .topBarTrailing) {
                     Button("Skip") {
                         navigateToAuth()
                     }
                     .font(.system(size: 16, weight: .medium))
-                    .foregroundStyle(Color.blue)
-                    .padding()
                 }
-
-                PageView(page: onboardingPages[currentPage])
-                    .animation(.easeInOut, value: currentPage)
-
-                // Page indicators
-                HStack(spacing: 8) {
-                    ForEach(0..<onboardingPages.count, id: \.self) { index in
-                        Capsule()
-                            .fill(index == currentPage ? Color.blue : Color.gray.opacity(0.3))
-                            .frame(width: index == currentPage ? 20 : 8, height: 8)
-                    }
-                }
-                .animation(.easeInOut, value: currentPage)
-                .padding(.bottom, 30)
-
-                // Next / Get Started button
-                Button(action: next) {
-                    Text(currentPage == onboardingPages.count - 1 ? "Get Started" : "Next")
-                        .font(.system(size: 17, weight: .semibold))
-                        .foregroundColor(.white)
-                        .frame(maxWidth: .infinity)
-                        .padding()
-                        .background(Color.blue)
-                        .clipShape(Capsule())
-                }
-                .padding(.horizontal)
-
-                Spacer()
             }
         }
     }
 
-    // Advance page; on last page navigate to Sign In / Sign Up
     func next() {
         if currentPage < onboardingPages.count - 1 {
             withAnimation { currentPage += 1 }
@@ -85,8 +85,6 @@ struct OnboardingPagesView: View {
         }
     }
 
-    // Marks onboarding complete — AppRootView observes this flag
-    // and automatically presents AuthenticationFlowView (Sign In / Sign Up)
     func navigateToAuth() {
         appState.hasCompletedOnboarding = true
     }
