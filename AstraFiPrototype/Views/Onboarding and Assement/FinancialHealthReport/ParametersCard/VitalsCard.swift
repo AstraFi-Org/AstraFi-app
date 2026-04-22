@@ -30,7 +30,6 @@ struct VitalsCard: View {
                         ForEach(FinancialHealthReportView.VitalsPeriod.allCases, id: \.self) { Text($0.rawValue) }
                     }
                     .pickerStyle(.segmented).frame(width: 160)
-                    Image(systemName: "chevron.right").font(.caption).fontWeight(.semibold).foregroundStyle(.tertiary)
                 }
             }
             HStack {

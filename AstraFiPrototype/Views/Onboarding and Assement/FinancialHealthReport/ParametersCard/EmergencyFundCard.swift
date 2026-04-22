@@ -29,7 +29,6 @@ struct EmergencyFundCard: View {
                     Text("\(Int(progress * 100))% funded").font(.caption).fontWeight(.bold)
                         .foregroundStyle(progressColor).padding(.horizontal, 10).padding(.vertical, 4)
                         .background(progressColor.opacity(0.1)).clipShape(Capsule())
-                    Image(systemName: "chevron.right").font(.caption).fontWeight(.semibold).foregroundStyle(.tertiary)
                 }
             }
             GeometryReader { geo in

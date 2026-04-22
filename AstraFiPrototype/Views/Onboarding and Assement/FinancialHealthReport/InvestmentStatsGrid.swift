@@ -22,7 +22,6 @@ struct InvestmentStatsGrid: View {
             HStack {
                 Text("Portfolio Overview").font(.headline)
                 Spacer()
-                Image(systemName: "chevron.right").font(.caption).fontWeight(.semibold).foregroundStyle(.tertiary)
             }
             .padding(.horizontal, 16).padding(.top, 16).padding(.bottom, 14)
             Divider().padding(.horizontal, 16)
