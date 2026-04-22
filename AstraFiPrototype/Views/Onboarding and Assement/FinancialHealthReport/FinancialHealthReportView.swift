@@ -86,8 +86,7 @@ struct FinancialHealthReportView: View {
                        expenses: displayedExpenses,
                        cashflow: appState.currentProfile?.cashflowData)
             .padding(.horizontal, 20).padding(.bottom, 6)
-            .contentShape(Rectangle()).onTapGesture { vitalsDetail = true }
-
+            .contentShape(Rectangle())
             DisclosureLink("Where do you spend the most?") { spendingSheet = true }
                 .padding(.horizontal, 20).padding(.bottom, 24)
         }
@@ -99,7 +98,7 @@ struct FinancialHealthReportView: View {
             InvestmentStatsGrid(total: investCount,
                                 atRisk: insights.investmentBreakdown.highRiskCount)
             .padding(.horizontal, 20).padding(.bottom, 10)
-            .contentShape(Rectangle()).onTapGesture { riskSheet = true }
+//            .contentShape(Rectangle()).onTapGesture { riskSheet = true }
 
             DisclosureLink("How can I reduce investment risk?") { riskSheet = true }
                 .padding(.horizontal, 20).padding(.bottom, 24)
@@ -114,8 +113,7 @@ struct FinancialHealthReportView: View {
                               lowRiskLiquid: insights.investmentBreakdown.lowRiskLiquidAmount,
                               statusMessage: insights.emergencyStatusMessage)
             .padding(.horizontal, 20).padding(.bottom, 6)
-            .contentShape(Rectangle()).onTapGesture { emergencyDetail = true }
-
+            .contentShape(Rectangle())
             DisclosureLink("How to improve emergency-fund liquidity?") { emergencyDetail = true }
                 .padding(.horizontal, 20).padding(.bottom, 24)
         }
@@ -132,7 +130,7 @@ struct FinancialHealthReportView: View {
                     ?? (data?.insuranceEntries.contains { [.life, .term, .ulip].contains($0.currentType) } ?? false)
             )
             .padding(.horizontal, 20).padding(.bottom, 6)
-            .contentShape(Rectangle()).onTapGesture { insuranceSheet = true }
+            .contentShape(Rectangle())
 
             DisclosureLink("Help me choose the right insurance") { insuranceSheet = true }
                 .padding(.horizontal, 20).padding(.bottom, 28)
