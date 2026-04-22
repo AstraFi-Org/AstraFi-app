@@ -41,7 +41,7 @@ struct PlannerView: View {
                 }
             }
         } else {
-            // Matching detail view logic usually implies monthly or annual. 
+            // Matching detail view logic usually implies monthly or annual.
             // Stick to monthly compounding for consistency.
             let pqrMonthly = pow(1 + monthlyRate, months)
             if pqrMonthly.isFinite {
@@ -83,7 +83,7 @@ struct PlannerView: View {
                             .font(.system(size: 15, weight: .semibold))
                             .foregroundStyle(AppTheme.auraIndigo)
                         Text("Financial Vitals")
-                            .font(.system(size: 20, weight: .bold, design: .rounded))
+                            .font(.system(size: 20, weight: .bold))
                     }
 
                     VStack(spacing: 14) {
@@ -118,7 +118,7 @@ struct PlannerView: View {
                                     .foregroundStyle(Color(hex: "#FF9F0A"))
                                     .font(.system(size: 14))
                                 Text("Complete your assessment to see financial vitals")
-                                    .font(.system(size: 13, design: .rounded))
+                                    .font(.system(size: 13))
                                     .foregroundStyle(.secondary)
                             } else {
                                 Image(systemName: savingRate >= 30 ? "checkmark.seal.fill" : "chart.line.uptrend.xyaxis")
@@ -127,7 +127,7 @@ struct PlannerView: View {
                                 Text(savingRate >= 30
                                      ? "Great! Your \(savingRate)% saving rate is above the recommended 30%."
                                      : "Your saving rate is \(savingRate)%. Try to reach at least 30%.")
-                                    .font(.system(size: 13, design: .rounded))
+                                    .font(.system(size: 13))
                                     .foregroundStyle(.secondary)
                             }
                             Spacer()
@@ -156,7 +156,7 @@ struct PlannerView: View {
                             .font(.system(size: 15, weight: .semibold))
                             .foregroundStyle(AppTheme.vibrantCyan)
                         Text("Emergency Fund")
-                            .font(.system(size: 20, weight: .bold, design: .rounded))
+                            .font(.system(size: 20, weight: .bold))
                     }
                     EmergencyFundSectionView()
                 }
@@ -170,7 +170,7 @@ struct PlannerView: View {
                             .font(.system(size: 15, weight: .semibold))
                             .foregroundStyle(AppTheme.auraGold)
                         Text("Value Forecast")
-                            .font(.system(size: 20, weight: .bold, design: .rounded))
+                            .font(.system(size: 20, weight: .bold))
                     }
 
                     if investments.isEmpty {
@@ -185,9 +185,9 @@ struct PlannerView: View {
                             }
                             VStack(spacing: 4) {
                                 Text("No data to forecast yet")
-                                    .font(.system(size: 15, weight: .semibold, design: .rounded))
+                                    .font(.system(size: 15, weight: .semibold))
                                 Text("Add investments to see projected portfolio growth.")
-                                    .font(.system(size: 13, design: .rounded))
+                                    .font(.system(size: 13))
                                     .foregroundStyle(.secondary)
                                     .multilineTextAlignment(.center)
                             }
@@ -208,7 +208,7 @@ struct PlannerView: View {
                                         }
                                     } label: {
                                         Text("\(yr) Years")
-                                            .font(.system(size: 14, weight: .semibold, design: .rounded))
+                                            .font(.system(size: 14, weight: .semibold))
                                             .foregroundStyle(projectionYears == yr ? .white : .secondary)
                                             .padding(.horizontal, 20)
                                             .padding(.vertical, 8)
@@ -268,11 +268,11 @@ struct PlannerView: View {
                                             .font(.system(size: 10))
                                             .foregroundStyle(.secondary)
                                         Text("1 Year")
-                                            .font(.system(size: 12, design: .rounded))
+                                            .font(.system(size: 12))
                                             .foregroundStyle(.secondary)
                                     }
                                     Text(oneYearProjection.toCurrency())
-                                        .font(.system(size: 15, weight: .bold, design: .rounded))
+                                        .font(.system(size: 15, weight: .bold))
                                 }
                                 .frame(maxWidth: .infinity, alignment: .leading)
                                 .padding(14)
@@ -285,11 +285,11 @@ struct PlannerView: View {
                                             .font(.system(size: 10))
                                             .foregroundStyle(AppTheme.auraIndigo)
                                         Text("\(projectionYears) Years")
-                                            .font(.system(size: 12, design: .rounded))
+                                            .font(.system(size: 12))
                                             .foregroundStyle(.secondary)
                                     }
                                     Text(selectedYearProjection.toCurrency())
-                                        .font(.system(size: 15, weight: .bold, design: .rounded))
+                                        .font(.system(size: 15, weight: .bold))
                                         .foregroundStyle(AppTheme.auraIndigo)
                                 }
                                 .frame(maxWidth: .infinity, alignment: .leading)
@@ -303,7 +303,7 @@ struct PlannerView: View {
                             // Fund breakdown
                             VStack(alignment: .leading, spacing: 10) {
                                 Text("Fund Breakdown (\(projectionYears)Y)")
-                                    .font(.system(size: 11, weight: .bold, design: .rounded))
+                                    .font(.system(size: 11, weight: .bold))
                                     .foregroundStyle(.secondary)
                                     .textCase(.uppercase)
                                     .tracking(0.8)
@@ -316,10 +316,10 @@ struct PlannerView: View {
 
                                         VStack(alignment: .leading, spacing: 2) {
                                             Text(inv.investmentName)
-                                                .font(.system(size: 14, weight: .medium, design: .rounded))
+                                                .font(.system(size: 14, weight: .medium))
                                                 .lineLimit(1)
                                             Text(inv.mode.rawValue)
-                                                .font(.system(size: 12, design: .rounded))
+                                                .font(.system(size: 12))
                                                 .foregroundStyle(.secondary)
                                         }
 
@@ -328,14 +328,14 @@ struct PlannerView: View {
                                         VStack(alignment: .trailing, spacing: 2) {
                                             let projected = projectedValue(for: inv, inYears: projectionYears)
                                             Text(projected.toCurrency())
-                                                .font(.system(size: 14, weight: .bold, design: .rounded))
+                                                .font(.system(size: 14, weight: .bold))
 
                                             HStack(spacing: 4) {
                                                 Text("Forecast:")
                                                     .font(.system(size: 10))
                                                     .foregroundStyle(.secondary)
                                                 Text("+\(Int(inv.expectedAnnualRate * 100))% p.a.")
-                                                    .font(.system(size: 11, weight: .bold, design: .rounded))
+                                                    .font(.system(size: 11, weight: .bold))
                                                     .foregroundStyle(AppTheme.auraGreen)
                                             }
                                         }
@@ -438,10 +438,10 @@ struct ActionButton: View {
                 }
                 VStack(alignment: .leading, spacing: 3) {
                     Text(title)
-                        .font(.system(size: 15, weight: .bold, design: .rounded))
+                        .font(.system(size: 15, weight: .bold))
                         .foregroundStyle(.primary)
                     Text(subtitle)
-                        .font(.system(size: 12, design: .rounded))
+                        .font(.system(size: 12))
                         .foregroundStyle(.secondary)
                 }
                 Spacer()

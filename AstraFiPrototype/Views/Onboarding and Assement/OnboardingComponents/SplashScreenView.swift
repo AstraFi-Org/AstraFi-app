@@ -72,11 +72,11 @@ struct SplashScreenView: View {
 
                 VStack(spacing: 6) {
                     Text("AstraFi")
-                        .font(.system(size: 38, weight: .bold, design: .rounded))
+                        .font(.system(size: 38, weight: .bold))
                         .foregroundStyle(.white)
 
                     Text("A Finance Guiding Star")
-                        .font(.system(size: 15, weight: .medium, design: .rounded))
+                        .font(.system(size: 15, weight: .medium))
                         .foregroundStyle(Color.white.opacity(0.5))
                         .tracking(0.5)
                 }
