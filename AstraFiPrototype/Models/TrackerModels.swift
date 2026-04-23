@@ -1,6 +1,20 @@
 import Foundation
 import SwiftUI
 
+/// Lightweight summary of a single investment used for the overview breakdown card.
+struct InvestmentSummaryItem: Identifiable {
+    let id: UUID
+    let name: String
+    let category: String
+    let risk: String
+    let invested: Double
+    let currentValue: Double
+    /// Positive = gain, negative = loss
+    var gainLoss: Double { currentValue - invested }
+    var gainLossPct: Double { invested > 0 ? (gainLoss / invested) * 100 : 0 }
+    var isGainer: Bool { gainLoss >= 0 }
+}
+
 struct Account: Identifiable {
     let id = UUID()
     let name: String
@@ -99,23 +113,23 @@ struct InvestmentPlanInputModel: Codable, Hashable {
     var currentAge: Int?
     var retirementAge: Int?
     var yearsPostRetirement: Int?
-    var lifestylePreference: String? 
+    var lifestylePreference: String?
     var yearlyStepUpPct: Double?
     var withdrawalPreference: String?
 
-    var educationFor: String? 
+    var educationFor: String?
     var educationDurationYrs: Int?
-    var educationLocation: String? 
-    var fundingStrategy: String? 
+    var educationLocation: String?
+    var fundingStrategy: String?
 
     var downPaymentAffordable: Double?
-    var vehicleBuyLogic: String? 
+    var vehicleBuyLogic: String?
 
-    var destinationType: String? 
+    var destinationType: String?
     var isFlexibleTimeline: Bool?
 
-    var contributionSplit: String? 
-    var wealthIntent: String? 
+    var contributionSplit: String?
+    var wealthIntent: String?
 }
 
 struct InvestmentPlanModel: Identifiable, Hashable {
