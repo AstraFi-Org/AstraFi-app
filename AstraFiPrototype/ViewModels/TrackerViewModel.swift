@@ -23,6 +23,24 @@ class TrackerViewModel {
     var moneyFlowChartData: [MoneyFlowChartItem] = []
     var fundAllocations: [FundAllocation] = []
 
+    // MARK: – Portfolio summary (synced from profile investments)
+
+    /// Sum of all principal amounts actually deployed (SIP-aware, installment-aware)
+    var portfolioTotalInvested: Double = 0
+    /// Sum of live current values across all investments
+    var portfolioTotalCurrentValue: Double = 0
+    /// Net gain  = currentValue − invested  (negative ⇒ loss)
+    var portfolioNetGain: Double = 0
+    /// Absolute return %  = netGain / totalInvested × 100
+    var portfolioReturnPct: Double = 0
+    /// CAGR across the whole portfolio (wealth-weighted average)
+    var portfolioCAGR: Double = 0
+
+    /// Investments in profit (currentValue > totalInvestedAmount)
+    var gainers: [InvestmentSummaryItem] = []
+    /// Investments in loss  (currentValue < totalInvestedAmount)
+    var losers: [InvestmentSummaryItem] = []
+
     var yourPlans: [InvestmentPlanModel] = []
     var savedPlanNames: Set<String> = []
     var followedPlanNames: Set<String> = []
@@ -104,10 +122,56 @@ class TrackerViewModel {
             self.investments = newInvestments
             self.goals = newGoals
             self.netWorth = nw.isFinite ? nw : 0
-            self.growthAmount = 0 
+            self.growthAmount = 0
             self.moneyFlowData = currentMoneyFlow
             self.moneyFlowChartData = self.calculateMoneyFlowChartData(profile, df: df)
             self.fundAllocations = newAllocations
+
+            // ── Portfolio summary ──────────────────────────────────────────
+            let allInv = profile.investments
+
+            let totalInv = allInv.reduce(0.0) { $0 + $1.totalInvestedAmount }
+            let totalCurr = allInv.reduce(0.0) { $0 + $1.currentValue }
+            let netGain = totalCurr - totalInv
+            let returnPct = totalInv > 0 ? (netGain / totalInv) * 100 : 0
+
+            // Portfolio CAGR: weight each investment's CAGR by its invested share
+            let cagrWeighted: Double = {
+                guard totalInv > 0 else { return 0 }
+                let weightedSum = allInv.reduce(0.0) { sum, inv in
+                    let w = inv.totalInvestedAmount / totalInv
+                    return sum + (inv.expectedAnnualRate * w)
+                }
+                return weightedSum * 100 // convert to %
+            }()
+
+            // Build per-investment summary items
+            let summaryItems: [InvestmentSummaryItem] = allInv.map { inv in
+                let risk: String
+                switch inv.investmentType {
+                case .stocks, .cryptocurrency: risk = "High Risk"
+                case .mutualFund, .nps:        risk = "Moderate Risk"
+                default:                        risk = "Low Risk"
+                }
+                return InvestmentSummaryItem(
+                    id: inv.id,
+                    name: inv.investmentName,
+                    category: inv.investmentType.rawValue,
+                    risk: risk,
+                    invested: inv.totalInvestedAmount,
+                    currentValue: inv.currentValue
+                )
+            }
+
+            self.portfolioTotalInvested     = totalInv.isFinite    ? totalInv    : 0
+            self.portfolioTotalCurrentValue = totalCurr.isFinite   ? totalCurr   : 0
+            self.portfolioNetGain           = netGain.isFinite     ? netGain     : 0
+            self.portfolioReturnPct         = returnPct.isFinite   ? returnPct   : 0
+            self.portfolioCAGR              = cagrWeighted.isFinite ? cagrWeighted : 0
+            self.gainers = summaryItems.filter {  $0.isGainer }
+                                       .sorted { $0.gainLoss  > $1.gainLoss  }
+            self.losers  = summaryItems.filter { !$0.isGainer }
+                                       .sorted { $0.gainLoss  < $1.gainLoss  }
         }
     }
     
