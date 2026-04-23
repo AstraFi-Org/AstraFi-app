@@ -144,55 +144,55 @@ var brandGradient: LinearGradient {
 //    }
 //}
 //
-//struct UploadDropZone: View {
-//    let fileName: String?
-//    var placeholderText: String = "Tap to upload PDF"
-//    var supportText: String = "Supports: PDF only"
-//    var changeFileText: String = "Tap to change file"
-//    var action: (() -> Void)? = nil
-//
-//    @State private var isPressed = false
-//
-//    private let green = Color.blue
-//
-//    var body: some View {
-//        Button {
-//            action?()
-//        } label: {
-//            ZStack {
-//                RoundedRectangle(cornerRadius: 14, style: .continuous)
-//                    .strokeBorder(
-//                        green.opacity(isPressed ? 0.8 : 0.4),
-//                        style: StrokeStyle(lineWidth: 1.5, dash: [6, 4])
-//                    )
-//                    .background(
-//                        RoundedRectangle(cornerRadius: 14, style: .continuous)
-//                            .fill(green.opacity(isPressed ? 0.10 : 0.05))
-//                    )
-//                    .frame(height: 110)
-//
-//                VStack(spacing: 8) {
-//                    Image(systemName: fileName == nil ? "arrow.down.doc.fill" : "checkmark.circle.fill")
-//                        .font(.system(size: 28))
-//                        .foregroundStyle(green.opacity(0.75))
-//
-//                    Text(fileName == nil ? placeholderText : fileName!)
-//                        .font(.subheadline)
-//                        .fontWeight(.medium)
-//                        .foregroundStyle(green.opacity(0.85))
-//
-//                    Text(fileName == nil ? supportText : changeFileText)
-//                        .font(.caption2)
-//                        .foregroundStyle(.tertiary)
-//                }
-//            }
-//        }
-//        .buttonStyle(.plain)
-//        .scaleEffect(isPressed ? 0.97 : 1.0)
-//        .animation(.easeInOut(duration: 0.15), value: isPressed)
-//        ._onButtonGesture(pressing: { isPressed = $0 }, perform: {})
-//    }
-//}
+struct UploadDropZone: View {
+    let fileName: String?
+    var placeholderText: String = "Tap to upload PDF"
+    var supportText: String = "Supports: PDF only"
+    var changeFileText: String = "Tap to change file"
+    var action: (() -> Void)? = nil
+
+    @State private var isPressed = false
+
+    private let green = Color.blue
+
+    var body: some View {
+        Button {
+            action?()
+        } label: {
+            ZStack {
+                RoundedRectangle(cornerRadius: 14, style: .continuous)
+                    .strokeBorder(
+                        green.opacity(isPressed ? 0.8 : 0.4),
+                        style: StrokeStyle(lineWidth: 1.5, dash: [6, 4])
+                    )
+                    .background(
+                        RoundedRectangle(cornerRadius: 14, style: .continuous)
+                            .fill(green.opacity(isPressed ? 0.10 : 0.05))
+                    )
+                    .frame(height: 110)
+
+                VStack(spacing: 8) {
+                    Image(systemName: fileName == nil ? "arrow.down.doc.fill" : "checkmark.circle.fill")
+                        .font(.system(size: 28))
+                        .foregroundStyle(green.opacity(0.75))
+
+                    Text(fileName == nil ? placeholderText : fileName!)
+                        .font(.subheadline)
+                        .fontWeight(.medium)
+                        .foregroundStyle(green.opacity(0.85))
+
+                    Text(fileName == nil ? supportText : changeFileText)
+                        .font(.caption2)
+                        .foregroundStyle(.tertiary)
+                }
+            }
+        }
+        .buttonStyle(.plain)
+        .scaleEffect(isPressed ? 0.97 : 1.0)
+        .animation(.easeInOut(duration: 0.15), value: isPressed)
+        ._onButtonGesture(pressing: { isPressed = $0 }, perform: {})
+    }
+}
 //
 //struct OrDivider: View {
 //    var text: String = "or"

@@ -22,7 +22,7 @@ struct LoanDetailsScreen: View {
             Color(.systemGroupedBackground).ignoresSafeArea()
 
             VStack(spacing: 0) {
-                AssessmentProgressHeader(progress: 0.75, title: "Your Loans", subtitle: "Add any active loans or EMIs to understand your debt ratio.")
+                AssessmentProgressHeader(progress: 0.75, title: "Your Liabilities", subtitle: "Add any active loans or EMIs to understand your debt ratio.")
                     .padding(.top, 16).padding(.horizontal, 20).padding(.bottom, 12)
 
                 Form {
@@ -52,11 +52,11 @@ struct LoanDetailsScreen: View {
                                     Label("Select from Gallery", systemImage: "photo.on.rectangle")
                                 }
 
-                                Button {
-                                    showCamera = true
-                                } label: {
-                                    Label("Take Photo", systemImage: "camera.fill")
-                                }
+//                                Button {
+//                                    showCamera = true
+//                                } label: {
+//                                    Label("Take Photo", systemImage: "camera.fill")
+//                                }
                             } label: {
                                 Label(uploadedFileName ?? "Import from Document/Image", systemImage: "plus.viewfinder")
                                     .fontWeight(.medium)
@@ -103,24 +103,91 @@ struct LoanDetailsScreen: View {
                                 if !entry.loanName.isEmpty {
                                     TextField("Scheme Name", text: $entry.loanName)
                                 }
-
-                                TextField("Loan Amount (₹)", text: $entry.amount)
+//                                AssessmentField(
+//                                    icon: "indianrupeesign",
+//                                    label: "Loan Amount",
+//                                    placeholder: "e.g. 352000",
+//                                    text: $entry.amount,
+//                                    keyboard: .numberPad
+//                                )
+                                HStack{
+                                    Text("Loan Amount")
+                                    Spacer()
+                                    TextField("Loan Amount (₹)", text: $entry.amount)
                                     .keyboardType(.numberPad)
-
-                                TextField("Interest Rate (%)", text: $entry.interestRate)
-                                    .keyboardType(.decimalPad)
-
-                                TextField("Tenure (Months)", text: $entry.tenure)
-                                    .keyboardType(.numberPad)
+                                    .multilineTextAlignment(.trailing)
+                                    .frame(width: 150)
+                                }
+//                                AssessmentField(
+//                                    icon: "percent",
+//                                    label: "Interest Rate (%)",
+//                                    placeholder: "e.g. 7.5",
+//                                    text: $entry.interestRate,
+//                                    keyboard: .decimalPad
+//                                )
+                                HStack{
+                                    Text("Interest Rate (%)")
+                                    Spacer()
+                                    TextField("Interest Rate (%)", text: $entry.interestRate)
+                                        .keyboardType(.decimalPad)
+                                        .multilineTextAlignment(.trailing)
+                                        .frame(width: 150)
+                                    
+                                }
+//                                AssessmentField(
+//                                    icon: "calendar",
+//                                    label: "Tenure (Months)",
+//                                    placeholder: "e.g. 20",
+//                                    text: $entry.tenure,
+//                                    keyboard: .numberPad
+//                                )
+                                HStack{
+                                    Text("Tenure (Months)")
+                                    Spacer()
+                                    
+                                    TextField("Tenure (Months)", text: $entry.tenure)
+                                        .keyboardType(.numberPad)
+                                        .multilineTextAlignment(.trailing)
+                                        .frame(width: 150)
+                                }
+                                
+                                
                                 
                                 if !entry.moratorium.isEmpty {
-                                    TextField("Moratorium (Months)", text: $entry.moratorium)
-                                        .keyboardType(.numberPad)
+//                                    AssessmentField(
+//                                        icon: "calendar",
+//                                        label: "Moratorium (Months)",
+//                                        placeholder: "e.g. 3",
+//                                        text: $entry.moratorium,
+//                                        keyboard: .numberPad
+//                                    )
+                                    HStack{
+                                        Text("Moratorium (Months)")
+                                        Spacer()
+                                        TextField("e.g. 5", text: $entry.moratorium)
+                                            .keyboardType(.numberPad)
+                                            .multilineTextAlignment(.trailing)
+                                            .frame(width: 150)
+                                    }
                                 }
 
                                 if !entry.insurancePremium.isEmpty {
-                                    TextField("Insurance Premium (₹)", text: $entry.insurancePremium)
-                                        .keyboardType(.numberPad)
+//                                    AssessmentField(
+//                                        icon: "indianrupeesign",
+//                                        label: "Insurance Premium",
+//                                        placeholder: "e.g. 352000",
+//                                        text: $entry.insurancePremium,
+//                                        keyboard: .numberPad
+//                                    )
+                                    HStack{
+                                        Text("Insurance Premium")
+                                        TextField("e.d. 353000", text: $entry.insurancePremium)
+                                            .keyboardType(.numberPad)
+                                            .multilineTextAlignment(.trailing)
+                                            .frame(width: 150)
+                                        
+                                    }
+
                                 }
 
                                 Picker("Interest Type", selection: $entry.interestType) {
@@ -160,7 +227,7 @@ struct LoanDetailsScreen: View {
             }
         }
         .navigationDestination(isPresented: $goNext) {
-            InsuranceGateView(data: data)
+            InsuranceDetailsScreen(data: data)
         }
         .sheet(isPresented: $showRBIInfo) {
             _RBISheet()
@@ -178,15 +245,15 @@ struct LoanDetailsScreen: View {
             }
         }
         .photosPicker(isPresented: $showPhotoPicker, selection: $selectedItem, matching: .images)
-        .fullScreenCover(isPresented: $showCamera) {
-            CameraPicker(image: $capturedImage)
-        }
+//        .fullScreenCover(isPresented: $showCamera) {
+//            CameraPicker(image: $capturedImage)
+//        }
         .onChange(of: selectedItem) { _, newItem in
             handleGallerySelection(newItem)
         }
-        .onChange(of: capturedImage) { _, newImage in
-            handleCameraCapture(newImage)
-        }
+//        .onChange(of: capturedImage) { _, newImage in
+//            handleCameraCapture(newImage)
+//        }
         .sheet(isPresented: $importViewModel.showReviewList) {
             ParsedLoanListView(
                 loans: $importViewModel.parsedLoans,

@@ -24,7 +24,7 @@ struct ReportFooterCTA: View {
                 appState.showDashboard = true
             } label: {
                 HStack(spacing: 8) {
-                    Text("Go to Dashboard");
+                    Text("Save");
                 }.font(.system(size: 18, weight: .semibold))
                     .foregroundColor(.white)
                     .frame(maxWidth: .infinity)

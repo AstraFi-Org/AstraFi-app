@@ -27,6 +27,6 @@ struct ReportInsuranceCard: View {
         }
         .padding(18).background(AppTheme.cardBackground)
         .clipShape(RoundedRectangle(cornerRadius: 16, style: .continuous))
-        .shadow(color: AppTheme.adaptiveShadow, radius: 8, x: 0, y: 2)
+        //.shadow(color: AppTheme.adaptiveShadow, radius: 8, x: 0, y: 2)
     }
 }
