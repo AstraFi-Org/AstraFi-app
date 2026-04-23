@@ -67,7 +67,7 @@ final class AppStateManager {
                 AstraInvestment(investmentType: .mutualFund, subtype: .debtFund,
                                 investmentName: "ICICI Prudential MF", investmentAmount: 480000,
                                 startDate: monthsAgo(12), associatedGoalID: goalCar.id, mode: .sip,
-                                schemeCode: "105703", units: 4500.0, purchaseNAV: 100.0),
+                                schemeCode: "105703", units: 4500.0, purchaseNAV: 10.0),
                 AstraInvestment(investmentType: .stocks, subtype: .largeCap,
                                 investmentName: "Reliance Industries", investmentAmount: 180000,
                                 startDate: monthsAgo(24), mode: .lumpsum),

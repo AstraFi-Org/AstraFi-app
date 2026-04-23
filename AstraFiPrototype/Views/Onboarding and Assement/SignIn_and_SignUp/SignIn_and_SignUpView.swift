@@ -23,8 +23,6 @@ struct SignInView: View {
                 VStack(alignment: .leading, spacing: 6) {
                     Text("Sign In")
                         .font(.system(size: 32, weight: .bold))
-                    Text("Let's get started!")
-                        .font(.system(size: 20))
                 }
                 .padding(.top, 24)
                 .padding(.bottom, 36)
@@ -120,9 +118,6 @@ struct SignUpView: View {
                     VStack(alignment: .leading, spacing: 6) {
                         Text("Sign Up")
                             .font(.system(size: 32, weight: .bold))
-                            .foregroundColor(.primary)
-                        Text("Let's get started !")
-                            .font(.system(size: 20))
                             .foregroundColor(.primary)
                     }
                     .padding(.top, 24)

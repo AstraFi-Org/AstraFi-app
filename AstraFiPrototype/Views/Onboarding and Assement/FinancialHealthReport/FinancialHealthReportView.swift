@@ -156,7 +156,7 @@ struct FinancialHealthReportView: View {
             }
         }
         .background(AppTheme.appBackground(for: colorScheme).ignoresSafeArea())
-        .navigationTitle("Health Report")
+        .navigationTitle("Financial Health Report")
         .navigationBarTitleDisplayMode(.inline)
         .onAppear { withAnimation(.easeOut(duration: 1.4)) { animatedScore = score } }
         .sheet(isPresented: $vitalsDetail) {

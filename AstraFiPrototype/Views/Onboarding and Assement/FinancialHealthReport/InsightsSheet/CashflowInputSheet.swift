@@ -119,3 +119,6 @@ struct CashflowInputSheet: View {
         ("ellipsis.circle.fill", "Other / Misc",       \CF.misc,          .gray),
     ]}
 }
+#Preview {
+    CashflowInputSheet(cashflow: .constant(CashflowEntry()))
+}

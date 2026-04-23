@@ -29,6 +29,7 @@ struct InvestmentDetailsScreen: View {
                     .padding(.top, 16).padding(.horizontal, 20).padding(.bottom, 12)
 
                 Form {
+                    
                     Section(header: Text("Import Investments"), footer: Text("Upload your NSDL/CDSL CAS (PDF) or an Excel export (CSV) to automatically estimate your net worth.")) {
                         if importViewModel.isLoading {
                             HStack {
@@ -40,6 +41,9 @@ struct InvestmentDetailsScreen: View {
                             Button {
                                 showFilePicker = true
                             } label: {
+//                                UploadDropZone(
+//                                    fileName: selectedFile ?? "Tap to upload Demat Report"
+//                                )
                                 Label(selectedFile ?? "Tap to upload PDF/CSV", systemImage: "doc.badge.arrow.up.fill")
                             }
 
@@ -134,16 +138,28 @@ struct InvestmentDetailsScreen: View {
                                     }
                                 } else {
                                     VStack(alignment: .leading, spacing: 0) {
-                                        TextField("Name / Fund", text: $entry.fundName)
-                                            .onChange(of: entry.fundName) { _, newValue in
-                                                if entry.type == .mutualFund && !newValue.isEmpty {
-                                                    activeEntryID = entry.id
-                                                    mfSearchResults = MFService.shared.searchSchemes(query: newValue)
-                                                    showSuggestions = !mfSearchResults.isEmpty
-                                                } else {
-                                                    showSuggestions = false
+//                                        AssessmentField(
+//                                            icon: "briefcase.fill",
+//                                            label: "Fund Name",
+//                                            placeholder: "e.g Invesco India Mid Cap",
+//                                            text: $entry.fundName
+//                                        )
+                                        HStack{
+                                            Text("Fund Name ")
+                                            Spacer()
+                                            TextField("Name / Fund", text: $entry.fundName)
+                                                .multilineTextAlignment(.trailing)
+                                                .frame(width: 150)
+                                                .onChange(of: entry.fundName) { _, newValue in
+                                                    if entry.type == .mutualFund && !newValue.isEmpty {
+                                                        activeEntryID = entry.id
+                                                        mfSearchResults = MFService.shared.searchSchemes(query: newValue)
+                                                        showSuggestions = !mfSearchResults.isEmpty
+                                                    } else {
+                                                        showSuggestions = false
+                                                    }
                                                 }
-                                            }
+                                        }
                                         
                                         if showSuggestions && activeEntryID == entry.id && entry.type == .mutualFund {
                                             ScrollView {
@@ -180,15 +196,25 @@ struct InvestmentDetailsScreen: View {
                                     }
                                 }
 
-                                Section(header: Text("Growth Analysis")) {
+//                                Section() {
                                     HStack {
-                                        if entry.type == .stocks {
-                                            Text("Total Value")
-                                        } else {
-                                            Text("₹")
-                                        }
+//                                        if entry.type == .stocks {
+//                                            Text("Total Value")
+//                                        } else {
+//                                            Text("₹")
+//                                        }
+//                                        AssessmentField(
+//                                            icon: "indianrupeesign",
+//                                            label: "Invested Amount",
+//                                            placeholder: "e.g. 10000",
+//                                            text: $entry.amount
+//                                        )
+                                        Text("Invested Amount")
+                                        Spacer()
                                         TextField("Amount", text: $entry.amount)
                                             .keyboardType(.numberPad)
+                                            .multilineTextAlignment(.trailing)
+                                            .frame(width: 150)
                                             .onChange(of: entry.amount) { _, _ in
                                                 recalculateInvestment(entry: $entry)
                                             }
@@ -209,7 +235,7 @@ struct InvestmentDetailsScreen: View {
                                             recalculateInvestment(entry: $entry)
                                         }
                                     }
-                                }
+                                
                                 
                                 if !entry.amount.isEmpty {
                                     if entry.mode == .sip {
@@ -321,16 +347,16 @@ struct InvestmentDetailsScreen: View {
                                                     .foregroundColor((entry.growthRate ?? 0) >= 0 ? .green : .red)
                                             }
 
-                                            if !entry.transactions.isEmpty {
-                                                Button {
-                                                    breakdownEntry = entry
-                                                    showingBreakdown = true
-                                                } label: {
-                                                    Text("View Installment Breakdown")
-                                                        .font(.caption)
-                                                        .foregroundColor(.blue)
-                                                }
-                                            }
+//                                            if !entry.transactions.isEmpty {
+//                                                Button {
+//                                                    breakdownEntry = entry
+//                                                    showingBreakdown = true
+//                                                } label: {
+//                                                    Text("View Installment Breakdown")
+//                                                        .font(.caption)
+//                                                        .foregroundColor(.blue)
+//                                                }
+//                                            }
                                         }
                                         .font(.subheadline)
                                         .padding(.vertical, 8)
@@ -366,7 +392,7 @@ struct InvestmentDetailsScreen: View {
             }
         }
         .navigationDestination(isPresented: $goNext) {
-            LoanGateView(data: data)
+            LoanDetailsScreen(data: data)
         }
         .fileImporter(
             isPresented: $showFilePicker,
@@ -509,59 +535,10 @@ struct InvestmentDetailsScreen: View {
     }
 }
 
-private struct InvestmentBreakdownSheet: View {
-    let entry: AssessmentInvestmentEntry
-    @Environment(\.dismiss) var dismiss
-    
-    var body: some View {
-        NavigationStack {
-            List {
-                Section {
-                    HStack {
-                        Text("Monthly SIP")
-                        Spacer()
-                        Text("₹\(entry.amount)")
-                    }
-                    HStack {
-                        Text("Total Invested")
-                        Spacer()
-                        Text("₹\(String(format: "%.0f", entry.totalInvested ?? 0))")
-                    }
-                    HStack {
-                        Text("Total Units")
-                        Spacer()
-                        Text(entry.quantity)
-                    }
-                } header: {
-                    Text("Summary")
-                }
-                
-                Section {
-                    ForEach(entry.transactions.sorted(by: { $0.date > $1.date })) { tx in
-                        HStack {
-                            VStack(alignment: .leading) {
-                                Text(tx.date, style: .date).font(.subheadline).bold()
-                                Text("NAV: ₹\(String(format: "%.2f", tx.nav))").font(.caption).foregroundColor(.secondary)
-                            }
-                            Spacer()
-                            VStack(alignment: .trailing) {
-                                Text("₹\(String(format: "%.0f", tx.amount))").font(.subheadline).foregroundColor(.blue)
-                                Text("\(String(format: "%.4f", tx.units)) Units").font(.caption).foregroundColor(.secondary)
-                            }
-                        }
-                        .padding(.vertical, 4)
-                    }
-                } header: {
-                    Text("Installment History")
-                }
-            }
-            .navigationTitle(entry.fundName)
-            .navigationBarTitleDisplayMode(.inline)
-            .toolbar {
-                ToolbarItem(placement: .confirmationAction) {
-                    Button("Done") { dismiss() }
-                }
-            }
-        }
+#Preview {
+    @Previewable var data = CompleteAssessmentData()
+
+    NavigationStack {
+        InvestmentDetailsScreen(data: data)
     }
 }

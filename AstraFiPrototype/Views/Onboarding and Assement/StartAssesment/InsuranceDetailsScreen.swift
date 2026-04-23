@@ -3,7 +3,6 @@ internal import UniformTypeIdentifiers
 
 struct InsuranceDetailsScreen: View {
     @Bindable var data: CompleteAssessmentData
-    var onComplete: (() -> Void)? = nil
     @Environment(\.dismiss) private var dismiss
     @State private var goNext           = false
     @State private var showFilePicker    = false
@@ -56,21 +55,44 @@ struct InsuranceDetailsScreen: View {
                                 Text("Health").tag(AssessmentInsuranceEntry.InsuranceDetails.health(AssessmentInsuranceEntry.HealthDetails()))
                                 Text("Critical Illness").tag(AssessmentInsuranceEntry.InsuranceDetails.criticalIllness(AssessmentInsuranceEntry.CriticalIllnessDetails()))
                             }
-
-                            TextField("Cover Amount (₹)", text: $data.insuranceEntries[0].coverAmount)
-                                .keyboardType(.numberPad)
+//                            AssessmentField(
+//                                icon: "indianrupeesign",
+//                                label: "Cover Amount",
+//                                placeholder: "e.g. 45000",
+//                                text: $data.insuranceEntries[0].coverAmount
+//                            )
+                            HStack(spacing:90){
+                                Text("Cover Amount")
+                                
+                                TextField("Cover Amount (₹)", text: $data.insuranceEntries[0].coverAmount)
+                                    .keyboardType(.numberPad)
+                            }
 
                             DatePicker("Policy Valid Upto", selection: $data.insuranceEntries[0].expiryDate, displayedComponents: .date)
                         }
                     }
 
                     Section("Dependents") {
-                        TextField("Number of dependents", text: $data.numberOfDependents)
-                            .keyboardType(.numberPad)
-                        
-                        Toggle("Are dependents insured?", isOn: $data.areDependentsInsured.animation())
-                    }
+//                        AssessmentField(
+//                            icon: "person.2",
+//                            label: "Number of dependents",
+//                            placeholder: "e.g. 3",
+//                            text: $data.numberOfDependents
+//                        )
+//                        .listRowBackground(Color.clear)
+                        HStack {
+                            Text("Number of Dependents")
 
+                            Spacer()
+
+                            TextField("e.g. 3", text: $data.numberOfDependents)
+                                .keyboardType(.numberPad)
+                                .multilineTextAlignment(.trailing)
+                                .frame(width: 80)
+                        }
+                        Toggle("Are Dependents insured?", isOn: $data.areDependentsInsured.animation())
+                    }
+                    
                     if data.areDependentsInsured {
                         Section("Dependent Insurance Details") {
                             Button {
@@ -78,31 +100,56 @@ struct InsuranceDetailsScreen: View {
                             } label: {
                                 Label("Add Dependent Policy", systemImage: "plus.circle")
                             }
-
                             ForEach($data.dependentInsuranceEntries) { $depEntry in
-                                VStack(alignment: .leading, spacing: 8) {
-                                    HStack {
-                                        Text("Dependent Policy").font(.caption).fontWeight(.bold).foregroundStyle(.secondary)
-                                        Spacer()
-                                        Button(role: .destructive) {
-                                            let idToDelete = depEntry.id
-                                            data.dependentInsuranceEntries.removeAll(where: { $0.id == idToDelete })
-                                        } label: {
-                                            Image(systemName: "trash")
-                                        }
-                                    }
+                                
+                                // Header row
+                                HStack {
+                                    Text("Dependent Policy")
+                                        .font(.caption)
+                                        .fontWeight(.bold)
+                                        .foregroundStyle(.secondary)
 
-                                    Picker("Type", selection: $depEntry.details) {
+                                    Spacer()
+
+                                    Button(role: .destructive) {
+                                        let idToDelete = depEntry.id
+                                        data.dependentInsuranceEntries.removeAll(where: { $0.id == idToDelete })
+                                    } label: {
+                                        Image(systemName: "trash")
+                                    }
+                                }
+
+                                // Type row
+                                HStack {
+                                    Text("Type")
+                                    Spacer()
+                                    Picker("", selection: $depEntry.details) {
                                         Text("Life").tag(AssessmentInsuranceEntry.InsuranceDetails.life(AssessmentInsuranceEntry.LifeDetails()))
                                         Text("Health").tag(AssessmentInsuranceEntry.InsuranceDetails.health(AssessmentInsuranceEntry.HealthDetails()))
                                     }
+                                    .labelsHidden()
+                                }
 
+                                // Cover amount row
+                                HStack {
+                                    Text("Cover Amount")
+                                    Spacer()
                                     TextField("Cover Amount (₹)", text: $depEntry.coverAmount)
                                         .keyboardType(.numberPad)
-                                    
-                                    DatePicker("Valid Upto", selection: $depEntry.expiryDate, displayedComponents: .date)
+                                        .multilineTextAlignment(.trailing)
                                 }
-                                .padding(.vertical, 4)
+
+                                // Date row
+                                HStack {
+                                    Text("Valid Upto")
+                                    Spacer()
+                                    DatePicker(
+                                        "",
+                                        selection: $depEntry.expiryDate,
+                                        displayedComponents: .date
+                                    )
+                                    .labelsHidden()
+                                }
                             }
                         }
                     }
@@ -111,7 +158,8 @@ struct InsuranceDetailsScreen: View {
                 }
             }
             AssessmentFooterButton(label: "See My Report", enabled: true, isLast: true) {
-                if let onComplete { onComplete() } else { goNext = true }
+                //if let onComplete { onComplete() } else { goNext = true }
+                goNext = true
             }
         }
         .navigationTitle("Financial Assessment")
@@ -148,3 +196,11 @@ private typealias MotorDetails            = AssessmentInsuranceEntry.MotorDetail
 private typealias TravelDetails           = AssessmentInsuranceEntry.TravelDetails
 private typealias CriticalIllnessDetails  = AssessmentInsuranceEntry.CriticalIllnessDetails
 private typealias ULIPDetails             = AssessmentInsuranceEntry.ULIPDetails
+
+#Preview {
+    @Previewable var data = CompleteAssessmentData()
+
+    NavigationStack {
+        InsuranceDetailsScreen(data: data)
+    }
+}
