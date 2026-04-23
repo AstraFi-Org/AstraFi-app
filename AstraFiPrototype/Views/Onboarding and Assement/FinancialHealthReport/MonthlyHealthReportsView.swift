@@ -242,15 +242,15 @@ struct HealthReportDetailView: View {
             VStack(spacing: 24) {
                 if let insights = report.insights {
                     // Detailed Report from Snapshot
-                    _AstraFiHeroCard(
+                    HeroCard(
                         name: appState.currentProfile?.basicDetails.name ?? "User",
                         score: Double(report.score),
                         radarValues: insights.radarValues
                     )
                     
-                    _ParameterSection(summaries: insights.parameterSummaries, onTap: { _ in })
+                    ParameterSection(summaries: insights.parameterSummaries, onTap: { _ in })
                     
-                    _SectionTitle("Key Insights")
+                    ReportSectionTitle("Key Insights")
                     VStack(spacing: 12) {
                         ForEach(Array(report.keyInsights.enumerated()), id: \.offset) { _, insight in
                             HStack(alignment: .top, spacing: 12) {

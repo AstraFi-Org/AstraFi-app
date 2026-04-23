@@ -11,53 +11,47 @@ struct DashboardView: View {
     private var loans: [AstraLoan] { profile?.loans ?? [] }
     
     var body: some View {
-        NavigationStack{
-            ScrollView(showsIndicators: false) {
-                VStack(spacing: AppTheme.auraInterCardSpacing) {
-                    //auraHeaderView
-                    investmentSummaryCard
-                    
-                    if investments.isEmpty {
-                        emptyStateCard(
-                            icon: "sparkles",
-                            title: "Begin Your AstraFi Journey",
-                            message: "Complete your assessment to unlock personalised financial insights.",
-                            accentColor: AppTheme.auraGold
-                        )
-                    } else {
-                        nextStepCard
-                    }
-                    
-                    goalsSection
-                    upcomingEMISection
+        ScrollView(showsIndicators: false) {
+            VStack(spacing: AppTheme.auraInterCardSpacing) {
+                investmentSummaryCard
+                
+                if investments.isEmpty {
+                    emptyStateCard(
+                        icon: "sparkles",
+                        title: "Begin Your AstraFi Journey",
+                        message: "Complete your assessment to unlock personalised financial insights.",
+                        accentColor: AppTheme.auraGold
+                    )
+                } else {
+                    nextStepCard
                 }
-                .padding(.horizontal, AppTheme.auraPadding)
-                .padding(.bottom, 48)
+                
+                goalsSection
+                upcomingEMISection
             }
-            .navigationTitle("Home")
-            .toolbarTitleDisplayMode(.inlineLarge)
-            .background(AppTheme.appBackground(for: colorScheme))
-            .toolbar {
+            .padding(.horizontal, AppTheme.auraPadding)
+            .padding(.bottom, 48)
+        }
+        .navigationTitle("Home")
+        .navigationBarTitleDisplayMode(.large)
+        .background(AppTheme.appBackground(for: colorScheme))
+        .toolbar {
+            ToolbarItem(placement: .navigationBarTrailing) {
                 Button {
                     withAnimation(.spring(response: 0.3, dampingFraction: 0.5)) { bellAnimate.toggle() }
                 } label: {
                     Image(systemName: "bell.fill")
                 }
                 .rotationEffect(.degrees(bellAnimate ? -15 : 0))
-                
+            }
+            ToolbarItem(placement: .navigationBarTrailing) {
                 NavigationLink(destination: ProfileView()) {
                     Image(systemName: "person.circle")
                 }
             }
-            //.navigationBarHidden(true)
         }
     }
     
-    // MARK: Header
-//    private var auraHeaderView: some View {
-//        HStack(alignment: .center)
-//        .padding(.top, 16)
-//    }
     
     // MARK: Portfolio Hero Card
     private var investmentSummaryCard: some View {
@@ -71,20 +65,20 @@ struct DashboardView: View {
             // ── Top section: Portfolio value
             VStack(alignment: .leading, spacing: 4) {
                 Text("Total Portfolio")
-                    .font(.system(size: 13, weight: .semibold, design: .rounded))
+                    .font(.system(size: 13, weight: .semibold))
                     .foregroundStyle(.white.opacity(0.75))
                 
                 Text(currentVal.toCurrency())
-                    .font(.system(size: 38, weight: .bold, design: .rounded))
+                    .font(.system(size: 38, weight: .bold))
                     .foregroundStyle(.white)
                 
                 HStack(spacing: 6) {
                     Image(systemName: returnsPositive ? "arrow.up.right" : "arrow.down.right")
                         .font(.system(size: 11, weight: .bold))
                     Text(totalReturns.toCurrency())
-                        .font(.system(size: 13, weight: .semibold, design: .rounded))
+                        .font(.system(size: 13, weight: .semibold))
                     Text(returnsPositive ? "total returns" : "total loss")
-                        .font(.system(size: 13, design: .rounded))
+                        .font(.system(size: 13))
                         .opacity(0.8)
                 }
                 .padding(.horizontal, 10)
@@ -104,15 +98,15 @@ struct DashboardView: View {
             
             // ── Bottom row: stats
             HStack {
-                _PortfolioStat(label: "Active", value: "\(activeCount)", icon: "briefcase.fill")
+                PortfolioStat(label: "Active", value: "\(activeCount)", icon: "briefcase.fill")
                 Divider()
                     .background(.white.opacity(0.25))
                     .frame(height: 28)
-                _PortfolioStat(label: "Invested", value: totalInvested.toShortCurrency(), icon: "indianrupeesign.circle.fill")
+                PortfolioStat(label: "Invested", value: totalInvested.toShortCurrency(), icon: "indianrupeesign.circle.fill")
                 Divider()
                     .background(.white.opacity(0.25))
                     .frame(height: 28)
-                _PortfolioStat(
+                PortfolioStat(
                     label: investments.isEmpty ? "Allocation" : "Optimised",
                     value: investments.isEmpty ? "—" : "✓",
                     icon: "chart.pie.fill"
@@ -142,7 +136,7 @@ struct DashboardView: View {
         .shadow(color: Color(hex: "#007AFF").opacity(0.35), radius: 20, x: 0, y: 10)
     }
     
-    private struct _PortfolioStat: View {
+    private struct PortfolioStat: View {
         let label: String
         let value: String
         let icon: String
@@ -154,10 +148,10 @@ struct DashboardView: View {
                     .foregroundStyle(.white.opacity(0.7))
                 VStack(alignment: .leading, spacing: 1) {
                     Text(value)
-                        .font(.system(size: 14, weight: .bold, design: .rounded))
+                        .font(.system(size: 14, weight: .bold))
                         .foregroundStyle(.white)
                     Text(label)
-                        .font(.system(size: 10, design: .rounded))
+                        .font(.system(size: 10))
                         .foregroundStyle(.white.opacity(0.65))
                 }
             }
@@ -178,9 +172,9 @@ struct DashboardView: View {
             }
             VStack(spacing: 6) {
                 Text(title)
-                    .font(.system(size: 17, weight: .semibold, design: .rounded))
+                    .font(.system(size: 17, weight: .semibold))
                 Text(message)
-                    .font(.system(size: 14, design: .rounded))
+                    .font(.system(size: 14))
                     .foregroundStyle(.secondary)
                     .multilineTextAlignment(.center)
             }
@@ -201,9 +195,9 @@ struct DashboardView: View {
             HStack {
                 VStack(alignment: .leading, spacing: 2) {
                     Text("Action Required")
-                        .font(.system(size: 18, weight: .bold, design: .rounded))
+                        .font(.system(size: 18, weight: .bold))
                     Text(concerns.isEmpty ? "All vitals healthy" : "\(concerns.count) item\(concerns.count > 1 ? "s" : "") need attention")
-                        .font(.system(size: 12, design: .rounded))
+                        .font(.system(size: 12))
                         .foregroundStyle(.secondary)
                 }
                 Spacer()
@@ -219,7 +213,7 @@ struct DashboardView: View {
             
             VStack(alignment: .leading, spacing: 12) {
                 if concerns.isEmpty {
-                    _ActionRow(
+                    ActionRow(
                         icon: "checkmark.shield.fill",
                         color: Color(hex: "#30D158"),
                         title: "All vitals are healthy",
@@ -227,7 +221,7 @@ struct DashboardView: View {
                     )
                 } else {
                     ForEach(concerns.prefix(3)) { concern in
-                        _ActionRow(
+                        ActionRow(
                             icon: concernIcon(for: concern.parameter),
                             color: concern.status == .concern ? Color(hex: "#FF453A") : Color(hex: "#FF9F0A"),
                             title: concern.title,
@@ -240,7 +234,7 @@ struct DashboardView: View {
             NavigationLink(destination: PlannerView()) {
                 HStack(spacing: 8) {
                     Text("View Full Analysis")
-                        .font(.system(size: 14, weight: .semibold, design: .rounded))
+                        .font(.system(size: 14, weight: .semibold))
                     Spacer()
                     Image(systemName: "arrow.right")
                         .font(.system(size: 12, weight: .bold))
@@ -269,7 +263,7 @@ struct DashboardView: View {
         }
     }
     
-    private struct _ActionRow: View {
+    private struct ActionRow: View {
         let icon: String
         let color: Color
         let title: String
@@ -287,9 +281,9 @@ struct DashboardView: View {
                 }
                 VStack(alignment: .leading, spacing: 3) {
                     Text(title)
-                        .font(.system(size: 14, weight: .semibold, design: .rounded))
+                        .font(.system(size: 14, weight: .semibold))
                     Text(subtitle)
-                        .font(.system(size: 13, design: .rounded))
+                        .font(.system(size: 13))
                         .foregroundStyle(.secondary)
                         .fixedSize(horizontal: false, vertical: true)
                 }
@@ -301,13 +295,13 @@ struct DashboardView: View {
     // MARK: Goals Section
     private var goalsSection: some View {
         VStack(alignment: .leading, spacing: 14) {
-            SectionHeader(title: "Dream Goals", destination: AnyView(GoalListView()))
+            SectionHeader(title: "Goals", destination: AnyView(GoalListView()))
             
             if goals.isEmpty {
                 emptyStateCard(
                     icon: "flag.2.crossed.fill",
                     title: "No goals set",
-                    message: "Complete your assessment to set financial goals.",
+                    message: "Plan your financial goals.",
                     accentColor: .orange
                 )
             } else {
@@ -338,7 +332,7 @@ struct DashboardView: View {
                 emptyStateCard(
                     icon: "building.columns.fill",
                     title: "No loans recorded",
-                    message: "Add your loans during assessment to track EMIs here.",
+                    message: "Add your loans to track EMIs here.",
                     accentColor: Color(hex: "#BF5AF2")
                 )
             } else {
@@ -380,12 +374,12 @@ private struct SectionHeader: View {
     var body: some View {
         HStack {
             Text(title)
-                .font(.system(size: 20, weight: .bold, design: .rounded))
+                .font(.system(size: 20, weight: .bold))
             Spacer()
             NavigationLink(destination: destination) {
                 HStack(spacing: 4) {
                     Text("See all")
-                        .font(.system(size: 13, weight: .semibold, design: .rounded))
+                        .font(.system(size: 13, weight: .semibold))
                     Image(systemName: "chevron.right")
                         .font(.system(size: 10, weight: .bold))
                 }

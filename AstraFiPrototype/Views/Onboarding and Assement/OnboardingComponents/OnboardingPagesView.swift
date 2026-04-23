@@ -10,71 +10,83 @@ let onboardingPages: [OnboardingPage] = [
     .init(imageName: "onboarding_financial_health",
           title: "Check Your\nFinancial Health",
           subtitle: "Get a clear view of your Income, Expenses, Risk level."),
-    
+
     .init(imageName: "onboarding_investment_plan",
           title: "Plan your Investment\nAround Goals",
           subtitle: "Goal based Planning to Achieve Faster"),
-    
+
     .init(imageName: "onboarding_track_assets",
           title: "Track Investment\nAnd Assets",
           subtitle: "Track everything in one place"),
-    
+
     .init(imageName: "onboarding_news_updates",
           title: "News And Updates",
           subtitle: "Stay updated with market trends"),
 ]
 
 struct OnboardingPagesView: View {
+    @Environment(AppStateManager.self) var appState
     @State private var currentPage = 0
 
     var body: some View {
-        ZStack {
-            Color(.systemBackground).ignoresSafeArea()
+        NavigationStack {
+            ZStack {
+                Color(.systemBackground).ignoresSafeArea()
 
-            VStack {
+                VStack {
 
-                // Skip Button
-                HStack {
-                    Spacer()
-                    Button("Skip") {
-                        currentPage = onboardingPages.count - 1
+                    PageView(page: onboardingPages[currentPage])
+                        .animation(.easeInOut, value: currentPage)
+
+                    // Page indicators
+                    HStack(spacing: 8) {
+                        ForEach(0..<onboardingPages.count, id: \.self) { index in
+                            Capsule()
+                                .fill(index == currentPage ? Color.blue : Color.gray.opacity(0.3))
+                                .frame(width: index == currentPage ? 20 : 8, height: 8)
+                        }
                     }
-                    .padding()
-                }
-
-                PageView(page: onboardingPages[currentPage])
                     .animation(.easeInOut, value: currentPage)
+                    .padding(.bottom, 30)
 
-                // Indicators
-                HStack(spacing: 8) {
-                    ForEach(0..<onboardingPages.count, id: \.self) { index in
-                        Capsule()
-                            .fill(index == currentPage ? Color.blue : Color.gray.opacity(0.3))
-                            .frame(width: index == currentPage ? 20 : 8, height: 8)
+                    // Next / Get Started button
+                    Button(action: next) {
+                        Text(currentPage == onboardingPages.count - 1 ? "Get Started" : "Next")
+                            .font(.system(size: 17, weight: .semibold))
+                            .foregroundColor(.white)
+                            .frame(maxWidth: .infinity)
+                            .padding()
+                            .background(Color.blue)
+                            .clipShape(Capsule())
                     }
-                }
-                .padding(.bottom, 30)
+                    .padding(.horizontal)
 
-                // Button
-                Button(action: next) {
-                    Text(currentPage == onboardingPages.count - 1 ? "Get Started" : "Next")
-                        .foregroundColor(.white)
-                        .frame(maxWidth: .infinity)
-                        .padding()
-                        .background(Color.blue)
-                        .clipShape(Capsule())
+                    Spacer()
                 }
-                .padding(.horizontal)
-
-                Spacer()
+            }
+            .navigationTitle("") // keep it clean
+            .navigationBarTitleDisplayMode(.inline)
+            .toolbar {
+                ToolbarItem(placement: .topBarTrailing) {
+                    Button("Skip") {
+                        navigateToAuth()
+                    }
+                    .font(.system(size: 16, weight: .medium))
+                }
             }
         }
     }
 
     func next() {
         if currentPage < onboardingPages.count - 1 {
-            currentPage += 1
+            withAnimation { currentPage += 1 }
+        } else {
+            navigateToAuth()
         }
+    }
+
+    func navigateToAuth() {
+        appState.hasCompletedOnboarding = true
     }
 }
 
@@ -110,4 +122,5 @@ struct PageView: View {
 
 #Preview {
     OnboardingPagesView()
+        .environment(AppStateManager())
 }
