@@ -64,7 +64,7 @@ struct FinancialHealthReportView: View {
 
     private var heroSection: some View {
         Group {
-            HeroCard(name: userName, score: animatedScore, radarValues: insights.radarValues)
+            HeroCard(name: userName, score: animatedScore, radarValues: insights.radarValues, insights: insights)
                 .padding(.horizontal, 20).padding(.top, 20).padding(.bottom, 24)
 
             ParameterSection(summaries: insights.parameterSummaries) { param in
