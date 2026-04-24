@@ -19,8 +19,8 @@ struct ParameterCard: View {
     }
     private var statusLabel: String {
         switch summary.status {
-        case .fine: return "On Track"
-        case .watch: return "Watch"
+        case .fine: return "All going well"
+        case .watch: return "Need to Manage"
         case .concern, .critical: return "Action Needed"
         }
     }
