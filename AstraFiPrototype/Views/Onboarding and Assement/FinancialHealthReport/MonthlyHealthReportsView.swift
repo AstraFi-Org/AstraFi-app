@@ -40,7 +40,6 @@ struct MonthlyHealthReportsView: View {
         .navigationTitle("Health Reports")
         .background(AppTheme.appBackground(for: colorScheme))
         .sheet(isPresented: $showingAssessment) {
-
             AssessmentPromptView()
         }
         .onAppear {
@@ -104,7 +103,7 @@ struct MonthlyHealthReportsView: View {
                 Label("Complete Assessment", systemImage: "arrow.right.circle.fill")
                     .font(.headline).padding(.horizontal, 24).padding(.vertical, 12)
                     .background(
-                        LinearGradient(colors: [Color(hex: "#4F6AFF"), Color(hex: "#8A3FFC")],
+                        LinearGradient(colors: [Color(hex: "4F6AFF"), Color(hex: "8A3FFC")],
                                        startPoint: .leading, endPoint: .trailing)
                     )
                     .foregroundColor(.white).cornerRadius(14)
@@ -125,7 +124,6 @@ struct MonthlyHealthReportsView: View {
 
             ForEach(groupedByYear, id: \.0) { year, yearReports in
                 VStack(alignment: .leading, spacing: 0) {
-
                     Text(year)
                         .font(.caption).fontWeight(.semibold).foregroundColor(.secondary)
                         .padding(.horizontal).padding(.vertical, 8)
@@ -245,11 +243,12 @@ struct HealthReportDetailView: View {
                     HeroCard(
                         name: appState.currentProfile?.basicDetails.name ?? "User",
                         score: Double(report.score),
-                        radarValues: insights.radarValues
+                        radarValues: insights.radarValues,
+                        insights: insights                          // ← added
                     )
-                    
+
                     ParameterSection(summaries: insights.parameterSummaries, onTap: { _ in })
-                    
+
                     ReportSectionTitle("Key Insights")
                     VStack(spacing: 12) {
                         ForEach(Array(report.keyInsights.enumerated()), id: \.offset) { _, insight in
@@ -365,15 +364,12 @@ struct AssessmentPromptView: View {
                 .background(Color(uiColor: .secondarySystemGroupedBackground)).cornerRadius(16)
                 .padding(.horizontal, 24)
 
-                Button(action: {
-                    dismiss()
-
-                }) {
+                Button(action: { dismiss() }) {
                     Text("Start Assessment")
                         .font(.headline).foregroundColor(.white)
                         .frame(maxWidth: .infinity).padding()
                         .background(
-                            LinearGradient(colors: [Color(hex: "#4F6AFF"), Color(hex: "#8A3FFC")],
+                            LinearGradient(colors: [Color(hex: "4F6AFF"), Color(hex: "8A3FFC")],
                                            startPoint: .leading, endPoint: .trailing)
                         )
                         .cornerRadius(16)

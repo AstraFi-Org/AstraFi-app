@@ -41,7 +41,7 @@ struct AssessmentInvestmentEntry: Identifiable {
     }
 
     enum InvestmentMode: String, CaseIterable, Hashable {
-        case lumpsum = "LumpSum", sip = "SIP" ,swp = "SWP"
+        case lumpsum = "LumpSum", sip = "SIP"
     }
 
     enum AssessmentSIPFrequency: String, CaseIterable, Identifiable, Hashable {
