@@ -313,7 +313,7 @@ struct HeroCard: View {
             // Radar chart section
             VStack(alignment: .leading, spacing: 10) {
                 HStack {
-                    Text("5-Parameter Overview").font(.headline)
+                    Text("Finanical Health Overview").font(.headline)
                     Spacer()
                     Button { showRadarInfo = true } label: {
                         Image(systemName: "info.circle")

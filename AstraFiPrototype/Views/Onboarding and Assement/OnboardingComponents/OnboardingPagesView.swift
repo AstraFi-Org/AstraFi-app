@@ -20,8 +20,8 @@ let onboardingPages: [OnboardingPage] = [
           subtitle: "Track everything in one place"),
 
     .init(imageName: "onboarding_news_updates",
-          title: "News And Updates",
-          subtitle: "Stay updated with market trends"),
+          title: "Value Forecast",
+          subtitle: "Seehow much corpus you can build in next years"),
 ]
 
 struct OnboardingPagesView: View {
@@ -32,11 +32,15 @@ struct OnboardingPagesView: View {
         NavigationStack {
             ZStack {
                 Color(.systemBackground).ignoresSafeArea()
-
                 VStack {
-
-                    PageView(page: onboardingPages[currentPage])
-                        .animation(.easeInOut, value: currentPage)
+                    
+                    TabView(selection: $currentPage) {
+                        ForEach(0..<onboardingPages.count, id: \.self) { index in
+                            PageView(page: onboardingPages[index])
+                                .tag(index)
+                        }
+                    }
+                    .tabViewStyle(.page(indexDisplayMode: .never))
 
                     // Page indicators
                     HStack(spacing: 8) {
@@ -49,7 +53,7 @@ struct OnboardingPagesView: View {
                     .animation(.easeInOut, value: currentPage)
                     .padding(.bottom, 30)
 
-                    // Next / Get Started button
+                    // Button
                     Button(action: next) {
                         Text(currentPage == onboardingPages.count - 1 ? "Get Started" : "Next")
                             .font(.system(size: 17, weight: .semibold))
