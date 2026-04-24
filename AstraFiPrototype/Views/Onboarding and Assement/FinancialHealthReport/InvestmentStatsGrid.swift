@@ -19,13 +19,6 @@ struct InvestmentStatsGrid: View {
 
     var body: some View {
         VStack(spacing: 0) {
-            HStack {
-                Text("Portfolio Overview").font(.headline)
-                Spacer()
-                Image(systemName: "chevron.right").font(.caption).fontWeight(.semibold).foregroundStyle(.tertiary)
-            }
-            .padding(.horizontal, 16).padding(.top, 16).padding(.bottom, 14)
-            Divider().padding(.horizontal, 16)
             LazyVGrid(columns: [GridItem(.flexible()), GridItem(.flexible())], spacing: 0) {
                 ForEach(Array(stats.enumerated()), id: \.offset) { idx, stat in
                     HStack(spacing: 10) {

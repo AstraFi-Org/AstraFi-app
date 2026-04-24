@@ -416,7 +416,7 @@ struct EmergencyFundSectionView: View {
                     } label: {
                         HStack(spacing: 4) {
                             Text(hasAllocation ? (showManage ? "Done" : "Manage") : "Allocate").font(.system(size: 13, weight: .semibold, design: .rounded))
-                            if !(hasAllocation && showManage) { Image(systemName: "chevron.right").font(.system(size: 10, weight: .bold)) }
+//                            if !(hasAllocation && showManage) { Image(systemName: "chevron.right").font(.system(size: 10, weight: .bold)) }
                         }
                         .foregroundStyle(.white).padding(.horizontal, 14).padding(.vertical, 7).background(AppTheme.auraIndigo).clipShape(Capsule())
                     }.buttonStyle(PlainButtonStyle())

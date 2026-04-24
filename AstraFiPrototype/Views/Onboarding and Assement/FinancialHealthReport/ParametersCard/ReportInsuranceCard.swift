@@ -16,7 +16,6 @@ struct ReportInsuranceCard: View {
             HStack {
                 Text("Coverage Summary").font(.headline)
                 Spacer()
-                Image(systemName: "chevron.right").font(.caption).fontWeight(.semibold).foregroundStyle(.tertiary)
             }
             InsuranceRow(icon: "cross.case.fill",
                          color: hasHealth ? Color(hex: "#30D158") : Color(hex: "#FF453A"),
@@ -28,6 +27,6 @@ struct ReportInsuranceCard: View {
         }
         .padding(18).background(AppTheme.cardBackground)
         .clipShape(RoundedRectangle(cornerRadius: 16, style: .continuous))
-        .shadow(color: AppTheme.adaptiveShadow, radius: 8, x: 0, y: 2)
+        //.shadow(color: AppTheme.adaptiveShadow, radius: 8, x: 0, y: 2)
     }
 }

@@ -85,7 +85,9 @@ struct DashboardView: View {
                 .padding(.vertical, 5)
                 .background(.white.opacity(0.15))
                 .clipShape(Capsule())
-                .foregroundStyle(returnsPositive ? AppTheme.auraGreen : Color(hex: "#FF453A"))
+                .foregroundStyle(
+                    returnsPositive ? .green : Color(hex: "#FF453A")
+                )
             }
             .frame(maxWidth: .infinity, alignment: .leading)
             .padding(24)
@@ -231,21 +233,21 @@ struct DashboardView: View {
                 }
             }
             
-            NavigationLink(destination: PlannerView()) {
-                HStack(spacing: 8) {
-                    Text("View Full Analysis")
-                        .font(.system(size: 14, weight: .semibold))
-                    Spacer()
-                    Image(systemName: "arrow.right")
-                        .font(.system(size: 12, weight: .bold))
-                }
-                .foregroundStyle(.white)
-                .padding(.horizontal, 18)
-                .padding(.vertical, 13)
-                .background(AppTheme.accentGradient)
-                .clipShape(RoundedRectangle(cornerRadius: 14, style: .continuous))
-                .shadow(color: Color(hex: "#007AFF").opacity(0.3), radius: 10, x: 0, y: 5)
-            }
+//            NavigationLink(destination: PlannerView()) {
+//                HStack(spacing: 8) {
+//                    Text("View Full Analysis")
+//                        .font(.system(size: 14, weight: .semibold))
+//                    Spacer()
+//                    Image(systemName: "arrow.right")
+//                        .font(.system(size: 12, weight: .bold))
+//                }
+//                .foregroundStyle(.white)
+//                .padding(.horizontal, 18)
+//                .padding(.vertical, 13)
+//                .background(AppTheme.accentGradient)
+//                .clipShape(RoundedRectangle(cornerRadius: 14, style: .continuous))
+//                .shadow(color: Color(hex: "#007AFF").opacity(0.3), radius: 10, x: 0, y: 5)
+//            }
         }
         .padding(20)
         .background(AppTheme.cardBackground)
