@@ -45,13 +45,13 @@ struct FullInvestmentListView: View {
             .navigationTitle("All Investments")
             .navigationBarTitleDisplayMode(.inline)
             .background(AppTheme.appBackground(for: colorScheme))
-            .toolbar {
-                ToolbarItem(placement: .topBarLeading) {
-                    Button { dismiss() } label: {
-                        Image(systemName: "chevron.left").fontWeight(.semibold)
-                    }
-                }
-            }
+//            .toolbar {
+//                ToolbarItem(placement: .topBarLeading) {
+//                    Button { dismiss() } label: {
+//                        Image(systemName: "chevron.left").fontWeight(.semibold)
+//                    }
+//                }
+//            }
         }
     }
     
