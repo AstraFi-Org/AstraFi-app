@@ -65,7 +65,7 @@ struct NewInvestmentPlanView: View {
                         stepContent
                         Spacer(minLength: 130)
                     }
-                    .padding(.horizontal, 20)
+                    .padding(.horizontal, 16)
                     .padding(.top, 24)
                 }
             }
@@ -130,7 +130,7 @@ struct NewInvestmentPlanView: View {
                 Text(steps[currentStep].title)
                     .font(.caption).foregroundColor(.secondary)
             }
-            .padding(.horizontal, 20)
+            .padding(.horizontal, 16)
 
             GeometryReader { geo in
                 ZStack(alignment: .leading) {
@@ -144,7 +144,7 @@ struct NewInvestmentPlanView: View {
                 }
             }
             .frame(height: 4)
-            .padding(.horizontal, 20)
+            .padding(.horizontal, 16)
         }
         .padding(.vertical, 14)
         .background(.ultraThinMaterial)
@@ -322,22 +322,34 @@ struct NewInvestmentPlanView: View {
     @ViewBuilder
     private func goalSpecificQuestionnaire(stepId: String) -> some View {
         switch initialGoal {
-        case "Retirement": RetirementQuestionnaire(input: $input, stepId: stepId, profileAge: profileAge, goalAccentColor: goalAccentColor)
-        case "Education":  EducationQuestionnaire(
-            input: $input,
-            stepId: stepId,
-            goalAccentColor: goalAccentColor
-        )
-        case "Home Purchase": HomeQuestionnaire(input: $input, stepId: stepId)
-        case "Vehicle":    VehicleQuestionnaire(input: $input, stepId: stepId)
-        case "Travel / Trip": TravelQuestionnaire(input: $input, stepId: stepId)
-        case "Wedding":    WeddingQuestionnaire(input: $input, stepId: stepId)
-        case "Wealth Creation": WealthQuestionnaire(input: $input, stepId: stepId, profileSavings: profileSavings)
-        case "Business Fund": BusinessQuestionnaire(input: $input, stepId: stepId)
-        default:          OtherQuestionnaire(input: $input, stepId: stepId)
+        case "Retirement":
+            RetirementQuestionnaire(
+                input: $input,
+                stepId: stepId,
+                profileAge: profileAge,
+                goalAccentColor: goalAccentColor
+            )
+        case "Education":
+            EducationQuestionnaire(
+                profileAge: profileAge,
+                goalAccentColor: goalAccentColor
+            )
+        case "Home Purchase":
+            HomeQuestionnaire(goalAccentColor: goalAccentColor)
+        case "Vehicle":
+            VehicleQuestionnaire(goalAccentColor: goalAccentColor)
+        case "Travel / Trip":
+            TravelQuestionnaire(goalAccentColor: goalAccentColor)
+        case "Wedding":
+            WeddingQuestionnaire(goalAccentColor: goalAccentColor)
+        case "Wealth Creation":
+            WealthQuestionnaire(goalAccentColor: goalAccentColor)
+        case "Business Fund":
+            BusinessQuestionnaire(goalAccentColor: goalAccentColor)
+        default:
+            OtherQuestionnaire(input: $input, stepId: stepId)
         }
     }
-
 
     // MARK: - Build Input Model
     private func buildInputModel() -> InvestmentPlanInputModel {
@@ -372,6 +384,72 @@ struct GoalStep: Identifiable {
     let subtitle: String
     let emoji: String
 
+//    static func steps(for goal: String, profile: AstraUserProfile?) -> [GoalStep] {
+//        let targetStep = GoalStep(id: "target", title: "Your Goal",
+//                                  subtitle: "Define what you want to achieve", emoji: "🎯")
+//        let sipStep    = GoalStep(id: "investment", title: "Investment Amount",
+//                                  subtitle: "How much can you invest monthly?", emoji: "💸")
+//        let stratStep  = GoalStep(id: "strategy", title: "Strategy",
+//                                  subtitle: "Risk, asset class & liquidity", emoji: "🧠")
+//
+//        var goalSteps: [GoalStep] = []
+//        switch goal {
+//        case "Retirement":
+//            goalSteps = [
+//                GoalStep(id: "retirement_details", title: "Retirement Details",
+//                         subtitle: "Timeline, Lifestyle & Strategy", emoji: "🌴")
+//            ]
+//        case "Education":
+//            goalSteps = [
+//                GoalStep(id: "edu_details", title: "Education Plan",
+//                         subtitle: "Timeline, Cost & Strategy", emoji: "🎓")
+//            ]
+//        case "Home Purchase":
+//            goalSteps = [
+//                GoalStep(id: "home_details", title: "Property",
+//                         subtitle: "What kind of home are you buying?", emoji: "🏠"),
+//                GoalStep(id: "home_finance", title: "Financing",
+//                         subtitle: "Down payment & loan preferences", emoji: "🏦"),
+//            ]
+//        case "Vehicle":
+//            goalSteps = [
+//                GoalStep(id: "vehicle_details", title: "Vehicle",
+//                         subtitle: "Type, segment & loan preference", emoji: "🚗"),
+//            ]
+//        case "Travel / Trip":
+//            goalSteps = [
+//                GoalStep(id: "travel_details", title: "Trip Details",
+//                         subtitle: "Destination, duration & travellers", emoji: "✈️"),
+//            ]
+//        case "Wedding":
+//            goalSteps = [
+//                GoalStep(id: "wedding_details", title: "Wedding",
+//                         subtitle: "Scale, venue & funding split", emoji: "💍"),
+//            ]
+//        case "Wealth Creation":
+//            goalSteps = [
+//                GoalStep(id: "wealth_details", title: "Wealth Intent",
+//                         subtitle: "What does wealth mean to you?", emoji: "💰"),
+//            ]
+//        case "Business Fund":
+//            goalSteps = [
+//                GoalStep(id: "business_details", title: "Business",
+//                         subtitle: "Type, stage & capital need", emoji: "🏢"),
+//            ]
+//        default:
+//            goalSteps = [
+//                GoalStep(id: "other_details", title: "Your Goal",
+//                         subtitle: "Tell us more about what you need", emoji: "🎯"),
+//            ]
+//        }
+//
+//        // Order: Target → Goal-specific → SIP → Strategy
+//        if goal == "Retirement" {
+//            return goalSteps + [sipStep, stratStep]
+//        } else {
+//            return [targetStep] + goalSteps + [sipStep, stratStep]
+//        }
+//    }
     static func steps(for goal: String, profile: AstraUserProfile?) -> [GoalStep] {
         let targetStep = GoalStep(id: "target", title: "Your Goal",
                                   subtitle: "Define what you want to achieve", emoji: "🎯")
@@ -394,35 +472,33 @@ struct GoalStep: Identifiable {
             ]
         case "Home Purchase":
             goalSteps = [
-                GoalStep(id: "home_details", title: "Property",
-                         subtitle: "What kind of home are you buying?", emoji: "🏠"),
-                GoalStep(id: "home_finance", title: "Financing",
-                         subtitle: "Down payment & loan preferences", emoji: "🏦"),
+                GoalStep(id: "home_details", title: "Home Plan",
+                         subtitle: "Timeline, Budget & Strategy", emoji: "🏠")
             ]
         case "Vehicle":
             goalSteps = [
-                GoalStep(id: "vehicle_details", title: "Vehicle",
-                         subtitle: "Type, segment & loan preference", emoji: "🚗"),
+                GoalStep(id: "vehicle_details", title: "Vehicle Plan",
+                         subtitle: "Timeline, Segment & Strategy", emoji: "🚗"),
             ]
         case "Travel / Trip":
             goalSteps = [
-                GoalStep(id: "travel_details", title: "Trip Details",
-                         subtitle: "Destination, duration & travellers", emoji: "✈️"),
+                GoalStep(id: "travel_details", title: "Travel Plan",
+                         subtitle: "Timeline, Budget & Strategy", emoji: "✈️"),
             ]
         case "Wedding":
             goalSteps = [
-                GoalStep(id: "wedding_details", title: "Wedding",
-                         subtitle: "Scale, venue & funding split", emoji: "💍"),
+                GoalStep(id: "wedding_details", title: "Wedding Plan",
+                         subtitle: "Timeline, Scale & Strategy", emoji: "💍"),
             ]
         case "Wealth Creation":
             goalSteps = [
-                GoalStep(id: "wealth_details", title: "Wealth Intent",
-                         subtitle: "What does wealth mean to you?", emoji: "💰"),
+                GoalStep(id: "wealth_details", title: "Wealth Plan",
+                         subtitle: "Target, Timeline & Strategy", emoji: "💰"),
             ]
         case "Business Fund":
             goalSteps = [
-                GoalStep(id: "business_details", title: "Business",
-                         subtitle: "Type, stage & capital need", emoji: "🏢"),
+                GoalStep(id: "business_details", title: "Business Plan",
+                         subtitle: "Timeline, Capital & Strategy", emoji: "🏢"),
             ]
         default:
             goalSteps = [
@@ -431,10 +507,12 @@ struct GoalStep: Identifiable {
             ]
         }
 
-        // Order: Target → Goal-specific → SIP → Strategy
-        if goal == "Retirement" {
+        // ✅ Education & Retirement skip the generic target step —
+        //    their questionnaires collect goal-specific data themselves
+        switch goal {
+        case "Retirement", "Education", "Home Purchase", "Vehicle", "Travel / Trip", "Wedding", "Wealth Creation", "Business Fund":
             return goalSteps + [sipStep, stratStep]
-        } else {
+        default:
             return [targetStep] + goalSteps + [sipStep, stratStep]
         }
     }
@@ -490,25 +568,6 @@ struct FormPickerField<T: Hashable>: View {
     }
 }
 
-//struct SectionCard<Content: View>: View {
-//    let title: String; let icon: String; let content: Content
-//    init(title: String, icon: String, @ViewBuilder content: () -> Content) {
-//        self.title = title; self.icon = icon; self.content = content()
-//    }
-//    var body: some View {
-//        VStack(alignment: .leading, spacing: 16) {
-//            HStack(spacing: 8) {
-//                Image(systemName: icon).foregroundStyle(.blue).font(.subheadline)
-//                Text(title).font(.subheadline).fontWeight(.bold).foregroundStyle(.primary)
-//                Spacer()
-//            }
-//            VStack(spacing: 16) { content }
-//        }
-//        .padding(18).background(AppTheme.cardBackground).cornerRadius(20)
-//        .shadow(color: AppTheme.adaptiveShadow, radius: 10, x: 0, y: 5)
-//    }
-//}
-
 struct FormTextField: View {
     @Environment(\.colorScheme) var colorScheme
     let label: String; @Binding var value: String
@@ -535,9 +594,9 @@ struct FormDateField: View {
             HStack {
                 DatePicker("", selection: $date, displayedComponents: .date)
                     .datePickerStyle(.compact).labelsHidden()
-                Spacer()
+                Spacer(minLength: 40)
             }
-            .padding(.horizontal, 8).padding(.vertical, 8)
+            .padding(.vertical, 16)
             .background(Color(UIColor.secondarySystemBackground).opacity(colorScheme == .dark ? 0.3 : 1.0))
             .cornerRadius(12)
         }
@@ -572,3 +631,4 @@ struct GoalInfoChip: View {
             .environment(AppStateManager.withSampleData())
     }
 }
+

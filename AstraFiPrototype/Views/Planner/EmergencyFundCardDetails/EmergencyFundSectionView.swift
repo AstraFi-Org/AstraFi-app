@@ -250,7 +250,7 @@ struct EmergencyFundSectionView: View {
         .animation(.spring(response: 0.36, dampingFraction: 0.80), value: showManage)
         .animation(.spring(response: 0.28, dampingFraction: 0.75), value: monthlyContribution)
         .onAppear(perform: syncFromProfile)
-        .sheet(isPresented: $showEditSheet) {
+        .navigationDestination(isPresented: $showEditSheet){
             ManageAllocationSheet(currentHolding: currentSaved, pTBills: $pTBills, pSavings: $pSavings, pSweepFD: $pSweepFD, onSave: saveAllocation)
                 .environment(appState)
         }

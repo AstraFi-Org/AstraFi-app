@@ -39,7 +39,6 @@ struct BasicDetailView: View {
     }
 
     var body: some View {
-        Text("hello")
         ZStack(alignment: .bottom) {
             Color(.systemGroupedBackground).ignoresSafeArea()
 
@@ -160,23 +159,23 @@ struct BasicDetailView: View {
             }
 
             // ── Footer
-            VStack(spacing: 0) {
-                if !canContinue {
-                    Text(
-                        data.name.trimmingCharacters(in: .whitespaces).isEmpty ? "Enter your name to continue" :
-                            income == 0 ? "Enter your monthly income to continue" :
-                            expenses == 0 ? "Enter your monthly expenses to continue" :
-                            age == 0 ? "Enter your age to continue" :
-                            hasEmergencyFund == nil ? "Answer the emergency fund question to continue" :
-                            "Choose whether to share your emergency fund amount"
-                    )
-                    .font(.caption)
-                    .foregroundStyle(.secondary)
-                    .multilineTextAlignment(.center)
-                    .padding(.horizontal, 20)
-                    .padding(.bottom, 8)
-                }
-            }
+//            VStack(spacing: 0) {
+//                if !canContinue {
+//                    Text(
+//                        data.name.trimmingCharacters(in: .whitespaces).isEmpty ? "Enter your name to continue" :
+//                            income == 0 ? "Enter your monthly income to continue" :
+//                            expenses == 0 ? "Enter your monthly expenses to continue" :
+//                            age == 0 ? "Enter your age to continue" :
+//                            hasEmergencyFund == nil ? "Answer the emergency fund question to continue" :
+//                            "Choose whether to share your emergency fund amount"
+//                    )
+//                    .font(.caption)
+//                    .foregroundStyle(.secondary)
+//                    .multilineTextAlignment(.center)
+//                    .padding(.horizontal, 20)
+//                    .padding(.bottom, 8)
+//                }
+//            }
         }
         .navigationTitle("Financial Assessment")
         .navigationBarTitleDisplayMode(.inline)

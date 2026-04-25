@@ -279,7 +279,7 @@ struct ProfileBanner: View {
 //    let isSelected: Bool
 //    let color: Color
 //    let action: () -> Void
-//    
+//
 //    var body: some View {
 //        Button(action: action) {
 //            HStack(spacing: 16) {
@@ -359,5 +359,58 @@ struct PlanFlowLayout: Layout {
             lineHeight = max(lineHeight, size.height)
             currentX += size.width + spacing
         }
+    }
+}
+//// MARK: - Shared Card Wrapper
+struct SectionCard<Content: View>: View {
+    let content: Content
+    init(@ViewBuilder content: () -> Content) { self.content = content() }
+
+    var body: some View {
+        content
+            .padding(18)
+            .background(.background, in: RoundedRectangle(cornerRadius: 18, style: .continuous))
+            .shadow(color: .black.opacity(0.06), radius: 12, x: 0, y: 4)
+    }
+}
+
+// MARK: - Shared Section Header
+struct SectionHeader2: View {
+    let icon: String
+    let iconColor: Color
+    let title: String
+    var subtitle: String? = nil
+
+    var body: some View {
+        HStack(spacing: 10) {
+            ZStack {
+                RoundedRectangle(cornerRadius: 8, style: .continuous)
+                    .fill(iconColor.opacity(0.12))
+                    .frame(width: 32, height: 32)
+                Image(systemName: icon)
+                    .font(.system(size: 14, weight: .semibold))
+                    .foregroundStyle(iconColor)
+            }
+            VStack(alignment: .leading, spacing: 1) {
+                Text(title)
+                    .font(.system(size: 15, weight: .bold, design: .rounded))
+                if let subtitle {
+                    Text(subtitle)
+                        .font(.system(size: 12, design: .rounded))
+                        .foregroundStyle(.secondary)
+                }
+            }
+            Spacer()
+        }
+    }
+}
+
+// MARK: - Extensions
+extension Int {
+    var formattedWithComma: String {
+        let formatter = NumberFormatter()
+        formatter.numberStyle = .decimal
+        formatter.groupingSeparator = ","
+        return formatter.string(from: NSNumber(value: self)) ?? "\(self)"
     }
 }

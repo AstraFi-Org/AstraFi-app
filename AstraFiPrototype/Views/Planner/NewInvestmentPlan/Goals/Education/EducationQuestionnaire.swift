@@ -1,370 +1,631 @@
 import SwiftUI
 
-struct EducationQuestionnaire: View {
-    @Binding var input: InvestmentPlanInputModel
-    let stepId: String
-    let goalAccentColor: Color
+// MARK: - Education Plan Input Model
+@Observable
+class EducationPlanInputModel {
+    var yearsUntilCourse: String = ""
+    var courseAmount: String = ""
+    var location: EducationLocation? = nil
+    var courseDurationYears: Int = 2
     
-    var body: some View {
-        VStack(spacing: 24) {
-            // Page Header
-            VStack(alignment: .leading, spacing: 8) {
-                Text("Secure Their Future")
-                    .font(.system(size: 28, weight: .bold, design: .rounded))
-                Text("Education is the best investment you can make for your loved ones.")
-                    .font(.subheadline)
-                    .foregroundColor(.secondary)
-            }
-            .frame(maxWidth: .infinity, alignment: .leading)
-            .padding(.bottom, 8)
-
-            // 1. Timeline & Goal Section
-            VStack(spacing: 20) {
-                LabeledField(label: "When are you assuming to start education?", icon: "clock.fill",
-                             note: "Years from today") {
-                    PlanSliderStepper(value: Binding(
-                        get: { input.yearsUntilEducation ?? 10 },
-                        set: { input.yearsUntilEducation = $0 }
-                    ), range: 1...25, unit: "yrs")
-                }
-                .cardStyle()
-
-                AssessmentField(
-                    icon: "indianrupeesign.circle.fill",
-                    label: "What amount you will need for the Education purpose?",
-                    placeholder: "e.g. 50,00,000",
-                    text: $input.targetAmount,
-                    keyboard: .numberPad
-                )
-
-                LabeledField(label: "What is tenure of the course that you are going to pursue?", icon: "book.fill",
-                             note: "Duration of the degree/course") {
-                    PlanSliderStepper(value: Binding(
-                        get: { input.educationDurationYrs ?? 4 },
-                        set: { input.educationDurationYrs = $0 }
-                    ), range: 1...6, unit: "yrs")
-                }
-                .cardStyle()
-            }
-
-            // 2. Education Insights Card
-            if let targetVal = Double(input.targetAmount.replacingOccurrences(of: ",", with: "")), targetVal > 0 {
-                EducationInsightCard(
-                    targetAmount: targetVal,
-                    yearsUntilStart: input.yearsUntilEducation ?? 10,
-                    courseTenure: input.educationDurationYrs ?? 4
-                )
-                .transition(.move(edge: .bottom).combined(with: .opacity))
-            }
-            
-            // 3. THE PLAN SECTION
-            VStack(alignment: .leading, spacing: 18) {
-                PlanDivider()
-                
-                HStack {
-                    Image(systemName: "lightbulb.fill")
-                        .foregroundColor(.orange)
-                    Text("What is your Plan?")
-                        .font(.system(size: 18, weight: .bold, design: .rounded))
-                }
-                .padding(.horizontal, 4)
-                
-                PlanSegmentChips(
-                    selection: Binding(
-                        get: { input.goalPlanType ?? "" },
-                        set: { input.goalPlanType = $0 }
-                    ),
-                    options: ["Will start SIP", "Bank / FD", "No Plan"]
-                )
-                .cardStyle()
-                
-                if let plan = input.goalPlanType, !plan.isEmpty {
-                    planDetailsView(for: plan)
-                        .transition(.asymmetric(insertion: .move(edge: .trailing).combined(with: .opacity),
-                                               removal: .opacity))
-                }
-            }
-            
-            Spacer(minLength: 40)
+    // Computed monthly living expenses based on location
+    var computedMonthlyLiving: Double {
+        guard let location = location else { return 0 }
+        switch location {
+        case .india: return 25000 // Normal lifestyle in India
+        case .abroad: return 150000 // Normal lifestyle Abroad (~$1800)
         }
-        .animation(.spring(response: 0.5, dampingFraction: 0.8), value: input.targetAmount)
-        .animation(.spring(), value: input.goalPlanType)
     }
-    
-    @ViewBuilder
-    private func planDetailsView(for plan: String) -> some View {
-        VStack(spacing: 20) {
-            if plan == "Will start SIP" {
-                AssessmentField(
-                    icon: "chart.line.uptrend.xyaxis.circle.fill",
-                    label: "Monthly SIP Amount (₹)",
-                    placeholder: "e.g. 15,000",
-                    text: Binding(
-                        get: { input.goalSIPAmount ?? "" },
-                        set: { input.goalSIPAmount = $0 }
-                    ),
-                    keyboard: .numberPad
-                )
-                
-                if let sipStr = input.goalSIPAmount, let sip = Double(sipStr), sip > 0 {
-                    let targetVal = Double(input.targetAmount.replacingOccurrences(of: ",", with: "")) ?? 0
-                    GoalSIPInsightCard(
-                        sipAmount: sip,
-                        targetCorpus: targetVal,
-                        yearsToInvest: input.yearsUntilEducation ?? 10,
-                        goalType: "Education"
-                    )
-                }
-            } else if plan == "Bank / FD" {
-                VStack(spacing: 20) {
-                    LabeledField(label: "Savings Frequency", icon: "calendar") {
-                        PlanSegmentChips(
-                            selection: Binding(
-                                get: { input.goalFDFrequency ?? "Monthly" },
-                                set: { input.goalFDFrequency = $0 }
-                            ),
-                            options: ["Monthly", "Quarterly", "Yearly"]
+}
+enum EducationLocation {
+    case india, abroad
+    var label: String { self == .india ? "India" : "Abroad" }
+    var emoji: String { self == .india ? "🇮🇳" : "✈️" }
+    var color: Color { self == .india ? .green : .blue }
+}
+
+// MARK: - Education Questionnaire
+struct EducationQuestionnaire: View {
+    @State private var input = EducationPlanInputModel()
+    //@StateObject private var input = EducationPlanInputModel()
+    let profileAge: Int?
+    let goalAccentColor: Color
+
+    var body: some View {
+        ScrollView(showsIndicators: false) {
+            VStack(spacing: 16) {
+
+                // ── 1. Timeline Card
+                SectionCard{
+                    VStack(spacing: 16) {
+                        SectionHeader2(
+                            icon: "calendar.badge.clock",
+                            iconColor: goalAccentColor,
+                            title: "Course Timeline",
+                            subtitle: "When are you planning to pursue this course?"
                         )
-                    }
-                    .cardStyle()
-                    
-                    AssessmentField(
-                        icon: "building.columns.fill",
-                        label: "Amount to save (\(input.goalFDFrequency ?? "Monthly"))",
-                        placeholder: "e.g. 20,000",
-                        text: Binding(
-                            get: { input.goalFDAmount ?? "" },
-                            set: { input.goalFDAmount = $0 }
-                        ),
-                        keyboard: .numberPad
-                    )
-                    
-                    if let amtStr = input.goalFDAmount, let amt = Double(amtStr), amt > 0 {
-                        let targetVal = Double(input.targetAmount.replacingOccurrences(of: ",", with: "")) ?? 0
-                        GoalFDInsightCard(
-                            amount: amt,
-                            frequency: input.goalFDFrequency ?? "Monthly",
-                            targetCorpus: targetVal,
-                            yearsToInvest: input.yearsUntilEducation ?? 10
-                        )
+
+                        Divider()
+
+                        HStack {
+                            Text("Years from now")
+                                .font(.system(size: 15, design: .rounded))
+                                .foregroundStyle(.secondary)
+                            Spacer()
+                            TextField("e.g. 3", text: $input.yearsUntilCourse)
+                                .keyboardType(.numberPad)
+                                .multilineTextAlignment(.trailing)
+                                .font(.system(size: 15, weight: .semibold, design: .rounded))
+                                .frame(width: 80)
+                        }
+
+                        if let age = profileAge, let years = Int(input.yearsUntilCourse), years > 0 {
+                            HStack(spacing: 8) {
+                                Image(systemName: "person.crop.circle.fill.badge.checkmark")
+                                    .font(.system(size: 12))
+                                    .foregroundStyle(.blue)
+                                Text("You'll be \(age + years) years old")
+                                    .font(.system(size: 13, weight: .medium, design: .rounded))
+                                    .foregroundStyle(.blue)
+                                Text("· when you start")
+                                    .font(.system(size: 12, design: .rounded))
+                                    .foregroundStyle(.secondary)
+                                Spacer()
+                            }
+                            .padding(.horizontal, 12)
+                            .padding(.vertical, 8)
+                            .background(.blue.opacity(0.06), in: RoundedRectangle(cornerRadius: 10, style: .continuous))
+                        }
+
+                        if let years = Int(input.yearsUntilCourse), years > 0 {
+                            HStack {
+                                Image(systemName: "arrow.right.circle.fill")
+                                    .foregroundStyle(goalAccentColor)
+                                    .font(.system(size: 14))
+                                Text("Time to save:")
+                                    .font(.system(size: 14, design: .rounded))
+                                    .foregroundStyle(.secondary)
+                                Text("\(years) years")
+                                    .font(.system(size: 14, weight: .bold, design: .rounded))
+                                    .foregroundStyle(goalAccentColor)
+                                Spacer()
+                            }
+                        }
                     }
                 }
-            } else {
-                InsightCard(
-                    title: "Education is a Priority",
-                    icon: "flag.checkered",
-                    iconColor: .blue,
-                    message: "Education costs are rising at ~10% annually. Delaying your planning by even 2 years can increase the required monthly savings by 25%.",
-                    scenarios: ["Admission cycles don't wait", "Currency fluctuation (for abroad)", "Tuition hikes often exceed CPI"]
-                )
+
+                // ── 2. Course Amount Card
+                SectionCard {
+                    VStack(spacing: 16) {
+                        SectionHeader2(
+                            icon: "indianrupeesign.circle.fill",
+                            iconColor: .orange,
+                            title: "Course Fees",
+                            subtitle: "Total fees needed at the start of the course"
+                        )
+
+                        Divider()
+
+                        HStack {
+                            Text("Course Amount (₹)")
+                                .font(.system(size: 15, design: .rounded))
+                                .foregroundStyle(.secondary)
+                            Spacer()
+                            TextField("e.g. 500000", text: $input.courseAmount)
+                                .keyboardType(.numberPad)
+                                .multilineTextAlignment(.trailing)
+                                .font(.system(size: 15, weight: .semibold, design: .rounded))
+                                .frame(width: 120)
+                        }
+
+                        if let amt = Double(input.courseAmount), amt > 0 {
+                            HStack(spacing: 8) {
+                                Image(systemName: "info.circle.fill")
+                                    .font(.system(size: 12))
+                                    .foregroundStyle(.orange)
+                                Text("With 6% inflation, you'll need \(inflatedAmount(amt)) at course start")
+                                    .font(.system(size: 12, design: .rounded))
+                                    .foregroundStyle(.secondary)
+                                    .fixedSize(horizontal: false, vertical: true)
+                                Spacer()
+                            }
+                            .padding(.horizontal, 12)
+                            .padding(.vertical, 8)
+                            .background(.orange.opacity(0.06), in: RoundedRectangle(cornerRadius: 10, style: .continuous))
+                        }
+                    }
+                }
+
+                // ── 3. Location Card
+                SectionCard {
+                    VStack(alignment: .leading, spacing: 0) {
+                        SectionHeader2(
+                            icon: "globe.asia.australia.fill",
+                            iconColor: .teal,
+                            title: "Where are you going?",
+                            subtitle: "Location affects living expenses significantly"
+                        )
+                        .padding(.bottom, 14)
+
+                        Divider()
+
+                        EducationLocationRow(
+                            location: .india,
+                            isSelected: input.location == .india,
+                            description: "Hostels, mess food & local transport"
+                        ) { input.location = .india }
+
+                        Divider().padding(.leading, 54)
+
+                        EducationLocationRow(
+                            location: .abroad,
+                            isSelected: input.location == .abroad,
+                            description: "Rent, groceries & international transport"
+                        ) { input.location = .abroad }
+                    }
+                }
+
+                // ── 4. Course Duration Card (shows after location selected)
+                if input.location != nil {
+                    SectionCard {
+                        VStack(spacing: 16) {
+                            SectionHeader2(
+                                icon: "calendar.badge.clock",
+                                iconColor: input.location == .abroad ? .blue : .green,
+                                title: "Course Duration",
+                                subtitle: "How many years will the course take?"
+                            )
+
+                            Divider()
+
+                            PlanSliderStepper(
+                                value: Binding(
+                                    get: { input.courseDurationYears },
+                                    set: { input.courseDurationYears = $0 }
+                                ),
+                                range: 1...6,
+                                unit: "yrs"
+                            )
+                        }
+                    }
+                    .transition(.move(edge: .bottom).combined(with: .opacity))
+                }
+
+                // ── 5. Insights Card (shows when all filled)
+                if showInsights {
+                    EducationInsightCard(
+                        courseAmount: Double(input.courseAmount) ?? 0,
+                        monthlyLiving: input.computedMonthlyLiving,
+                        durationYears: input.courseDurationYears,
+                        yearsToSave: Int(input.yearsUntilCourse) ?? 1,
+                        location: input.location ?? .india,
+                        accentColor: goalAccentColor
+                    )
+                    .transition(.move(edge: .bottom).combined(with: .opacity))
+                }
+
+                Spacer(minLength: 40)
             }
+            .padding(.vertical, 16)
         }
+        .scrollDismissesKeyboard(.interactively)
+        .onTapGesture { hideKeyboard() }
+        .animation(.spring(response: 0.5, dampingFraction: 0.8), value: input.location)
+        .animation(.spring(response: 0.5, dampingFraction: 0.8), value: showInsights)
+    }
+
+    private var showInsights: Bool {
+        !input.courseAmount.isEmpty &&
+        !input.yearsUntilCourse.isEmpty &&
+        input.location != nil
+    }
+
+    private func inflatedAmount(_ base: Double) -> String {
+        let years = Double(Int(input.yearsUntilCourse) ?? 0)
+        let inflated = base * pow(1.06, years)
+        if inflated >= 10_000_000 { return String(format: "₹%.1f Cr", inflated / 10_000_000) }
+        if inflated >= 100_000    { return String(format: "₹%.1f L", inflated / 100_000) }
+        return "₹\(Int(inflated))"
+    }
+}
+
+// MARK: - Location Row
+private struct EducationLocationRow: View {
+    let location: EducationLocation
+    let isSelected: Bool
+    let description: String
+    let action: () -> Void
+
+    var body: some View {
+        Button(action: action) {
+            HStack(spacing: 14) {
+                Text(location.emoji)
+                    .font(.system(size: 22))
+                    .frame(width: 40, height: 40)
+                    .background(location.color.opacity(0.1),
+                                in: RoundedRectangle(cornerRadius: 10, style: .continuous))
+
+                VStack(alignment: .leading, spacing: 2) {
+                    Text(location.label)
+                        .font(.system(size: 15, weight: .bold, design: .rounded))
+                        .foregroundStyle(isSelected ? location.color : .primary)
+                    Text(description)
+                        .font(.system(size: 12, design: .rounded))
+                        .foregroundStyle(.secondary)
+                }
+
+                Spacer()
+
+                ZStack {
+                    Circle()
+                        .stroke(isSelected ? location.color : Color.secondary.opacity(0.3), lineWidth: 2)
+                        .frame(width: 22, height: 22)
+                    if isSelected {
+                        Circle().fill(location.color).frame(width: 13, height: 13)
+                    }
+                }
+            }
+            .padding(.vertical, 10)
+        }
+        .buttonStyle(.plain)
+        .animation(.spring(response: 0.25, dampingFraction: 0.7), value: isSelected)
     }
 }
 
 // MARK: - Education Insight Card
-
 struct EducationInsightCard: View {
-    let targetAmount: Double
-    let yearsUntilStart: Int
-    let courseTenure: Int
-    
+    let courseAmount: Double
+    let monthlyLiving: Double
+    let durationYears: Int
+    let yearsToSave: Int
+    let location: EducationLocation
+    let accentColor: Color
+
+    private var totalLivingCost: Double {
+        monthlyLiving * 12 * Double(durationYears)
+    }
+
+    private var inflatedCourse: Double {
+        courseAmount * pow(1.06, Double(yearsToSave))
+    }
+
+    private var inflatedLiving: Double {
+        totalLivingCost * pow(1.06, Double(yearsToSave))
+    }
+
+    private var totalCorpus: Double {
+        inflatedCourse + inflatedLiving
+    }
+
+    private var requiredMonthlySIP: Double {
+        let n = Double(max(1, yearsToSave)) * 12
+        let r = 0.12 / 12
+        return totalCorpus * (r / (pow(1 + r, n) - 1)) / (1 + r)
+    }
+
+    private var requiredMonthlyFD: Double {
+        let n = Double(max(1, yearsToSave)) * 12
+        let r = 0.065 / 12
+        return totalCorpus * (r / (pow(1 + r, n) - 1)) / (1 + r)
+    }
+
+    private var isHighCost: Bool { totalCorpus > 5_000_000 }
+
+    @State private var showFactors: Bool = false
+
     var body: some View {
-        VStack(alignment: .leading, spacing: 18) {
-            HStack {
-                Text("🎓")
-                Text("Future Cost Projection")
-                    .font(.system(size: 16, weight: .bold, design: .rounded))
-                Spacer()
-            }
-            
-            VStack(alignment: .leading, spacing: 12) {
-                Text("With education inflation (10% p.a.), the ₹\(fmtL(targetAmount)) you need today will become:")
-                    .font(.system(size: 14, weight: .medium, design: .rounded))
-                    .foregroundColor(.primary.opacity(0.8))
-                
-                HStack(spacing: 12) {
-                    VStack(alignment: .leading, spacing: 4) {
-                        Text("ESTIMATED COST AT START")
-                            .font(.system(size: 10, weight: .bold))
-                            .foregroundColor(.secondary)
-                        Text(fmtCr(futureCost))
-                            .font(.system(size: 24, weight: .black, design: .rounded))
-                            .foregroundColor(.purple)
-                    }
+        SectionCard {
+            VStack(alignment: .leading, spacing: 16) {
+
+                // Header
+                HStack {
+                    SectionHeader2(
+                        icon: "graduationcap.fill",
+                        iconColor: accentColor,
+                        title: "Education Corpus Plan",
+                        subtitle: "Your complete financial target"
+                    )
                     
+                    Button {
+                        showFactors.toggle()
+                    } label: {
+                        Image(systemName: "info.circle")
+                            .font(.system(size: 18))
+                            .foregroundStyle(accentColor)
+                    }
+                    .sheet(isPresented: $showFactors) {
+                        EducationExpenseSheet(location: location, accentColor: accentColor)
+                            .presentationDetents([.medium, .large])
+                    }
+                }
+
+                Divider()
+
+                // Breakdown rows
+                VStack(spacing: 10) {
+                    corpusRow(
+                        icon: "book.fill",
+                        label: "Course Fees (inflation-adjusted)",
+                        value: fmt(inflatedCourse),
+                        color: .orange
+                    )
+                    corpusRow(
+                        icon: location == .abroad ? "airplane" : "house.fill",
+                        label: "Living Expenses (\(durationYears) yrs, adjusted)",
+                        value: fmt(inflatedLiving),
+                        color: location == .abroad ? .blue : .green
+                    )
+
+                    Divider()
+
+                    // Total
+                    HStack {
+                        HStack(spacing: 8) {
+                            ZStack {
+                                RoundedRectangle(cornerRadius: 8, style: .continuous)
+                                    .fill(accentColor.opacity(0.12))
+                                    .frame(width: 30, height: 30)
+                                Image(systemName: "target")
+                                    .font(.system(size: 13, weight: .semibold))
+                                    .foregroundStyle(accentColor)
+                            }
+                            Text("Total Corpus Needed")
+                                .font(.system(size: 14, weight: .bold, design: .rounded))
+                        }
+                        Spacer()
+                        Text(fmt(totalCorpus))
+                            .font(.system(size: 18, weight: .black, design: .rounded))
+                            .foregroundStyle(accentColor)
+                    }
+                    .padding(12)
+                    .background(accentColor.opacity(0.07),
+                                in: RoundedRectangle(cornerRadius: 10, style: .continuous))
+                }
+
+                Divider()
+
+                // How to save section
+                VStack(alignment: .leading, spacing: 10) {
+                    Label("HOW TO BUILD THIS CORPUS", systemImage: "lightbulb.fill")
+                        .font(.system(size: 10, weight: .bold))
+                        .foregroundStyle(.secondary)
+
+                    savingOptionRow(
+                        icon: "chart.line.uptrend.xyaxis",
+                        color: .green,
+                        title: "Via SIP (12% returns)",
+                        value: "₹\(Int(requiredMonthlySIP).formattedWithComma)/month",
+                        note: "Equity mutual funds — recommended"
+                    )
+
+                    savingOptionRow(
+                        icon: "building.columns.fill",
+                        color: .orange,
+                        title: "Via FD (6.5% returns)",
+                        value: "₹\(Int(requiredMonthlyFD).formattedWithComma)/month",
+                        note: "Safe but needs more monthly savings"
+                    )
+                }
+
+                // Location-specific insights
+                if location == .abroad {
+                    HStack(alignment: .top, spacing: 8) {
+                        Image(systemName: "globe.europe.africa.fill")
+                            .font(.system(size: 11))
+                            .foregroundStyle(.blue)
+                        VStack(alignment: .leading, spacing: 4) {
+                            Text("International Planning")
+                                .font(.system(size: 11, weight: .bold))
+                            Text("Costs include international travel & higher rent. Consider forex-hedged plans to avoid currency risk.")
+                                .font(.system(size: 10))
+                                .foregroundStyle(.secondary)
+                        }
+                        Spacer()
+                    }
+                    .padding(10)
+                    .background(Color.blue.opacity(0.06), in: RoundedRectangle(cornerRadius: 10, style: .continuous))
+                } else {
+                    HStack(alignment: .top, spacing: 8) {
+                        Image(systemName: "indianrupeesign.circle.fill")
+                            .font(.system(size: 11))
+                            .foregroundStyle(.green)
+                        VStack(alignment: .leading, spacing: 4) {
+                            Text("Domestic Planning")
+                                .font(.system(size: 11, weight: .bold))
+                            Text("Assuming hostel/PG stay and mess food. Indian inflation is assumed at 6-8% for education.")
+                                .font(.system(size: 10))
+                                .foregroundStyle(.secondary)
+                        }
+                        Spacer()
+                    }
+                    .padding(10)
+                    .background(Color.green.opacity(0.06), in: RoundedRectangle(cornerRadius: 10, style: .continuous))
+                }
+
+                // Footer note
+                HStack {
                     Spacer()
+                    Text("Assumes 6% inflation · 12% SIP · 6.5% FD returns")
+                        .font(.system(size: 10, design: .rounded))
+                        .foregroundStyle(.secondary)
+                }
+            }
+        }
+    }
+
+    private func corpusRow(icon: String, label: String, value: String, color: Color) -> some View {
+        HStack {
+            HStack(spacing: 8) {
+                ZStack {
+                    RoundedRectangle(cornerRadius: 7, style: .continuous)
+                        .fill(color.opacity(0.10))
+                        .frame(width: 26, height: 26)
+                    Image(systemName: icon)
+                        .font(.system(size: 11, weight: .semibold))
+                        .foregroundStyle(color)
+                }
+                Text(label)
+                    .font(.system(size: 13, design: .rounded))
+                    .foregroundStyle(.secondary)
+            }
+            Spacer()
+            Text(value)
+                .font(.system(size: 13, weight: .bold, design: .rounded))
+                .foregroundStyle(.primary)
+        }
+    }
+}
+
+// MARK: - Expense Sheet Component
+struct EducationExpenseSheet: View {
+    let location: EducationLocation
+    let accentColor: Color
+    @Environment(\.dismiss) var dismiss
+
+    var body: some View {
+        NavigationStack {
+            ScrollView {
+                VStack(alignment: .leading, spacing: 24) {
                     
-                    VStack(alignment: .trailing, spacing: 4) {
-                        Text("COURSE TENURE")
-                            .font(.system(size: 10, weight: .bold))
-                            .foregroundColor(.secondary)
-                        Text("\(courseTenure) Years")
-                            .font(.system(size: 16, weight: .bold, design: .rounded))
-                            .foregroundColor(.primary)
+                    // Header Section
+                    VStack(alignment: .leading, spacing: 8) {
+                        Text("Assumed Monthly Expenses")
+                            .font(.system(size: 28, weight: .bold, design: .rounded))
+                        Text("Detailed breakdown for a normal lifestyle \(location == .india ? "in India" : "abroad").")
+                            .font(.system(size: 15))
+                            .foregroundStyle(.secondary)
                     }
+                    .padding(.horizontal)
+
+                    // Breakdown List
+                    VStack(spacing: 0) {
+                        if location == .india {
+                            expenseRow(icon: "fork.knife", color: .orange, title: "Food & Dining", subtitle: "Mess food + eating out", amount: 8000)
+                            expenseRow(icon: "bus.fill", color: .blue, title: "Transport", subtitle: "Local commute & auto", amount: 4000)
+                            expenseRow(icon: "airplane", color: .indigo, title: "Travel", subtitle: "2 domestic trips (annualized)", amount: 5000)
+                            expenseRow(icon: "music.note.house.fill", color: .purple, title: "Social & Fun", subtitle: "2 parties or movie nights", amount: 3000)
+                            expenseRow(icon: "pills.fill", color: .red, title: "Misc & Health", subtitle: "Personal care & supplies", amount: 5000)
+                        } else {
+                            expenseRow(icon: "house.fill", color: .green, title: "Rent & Utilities", subtitle: "Shared apartment + bills", amount: 80000)
+                            expenseRow(icon: "cart.fill", color: .orange, title: "Food & Groceries", subtitle: "Home cooking + occasional dining", amount: 30000)
+                            expenseRow(icon: "tram.fill", color: .blue, title: "Transport", subtitle: "Public transport pass", amount: 15000)
+                            expenseRow(icon: "airplane", color: .indigo, title: "International Travel", subtitle: "Annual trips (annualized)", amount: 15000)
+                            expenseRow(icon: "sparkles", color: .purple, title: "Misc & Social", subtitle: "Student activities & fun", amount: 10000)
+                        }
+                    }
+                    .padding(8)
+                    .background(Color(.secondarySystemGroupedBackground))
+                    .cornerRadius(20)
+                    .padding(.horizontal)
+
+                    // Total Footer
+                    VStack(alignment: .leading, spacing: 4) {
+                        Text("Total Monthly Budget")
+                            .font(.system(size: 14, weight: .bold))
+                            .foregroundStyle(.secondary)
+                        
+                        Text("₹\(Int(location == .india ? 25000 : 150000).formattedWithComma)")
+                            .font(.system(size: 44, weight: .black, design: .rounded))
+                            .foregroundStyle(accentColor)
+                    }
+                    .padding(.horizontal)
+                    
+                    Text("These are estimated monthly expenses in today's value. The actual corpus accounts for inflation over the saving period.")
+                        .font(.system(size: 13))
+                        .foregroundStyle(.secondary)
+                        .padding(.horizontal)
+                    
+                    Spacer(minLength: 40)
                 }
-                .padding(14)
-                .background(Color.purple.opacity(0.06))
-                .cornerRadius(12)
+                .padding(.top, 24)
             }
-            
-            VStack(spacing: 12) {
-                InsightRow(icon: "chart.line.uptrend.xyaxis", text: "Education Inflation: 10% p.a. assumed", color: .red)
-                InsightRow(icon: "graduationcap.fill", text: "Covers tuition & living for \(courseTenure) years", color: .blue)
+            .background(Color(.systemGroupedBackground))
+            .toolbar {
+                ToolbarItem(placement: .topBarTrailing) {
+                    Button("Done") { dismiss() }
+                        .fontWeight(.bold)
+                        .buttonStyle(.borderedProminent)
+                        .tint(accentColor)
+                        .clipShape(Capsule())
+                }
             }
+            .navigationTitle("Normal Lifestyle")
+            .navigationBarTitleDisplayMode(.inline)
         }
-        .padding(20)
-        .background(RoundedRectangle(cornerRadius: 20).fill(Color.purple.opacity(0.05)))
-        .overlay(RoundedRectangle(cornerRadius: 20).stroke(Color.purple.opacity(0.2), lineWidth: 1))
     }
-    
-    private var futureCost: Double {
-        targetAmount * pow(1.10, Double(yearsUntilStart))
-    }
-    
-    private func fmtCr(_ val: Double) -> String {
-        if val >= 10000000 { return String(format: "₹%.1f Cr", val / 10000000.0) }
-        return String(format: "₹%.1f L", val / 100000.0)
-    }
-    
-    private func fmtL(_ val: Double) -> String {
-        return String(format: "%.0f L", val / 100000.0)
-    }
-}
 
-// MARK: - Reusable Insight Components (Generic Versions)
+    private func expenseRow(icon: String, color: Color, title: String, subtitle: String, amount: Double) -> some View {
+        VStack(spacing: 0) {
+            HStack(spacing: 16) {
+                ZStack {
+                    Circle()
+                        .fill(color.opacity(0.12))
+                        .frame(width: 44, height: 44)
+                    Image(systemName: icon)
+                        .font(.system(size: 18, weight: .semibold))
+                        .foregroundStyle(color)
+                }
 
-struct GoalSIPInsightCard: View {
-    let sipAmount: Double
-    let targetCorpus: Double
-    let yearsToInvest: Int
-    let goalType: String
-    
-    var body: some View {
-        VStack(alignment: .leading, spacing: 16) {
-            HStack {
-                Text(onTrack ? "✅" : "⚠️")
-                Text(onTrack ? "Plan is Healthy" : "Gap in Funding")
-                    .font(.headline).fontWeight(.bold)
+                VStack(alignment: .leading, spacing: 2) {
+                    Text(title)
+                        .font(.system(size: 16, weight: .bold))
+                    Text(subtitle)
+                        .font(.system(size: 12))
+                        .foregroundStyle(.secondary)
+                }
+
                 Spacer()
+
+                Text("₹\(Int(amount).formattedWithComma)")
+                    .font(.system(size: 16, weight: .bold, design: .rounded))
             }
+            .padding(.vertical, 14)
+            .padding(.horizontal, 12)
             
-            Text(message)
-                .font(.subheadline)
-                .foregroundColor(.secondary)
-            
-            Divider()
-            
-            VStack(alignment: .leading, spacing: 12) {
-                Text("SCENARIOS")
-                    .font(.system(size: 10, weight: .bold)).foregroundColor(.secondary)
-                
-                HStack(spacing: 8) {
-                    Circle().fill(Color.blue.opacity(0.6)).frame(width: 4, height: 4)
-                    Text("Wealth growth from returns: \(fmtCr(estimatedGrowth))").font(.caption).foregroundColor(.secondary)
-                }
-                HStack(spacing: 8) {
-                    Circle().fill(Color.orange.opacity(0.6)).frame(width: 4, height: 4)
-                    Text("Impact of 2-year delay: -\(fmtCr(delayLoss))").font(.caption).foregroundColor(.secondary)
-                }
-            }
+            Divider().padding(.leading, 72)
         }
-        .padding(20)
-        .background(onTrack ? Color.green.opacity(0.05) : Color.orange.opacity(0.05))
-        .cornerRadius(20)
-        .overlay(RoundedRectangle(cornerRadius: 20).stroke(onTrack ? Color.green.opacity(0.2) : Color.orange.opacity(0.2), lineWidth: 1))
-    }
-    
-    private var estimatedFinalValue: Double {
-        let n = Double(max(1, yearsToInvest)) * 12
-        let r = 0.12 / 12
-        return sipAmount * ((pow(1 + r, n) - 1) / r) * (1 + r)
-    }
-    
-    private var estimatedGrowth: Double {
-        estimatedFinalValue - (sipAmount * 12 * Double(yearsToInvest))
-    }
-    
-    private var delayLoss: Double {
-        let nDelayed = Double(max(0, yearsToInvest - 2)) * 12
-        let r = 0.12 / 12
-        let valFull = estimatedFinalValue
-        let valDelayed = sipAmount * ((pow(1 + r, nDelayed) - 1) / r) * (1 + r)
-        return valFull - valDelayed
-    }
-    
-    private var onTrack: Bool { estimatedFinalValue >= targetCorpus }
-    
-    private var message: String {
-        if onTrack {
-            return "At 12% returns, your SIP will reach \(fmtCr(estimatedFinalValue)) in \(yearsToInvest) years."
-        } else {
-            return "Target is \(fmtCr(targetCorpus)). At current SIP, you'll reach \(fmtCr(estimatedFinalValue))."
-        }
-    }
-    
-    private func fmtCr(_ val: Double) -> String {
-        if val >= 10000000 { return String(format: "₹%.1f Cr", val / 10000000.0) }
-        return String(format: "₹%.1f L", val / 100000.0)
     }
 }
 
-struct GoalFDInsightCard: View {
-    let amount: Double
-    let frequency: String
-    let targetCorpus: Double
-    let yearsToInvest: Int
-    
-    var body: some View {
-        VStack(alignment: .leading, spacing: 16) {
-            HStack {
-                Text("🏦")
-                Text("FD Projection (7%)")
-                    .font(.headline).fontWeight(.bold)
-                Spacer()
+    private func savingOptionRow(icon: String, color: Color, title: String, value: String, note: String) -> some View {
+        HStack(spacing: 12) {
+            ZStack {
+                Circle()
+                    .fill(color.opacity(0.10))
+                    .frame(width: 34, height: 34)
+                Image(systemName: icon)
+                    .font(.system(size: 13, weight: .semibold))
+                    .foregroundStyle(color)
             }
-            
-            Text("Your \(frequency.lowercased()) savings will reach \(fmtCr(estimatedFinalValue)) in \(yearsToInvest) years.")
-                .font(.subheadline)
-                .foregroundColor(.secondary)
-            
-            Divider()
-            
-            Text("Warning: Education inflation (10%) is higher than FD returns (7%). Your purchasing power will decrease over time.")
-                .font(.caption)
-                .foregroundColor(.red)
-                .italic()
+            VStack(alignment: .leading, spacing: 2) {
+                Text(title)
+                    .font(.system(size: 13, weight: .bold, design: .rounded))
+                Text(note)
+                    .font(.system(size: 11, design: .rounded))
+                    .foregroundStyle(.secondary)
+            }
+            Spacer()
+            Text(value)
+                .font(.system(size: 13, weight: .bold, design: .rounded))
+                .foregroundStyle(color)
         }
-        .padding(20)
-        .background(Color.orange.opacity(0.05))
-        .cornerRadius(20)
-        .overlay(RoundedRectangle(cornerRadius: 20).stroke(Color.orange.opacity(0.2), lineWidth: 1))
+        .padding(10)
+        .background(color.opacity(0.05),
+                    in: RoundedRectangle(cornerRadius: 10, style: .continuous))
     }
-    
-    private var estimatedFinalValue: Double {
-        let freqMult: Double = frequency == "Monthly" ? 12 : (frequency == "Quarterly" ? 4 : 1)
-        let n = Double(max(1, yearsToInvest)) * freqMult
-        let r = 0.07 / freqMult
-        return amount * ((pow(1 + r, n) - 1) / r) * (1 + r)
-    }
-    
-    private func fmtCr(_ val: Double) -> String {
-        if val >= 10000000 { return String(format: "₹%.1f Cr", val / 10000000.0) }
-        return String(format: "₹%.1f L", val / 100000.0)
-    }
-}
 
+    private func fmt(_ v: Double) -> String {
+        if v >= 10_000_000 { return String(format: "₹%.1f Cr", v / 10_000_000) }
+        if v >= 100_000    { return String(format: "₹%.1f L", v / 100_000) }
+        return "₹\(Int(v))"
+    }
+
+
+// MARK: - Preview
 #Preview {
     ZStack {
-        AppTheme.appBackground(for: .light).ignoresSafeArea()
-        ScrollView {
-            EducationQuestionnaire(
-                input: .constant(InvestmentPlanInputModel.sampleEducation),
-                stepId: "edu_details",
-                goalAccentColor: .purple
-            )
-            .padding()
-        }
+        Color(.systemGroupedBackground).ignoresSafeArea()
+        EducationQuestionnaire(profileAge: 28, goalAccentColor: .indigo)
+            .padding(.top, 16)
     }
 }
