@@ -39,6 +39,7 @@ struct BasicDetailView: View {
     }
 
     var body: some View {
+        Text("Hello Akaksj")
         ZStack(alignment: .bottom) {
             Color(.systemGroupedBackground).ignoresSafeArea()
 
