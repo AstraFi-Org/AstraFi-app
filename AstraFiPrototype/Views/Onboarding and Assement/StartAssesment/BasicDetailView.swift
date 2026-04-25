@@ -54,7 +54,7 @@ struct BasicDetailView: View {
                             .foregroundStyle(.secondary)
                             .fixedSize(horizontal: false, vertical: true)
                     }
-                    //.padding(.horizontal, 20)
+                    .padding(.horizontal, 20)
                     .padding(.top, 24)
                     .padding(.bottom, 24)
 
@@ -238,7 +238,7 @@ struct EmergencyFundQuestionCard: View {
                     .foregroundStyle(.secondary)
                     .fixedSize(horizontal: false, vertical: true)
 
-                Text("Do you already have one?")
+                Text("Do you already have Emergency Fund?")
                     .font(.system(size: 16, weight: .semibold, design: .rounded))
             }
 
@@ -300,10 +300,42 @@ private struct EFChoiceButton: View {
 }
 
 // MARK: - EF Share Prompt Card
+// MARK: - Reusable Choice Button
+struct EFChoiceButton2: View {
+    let label: String
+    let color: Color
+    let isSelected: Bool
+    let action: () -> Void
+
+    var body: some View {
+        Button(action: action) {
+            Text(label)
+                .font(.system(size: 14, weight: .bold, design: .rounded))
+                .foregroundStyle(isSelected ? .white : color)
+                .frame(maxWidth: .infinity)
+                .padding(.vertical, 12)
+                .background(
+                    RoundedRectangle(cornerRadius: 12, style: .continuous)
+                        .fill(isSelected ? color : color.opacity(0.12))
+                )
+                .overlay(
+                    RoundedRectangle(cornerRadius: 12, style: .continuous)
+                        .stroke(color.opacity(isSelected ? 0 : 0.3), lineWidth: 1)
+                )
+        }
+        .buttonStyle(.plain)
+        .animation(.easeInOut(duration: 0.18), value: isSelected)
+    }
+}
+
+// MARK: - Main Card View
 struct EFSharePromptCard: View {
     @Binding var wantsToShareEF: Bool?
     let onYes: () -> Void
     let onSkip: () -> Void
+
+    // Local selection state to drive button appearance
+    @State private var selectedChoice: Bool? = nil
 
     var body: some View {
         VStack(alignment: .leading, spacing: 16) {
@@ -336,33 +368,32 @@ struct EFSharePromptCard: View {
             }
 
             HStack(spacing: 12) {
-                // Yes → Phase1BView to enter EF amount
-                Button(action: onYes) {
-                    Text("Yes, let's do it")
-                        .font(.system(size: 14, weight: .bold, design: .rounded))
-                        .foregroundStyle(.white)
-                        .frame(maxWidth: .infinity)
-                        .padding(.vertical, 12)
-                        .background(
-                            RoundedRectangle(cornerRadius: 12, style: .continuous)
-                                .fill(AppTheme.auraGreen)
-                        )
+                // YES button
+                EFChoiceButton2(
+                    label: "Yes, let's do it",
+                    color: AppTheme.auraGreen,
+                    isSelected: selectedChoice == true
+                ) {
+                    selectedChoice = true
+                    wantsToShareEF = true
+                    // Small delay so user sees the selection before navigation
+                    DispatchQueue.main.asyncAfter(deadline: .now() + 0.2) {
+                        onYes()
+                    }
                 }
-                .buttonStyle(.plain)
 
-                // Skip → jump straight to InvestmentQuestionView
-                Button(action: onSkip) {
-                    Text("Skip for now")
-                        .font(.system(size: 14, weight: .bold, design: .rounded))
-                        .foregroundStyle(.white)
-                        .frame(maxWidth: .infinity)
-                        .padding(.vertical, 12)
-                        .background(
-                            RoundedRectangle(cornerRadius: 12, style: .continuous)
-                                .fill(AppTheme.vibrantOrange)
-                        )
+                // SKIP button
+                EFChoiceButton2(
+                    label: "Skip for now",
+                    color: AppTheme.vibrantOrange,
+                    isSelected: selectedChoice == false
+                ) {
+                    selectedChoice = false
+                    wantsToShareEF = false
+                    DispatchQueue.main.asyncAfter(deadline: .now() + 0.2) {
+                        onSkip()
+                    }
                 }
-                .buttonStyle(.plain)
             }
         }
         .padding(18)

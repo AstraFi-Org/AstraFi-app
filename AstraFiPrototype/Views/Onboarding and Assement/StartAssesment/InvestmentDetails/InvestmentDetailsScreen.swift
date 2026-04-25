@@ -301,19 +301,19 @@ struct InvestmentDetailsScreen: View {
                                                 }
                                             }
 
-                                            if !entry.transactions.isEmpty {
-                                                Button {
-                                                    breakdownEntry = entry
-                                                    showingBreakdown = true
-                                                } label: {
-                                                    HStack(spacing: 4) {
-                                                        Image(systemName: "list.bullet.rectangle")
-                                                        Text("View Installment Breakdown")
-                                                    }
-                                                    .font(.caption)
-                                                    .foregroundColor(.blue)
-                                                }
-                                            }
+//                                            if !entry.transactions.isEmpty {
+//                                                Button {
+//                                                    breakdownEntry = entry
+//                                                    showingBreakdown = true
+//                                                } label: {
+//                                                    HStack(spacing: 4) {
+//                                                        Image(systemName: "list.bullet.rectangle")
+//                                                        Text("View Installment Breakdown")
+//                                                    }
+//                                                    .font(.caption)
+//                                                    .foregroundColor(.blue)
+//                                                }
+//                                            }
                                         }
                                         .font(.subheadline)
                                         .padding(10)

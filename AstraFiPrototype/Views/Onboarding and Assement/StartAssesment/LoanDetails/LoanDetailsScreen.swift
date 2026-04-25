@@ -172,22 +172,14 @@ struct LoanDetailsScreen: View {
                                 }
 
                                 if !entry.insurancePremium.isEmpty {
-//                                    AssessmentField(
-//                                        icon: "indianrupeesign",
-//                                        label: "Insurance Premium",
-//                                        placeholder: "e.g. 352000",
-//                                        text: $entry.insurancePremium,
-//                                        keyboard: .numberPad
-//                                    )
-                                    HStack{
+                                    HStack {
                                         Text("Insurance Premium")
-                                        TextField("e.d. 353000", text: $entry.insurancePremium)
+                                        Spacer()
+                                        TextField("e.g. 2540", text: $entry.insurancePremium)
                                             .keyboardType(.numberPad)
                                             .multilineTextAlignment(.trailing)
                                             .frame(width: 150)
-                                        
                                     }
-
                                 }
 
                                 Picker("Interest Type", selection: $entry.interestType) {

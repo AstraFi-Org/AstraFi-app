@@ -30,7 +30,7 @@ struct SanctionLetterParser: LoanStatementParser {
                 // Final check: Principal should not be exactly the insurance amount
                 if cleaned > 0 && cleaned != loanData.insurance {
                    loanData.principal = cleaned
-                   break 
+                   break
                 }
             }
         }
@@ -53,9 +53,17 @@ struct SanctionLetterParser: LoanStatementParser {
             }
         }
         
-        // Tenure (months): Support ":96months" or "period 96 months"
-        if let match = extractRegex(#"(?:total period|tenure).{0,15}?:?\s?(\d+)\s?months?"#, in: normalizedText) {
-            loanData.tenure = Int(match) ?? 0
+        // Tenure (months): Multiple patterns for ":96months", "96 months", "total period :96months"
+        let tenurePatterns = [
+            #"(?:total period|tenure)\s*[:\-]?\s*(\d+)\s*months?"#,
+            #"(?:total period|tenure).{0,20}?:?\s*(\d+)\s*months?"#,
+            #"repayable in.{0,10}?(\d+)\s*months?"#
+        ]
+        for pattern in tenurePatterns {
+            if let match = extractRegex(pattern, in: normalizedText) {
+                let val = Int(match) ?? 0
+                if val > 0 { loanData.tenure = val; break }
+            }
         }
         
         // Moratorium (months): Support ":55" or "55 months"
