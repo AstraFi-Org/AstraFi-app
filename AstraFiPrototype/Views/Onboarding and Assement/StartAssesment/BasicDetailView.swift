@@ -9,6 +9,7 @@ struct BasicDetailView: View {
 
     @State private var goNext = false
     @State private var goSkipToInvestment = false
+    @State private var goToInvestmentQuestion = false
     // nil = not answered, true = has EF, false = no EF
     @State private var hasEmergencyFund: Bool? = nil
     // nil = not answered, true = wants to share EF amount, false = skipped
@@ -45,7 +46,7 @@ struct BasicDetailView: View {
                 VStack(spacing: 0) {
 
                     // ── Page title (scrolls with content)
-                    VStack(alignment: .leading, spacing: 4) {
+                    VStack(alignment: .leading) {
                         Text("Let's get started")
                             .font(.system(size: 28, weight: .bold))
                         Text("Your basics help us calculate your financial health in real time.")
@@ -53,7 +54,7 @@ struct BasicDetailView: View {
                             .foregroundStyle(.secondary)
                             .fixedSize(horizontal: false, vertical: true)
                     }
-                    .padding(.horizontal, 20)
+                    //.padding(.horizontal, 20)
                     .padding(.top, 24)
                     .padding(.bottom, 24)
 
@@ -130,10 +131,14 @@ struct BasicDetailView: View {
                             .padding(.top, 12)
                             .transition(.scale(scale: 0.95).combined(with: .opacity))
                         } else {
-                            EFNecessityCard(income: income, expenses: expenses)
-                                .padding(.horizontal, 20)
-                                .padding(.top, 12)
-                                .transition(.scale(scale: 0.95).combined(with: .opacity))
+                            EFNecessityCard(
+                                income: income,
+                                expenses: expenses,
+                                onProceed: { goToInvestmentQuestion = true }
+                            )
+                            .padding(.horizontal, 20)
+                            .padding(.top, 12)
+                            .transition(.scale(scale: 0.95).combined(with: .opacity))
                         }
                     }
 
@@ -190,13 +195,15 @@ struct BasicDetailView: View {
                     appState.showDashboard = true
                 }
                 .font(.system(size: 15))
-                .foregroundStyle(.secondary)
             }
         }
         .navigationDestination(isPresented: $goNext) {
             Phase1BView(data: data)
         }
         .navigationDestination(isPresented: $goSkipToInvestment) {
+            InvestmentQuestionView(data: data)
+        }
+        .navigationDestination(isPresented: $goToInvestmentQuestion) {
             InvestmentQuestionView(data: data)
         }
         .onAppear {
@@ -231,7 +238,7 @@ struct EmergencyFundQuestionCard: View {
                     .foregroundStyle(.secondary)
                     .fixedSize(horizontal: false, vertical: true)
 
-                Text("Do you Emergency Fund?")
+                Text("Do you already have one?")
                     .font(.system(size: 16, weight: .semibold, design: .rounded))
             }
 
@@ -373,6 +380,7 @@ struct EFSharePromptCard: View {
 struct EFNecessityCard: View {
     let income: Double
     let expenses: Double
+    var onProceed: (() -> Void)? = nil
 
     private var target: Double { max(income * 6, expenses * 6) }
     private var monthlyStep: Double { target / 12 }
@@ -399,34 +407,6 @@ struct EFNecessityCard: View {
             }
 
             HStack(spacing: 20) {
-                ZStack {
-                    Circle()
-                        .stroke(Color.gray.opacity(0.12), lineWidth: 10)
-                        .frame(width: 86, height: 86)
-
-                    Circle()
-                        .trim(from: 0, to: ringProgress)
-                        .stroke(
-                            AngularGradient(
-                                colors: [AppTheme.vibrantOrange, AppTheme.auraGold],
-                                center: .center
-                            ),
-                            style: StrokeStyle(lineWidth: 10, lineCap: .round)
-                        )
-                        .rotationEffect(.degrees(-90))
-                        .frame(width: 86, height: 86)
-                        .animation(.spring(response: 1.0, dampingFraction: 0.7).delay(0.2), value: ringProgress)
-
-                    VStack(spacing: 1) {
-                        Text("0%")
-                            .font(.system(size: 17, weight: .bold, design: .rounded))
-                            .foregroundStyle(AppTheme.vibrantOrange)
-                        Text("funded")
-                            .font(.system(size: 9, design: .rounded))
-                            .foregroundStyle(.secondary)
-                    }
-                }
-
                 VStack(alignment: .leading, spacing: 10) {
                     VStack(alignment: .leading, spacing: 2) {
                         Text("Your target")
@@ -473,6 +453,25 @@ struct EFNecessityCard: View {
             .padding(10)
             .background(AppTheme.auraIndigo.opacity(0.07))
             .clipShape(RoundedRectangle(cornerRadius: 10, style: .continuous))
+
+            if let proceed = onProceed {
+                Button(action: proceed) {
+                    HStack(spacing: 8) {
+                        Text("Proceed")
+                            .font(.system(size: 15, weight: .bold, design: .rounded))
+                        
+                    }
+                    .foregroundStyle(.white)
+                    .frame(maxWidth: .infinity)
+                    .padding(.vertical, 14)
+                    .background(
+                        RoundedRectangle(cornerRadius: 14, style: .continuous)
+                            .fill(AppTheme.auraGreen)
+                    )
+                }
+                .buttonStyle(.plain)
+                .padding(.top, 4)
+            }
         }
         .padding(18)
         .background(AppTheme.cardBackground)
