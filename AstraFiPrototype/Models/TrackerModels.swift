@@ -120,6 +120,7 @@ struct InvestmentPlanInputModel: Codable, Hashable {
     var educationFor: String?
     var educationDurationYrs: Int?
     var educationLocation: String?
+    var yearsUntilEducation: Int?
     var fundingStrategy: String?
 
     var downPaymentAffordable: Double?
@@ -130,6 +131,54 @@ struct InvestmentPlanInputModel: Codable, Hashable {
 
     var contributionSplit: String?
     var wealthIntent: String?
+    
+    var retirementPlanType: String?
+    var retirementSIPAmount: String?
+    var retirementFDFrequency: String?
+    var retirementFDAmount: String?
+    
+    // Generic planning fields for other goals
+    var goalPlanType: String?
+    var goalSIPAmount: String?
+    var goalFDFrequency: String?
+    var goalFDAmount: String?
+
+    // MARK: - Previews
+    static var sampleRetirement: InvestmentPlanInputModel {
+        InvestmentPlanInputModel(
+            investmentType: "Monthly SIP", amount: "20000", liquidity: "Medium", riskType: "Moderate",
+            timePeriod: "25", scheduleInvestmentDate: Date(), scheduleSIPDate: Date(),
+            purposeOfInvestment: "Retirement", targetAmount: "50000000", savedAmount: "500000",
+            hasEmergencyFund: true, retirementAge: 60, yearsPostRetirement: 25, lifestylePreference: "Normal"
+        )
+    }
+    
+    static var sampleEducation: InvestmentPlanInputModel {
+        InvestmentPlanInputModel(
+            investmentType: "Monthly SIP", amount: "15000", liquidity: "Medium", riskType: "Moderate",
+            timePeriod: "15", scheduleInvestmentDate: Date(), scheduleSIPDate: Date(),
+            purposeOfInvestment: "Education", targetAmount: "2500000", savedAmount: "100000",
+            hasEmergencyFund: true, educationFor: "Child", educationDurationYrs: 4, educationLocation: "India"
+        )
+    }
+
+    static var sampleHome: InvestmentPlanInputModel {
+        InvestmentPlanInputModel(
+            investmentType: "Monthly SIP", amount: "50000", liquidity: "Low", riskType: "Moderate",
+            timePeriod: "10", scheduleInvestmentDate: Date(), scheduleSIPDate: Date(),
+            purposeOfInvestment: "Home Purchase", targetAmount: "10000000", savedAmount: "1000000",
+            hasEmergencyFund: true, openToLoan: true, preferredLoanTenureYears: 20
+        )
+    }
+
+    static var sampleVehicle: InvestmentPlanInputModel {
+        InvestmentPlanInputModel(
+            investmentType: "Monthly SIP", amount: "25000", liquidity: "Medium", riskType: "Moderate",
+            timePeriod: "5", scheduleInvestmentDate: Date(), scheduleSIPDate: Date(),
+            purposeOfInvestment: "Vehicle", targetAmount: "1500000", savedAmount: "200000",
+            hasEmergencyFund: true
+        )
+    }
 }
 
 struct InvestmentPlanModel: Identifiable, Hashable {

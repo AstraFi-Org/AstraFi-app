@@ -17,11 +17,7 @@ let onboardingPages: [OnboardingPage] = [
 
     .init(imageName: "onboarding_track_assets",
           title: "Track Investment\nAnd Assets",
-          subtitle: "Track everything in one place"),
-
-    .init(imageName: "onboarding_news_updates",
-          title: "Value Forecast",
-          subtitle: "Seehow much corpus you can build in next years"),
+          subtitle: "Track everything in one place")
 ]
 
 struct OnboardingPagesView: View {
