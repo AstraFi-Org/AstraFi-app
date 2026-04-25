@@ -60,7 +60,10 @@ struct InvestmentQuestionView: View {
                     if let invests = doesInvest {
                         if invests {
                             // YES → analyse card with CTA
-                            InvestmentAnalyseCard(onAnalyse: { goInvestments = true })
+                            InvestmentAnalyseCard(
+                                onAnalyse: { goInvestments = true },
+                                onSkip: { goReport = true }
+                            )
                                 .padding(.horizontal, 20)
                                 .padding(.top, 14)
                                 .transition(.scale(scale: 0.95).combined(with: .opacity))
