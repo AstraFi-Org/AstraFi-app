@@ -9,6 +9,7 @@ struct BasicDetailView: View {
 
     @State private var goNext = false
     @State private var goSkipToInvestment = false
+    @State private var goToInvestmentQuestion = false
     // nil = not answered, true = has EF, false = no EF
     @State private var hasEmergencyFund: Bool? = nil
     // nil = not answered, true = wants to share EF amount, false = skipped
@@ -130,10 +131,14 @@ struct BasicDetailView: View {
                             .padding(.top, 12)
                             .transition(.scale(scale: 0.95).combined(with: .opacity))
                         } else {
-                            EFNecessityCard(income: income, expenses: expenses)
-                                .padding(.horizontal, 20)
-                                .padding(.top, 12)
-                                .transition(.scale(scale: 0.95).combined(with: .opacity))
+                            EFNecessityCard(
+                                income: income,
+                                expenses: expenses,
+                                onProceed: { goToInvestmentQuestion = true }
+                            )
+                            .padding(.horizontal, 20)
+                            .padding(.top, 12)
+                            .transition(.scale(scale: 0.95).combined(with: .opacity))
                         }
                     }
 
@@ -197,6 +202,9 @@ struct BasicDetailView: View {
             Phase1BView(data: data)
         }
         .navigationDestination(isPresented: $goSkipToInvestment) {
+            InvestmentQuestionView(data: data)
+        }
+        .navigationDestination(isPresented: $goToInvestmentQuestion) {
             InvestmentQuestionView(data: data)
         }
         .onAppear {
@@ -373,6 +381,7 @@ struct EFSharePromptCard: View {
 struct EFNecessityCard: View {
     let income: Double
     let expenses: Double
+    var onProceed: (() -> Void)? = nil
 
     private var target: Double { max(income * 6, expenses * 6) }
     private var monthlyStep: Double { target / 12 }
@@ -473,6 +482,25 @@ struct EFNecessityCard: View {
             .padding(10)
             .background(AppTheme.auraIndigo.opacity(0.07))
             .clipShape(RoundedRectangle(cornerRadius: 10, style: .continuous))
+
+            if let proceed = onProceed {
+                Button(action: proceed) {
+                    HStack(spacing: 8) {
+                        Text("Proceed")
+                            .font(.system(size: 15, weight: .bold, design: .rounded))
+                        
+                    }
+                    .foregroundStyle(.white)
+                    .frame(maxWidth: .infinity)
+                    .padding(.vertical, 14)
+                    .background(
+                        RoundedRectangle(cornerRadius: 14, style: .continuous)
+                            .fill(AppTheme.auraGreen)
+                    )
+                }
+                .buttonStyle(.plain)
+                .padding(.top, 4)
+            }
         }
         .padding(18)
         .background(AppTheme.cardBackground)
