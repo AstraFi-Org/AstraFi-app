@@ -7,20 +7,159 @@
 
 import SwiftUI
 
+//struct Phase1BView: View {
+//    @Bindable var data: CompleteAssessmentData
+//    @Environment(AppStateManager.self) var appState
+//    @Environment(\.dismiss) private var dismiss
+//
+//    @State private var goReport       = false   // → ChoiceToReport (skip investments)
+//    @State private var goInvestments = false   // → InvestmentDetailsScreen
+//
+//    // nil = unanswered, true = invests, false = doesn't
+//    @State private var doesInvest: Bool? = nil
+//
+//    private var income: Double  { Double(data.income) ?? 0 }
+//    private var expenses: Double { Double(data.expenditure) ?? 0 }
+//    private var efSaved: Double { Double(data.emergencyFundAmount) ?? 0 }
+//    private var emergencyTarget: Double { income * 6 }
+//
+//    private var minSavePerMonth: Double {
+//        let remaining = max(0, emergencyTarget - efSaved)
+//        let toReachTarget = remaining / 12.0
+//        let tenPctFloor  = income * 0.10
+//        return max(toReachTarget, tenPctFloor)
+//    }
+//    private var efProgress: Double { emergencyTarget > 0 ? min(1, efSaved / emergencyTarget) : 0 }
+//    private var efColor: Color {
+//        efProgress >= 1 ? AppTheme.auraGreen :
+//        efProgress >= 0.5 ? AppTheme.vibrantOrange :
+//        AppTheme.vibrantRed
+//    }
+//
+//    // Show investment question once EF amount is filled (even 0)
+//    private var showInvestQuestion: Bool {
+//        !data.emergencyFundAmount.trimmingCharacters(in: .whitespaces).isEmpty
+//    }
+//
+//    var body: some View {
+//        ZStack(alignment: .bottom) {
+//            Color(.systemGroupedBackground).ignoresSafeArea()
+//
+//            ScrollView(showsIndicators: false) {
+//                VStack(spacing: 0) {
+//
+//                    // ── Page title (scrolls with content)
+//                    VStack(alignment: .leading, spacing: 4) {
+//                        Text("Almost there")
+//                            .font(.system(size: 28, weight: .bold, design: .rounded))
+//                        Text("Tell us about your existing safety net so we can give you personalised advice.")
+//                            .font(.system(size: 15, design: .rounded))
+//                            .foregroundStyle(.secondary)
+//                            .fixedSize(horizontal: false, vertical: true)
+//                    }
+//                    .padding(.horizontal, 20)
+//                    .padding(.top, 24)
+//                    .padding(.bottom, 24)
+//
+//                    // ── EF Field
+//                    VStack(spacing: 14) {
+//                        AssessmentField(
+//                            icon: "shield.lefthalf.filled",
+//                            label: "Emergency Fund Saved (₹)",
+//                            placeholder: "e.g. 100000  (0 if none)",
+//                            text: $data.emergencyFundAmount,
+//                            keyboard: .numberPad
+//                        )
+//                    }
+//                    .padding(.horizontal, 20)
+//
+//                    // ── EF Insight Card
+//                    if income > 0 {
+//                        EFInsightCard(
+//                            efSaved: efSaved,
+//                            emergencyTarget: emergencyTarget,
+//                            minSavePerMonth: minSavePerMonth,
+//                            efProgress: efProgress,
+//                            efColor: efColor
+//                        )
+//                        .padding(.horizontal, 20)
+//                        .padding(.top, 24)
+//                        .transition(.move(edge: .bottom).combined(with: .opacity))
+//                    }
+//
+//                    // ── Investment Question
+//                    if showInvestQuestion {
+//                        InvestmentQuestionCard(doesInvest: $doesInvest)
+//                            .padding(.horizontal, 20)
+//                            .padding(.top, 16)
+//                            .transition(.move(edge: .bottom).combined(with: .opacity))
+//                    }
+//
+//                    // ── Conditional investment cards
+//                    if let invests = doesInvest {
+//                        if invests {
+//                            InvestmentAnalyseCard(
+//                                onAnalyse: { goInvestments = true },
+//                                onSkip: { goReport = true }
+//                            )
+//                                .padding(.horizontal, 20)
+//                                .padding(.top, 12)
+//                                .transition(.scale(scale: 0.95).combined(with: .opacity))
+//                        } else {
+//                            InvestmentNecessityCard()
+//                                .padding(.horizontal, 20)
+//                                .padding(.top, 12)
+//                                .transition(.scale(scale: 0.95).combined(with: .opacity))
+//                        }
+//                    }
+//
+//                    Spacer().frame(height: 120)
+//                }
+//            }
+//            .animation(.spring(response: 0.45, dampingFraction: 0.8), value: showInvestQuestion)
+//            .animation(.spring(response: 0.4,  dampingFraction: 0.8), value: doesInvest)
+//            .animation(.spring(response: 0.3,  dampingFraction: 0.75), value: efProgress)
+//            .safeAreaInset(edge: .top, spacing: 0) {
+//                AssessmentProgressBar(progress: 0.4)
+//                    .padding(.horizontal, 20)
+//                    .padding(.vertical, 10)
+//                    .background(Color(.systemGroupedBackground))
+//            }
+//
+//        }
+//        .navigationTitle("Financial Assessment")
+//        .navigationBarTitleDisplayMode(.inline)
+//        .navigationBarBackButtonHidden(true)
+//        .toolbar {
+//            ToolbarItem(placement: .navigationBarLeading) {
+//                Button { dismiss() } label: {
+//                    Image(systemName: "chevron.left")
+//                        .fontWeight(.semibold)
+//                        .foregroundColor(.primary)
+//                }
+//            }
+//        }
+//        .navigationDestination(isPresented: $goReport) {
+//            FinancialHealthReportView()
+//        }
+//        .navigationDestination(isPresented: $goInvestments) {
+//            InvestmentDetailsScreen(data: data)
+//        }
+//    }
+//}
+// MARK: - Phase1BView (updated)
 struct Phase1BView: View {
     @Bindable var data: CompleteAssessmentData
     @Environment(AppStateManager.self) var appState
     @Environment(\.dismiss) private var dismiss
 
-    @State private var goReport       = false   // → ChoiceToReport (skip investments)
-    @State private var goInvestments = false   // → InvestmentDetailsScreen
-
-    // nil = unanswered, true = invests, false = doesn't
+    @State private var goReport       = false
+    @State private var goInvestments = false
     @State private var doesInvest: Bool? = nil
 
-    private var income: Double  { Double(data.income) ?? 0 }
+    private var income: Double   { Double(data.income) ?? 0 }
     private var expenses: Double { Double(data.expenditure) ?? 0 }
-    private var efSaved: Double { Double(data.emergencyFundAmount) ?? 0 }
+    private var efSaved: Double  { Double(data.emergencyFundAmount) ?? 0 }
     private var emergencyTarget: Double { income * 6 }
 
     private var minSavePerMonth: Double {
@@ -36,9 +175,13 @@ struct Phase1BView: View {
         AppTheme.vibrantRed
     }
 
-    // Show investment question once EF amount is filled (even 0)
     private var showInvestQuestion: Bool {
         !data.emergencyFundAmount.trimmingCharacters(in: .whitespaces).isEmpty
+    }
+
+    // Show the bottom CTA only when user picks "Not yet"
+    private var showContinueButton: Bool {
+        doesInvest == false
     }
 
     var body: some View {
@@ -48,7 +191,6 @@ struct Phase1BView: View {
             ScrollView(showsIndicators: false) {
                 VStack(spacing: 0) {
 
-                    // ── Page title (scrolls with content)
                     VStack(alignment: .leading, spacing: 4) {
                         Text("Almost there")
                             .font(.system(size: 28, weight: .bold, design: .rounded))
@@ -57,11 +199,10 @@ struct Phase1BView: View {
                             .foregroundStyle(.secondary)
                             .fixedSize(horizontal: false, vertical: true)
                     }
-//                    .padding(.horizontal, 20)
+                    .padding(.horizontal, 20)
                     .padding(.top, 24)
                     .padding(.bottom, 24)
 
-                    // ── EF Field
                     VStack(spacing: 14) {
                         AssessmentField(
                             icon: "shield.lefthalf.filled",
@@ -73,7 +214,6 @@ struct Phase1BView: View {
                     }
                     .padding(.horizontal, 20)
 
-                    // ── EF Insight Card
                     if income > 0 {
                         EFInsightCard(
                             efSaved: efSaved,
@@ -87,7 +227,6 @@ struct Phase1BView: View {
                         .transition(.move(edge: .bottom).combined(with: .opacity))
                     }
 
-                    // ── Investment Question
                     if showInvestQuestion {
                         InvestmentQuestionCard(doesInvest: $doesInvest)
                             .padding(.horizontal, 20)
@@ -95,16 +234,15 @@ struct Phase1BView: View {
                             .transition(.move(edge: .bottom).combined(with: .opacity))
                     }
 
-                    // ── Conditional investment cards
                     if let invests = doesInvest {
                         if invests {
                             InvestmentAnalyseCard(
                                 onAnalyse: { goInvestments = true },
                                 onSkip: { goReport = true }
                             )
-                                .padding(.horizontal, 20)
-                                .padding(.top, 12)
-                                .transition(.scale(scale: 0.95).combined(with: .opacity))
+                            .padding(.horizontal, 20)
+                            .padding(.top, 12)
+                            .transition(.scale(scale: 0.95).combined(with: .opacity))
                         } else {
                             InvestmentNecessityCard()
                                 .padding(.horizontal, 20)
@@ -113,7 +251,8 @@ struct Phase1BView: View {
                         }
                     }
 
-                    Spacer().frame(height: 120)
+                    // Extra bottom padding so content isn't hidden behind the sticky button
+                    Spacer().frame(height: showContinueButton ? 160 : 120)
                 }
             }
             .animation(.spring(response: 0.45, dampingFraction: 0.8), value: showInvestQuestion)
@@ -126,14 +265,20 @@ struct Phase1BView: View {
                     .background(Color(.systemGroupedBackground))
             }
 
-            // ── Footer — label changes based on choice
-            AssessmentFooterButton(
-                label: doesInvest == false ? "Skip to Report" : "",
-                enabled: true,
-                isLast: false,
-                action: { goReport = true }
-            )
+            // ── Sticky Continue Button (slides up when "Not yet" is tapped)
+            if showContinueButton {
+                ContinueToReportButton {
+                    goReport = true
+                }
+                .transition(
+                    .asymmetric(
+                        insertion: .move(edge: .bottom).combined(with: .opacity),
+                        removal:   .move(edge: .bottom).combined(with: .opacity)
+                    )
+                )
+            }
         }
+        .animation(.spring(response: 0.4, dampingFraction: 0.8), value: showContinueButton)
         .navigationTitle("Financial Assessment")
         .navigationBarTitleDisplayMode(.inline)
         .navigationBarBackButtonHidden(true)
@@ -155,6 +300,50 @@ struct Phase1BView: View {
     }
 }
 
+// MARK: - Sticky Continue Button
+private struct ContinueToReportButton: View {
+    let action: () -> Void
+
+    var body: some View {
+        VStack(spacing: 0) {
+            // Soft fade so content blends into the button area
+            LinearGradient(
+                colors: [
+                    Color(.systemGroupedBackground).opacity(0),
+                    Color(.systemGroupedBackground)
+                ],
+                startPoint: .top,
+                endPoint: .bottom
+            )
+            .frame(height: 28)
+
+            Button(action: action) {
+                HStack(spacing: 10) {
+                    Text("Continue to Report")
+                        .font(.system(size: 16, weight: .bold, design: .rounded))
+                }
+                .foregroundStyle(.white)
+                .frame(maxWidth: .infinity)
+                .padding(.vertical, 16)
+                .background(
+                    LinearGradient(
+                        colors: [AppTheme.vibrantOrange, AppTheme.vibrantOrange.opacity(0.85)],
+                        startPoint: .leading,
+                        endPoint: .trailing
+                    )
+                )
+                .clipShape(RoundedRectangle(cornerRadius: 16, style: .continuous))
+                .shadow(color: AppTheme.vibrantOrange.opacity(0.35), radius: 10, x: 0, y: 4)
+            }
+            .buttonStyle(.plain)
+            .padding(.horizontal, 20)
+
+            Color(.systemGroupedBackground)
+                .frame(height: 34) // absorbs home indicator / safe area
+        }
+        .background(Color(.systemGroupedBackground))
+    }
+}
 // MARK: - Investment Question Card
 struct InvestmentQuestionCard: View {
     @Binding var doesInvest: Bool?
@@ -182,14 +371,14 @@ struct InvestmentQuestionCard: View {
             HStack(spacing: 12) {
                 InvestChoiceButton(
                     label: "Yes, I invest",
-                    icon: "chart.bar.fill",
+                    //icon: "chart.bar.fill",
                     color: AppTheme.auraGreen,
                     isSelected: doesInvest == true
                 ) { doesInvest = true }
 
                 InvestChoiceButton(
                     label: "Not yet",
-                    icon: "banknote",
+                    //icon: "banknote",
                     color: AppTheme.vibrantOrange,
                     isSelected: doesInvest == false
                 ) { doesInvest = false }
@@ -209,7 +398,7 @@ struct InvestmentQuestionCard: View {
 // MARK: - Choice Button (reusable)
 private struct InvestChoiceButton: View {
     let label: String
-    let icon: String
+//    let icon: String
     let color: Color
     let isSelected: Bool
     let action: () -> Void
@@ -217,8 +406,8 @@ private struct InvestChoiceButton: View {
     var body: some View {
         Button(action: action) {
             HStack(spacing: 8) {
-                Image(systemName: icon)
-                    .font(.system(size: 14, weight: .semibold))
+//                Image(systemName: icon)
+//                    .font(.system(size: 14, weight: .semibold))
                 Text(label)
                     .font(.system(size: 14, weight: .semibold, design: .rounded))
             }
