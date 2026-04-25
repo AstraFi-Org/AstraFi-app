@@ -111,7 +111,7 @@ struct NewInvestmentPlanView: View {
 
     var body: some View {
         ZStack(alignment: .bottom) {
-            Color(uiColor: .systemGroupedBackground).ignoresSafeArea()
+//            Color(uiColor: .systemGroupedBackground).ignoresSafeArea()
             VStack(spacing: 0) {
                 stepProgressBar
                 ScrollView {
@@ -124,12 +124,23 @@ struct NewInvestmentPlanView: View {
                     .padding(.horizontal, 20)
                 }
             }
-            bottomButtons
+            //bottomButtons
         }
         .navigationTitle("\(initialGoal) Plan")
+        .navigationBarBackButtonHidden(true)
         .navigationBarTitleDisplayMode(.inline)
         .navigationDestination(isPresented: $showResultView) {
             InvestmentPlanResultView(input: buildInputModel())
+        }
+        .toolbar {
+            ToolbarItem(placement: .navigationBarLeading) {
+                Button {
+                    dismiss()
+                } label: {
+                    Image(systemName: "chevron.left")
+                        .font(.system(size: 16, weight: .semibold))
+                }
+            }
         }
         .onAppear { prefillFromProfile() }
     }
@@ -179,47 +190,45 @@ struct NewInvestmentPlanView: View {
         stepFields(for: steps[currentStep].id)
     }
 
-    private var bottomButtons: some View {
-        HStack(spacing: 12) {
-            if currentStep > 0 {
-                Button {
-                    UIImpactFeedbackGenerator(style: .light).impactOccurred()
-                    withAnimation(.spring(response: 0.35)) { currentStep -= 1 }
-                } label: {
-                    HStack(spacing: 6) {
-                        Image(systemName: "chevron.left").font(.subheadline.bold())
-                        Text("Back").font(.subheadline.bold())
-                    }
-                    .foregroundStyle(.primary)
-                    .frame(width: 90, height: 54)
-                    .background(Color(uiColor: .secondarySystemBackground), in: RoundedRectangle(cornerRadius: 14))
-                }
-            }
-            Button {
-                UIImpactFeedbackGenerator(style: .medium).impactOccurred()
-                if currentStep < totalSteps - 1 {
-                    withAnimation(.spring(response: 0.35)) { currentStep += 1 }
-                } else {
-                    showResultView = true
-                }
-            } label: {
-                HStack(spacing: 8) {
-                    Text(currentStep < totalSteps - 1 ? "Continue" : "Generate My Plan")
-                        .font(.headline).fontWeight(.bold)
-                    Image(systemName: currentStep < totalSteps - 1 ? "chevron.right" : "sparkles")
-                        .font(.subheadline.bold())
-                }
-                .foregroundStyle(.white)
-                .frame(maxWidth: .infinity, minHeight: 54)
-                .background(goalAccentColor, in: RoundedRectangle(cornerRadius: 14))
-                .shadow(color: goalAccentColor.opacity(0.3), radius: 10, x: 0, y: 4)
-            }
-        }
-        .padding(.horizontal, 20)
-        .padding(.bottom, 34)
-        .padding(.top, 12)
-        .background(.bar)
-    }
+//    private var bottomButtons: some View {
+//        HStack(spacing: 12) {
+//            if currentStep > 0 {
+//                Button {
+//                    UIImpactFeedbackGenerator(style: .light).impactOccurred()
+//                    withAnimation(.spring(response: 0.35)) { currentStep -= 1 }
+//                } label: {
+//                    HStack(spacing: 6) {
+//                        Image(systemName: "chevron.left").font(.subheadline.bold())
+//                    }
+//                    .foregroundStyle(.primary)
+//                    .frame(width: 90, height: 54)
+//                    .background(Color(uiColor: .secondarySystemBackground), in: RoundedRectangle(cornerRadius: 14))
+//                }
+//            }
+//            Button {
+//                UIImpactFeedbackGenerator(style: .medium).impactOccurred()
+//                if currentStep < totalSteps - 1 {
+//                    withAnimation(.spring(response: 0.35)) { currentStep += 1 }
+//                } else {
+//                    showResultView = true
+//                }
+//            } label: {
+//                HStack(spacing: 8) {
+//                    Text(currentStep < totalSteps - 1 ? "Continue" : "Generate My Plan")
+//                        .font(.headline).fontWeight(.bold)
+//                    
+//                }
+//                .foregroundStyle(.white)
+//                .frame(maxWidth: .infinity, minHeight: 54)
+//                .background(goalAccentColor, in: RoundedRectangle(cornerRadius: 14))
+//                .shadow(color: goalAccentColor.opacity(0.3), radius: 10, x: 0, y: 4)
+//            }
+//        }
+//        .padding(.horizontal, 20)
+//        .padding(.bottom, 34)
+//        .padding(.top, 12)
+//        .background(.bar)
+//    }
 
     // MARK: - Step Fields
     @ViewBuilder

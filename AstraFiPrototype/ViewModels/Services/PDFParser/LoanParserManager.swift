@@ -18,56 +18,104 @@ class LoanParserManager {
     func detectLoanPDFType(from text: String) -> LoanPDFType {
         let normalizedText = text.lowercased()
 
-        if normalizedText.contains("repayment schedule") || normalizedText.contains("amortization") {
+        // --- Repayment Schedule ---
+        if normalizedText.contains("repayment schedule")
+            || normalizedText.contains("amortization") {
             return .repaymentSchedule
-        } else if normalizedText.contains("sanction letter") || normalizedText.contains("disbursement details") {
+        }
+
+        // --- Sanction Letter ---
+        // Covers: Bank of Baroda ("letter of sanction to the borrower"),
+        //         standard "sanction letter", and other common sanction letter keywords
+        if normalizedText.contains("sanction letter")
+            || normalizedText.contains("letter of sanction")
+            || normalizedText.contains("disbursement details")
+            || normalizedText.contains("terms and conditions")
+            || normalizedText.contains("permissible limit")
+            || normalizedText.contains("moratorium")
+            || normalizedText.contains("baroda gyan loan")
+            || normalizedText.contains("education loan")
+            || (normalizedText.contains("sanctioned") && normalizedText.contains("borrower")) {
             return .sanctionLetter
-        } else if normalizedText.contains("loan account") || normalizedText.contains("loan statement") {
+        }
+
+        // --- Loan Statement ---
+        if normalizedText.contains("loan account")
+            || normalizedText.contains("loan statement")
+            || normalizedText.contains("outstanding balance")
+            || normalizedText.contains("closing balance") {
             return .statement
         }
 
-        // Keywords detection as fallback
-        if normalizedText.contains("principal") && normalizedText.contains("interest") && normalizedText.contains("emi") {
-             return .statement
+        // --- Keyword fallback for statement ---
+        if normalizedText.contains("principal")
+            && normalizedText.contains("interest")
+            && normalizedText.contains("emi") {
+            return .statement
         }
 
         return .unknown
     }
 
+    // MARK: - Parse from PDF file
+
     func parseLoanPDF(at url: URL) async throws -> [ParsedLoan] {
         let fullText = try await VisionOCRService.shared.extractTextFromPDF(at: url)
         return try await parseText(fullText)
     }
-    
+
+    // MARK: - Parse from UIImage (Gallery / Camera)
+
     func parseLoanImage(_ image: UIImage) async throws -> [ParsedLoan] {
         let text = try await VisionOCRService.shared.extractText(from: image)
         return try await parseText(text)
     }
-    
+
+    // MARK: - Core Parse Logic
+
     private func parseText(_ text: String) async throws -> [ParsedLoan] {
-        if text.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty {
+        guard !text.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty else {
             throw PDFParsingError.emptyExtraction
         }
 
         let type = detectLoanPDFType(from: text)
 
-        let parser: LoanStatementParser
+        // Primary parser based on detected type
+        let primaryParser: LoanStatementParser
         switch type {
         case .sanctionLetter:
-            parser = SanctionLetterParser()
+            primaryParser = SanctionLetterParser()
         case .statement:
-            parser = AstraLoanStatementParser()
+            primaryParser = AstraLoanStatementParser()
         case .repaymentSchedule:
-            parser = RepaymentScheduleParser()
+            primaryParser = RepaymentScheduleParser()
         case .unknown:
-             // Try sanction letter parser as it's the most robust for general loan docs
-             parser = SanctionLetterParser()
+            primaryParser = SanctionLetterParser()
         }
 
-        let results = parser.parse(text: text)
-        if results.isEmpty && type == .unknown {
-             throw PDFParsingError.unsupportedFormat
+        var results = primaryParser.parse(text: text)
+
+        // If primary parser returned nothing, try all parsers as fallback
+        if results.isEmpty {
+            let fallbackParsers: [LoanStatementParser] = [
+                SanctionLetterParser(),
+                AstraLoanStatementParser(),
+                RepaymentScheduleParser()
+            ]
+            for fallback in fallbackParsers {
+                let fallbackResults = fallback.parse(text: text)
+                if !fallbackResults.isEmpty {
+                    results = fallbackResults
+                    break
+                }
+            }
         }
+
+        // Only throw if every parser failed
+        if results.isEmpty {
+            throw PDFParsingError.unsupportedFormat
+        }
+
         return results
     }
 }

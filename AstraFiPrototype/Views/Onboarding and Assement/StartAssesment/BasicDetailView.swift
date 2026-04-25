@@ -237,7 +237,7 @@ struct EmergencyFundQuestionCard: View {
                     .foregroundStyle(.secondary)
                     .fixedSize(horizontal: false, vertical: true)
 
-                Text("Do you already have one?")
+                Text("Do you Emergency Fund?")
                     .font(.system(size: 16, weight: .semibold, design: .rounded))
             }
 
