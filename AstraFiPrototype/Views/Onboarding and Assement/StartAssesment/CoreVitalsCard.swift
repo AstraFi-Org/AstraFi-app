@@ -136,6 +136,8 @@ struct FinancialKnowledgeSheet: View {
                             color: AppTheme.auraGreen,
                             icon: "leaf.fill"
                         )
+                        Text("Expense = Needs+wants")
+                            .font(.caption)
                     }
                     .padding(14)
                     .background(AppTheme.cardBackground)
