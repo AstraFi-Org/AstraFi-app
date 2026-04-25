@@ -9,9 +9,9 @@ struct BusinessResultView: View {
     }
 }
 
-//#Preview {
-//    NavigationStack {
-//        BusinessResultView(input: InvestmentPlanInputModel.sampleVehicle)
-//            .environment(AppStateManager.withSampleData())
-//    }
-//}
+#Preview {
+    NavigationStack {
+        BusinessResultView(input: InvestmentPlanInputModel.sampleVehicle)
+            .environment(AppStateManager.withSampleData())
+    }
+}

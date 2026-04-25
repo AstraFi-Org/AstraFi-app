@@ -1,48 +1,5 @@
 import SwiftUI
 
-//// MARK: - Shared Card Wrapper
-private struct SectionCard<Content: View>: View {
-    let content: Content
-    init(@ViewBuilder content: () -> Content) { self.content = content() }
-
-    var body: some View {
-        content
-            .padding(18)
-            .background(.background, in: RoundedRectangle(cornerRadius: 18, style: .continuous))
-            .shadow(color: .black.opacity(0.06), radius: 12, x: 0, y: 4)
-    }
-}
-
-// MARK: - Shared Section Header
-private struct SectionHeader: View {
-    let icon: String
-    let iconColor: Color
-    let title: String
-    var subtitle: String? = nil
-
-    var body: some View {
-        HStack(spacing: 10) {
-            ZStack {
-                RoundedRectangle(cornerRadius: 8, style: .continuous)
-                    .fill(iconColor.opacity(0.12))
-                    .frame(width: 32, height: 32)
-                Image(systemName: icon)
-                    .font(.system(size: 14, weight: .semibold))
-                    .foregroundStyle(iconColor)
-            }
-            VStack(alignment: .leading, spacing: 1) {
-                Text(title)
-                    .font(.system(size: 15, weight: .bold, design: .rounded))
-                if let subtitle {
-                    Text(subtitle)
-                        .font(.system(size: 12, design: .rounded))
-                        .foregroundStyle(.secondary)
-                }
-            }
-            Spacer()
-        }
-    }
-}
 
 // MARK: - Uniform Info Row (label + value)
 private struct InfoRow: View {
@@ -79,7 +36,7 @@ struct RetirementQuestionnaire: View {
                 // ── 1. Timeline Card
                 SectionCard {
                     VStack(spacing: 16) {
-                        SectionHeader(
+                        SectionHeader2(
                             icon: "clock.fill",
                             iconColor: goalAccentColor,
                             title: "Retirement Timeline",
@@ -164,9 +121,9 @@ struct RetirementQuestionnaire: View {
 //                            title: "Retirement Lifestyle",
 //                            subtitle: "What type of life do you want after retirement?"
 //                        )
-//                        
+//
 //                        Divider()
-//                        
+//
 //                        VStack(spacing: 10) {
 //                            LifestyleChoiceCard(
 //                                title: "Lavish",
@@ -174,14 +131,14 @@ struct RetirementQuestionnaire: View {
 //                                isSelected: input.lifestylePreference == "Lavish",
 //                                color: .purple
 //                            ) { input.lifestylePreference = "Lavish" }
-//                            
+//
 //                            LifestyleChoiceCard(
 //                                title: "Normal",
 //                                description: "Comfortable trips, good food & occasional luxury",
 //                                isSelected: input.lifestylePreference == "Normal",
 //                                color: .blue
 //                            ) { input.lifestylePreference = "Normal" }
-//                            
+//
 //                            LifestyleChoiceCard(
 //                                title: "Average",
 //                                description: "Essential comforts with budget-friendly trips",
@@ -194,7 +151,7 @@ struct RetirementQuestionnaire: View {
                 // ── 2. Lifestyle Selection Card
                 SectionCard {
                     VStack(alignment: .leading, spacing: 0) {  // ✅ spacing: 0, dividers handle gaps
-                        SectionHeader(
+                        SectionHeader2(
                             icon: "hand.tap.fill",
                             iconColor: .purple,
                             title: "Retirement Lifestyle",
@@ -235,7 +192,7 @@ struct RetirementQuestionnaire: View {
                 if let preference = input.lifestylePreference {
                     SectionCard {
                         VStack(spacing: 16) {
-                            SectionHeader(
+                            SectionHeader2(
                                 icon: "sparkles",
                                 iconColor: .orange,
                                 title: "Corpus Estimate",
@@ -256,7 +213,7 @@ struct RetirementQuestionnaire: View {
                 // ── 4. Plan Section
                 SectionCard {
                     VStack(alignment: .leading, spacing: 16) {
-                        SectionHeader(
+                        SectionHeader2(
                             icon: "lightbulb.fill",
                             iconColor: .orange,
                             title: "Your Savings Plan",
@@ -294,78 +251,9 @@ struct RetirementQuestionnaire: View {
                     .presentationDragIndicator(.visible)
             }
         }
-        .scrollDismissesKeyboard(.interactively)  // ✅ drag down dismisses keyboard
+        .scrollDismissesKeyboard(.interactively)
         .onTapGesture { hideKeyboard() }
     }
-
-    //@ViewBuilder
-//    private func planDetailsView(for plan: String) -> some View {
-//        VStack(spacing: 16) {
-//            if plan == "Will start SIP" {
-//                AssessmentField(
-//                    icon: "indianrupeesign.circle.fill",
-//                    label: "Monthly SIP Amount (₹)",
-//                    placeholder: "e.g. 50,000",
-//                    text: Binding(
-//                        get: { input.retirementSIPAmount ?? "" },
-//                        set: { input.retirementSIPAmount = $0 }
-//                    ),
-//                    keyboard: .numberPad
-//                )
-//                if let sipStr = input.retirementSIPAmount, let sip = Double(sipStr), sip > 0 {
-//                    SIPInsightCard(
-//                        sipAmount: sip,
-//                        targetCorpus: getTargetCorpusValue(),
-//                        yearsToInvest: (input.retirementAge ?? 60) - (profileAge ?? 35)
-//                    )
-//                }
-//
-//            } else if plan == "Bank / FD" {
-//                VStack(spacing: 14) {
-//                    LabeledField(label: "Savings Frequency", icon: "calendar") {
-//                        PlanSegmentChips(
-//                            selection: Binding(
-//                                get: { input.retirementFDFrequency ?? "Monthly" },
-//                                set: { input.retirementFDFrequency = $0 }
-//                            ),
-//                            options: ["Monthly", "Quarterly", "Yearly"]
-//                        )
-//                    }
-//
-//                    AssessmentField(
-//                        icon: "building.columns.fill",
-//                        label: "Amount to save (\(input.retirementFDFrequency ?? "Monthly"))",
-//                        placeholder: "e.g. 20,000",
-//                        text: Binding(
-//                            get: { input.retirementFDAmount ?? "" },
-//                            set: { input.retirementFDAmount = $0 }
-//                        ),
-//                        keyboard: .numberPad
-//                    )
-//                    if let amtStr = input.retirementFDAmount, let amt = Double(amtStr), amt > 0 {
-//                        FDInsightCard(
-//                            amount: amt,
-//                            frequency: input.retirementFDFrequency ?? "Monthly",
-//                            targetCorpus: getTargetCorpusValue(),
-//                            yearsToInvest: (input.retirementAge ?? 60) - (profileAge ?? 35)
-//                        )
-//                    }
-//                }
-//            } else {
-//                InsightCard(
-//                    title: "Planning is Freedom",
-//                    icon: "flag.checkered",
-//                    iconColor: .blue,
-//                    message: "Starting today is your biggest advantage. Every year of delay requires a 20% higher investment later to reach the same goal.",
-//                    scenarios: [
-//                        "Compounding works best over time",
-//                        "Inflation starts eating savings now",
-//                        "Healthcare costs rise 10% annually"
-//                    ]
-//                )
-//            }
-//        }
-//    }
     @ViewBuilder
     private func planDetailsView(for plan: String) -> some View {
         VStack(spacing: 16) {
@@ -518,67 +406,6 @@ struct LifestyleChoiceCard: View {
         .animation(.spring(response: 0.25, dampingFraction: 0.7), value: isSelected)
     }
 }
-//struct LifestyleChoiceCard: View {
-//    let title: String
-//    let description: String
-//    let isSelected: Bool
-//    let color: Color
-//    let action: () -> Void
-//
-//    private var emoji: String {
-//        switch title {
-//        case "Lavish":  return "👑"
-//        case "Normal":  return "🌟"
-//        default:        return "🌿"
-//        }
-//    }
-//
-//    var body: some View {
-//        Button(action: action) {
-//            HStack(spacing: 14) {
-//                Text(emoji)
-//                    .font(.system(size: 22))
-//                    .frame(width: 40, height: 40)
-//                    .background(color.opacity(0.1), in: RoundedRectangle(cornerRadius: 10, style: .continuous))
-//
-//                VStack(alignment: .leading, spacing: 2) {
-//                    Text(title)
-//                        .font(.system(size: 15, weight: .bold, design: .rounded))
-//                        .foregroundStyle(isSelected ? color : .primary)
-//                    Text(description)
-//                        .font(.system(size: 12, design: .rounded))
-//                        .foregroundStyle(.secondary)
-//                        .fixedSize(horizontal: false, vertical: true)
-//                }
-//
-//                Spacer()
-//
-//                ZStack {
-//                    Circle()
-//                        .stroke(isSelected ? color : Color.secondary.opacity(0.3), lineWidth: 2)
-//                        .frame(width: 22, height: 22)
-//                    if isSelected {
-//                        Circle()
-//                            .fill(color)
-//                            .frame(width: 13, height: 13)
-//                    }
-//                }
-//            }
-//            .padding(.horizontal, 14)
-//            .padding(.vertical, 12)
-//            .background(
-//                RoundedRectangle(cornerRadius: 13, style: .continuous)
-//                    .fill(isSelected ? color.opacity(0.07) : Color(.secondarySystemGroupedBackground))
-//            )
-//            .overlay(
-//                RoundedRectangle(cornerRadius: 13, style: .continuous)
-//                    .stroke(isSelected ? color.opacity(0.4) : Color.clear, lineWidth: 1.5)
-//            )
-//            .animation(.spring(response: 0.25, dampingFraction: 0.7), value: isSelected)
-//        }
-//        .buttonStyle(.plain)
-//    }
-//}
 
 // MARK: - FD Insight Card (redesigned)
 struct FDInsightCard: View {
@@ -1120,7 +947,6 @@ struct LifestyleExpenseRow: View {
                 profileAge: 35,
                 goalAccentColor: .purple
             )
-            .padding(.horizontal, 20)
             .padding(.top, 16)
         }
     }
