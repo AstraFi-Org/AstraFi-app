@@ -105,7 +105,7 @@ struct InvestmentQuestionView: View {
             InvestmentDetailsScreen(data: data)
         }
         .navigationDestination(isPresented: $goReport) {
-            ChoiceToReport(data: data)
+            FinancialHealthReportView()
         }
     }
 }
