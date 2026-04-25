@@ -48,17 +48,14 @@ struct Phase1BView: View {
             ScrollView(showsIndicators: false) {
                 VStack(spacing: 0) {
 
-                    // ── Progress
-                    VStack(alignment: .leading, spacing: 12) {
-                        AssessmentProgressBar(progress: 0.4)
-                        VStack(alignment: .leading, spacing: 4) {
-                            Text("Almost there")
-                                .font(.system(size: 28, weight: .bold, design: .rounded))
-                            Text("Tell us about your existing safety net so we can give you personalised advice.")
-                                .font(.system(size: 15, design: .rounded))
-                                .foregroundStyle(.secondary)
-                                .fixedSize(horizontal: false, vertical: true)
-                        }
+                    // ── Page title (scrolls with content)
+                    VStack(alignment: .leading, spacing: 4) {
+                        Text("Almost there")
+                            .font(.system(size: 28, weight: .bold, design: .rounded))
+                        Text("Tell us about your existing safety net so we can give you personalised advice.")
+                            .font(.system(size: 15, design: .rounded))
+                            .foregroundStyle(.secondary)
+                            .fixedSize(horizontal: false, vertical: true)
                     }
                     .padding(.horizontal, 20)
                     .padding(.top, 24)
@@ -101,7 +98,10 @@ struct Phase1BView: View {
                     // ── Conditional investment cards
                     if let invests = doesInvest {
                         if invests {
-                            InvestmentAnalyseCard(onAnalyse: { goInvestments = true })
+                            InvestmentAnalyseCard(
+                                onAnalyse: { goInvestments = true },
+                                onSkip: { goReport = true }
+                            )
                                 .padding(.horizontal, 20)
                                 .padding(.top, 12)
                                 .transition(.scale(scale: 0.95).combined(with: .opacity))
@@ -119,6 +119,12 @@ struct Phase1BView: View {
             .animation(.spring(response: 0.45, dampingFraction: 0.8), value: showInvestQuestion)
             .animation(.spring(response: 0.4,  dampingFraction: 0.8), value: doesInvest)
             .animation(.spring(response: 0.3,  dampingFraction: 0.75), value: efProgress)
+            .safeAreaInset(edge: .top, spacing: 0) {
+                AssessmentProgressBar(progress: 0.4)
+                    .padding(.horizontal, 20)
+                    .padding(.vertical, 10)
+                    .background(Color(.systemGroupedBackground))
+            }
 
             // ── Footer — label changes based on choice
             AssessmentFooterButton(
@@ -236,6 +242,7 @@ private struct InvestChoiceButton: View {
 // MARK: - "Yes I Invest" → Analyse Card
 struct InvestmentAnalyseCard: View {
     let onAnalyse: () -> Void
+    let onSkip: () -> Void
 
     var body: some View {
         VStack(alignment: .leading, spacing: 14) {
@@ -262,35 +269,39 @@ struct InvestmentAnalyseCard: View {
 
             // 3 benefit pills
             HStack(spacing: 8) {
-                benefitPill(icon: "chart.pie.fill",      color: AppTheme.auraIndigo,   text: "Diversification")
-                benefitPill(icon: "arrow.up.right",      color: AppTheme.auraGreen,    text: "Growth check")
-                benefitPill(icon: "exclamationmark.triangle", color: AppTheme.vibrantOrange, text: "Risk alerts")
+                benefitPill(icon: "chart.pie.fill",          color: AppTheme.auraIndigo,    text: "Diversification")
+                benefitPill(icon: "arrow.up.right",          color: AppTheme.auraGreen,     text: "Growth check")
+                benefitPill(icon: "exclamationmark.triangle",color: AppTheme.vibrantOrange, text: "Risk alerts")
             }
 
-            // CTA button
-            Button(action: onAnalyse) {
-                HStack(spacing: 8) {
-                    Text("Yes, analyse my investments")
+            // Two side-by-side buttons
+            HStack(spacing: 12) {
+                Button(action: onAnalyse) {
+                    Text("Yes, analyse")
                         .font(.system(size: 14, weight: .bold, design: .rounded))
+                        .foregroundStyle(.white)
+                        .frame(maxWidth: .infinity)
+                        .padding(.vertical, 12)
+                        .background(AppTheme.auraGreen)
+                        .clipShape(RoundedRectangle(cornerRadius: 12, style: .continuous))
                 }
-                .foregroundStyle(.white)
-                .frame(maxWidth: .infinity)
-                .padding(.vertical, 13)
-                .background(
-                    LinearGradient(
-                        colors: [AppTheme.auraGreen, AppTheme.auraIndigo],
-                        startPoint: .leading,
-                        endPoint: .trailing
-                    )
-                )
-                .clipShape(RoundedRectangle(cornerRadius: 12, style: .continuous))
-            }
-            .buttonStyle(.plain)
+                .buttonStyle(.plain)
 
-            // Skip hint
-            Text("You can also skip this and go straight to your report using the button below.")
-                .font(.system(size: 11, design: .rounded))
-                .foregroundStyle(Color.secondary.opacity(0.6))
+                Button(action: onSkip) {
+                    Text("Skip for now")
+                        .font(.system(size: 14, weight: .bold, design: .rounded))
+                        .foregroundStyle(AppTheme.vibrantOrange)
+                        .frame(maxWidth: .infinity)
+                        .padding(.vertical, 12)
+                        .background(AppTheme.vibrantOrange.opacity(0.10))
+                        .clipShape(RoundedRectangle(cornerRadius: 12, style: .continuous))
+                        .overlay(
+                            RoundedRectangle(cornerRadius: 12, style: .continuous)
+                                .stroke(AppTheme.vibrantOrange.opacity(0.30), lineWidth: 1)
+                        )
+                }
+                .buttonStyle(.plain)
+            }
         }
         .padding(18)
         .background(AppTheme.cardBackground)
