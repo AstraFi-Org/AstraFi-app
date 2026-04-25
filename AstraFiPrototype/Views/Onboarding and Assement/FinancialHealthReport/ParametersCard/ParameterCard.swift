@@ -67,7 +67,6 @@ struct ParameterCard: View {
             Text(summary.description).font(.caption).foregroundStyle(.secondary).lineLimit(2)
             Spacer(minLength: 4)
             HStack(spacing: 4) {
-                Image(systemName: statusIcon).font(.caption2)
                 Text(statusLabel).font(.caption).fontWeight(.semibold)
             }
             .foregroundStyle(statusColor)
