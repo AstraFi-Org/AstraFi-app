@@ -228,7 +228,8 @@ struct Plan2InteractiveTimelineView: View {
 
     private func formatL(_ value: Double) -> String {
         let v = abs(value)
-        if v >= 100000 { return String(format: "%.2fL", value / 100000) }
+        if v >= 10000000 { return String(format: "%.2fCr", value / 10000000) }
+        else if v >= 100000 { return String(format: "%.2fL", value / 100000) }
         else if v >= 1000 { return String(format: "%.1fK", value / 1000) }
         return String(format: "%.0f", value)
     }
