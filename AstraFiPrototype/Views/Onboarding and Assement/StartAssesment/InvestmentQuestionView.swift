@@ -20,6 +20,7 @@ import SwiftUI
 
 struct InvestmentQuestionView: View {
     @Bindable var data: CompleteAssessmentData
+    @Environment(AppStateManager.self) var appState
     @Environment(\.dismiss) private var dismiss
 
     @State private var doesInvest: Bool?    = nil
@@ -61,8 +62,14 @@ struct InvestmentQuestionView: View {
                         if invests {
                             // YES → analyse card with CTA
                             InvestmentAnalyseCard(
-                                onAnalyse: { goInvestments = true },
-                                onSkip: { goReport = true }
+                                onAnalyse: {
+                                    appState.updateProfile(from: data)
+                                    goInvestments = true
+                                },
+                                onSkip: {
+                                    appState.updateProfile(from: data)
+                                    goReport = true
+                                }
                             )
                                 .padding(.horizontal, 20)
                                 .padding(.top, 14)
@@ -87,7 +94,10 @@ struct InvestmentQuestionView: View {
                     label: "Skip to Report",
                     enabled: true,
                     isLast: false,
-                    action: { goReport = true }
+                    action: {
+                        appState.updateProfile(from: data)
+                        goReport = true
+                    }
                 )
             }
         }
@@ -105,7 +115,7 @@ struct InvestmentQuestionView: View {
             InvestmentDetailsScreen(data: data)
         }
         .navigationDestination(isPresented: $goReport) {
-            FinancialHealthReportView()
+            FinancialHealthReportView(data: data)
         }
     }
 }

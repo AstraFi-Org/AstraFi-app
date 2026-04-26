@@ -237,8 +237,14 @@ struct Phase1BView: View {
                     if let invests = doesInvest {
                         if invests {
                             InvestmentAnalyseCard(
-                                onAnalyse: { goInvestments = true },
-                                onSkip: { goReport = true }
+                                onAnalyse: {
+                                    appState.updateProfile(from: data)
+                                    goInvestments = true
+                                },
+                                onSkip: {
+                                    appState.updateProfile(from: data)
+                                    goReport = true
+                                }
                             )
                             .padding(.horizontal, 20)
                             .padding(.top, 12)
@@ -268,6 +274,7 @@ struct Phase1BView: View {
             // ── Sticky Continue Button (slides up when "Not yet" is tapped)
             if showContinueButton {
                 ContinueToReportButton {
+                    appState.updateProfile(from: data)
                     goReport = true
                 }
                 .transition(
@@ -292,7 +299,7 @@ struct Phase1BView: View {
             }
         }
         .navigationDestination(isPresented: $goReport) {
-            FinancialHealthReportView()
+            FinancialHealthReportView(data: data)
         }
         .navigationDestination(isPresented: $goInvestments) {
             InvestmentDetailsScreen(data: data)
