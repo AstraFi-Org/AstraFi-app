@@ -272,6 +272,10 @@ struct RetirementQuestionnaire: View {
         trackerInput.investmentType = "Monthly SIP"
         trackerInput.amount = savingPlan == .sip ? expectedSIPAmount : "0"
         trackerInput.targetAmount = String(format: "%.0f", getTargetCorpusValue())
+        let age = (profileAge == 0 || profileAge == nil) ? 35 : profileAge!
+        trackerInput.timePeriod = String(max(1, (input.retirementAge ?? 60) - age))
+        trackerInput.goalPlanType = savingPlan?.rawValue
+        trackerInput.goalSIPAmount = expectedSIPAmount
         return trackerInput
     }
 
@@ -295,19 +299,20 @@ struct LifestyleChoiceCard: View {
     let color: Color
     let action: () -> Void
 
-    private var emoji: String {
+    private var icon: String {
         switch title {
-        case "Lavish": return "👑"
-        case "Normal": return "🌟"
-        default:       return "🌿"
+        case "Lavish": return "crown.fill"
+        case "Normal": return "star.fill"
+        default:       return "leaf.fill"
         }
     }
 
     var body: some View {
         Button(action: action) {
             HStack(spacing: 14) {
-                Text(emoji)
-                    .font(.system(size: 22))
+                Image(systemName: icon)
+                    .font(.system(size: 18, weight: .semibold))
+                    .foregroundStyle(color)
                     .frame(width: 40, height: 40)
                     .background(color.opacity(0.1), in: RoundedRectangle(cornerRadius: 10, style: .continuous))
 
@@ -419,7 +424,9 @@ struct RetirementInsightCard: View {
     var body: some View {
         VStack(alignment: .leading, spacing: 14) {
             HStack {
-                Text(headerEmoji).font(.system(size: 18))
+                Image(systemName: headerIcon)
+                    .font(.system(size: 18, weight: .semibold))
+                    .foregroundStyle(accentColor)
                 Text(headerTitle)
                     .font(.system(size: 14, weight: .bold, design: .rounded))
                     .foregroundStyle(.primary)
@@ -473,8 +480,8 @@ struct RetirementInsightCard: View {
     private var accentColor: Color {
         switch preference { case "Lavish": return .purple; case "Normal": return .blue; default: return .green }
     }
-    private var headerEmoji: String {
-        switch preference { case "Lavish": return "👑"; case "Normal": return "🌟"; default: return "🌿" }
+    private var headerIcon: String {
+        switch preference { case "Lavish": return "crown.fill"; case "Normal": return "star.fill"; default: return "leaf.fill" }
     }
     private var headerTitle: String {
         switch preference { case "Lavish": return "That's smart thinking!"; case "Normal": return "Comfortable Planning"; default: return "Secure Foundations" }

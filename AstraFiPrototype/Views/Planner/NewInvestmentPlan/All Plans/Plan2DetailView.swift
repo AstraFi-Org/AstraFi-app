@@ -39,7 +39,7 @@ struct Plan2DetailView: View {
                 .padding(.horizontal, 20)
                 .padding(.bottom, 120)
             }
-            .background(AppTheme.appBackground(for: .light))
+            .background(AppTheme.appBackground(for: colorScheme))
 
             if !isFromTracker {
                 savePlanFooter
@@ -126,7 +126,7 @@ struct Plan2DetailView: View {
         .background(
             ZStack {
                 BlurView(style: UIBlurEffect.Style.systemUltraThinMaterial)
-                LinearGradient(colors: [.white.opacity(0.8), .white], startPoint: .top, endPoint: .bottom)
+                LinearGradient(colors: [Color(UIColor.systemBackground).opacity(0.8), Color(UIColor.systemBackground)], startPoint: .top, endPoint: .bottom)
             }
             .ignoresSafeArea()
             .frame(height: 100)
@@ -476,6 +476,7 @@ struct Plan2DetailView: View {
 
     private func formatL_Detail(_ value: Double) -> String {
         let v = abs(value)
+        if v >= 10000000 { return String(format: "%.1fCr", value / 10000000) }
         if v >= 100000 { return String(format: "%.1fL", value / 100000) }
         if v >= 1000 { return String(format: "%.1fK", value / 1000) }
         return String(format: "%.0f", value)

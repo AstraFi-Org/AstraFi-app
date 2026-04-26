@@ -170,7 +170,7 @@ class UpstoxCASParser {
             .map { $0.trimmingCharacters(in: .whitespacesAndNewlines) }
 
         let holdingMap = parseHoldingValuation(lines: lines)
-        var investmentMap = parseTransactionSection(lines: lines)
+        let investmentMap = parseTransactionSection(lines: lines)
 
         if investmentMap.isEmpty {
             return holdingMap.map { (isin, holding) in

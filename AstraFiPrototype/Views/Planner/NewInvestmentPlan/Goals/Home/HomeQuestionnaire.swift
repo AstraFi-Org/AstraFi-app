@@ -115,10 +115,7 @@ struct HomeQuestionnaire: View {
                                 .foregroundStyle(.secondary)
                         }
                         Spacer()
-                        TextField("e.g. 50L", text: $input.currentHomeCost)
-                            .keyboardType(.numberPad)
-                            .multilineTextAlignment(.trailing)
-                            .font(.system(size: 15, weight: .semibold, design: .rounded))
+                        GoalAmountField(text: $input.currentHomeCost, placeholder: "e.g. 50L")
                             .frame(width: 120)
                     }
                     
@@ -133,10 +130,7 @@ struct HomeQuestionnaire: View {
                                 .foregroundStyle(.secondary)
                         }
                         Spacer()
-                        TextField("e.g. 5L", text: $input.savedAmount)
-                            .keyboardType(.numberPad)
-                            .multilineTextAlignment(.trailing)
-                            .font(.system(size: 15, weight: .semibold, design: .rounded))
+                        GoalAmountField(text: $input.savedAmount, placeholder: "e.g. 5L")
                             .frame(width: 120)
                     }
                 }

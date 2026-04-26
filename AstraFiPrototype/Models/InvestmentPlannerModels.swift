@@ -10,7 +10,7 @@ struct UserInvestment: Identifiable {
 
 struct PortfolioBlueprint: Codable, Equatable {
     var allocations: [AssetAllocation]
-    var blendedCAGR: Double           
+    var blendedCAGR: Double
     var riskLabel: String
 }
 
@@ -170,7 +170,7 @@ struct LeveragedStrategyResult: Codable, Equatable, Identifiable {
     var breakEvenReturn: Double
     var riskLevel: String
     var riskFlags: [String]
-    var survivalDuration: Int? 
+    var survivalDuration: Int?
     var yearlyBreakdown: [Plan3YearlyDetail]
     var milestones: [Plan3Milestone] = []
 }
@@ -180,7 +180,7 @@ struct Plan3Milestone: Identifiable, Codable, Equatable {
     let label: String
     let startValue: Double
     let growth: Double
-    let emiPaid: Double 
+    let emiPaid: Double
     let endValue: Double
 }
 
@@ -206,16 +206,16 @@ struct Plan3Result: Codable, Equatable {
 
     var recommendedStrategy: String
     var recommendationReason: String
-    var scenarios: LeveragedScenarioAnalysis
-    var portfolio: PortfolioBlueprint? 
+    var scenarios: [PlanScenario]
+    var portfolio: PortfolioBlueprint?
 
     static func empty() -> Plan3Result {
         let emptyStrategy = LeveragedStrategyResult(name: "", description: "", finalValue: 0, totalEMIPaid: 0, netProfit: 0, breakEvenReturn: 0, riskLevel: "", riskFlags: [], survivalDuration: nil, yearlyBreakdown: [])
         return Plan3Result(loanAmount: 0, loanRate: 0, tenure: 1, monthlyEMI: 0,
-                           conservative: emptyStrategy, moderate: emptyStrategy, aggressive: emptyStrategy,
-                           recommendedStrategy: "", recommendationReason: "",
-                           scenarios: LeveragedScenarioAnalysis(bestCaseReturn: 0, worstCaseReturn: 0, realisticCaseReturn: 0),
-                           portfolio: nil)
+                            conservative: emptyStrategy, moderate: emptyStrategy, aggressive: emptyStrategy,
+                            recommendedStrategy: "", recommendationReason: "",
+                            scenarios: [],
+                            portfolio: nil)
     }
 }
 
@@ -282,7 +282,7 @@ struct RecommendationTip: Identifiable, Codable, Equatable {
 struct FullPlanResult: Codable, Equatable {
     var plan1: Plan1Result
     var plan2: Plan2Result?
-    var plan3: Plan3Result? 
+    var plan3: Plan3Result?
     var feasibility: FeasibilityResult
     var recommendations: PlanRecommendations
     var comparisonScore: PlanComparisonScore?
@@ -321,11 +321,11 @@ enum InvestmentGoalCategory: String, Codable, CaseIterable {
 }
 
 struct PlanComparisonScore: Codable, Equatable {
-    var plan1Score: Double     
-    var plan2Score: Double     
-    var plan3Score: Double?    
-    var winner: String         
-    var confidence: String     
+    var plan1Score: Double
+    var plan2Score: Double
+    var plan3Score: Double?
+    var winner: String
+    var confidence: String
     var dimensions: [ScoreDimension]
     var detailedReasoning: String
     var keyValidations: [ValidationPoint]
@@ -333,15 +333,15 @@ struct PlanComparisonScore: Codable, Equatable {
 
 struct ScoreDimension: Codable, Equatable, Identifiable {
     var id: UUID = UUID()
-    let axis: String           
+    let axis: String
     let plan1Value: String
     let plan2Value: String
     let plan3Value: String?
-    let plan1Points: Double    
-    let plan2Points: Double    
-    let plan3Points: Double?   
-    let weight: Double         
-    let winner: String         
+    let plan1Points: Double
+    let plan2Points: Double
+    let plan3Points: Double?
+    let weight: Double
+    let winner: String
 }
 
 struct ValidationPoint: Codable, Equatable, Identifiable {
@@ -358,14 +358,14 @@ enum ValidationSeverity: String, Codable {
 
 struct FinancialHealthContext: Codable, Equatable {
     var netWorth: Double
-    var monthlyIncome: Double         
+    var monthlyIncome: Double
     var monthlyExpenses: Double
-    var existingEMIBurden: Double     
-    var emergencyFundCoverage: Double 
+    var existingEMIBurden: Double
+    var emergencyFundCoverage: Double
     var investmentScore: Int
     var debtToIncomeRatio: Double
-    var investableMonthly: Double     
-    var healthGrade: String           
+    var investableMonthly: Double
+    var healthGrade: String
     var healthSummary: String
 }
 

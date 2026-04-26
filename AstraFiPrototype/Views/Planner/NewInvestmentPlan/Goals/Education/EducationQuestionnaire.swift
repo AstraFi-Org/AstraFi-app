@@ -12,12 +12,11 @@ enum LifestyleOption: String, CaseIterable, Identifiable {
         case .average: return "Average"
         }
     }
-    
-    var emoji: String {
+    var icon: String {
         switch self {
-        case .lavish: return "🥂"
-        case .normal: return "🏡"
-        case .average: return "🎒"
+        case .lavish: return "wineglass.fill"
+        case .normal: return "house.fill"
+        case .average: return "backpack.fill"
         }
     }
     
@@ -102,7 +101,7 @@ class EducationPlanInputModel {
     }
     
     func toTrackerModel() -> InvestmentPlanInputModel {
-        return InvestmentPlanInputModel(
+        var model = InvestmentPlanInputModel(
             investmentType: "Monthly SIP",
             amount: savingPlan == .sip ? expectedSIPAmount : "0",
             liquidity: "Medium",
@@ -120,12 +119,15 @@ class EducationPlanInputModel {
             educationLocation: location == .india ? "India" : "Abroad",
             yearsUntilEducation: Int(yearsUntilCourse)
         )
+        model.goalPlanType = savingPlan?.rawValue
+        model.goalSIPAmount = expectedSIPAmount
+        return model
     }
 }
 enum EducationLocation {
     case india, abroad
     var label: String { self == .india ? "India" : "Abroad" }
-    var emoji: String { self == .india ? "🇮🇳" : "✈️" }
+    var icon: String { self == .india ? "map.fill" : "airplane" }
     var color: Color { self == .india ? .green : .blue }
 }
 
@@ -220,10 +222,7 @@ struct EducationQuestionnaire: View {
                                 .font(.system(size: 15, design: .rounded))
                                 .foregroundStyle(.secondary)
                             Spacer()
-                            TextField("e.g. 500000", text: $input.courseAmount)
-                                .keyboardType(.numberPad)
-                                .multilineTextAlignment(.trailing)
-                                .font(.system(size: 15, weight: .semibold, design: .rounded))
+                            GoalAmountField(text: $input.courseAmount, placeholder: "e.g. 500000")
                                 .frame(width: 120)
                         }
 
@@ -431,8 +430,9 @@ private struct EducationLocationRow: View {
     var body: some View {
         Button(action: action) {
             HStack(spacing: 14) {
-                Text(location.emoji)
-                    .font(.system(size: 22))
+                Image(systemName: location.icon)
+                    .font(.system(size: 18, weight: .semibold))
+                    .foregroundStyle(location.color)
                     .frame(width: 40, height: 40)
                     .background(location.color.opacity(0.1),
                                 in: RoundedRectangle(cornerRadius: 10, style: .continuous))
@@ -473,8 +473,9 @@ private struct EducationLifestyleRow: View {
     var body: some View {
         Button(action: action) {
             HStack(spacing: 14) {
-                Text(lifestyle.emoji)
-                    .font(.system(size: 22))
+                Image(systemName: lifestyle.icon)
+                    .font(.system(size: 18, weight: .semibold))
+                    .foregroundStyle(lifestyle.color)
                     .frame(width: 40, height: 40)
                     .background(lifestyle.color.opacity(0.1),
                                 in: RoundedRectangle(cornerRadius: 10, style: .continuous))
@@ -528,7 +529,9 @@ struct LifestyleDetailsSheet: View {
                         ForEach(LifestyleOption.allCases) { option in
                             VStack(alignment: .leading, spacing: 8) {
                                 HStack {
-                                    Text(option.emoji)
+                                    Image(systemName: option.icon)
+                                        .font(.system(size: 18, weight: .semibold))
+                                        .foregroundStyle(option.color)
                                     Text(option.label)
                                         .font(.system(size: 18, weight: .bold))
                                         .foregroundStyle(option.color)

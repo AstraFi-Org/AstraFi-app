@@ -135,10 +135,7 @@ public struct GoalSavingPlanSection<Destination: View>: View {
                                 .font(.system(size: 15, design: .rounded))
                                 .foregroundStyle(.secondary)
                             Spacer()
-                            TextField("e.g. 10000", text: $expectedSIPAmount)
-                                .keyboardType(.numberPad)
-                                .multilineTextAlignment(.trailing)
-                                .font(.system(size: 15, weight: .semibold, design: .rounded))
+                            GoalAmountField(text: $expectedSIPAmount, placeholder: "e.g. 10000")
                                 .frame(width: 120)
                         }
                         .padding(.horizontal, 4)
