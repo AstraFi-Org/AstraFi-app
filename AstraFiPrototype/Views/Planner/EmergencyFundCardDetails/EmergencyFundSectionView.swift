@@ -153,11 +153,11 @@ struct EmergencyFundSectionView: View {
     private var currentSaved: Double { profile?.basicDetails.emergencyFundAmount ?? 0 }
 
     // MARK: Emergency Fund Target Calculation
-    // Rule: 6× monthly expenses (personal finance standard)
-    // Fallback: 6× gross income if expenses unknown
+    // Rule: 6× monthly income (user request)
+    // Fallback: 6× monthly expenses
     private var emergencyFundTarget: Double {
-        if monthlyExpenses > 0 { return monthlyExpenses * 6 }
         if monthlyIncome > 0   { return monthlyIncome * 6 }
+        if monthlyExpenses > 0 { return monthlyExpenses * 6 }
         return 0
     }
 
@@ -250,7 +250,7 @@ struct EmergencyFundSectionView: View {
         .animation(.spring(response: 0.36, dampingFraction: 0.80), value: showManage)
         .animation(.spring(response: 0.28, dampingFraction: 0.75), value: monthlyContribution)
         .onAppear(perform: syncFromProfile)
-        .sheet(isPresented: $showEditSheet) {
+        .navigationDestination(isPresented: $showEditSheet){
             ManageAllocationSheet(currentHolding: currentSaved, pTBills: $pTBills, pSavings: $pSavings, pSweepFD: $pSweepFD, onSave: saveAllocation)
                 .environment(appState)
         }

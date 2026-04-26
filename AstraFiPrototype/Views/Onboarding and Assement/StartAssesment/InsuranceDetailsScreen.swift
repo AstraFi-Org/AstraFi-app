@@ -8,37 +8,32 @@ struct InsuranceDetailsScreen: View {
     @State private var showFilePicker    = false
     @State private var uploadedFileName: String? = nil
 
-    private var helpText: String {
-        var base = "Reviewing your insurance coverage ensures you and your family are adequately protected.\n\n• Add-on/Rider Cost: Extra fee for additional benefits (like accidental death or critical illness) added to a base policy."
-        
-        let types = Set(data.insuranceEntries.map { $0.currentType })
-        
-        if types.contains(.health) {
-            base += "\n\n• Health Insurance: Covers medical expenses. Can be Individual or Family Floater (covering multiple family members)."
-        }
-        if types.contains(.life) || types.contains(.term) || types.contains(.ulip) {
-            base += "\n\n• Term Life: High coverage at low cost for a fixed period.\n\n• Endowment: Combines protection and savings.\n\n• ULIP: Market-linked investment + insurance."
-        }
-        if types.contains(.motor) {
-            base += "\n\n• Motor Insurance: Mandatory coverage for vehicles against damage, theft, and third-party liability."
-        }
-        if types.contains(.criticalIllness) {
-            base += "\n\n• Critical Illness: Pays a lumpsum on diagnosis of specific major diseases."
-        }
-        
-        return base
-    }
+    private var income: Double { Double(data.income) ?? 0 }
 
     var body: some View {
         ZStack(alignment: .bottom) {
             Color(.systemGroupedBackground).ignoresSafeArea()
 
-            VStack(spacing: 0) {
-                AssessmentProgressHeader(progress: 0.9, title: "Insurance & Protection", subtitle: "Your coverage keeps your family and finances safe.")
-                    .padding(.top, 16).padding(.horizontal, 20).padding(.bottom, 12)
+            ScrollView(showsIndicators: false) {
+                VStack(spacing: 0) {
 
-                Form {
-                    Section(header: Text("Your Insurance Status")) {
+                    // ── Page header
+                    VStack(alignment: .leading, spacing: 6) {
+                        Text("Insurance & Protection")
+                            .font(.system(size: 28, weight: .bold))
+                        Text("Your coverage keeps your family and finances safe.")
+                            .font(.system(size: 15, design: .rounded))
+                            .foregroundStyle(.secondary)
+                            .fixedSize(horizontal: false, vertical: true)
+                    }
+                    .frame(maxWidth: .infinity, alignment: .leading)
+                    .padding(.horizontal, 20)
+                    .padding(.top, 24)
+                    .padding(.bottom, 24)
+
+                    // ── Your Insurance Status
+                    sectionCard {
+                        sectionHeader("Your Insurance Status")
                         Toggle("Are you insured?", isOn: $data.isInsured.animation())
                             .onChange(of: data.isInsured) { _, newValue in
                                 if newValue && data.insuranceEntries.isEmpty {
@@ -46,82 +41,106 @@ struct InsuranceDetailsScreen: View {
                                 }
                             }
                     }
+                    .padding(.horizontal, 20)
 
+                    // ── Policy Details
                     if data.isInsured && !data.insuranceEntries.isEmpty {
-                        Section("Your Policy Details") {
-                            
-                            Picker("Insurance Type", selection: $data.insuranceEntries[0].details) {
-                                Text("Life").tag(AssessmentInsuranceEntry.InsuranceDetails.life(AssessmentInsuranceEntry.LifeDetails()))
-                                Text("Health").tag(AssessmentInsuranceEntry.InsuranceDetails.health(AssessmentInsuranceEntry.HealthDetails()))
-                                Text("Critical Illness").tag(AssessmentInsuranceEntry.InsuranceDetails.criticalIllness(AssessmentInsuranceEntry.CriticalIllnessDetails()))
-                            }
-//                            AssessmentField(
-//                                icon: "indianrupeesign",
-//                                label: "Cover Amount",
-//                                placeholder: "e.g. 45000",
-//                                text: $data.insuranceEntries[0].coverAmount
-//                            )
-                            HStack(spacing:90){
-                                Text("Cover Amount")
-                                
-                                TextField("Cover Amount (₹)", text: $data.insuranceEntries[0].coverAmount)
-                                    .keyboardType(.numberPad)
+                        sectionCard {
+                            sectionHeader("Your Policy Details")
+
+                            HStack {
+                                Text("Insurance Type")
+                                    .font(.system(size: 16, design: .rounded))
+                                Spacer()
+                                Picker("", selection: $data.insuranceEntries[0].details) {
+                                    Text("Life").tag(AssessmentInsuranceEntry.InsuranceDetails.life(AssessmentInsuranceEntry.LifeDetails()))
+                                    Text("Health").tag(AssessmentInsuranceEntry.InsuranceDetails.health(AssessmentInsuranceEntry.HealthDetails()))
+                                    Text("Critical Illness").tag(AssessmentInsuranceEntry.InsuranceDetails.criticalIllness(AssessmentInsuranceEntry.CriticalIllnessDetails()))
+                                }
+                                .labelsHidden()
                             }
 
-                            DatePicker("Policy Valid Upto", selection: $data.insuranceEntries[0].expiryDate, displayedComponents: .date)
+                            Divider().opacity(0.5)
+
+                            HStack {
+                                Text("Cover Amount (₹)")
+                                    .font(.system(size: 16, design: .rounded))
+                                Spacer()
+                                TextField("e.g. 10000000", text: $data.insuranceEntries[0].coverAmount)
+                                    .keyboardType(.numberPad)
+                                    .multilineTextAlignment(.trailing)
+                                    .frame(width: 140)
+                            }
+
+                            Divider().opacity(0.5)
+
+                            DatePicker(
+                                "Policy Valid Upto",
+                                selection: $data.insuranceEntries[0].expiryDate,
+                                displayedComponents: .date
+                            )
                         }
+                        .padding(.horizontal, 20)
+                        .padding(.top, 12)
+                        .transition(.move(edge: .bottom).combined(with: .opacity))
                     }
 
-                    Section("Dependents") {
-//                        AssessmentField(
-//                            icon: "person.2",
-//                            label: "Number of dependents",
-//                            placeholder: "e.g. 3",
-//                            text: $data.numberOfDependents
-//                        )
-//                        .listRowBackground(Color.clear)
+                    // ── Dependents
+                    sectionCard {
+                        sectionHeader("Dependents")
+
                         HStack {
                             Text("Number of Dependents")
-
+                                .font(.system(size: 16, design: .rounded))
                             Spacer()
-
                             TextField("e.g. 3", text: $data.numberOfDependents)
                                 .keyboardType(.numberPad)
                                 .multilineTextAlignment(.trailing)
                                 .frame(width: 80)
                         }
+
+                        Divider().opacity(0.5)
+
                         Toggle("Are Dependents insured?", isOn: $data.areDependentsInsured.animation())
                     }
-                    
+                    .padding(.horizontal, 20)
+                    .padding(.top, 12)
+
+                    // ── Dependent Policy Details
                     if data.areDependentsInsured {
-                        Section("Dependent Insurance Details") {
+                        sectionCard {
+                            sectionHeader("Dependent Insurance Details")
+
                             Button {
                                 data.dependentInsuranceEntries.append(AssessmentInsuranceEntry())
                             } label: {
                                 Label("Add Dependent Policy", systemImage: "plus.circle")
+                                    .font(.system(size: 15, design: .rounded))
+                                    .foregroundStyle(AppTheme.auraIndigo)
                             }
+                            .buttonStyle(.plain)
+
                             ForEach($data.dependentInsuranceEntries) { $depEntry in
-                                
-                                // Header row
+                                Divider().opacity(0.4)
+
                                 HStack {
                                     Text("Dependent Policy")
-                                        .font(.caption)
-                                        .fontWeight(.bold)
+                                        .font(.system(size: 12, weight: .bold, design: .rounded))
                                         .foregroundStyle(.secondary)
-
                                     Spacer()
-
                                     Button(role: .destructive) {
                                         let idToDelete = depEntry.id
                                         data.dependentInsuranceEntries.removeAll(where: { $0.id == idToDelete })
                                     } label: {
                                         Image(systemName: "trash")
+                                            .font(.system(size: 13))
                                     }
                                 }
+                                .padding(.top, 4)
 
-                                // Type row
                                 HStack {
                                     Text("Type")
+                                        .font(.system(size: 16, design: .rounded))
                                     Spacer()
                                     Picker("", selection: $depEntry.details) {
                                         Text("Life").tag(AssessmentInsuranceEntry.InsuranceDetails.life(AssessmentInsuranceEntry.LifeDetails()))
@@ -130,39 +149,68 @@ struct InsuranceDetailsScreen: View {
                                     .labelsHidden()
                                 }
 
-                                // Cover amount row
+                                Divider().opacity(0.4)
+
                                 HStack {
-                                    Text("Cover Amount")
+                                    Text("Cover Amount (₹)")
+                                        .font(.system(size: 16, design: .rounded))
                                     Spacer()
-                                    TextField("Cover Amount (₹)", text: $depEntry.coverAmount)
+                                    TextField("e.g. 500000", text: $depEntry.coverAmount)
                                         .keyboardType(.numberPad)
                                         .multilineTextAlignment(.trailing)
+                                        .frame(width: 140)
                                 }
 
-                                // Date row
+                                Divider().opacity(0.4)
+
                                 HStack {
                                     Text("Valid Upto")
+                                        .font(.system(size: 16, design: .rounded))
                                     Spacer()
-                                    DatePicker(
-                                        "",
-                                        selection: $depEntry.expiryDate,
-                                        displayedComponents: .date
-                                    )
-                                    .labelsHidden()
+                                    DatePicker("", selection: $depEntry.expiryDate, displayedComponents: .date)
+                                        .labelsHidden()
                                 }
                             }
                         }
+                        .padding(.horizontal, 20)
+                        .padding(.top, 12)
+                        .transition(.move(edge: .bottom).combined(with: .opacity))
                     }
-                    
-                    Color.clear.frame(height: 100).listRowBackground(Color.clear)
+
+                    // ── Live Insurance Insight Card
+                    InsuranceInsightCard(
+                        isInsured: data.isInsured,
+                        coverAmountStr: data.insuranceEntries.first?.coverAmount ?? "",
+                        income: income,
+                        numDependentsStr: data.numberOfDependents,
+                        areDependentsInsured: data.areDependentsInsured,
+                        dependentEntries: data.dependentInsuranceEntries,
+                        policyDetails: data.insuranceEntries.first?.details,
+                        expiryDate: data.isInsured ? data.insuranceEntries.first?.expiryDate : nil
+                    )
+                    .padding(.horizontal, 20)
+                    .padding(.top, 20)
+
+                    Spacer().frame(height: 120)
                 }
             }
+            .animation(.spring(response: 0.45, dampingFraction: 0.8), value: data.isInsured)
+            .animation(.spring(response: 0.45, dampingFraction: 0.8), value: data.areDependentsInsured)
+            .animation(.spring(response: 0.3, dampingFraction: 0.75), value: data.insuranceEntries.first?.coverAmount)
+            .animation(.spring(response: 0.3, dampingFraction: 0.75), value: data.numberOfDependents)
+            .safeAreaInset(edge: .top, spacing: 0) {
+                AssessmentProgressBar(progress: 0.9)
+                    .padding(.horizontal, 20)
+                    .padding(.vertical, 10)
+                    .background(Color(.systemGroupedBackground))
+            }
+
             AssessmentFooterButton(label: "See My Report", enabled: true, isLast: true) {
-                //if let onComplete { onComplete() } else { goNext = true }
                 goNext = true
             }
         }
         .navigationTitle("Financial Assessment")
+        .navigationBarTitleDisplayMode(.inline)
         .navigationBarBackButtonHidden(true)
         .toolbar {
             ToolbarItem(placement: .navigationBarLeading) {
@@ -188,6 +236,32 @@ struct InsuranceDetailsScreen: View {
             }
         }
     }
+
+    // MARK: - Helpers
+
+    @ViewBuilder
+    private func sectionCard<Content: View>(@ViewBuilder content: () -> Content) -> some View {
+        VStack(alignment: .leading, spacing: 14) {
+            content()
+        }
+        .frame(maxWidth: .infinity, alignment: .leading)
+        .padding(16)
+        .background(AppTheme.cardBackground)
+        .clipShape(RoundedRectangle(cornerRadius: 16, style: .continuous))
+        .shadow(color: AppTheme.adaptiveShadow, radius: 6, x: 0, y: 2)
+        .overlay(
+            RoundedRectangle(cornerRadius: 16, style: .continuous)
+                .stroke(Color.gray.opacity(0.10), lineWidth: 1)
+        )
+    }
+
+    private func sectionHeader(_ title: String) -> some View {
+        Text(title)
+            .font(.system(size: 12, weight: .semibold, design: .rounded))
+            .foregroundStyle(.secondary)
+            .textCase(.uppercase)
+            .tracking(0.5)
+    }
 }
 
 private typealias LifeDetails             = AssessmentInsuranceEntry.LifeDetails
@@ -199,7 +273,6 @@ private typealias ULIPDetails             = AssessmentInsuranceEntry.ULIPDetails
 
 #Preview {
     @Previewable var data = CompleteAssessmentData()
-
     NavigationStack {
         InsuranceDetailsScreen(data: data)
     }

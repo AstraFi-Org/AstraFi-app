@@ -9,6 +9,7 @@ struct BasicDetailView: View {
 
     @State private var goNext = false
     @State private var goSkipToInvestment = false
+    @State private var goToInvestmentQuestion = false
     // nil = not answered, true = has EF, false = no EF
     @State private var hasEmergencyFund: Bool? = nil
     // nil = not answered, true = wants to share EF amount, false = skipped
@@ -45,7 +46,7 @@ struct BasicDetailView: View {
                 VStack(spacing: 0) {
 
                     // ── Page title (scrolls with content)
-                    VStack(alignment: .leading, spacing: 4) {
+                    VStack(alignment: .leading) {
                         Text("Let's get started")
                             .font(.system(size: 28, weight: .bold))
                         Text("Your basics help us calculate your financial health in real time.")
@@ -130,10 +131,14 @@ struct BasicDetailView: View {
                             .padding(.top, 12)
                             .transition(.scale(scale: 0.95).combined(with: .opacity))
                         } else {
-                            EFNecessityCard(income: income, expenses: expenses)
-                                .padding(.horizontal, 20)
-                                .padding(.top, 12)
-                                .transition(.scale(scale: 0.95).combined(with: .opacity))
+                            EFNecessityCard(
+                                income: income,
+                                expenses: expenses,
+                                onProceed: { goToInvestmentQuestion = true }
+                            )
+                            .padding(.horizontal, 20)
+                            .padding(.top, 12)
+                            .transition(.scale(scale: 0.95).combined(with: .opacity))
                         }
                     }
 
@@ -154,23 +159,23 @@ struct BasicDetailView: View {
             }
 
             // ── Footer
-            VStack(spacing: 0) {
-                if !canContinue {
-                    Text(
-                        data.name.trimmingCharacters(in: .whitespaces).isEmpty ? "Enter your name to continue" :
-                            income == 0 ? "Enter your monthly income to continue" :
-                            expenses == 0 ? "Enter your monthly expenses to continue" :
-                            age == 0 ? "Enter your age to continue" :
-                            hasEmergencyFund == nil ? "Answer the emergency fund question to continue" :
-                            "Choose whether to share your emergency fund amount"
-                    )
-                    .font(.caption)
-                    .foregroundStyle(.secondary)
-                    .multilineTextAlignment(.center)
-                    .padding(.horizontal, 20)
-                    .padding(.bottom, 8)
-                }
-            }
+//            VStack(spacing: 0) {
+//                if !canContinue {
+//                    Text(
+//                        data.name.trimmingCharacters(in: .whitespaces).isEmpty ? "Enter your name to continue" :
+//                            income == 0 ? "Enter your monthly income to continue" :
+//                            expenses == 0 ? "Enter your monthly expenses to continue" :
+//                            age == 0 ? "Enter your age to continue" :
+//                            hasEmergencyFund == nil ? "Answer the emergency fund question to continue" :
+//                            "Choose whether to share your emergency fund amount"
+//                    )
+//                    .font(.caption)
+//                    .foregroundStyle(.secondary)
+//                    .multilineTextAlignment(.center)
+//                    .padding(.horizontal, 20)
+//                    .padding(.bottom, 8)
+//                }
+//            }
         }
         .navigationTitle("Financial Assessment")
         .navigationBarTitleDisplayMode(.inline)
@@ -185,18 +190,20 @@ struct BasicDetailView: View {
             }
             ToolbarItem(placement: .navigationBarTrailing) {
                 Button("Skip") {
-                    appState.setupEmptyProfile(name: "User")
+                    appState.updateProfile(from: data)
                     appState.isAssessmentSkipped = true
                     appState.showDashboard = true
                 }
                 .font(.system(size: 15))
-                .foregroundStyle(.secondary)
             }
         }
         .navigationDestination(isPresented: $goNext) {
             Phase1BView(data: data)
         }
         .navigationDestination(isPresented: $goSkipToInvestment) {
+            InvestmentQuestionView(data: data)
+        }
+        .navigationDestination(isPresented: $goToInvestmentQuestion) {
             InvestmentQuestionView(data: data)
         }
         .onAppear {
@@ -231,7 +238,7 @@ struct EmergencyFundQuestionCard: View {
                     .foregroundStyle(.secondary)
                     .fixedSize(horizontal: false, vertical: true)
 
-                Text("Do you Emergency Fund?")
+                Text("Do you already have Emergency Fund?")
                     .font(.system(size: 16, weight: .semibold, design: .rounded))
             }
 
@@ -293,10 +300,42 @@ private struct EFChoiceButton: View {
 }
 
 // MARK: - EF Share Prompt Card
+// MARK: - Reusable Choice Button
+struct EFChoiceButton2: View {
+    let label: String
+    let color: Color
+    let isSelected: Bool
+    let action: () -> Void
+
+    var body: some View {
+        Button(action: action) {
+            Text(label)
+                .font(.system(size: 14, weight: .bold, design: .rounded))
+                .foregroundStyle(isSelected ? .white : color)
+                .frame(maxWidth: .infinity)
+                .padding(.vertical, 12)
+                .background(
+                    RoundedRectangle(cornerRadius: 12, style: .continuous)
+                        .fill(isSelected ? color : color.opacity(0.12))
+                )
+                .overlay(
+                    RoundedRectangle(cornerRadius: 12, style: .continuous)
+                        .stroke(color.opacity(isSelected ? 0 : 0.3), lineWidth: 1)
+                )
+        }
+        .buttonStyle(.plain)
+        .animation(.easeInOut(duration: 0.18), value: isSelected)
+    }
+}
+
+// MARK: - Main Card View
 struct EFSharePromptCard: View {
     @Binding var wantsToShareEF: Bool?
     let onYes: () -> Void
     let onSkip: () -> Void
+
+    // Local selection state to drive button appearance
+    @State private var selectedChoice: Bool? = nil
 
     var body: some View {
         VStack(alignment: .leading, spacing: 16) {
@@ -306,7 +345,7 @@ struct EFSharePromptCard: View {
                     .font(.system(size: 20))
                     .foregroundStyle(AppTheme.auraGreen)
                 VStack(alignment: .leading, spacing: 2) {
-                    Text("That's great! 🎉")
+                    Text("That's great!")
                         .font(.system(size: 15, weight: .bold, design: .rounded))
                         .foregroundStyle(AppTheme.auraGreen)
                     Text("Having an emergency fund puts you ahead of most people.")
@@ -329,33 +368,32 @@ struct EFSharePromptCard: View {
             }
 
             HStack(spacing: 12) {
-                // Yes → Phase1BView to enter EF amount
-                Button(action: onYes) {
-                    Text("Yes, let's do it")
-                        .font(.system(size: 14, weight: .bold, design: .rounded))
-                        .foregroundStyle(.white)
-                        .frame(maxWidth: .infinity)
-                        .padding(.vertical, 12)
-                        .background(
-                            RoundedRectangle(cornerRadius: 12, style: .continuous)
-                                .fill(AppTheme.auraGreen)
-                        )
+                // YES button
+                EFChoiceButton2(
+                    label: "Yes, let's do it",
+                    color: AppTheme.auraGreen,
+                    isSelected: selectedChoice == true
+                ) {
+                    selectedChoice = true
+                    wantsToShareEF = true
+                    // Small delay so user sees the selection before navigation
+                    DispatchQueue.main.asyncAfter(deadline: .now() + 0.2) {
+                        onYes()
+                    }
                 }
-                .buttonStyle(.plain)
 
-                // Skip → jump straight to InvestmentQuestionView
-                Button(action: onSkip) {
-                    Text("Skip for now")
-                        .font(.system(size: 14, weight: .bold, design: .rounded))
-                        .foregroundStyle(.white)
-                        .frame(maxWidth: .infinity)
-                        .padding(.vertical, 12)
-                        .background(
-                            RoundedRectangle(cornerRadius: 12, style: .continuous)
-                                .fill(AppTheme.vibrantOrange)
-                        )
+                // SKIP button
+                EFChoiceButton2(
+                    label: "Skip for now",
+                    color: AppTheme.vibrantOrange,
+                    isSelected: selectedChoice == false
+                ) {
+                    selectedChoice = false
+                    wantsToShareEF = false
+                    DispatchQueue.main.asyncAfter(deadline: .now() + 0.2) {
+                        onSkip()
+                    }
                 }
-                .buttonStyle(.plain)
             }
         }
         .padding(18)
@@ -373,8 +411,9 @@ struct EFSharePromptCard: View {
 struct EFNecessityCard: View {
     let income: Double
     let expenses: Double
+    var onProceed: (() -> Void)? = nil
 
-    private var target: Double { max(income * 6, expenses * 6) }
+    private var target: Double { income * 6 }
     private var monthlyStep: Double { target / 12 }
 
     @State private var ringProgress: Double = 0
@@ -399,34 +438,6 @@ struct EFNecessityCard: View {
             }
 
             HStack(spacing: 20) {
-                ZStack {
-                    Circle()
-                        .stroke(Color.gray.opacity(0.12), lineWidth: 10)
-                        .frame(width: 86, height: 86)
-
-                    Circle()
-                        .trim(from: 0, to: ringProgress)
-                        .stroke(
-                            AngularGradient(
-                                colors: [AppTheme.vibrantOrange, AppTheme.auraGold],
-                                center: .center
-                            ),
-                            style: StrokeStyle(lineWidth: 10, lineCap: .round)
-                        )
-                        .rotationEffect(.degrees(-90))
-                        .frame(width: 86, height: 86)
-                        .animation(.spring(response: 1.0, dampingFraction: 0.7).delay(0.2), value: ringProgress)
-
-                    VStack(spacing: 1) {
-                        Text("0%")
-                            .font(.system(size: 17, weight: .bold, design: .rounded))
-                            .foregroundStyle(AppTheme.vibrantOrange)
-                        Text("funded")
-                            .font(.system(size: 9, design: .rounded))
-                            .foregroundStyle(.secondary)
-                    }
-                }
-
                 VStack(alignment: .leading, spacing: 10) {
                     VStack(alignment: .leading, spacing: 2) {
                         Text("Your target")
@@ -473,6 +484,25 @@ struct EFNecessityCard: View {
             .padding(10)
             .background(AppTheme.auraIndigo.opacity(0.07))
             .clipShape(RoundedRectangle(cornerRadius: 10, style: .continuous))
+
+            if let proceed = onProceed {
+                Button(action: proceed) {
+                    HStack(spacing: 8) {
+                        Text("Proceed")
+                            .font(.system(size: 15, weight: .bold, design: .rounded))
+                        
+                    }
+                    .foregroundStyle(.white)
+                    .frame(maxWidth: .infinity)
+                    .padding(.vertical, 14)
+                    .background(
+                        RoundedRectangle(cornerRadius: 14, style: .continuous)
+                            .fill(AppTheme.auraGreen)
+                    )
+                }
+                .buttonStyle(.plain)
+                .padding(.top, 4)
+            }
         }
         .padding(18)
         .background(AppTheme.cardBackground)

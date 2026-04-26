@@ -62,7 +62,10 @@ struct SplashScreenView: View {
                         .frame(width: 82, height: 82)
 
                     // Star icon
-                    Image(systemName: "star.fill")
+                    Image(.logo)
+                        .scaledToFit()
+                        .frame(width: 570, height: 570)
+                        .clipShape(Ellipse())
                         .font(.system(size: 34, weight: .bold))
                         .foregroundStyle(.white)
                         .symbolEffect(.pulse)
