@@ -62,34 +62,34 @@ struct InvestmentPlanResultView: View {
                     .buttonStyle(PlainButtonStyle())
                     
                     // Plan 3: Loan + Invest (Arbitrage)
-                    if isLoanEligibleGoal {
-                        if let p3 = results.plan3 {
-                            NavigationLink(destination: Plan3DetailView(input: input, result: p3)) {
-                                StrategySelectionCard(
-                                    id: 3,
-                                    title: "Loan & Arbitrage Strategy",
-                                    subtitle: "Take a loan and invest the principal such that returns cover the EMI while building long-term wealth.",
-                                    icon: "arrow.up.right.circle.fill",
-                                    color: .purple,
-                                    isRecommended: true
-                                )
-                            }
-                            .buttonStyle(PlainButtonStyle())
-                        } else {
-                            NavigationLink(destination: noPlanWarning(message: "Arbitrage strategy requires a higher credit surplus.")) {
-                                StrategySelectionCard(
-                                    id: 3,
-                                    title: "Loan & Arbitrage Strategy",
-                                    subtitle: "Take a loan and invest the principal such that returns cover the EMI while building long-term wealth.",
-                                    icon: "arrow.up.right.circle.fill",
-                                    color: .purple,
-                                    isRecommended: true
-                                )
-                            }
-                            .buttonStyle(PlainButtonStyle())
+                    if let p3 = results.plan3 {
+                        NavigationLink(destination: Plan3DetailView(input: input, result: p3)) {
+                            StrategySelectionCard(
+                                id: 3,
+                                title: "Loan & Arbitrage Strategy",
+                                subtitle: "Take a loan and invest the principal such that returns cover the EMI while building long-term wealth.",
+                                icon: "arrow.up.right.circle.fill",
+                                color: .purple,
+                                isRecommended: true
+                            )
                         }
-                        
-                        // Plan 2: Traditional Loan
+                        .buttonStyle(PlainButtonStyle())
+                    } else {
+                        NavigationLink(destination: noPlanWarning(message: "Arbitrage strategy requires a higher credit surplus.")) {
+                            StrategySelectionCard(
+                                id: 3,
+                                title: "Loan & Arbitrage Strategy",
+                                subtitle: "Take a loan and invest the principal such that returns cover the EMI while building long-term wealth.",
+                                icon: "arrow.up.right.circle.fill",
+                                color: .purple,
+                                isRecommended: true
+                            )
+                        }
+                        .buttonStyle(PlainButtonStyle())
+                    }
+                    
+                    // Plan 2: Traditional Loan
+                    if isLoanEligibleGoal {
                         if let p2 = results.plan2 {
                             NavigationLink(destination: Plan2DetailView(input: input, result: p2)) {
                                 StrategySelectionCard(

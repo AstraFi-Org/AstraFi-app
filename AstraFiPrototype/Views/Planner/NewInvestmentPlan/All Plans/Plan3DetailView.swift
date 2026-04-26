@@ -2,6 +2,7 @@ import SwiftUI
 import Charts
 
 struct Plan3DetailView: View {
+    @Environment(\.colorScheme) var colorScheme
     @Environment(\.dismiss) var dismiss
     @Environment(AppStateManager.self) var appState
 
@@ -13,6 +14,9 @@ struct Plan3DetailView: View {
     @State private var investmentMode: String = "Lumpsum"
     @State private var lumpsumPhases: Int = 5
     @State private var isEMIDeductionOn: Bool = true
+    @State private var showingSaveAlert = false
+    @State private var alertMessage = ""
+    @State private var showAssumptionsAlert = false
 
     @State private var currentResult: Plan3Result? = nil
     @State private var loanOverride: Double = 0
@@ -34,38 +38,54 @@ struct Plan3DetailView: View {
         }
     }
 
+    private var totalInvested: Double {
+        let lumpsum = activeResult.loanAmount 
+        let totalEMIs = isEMIDeductionOn ? 0 : currentStrategy.totalEMIPaid
+        return lumpsum + totalEMIs
+    }
+
+    private var planAssets: [PortfolioAsset] {
+        guard let p = activeResult.portfolio else { return [] }
+        let loanAmt = activeResult.loanAmount
+        return p.allocations.map { allocation in
+            let invested = loanAmt * (allocation.percentage / 100)
+            // Growth is proportional across assets in this simple model
+            let growthRatio = currentStrategy.finalValue / loanAmt
+            let expectedVal = invested * growthRatio
+            
+            return PortfolioAsset(
+                id: allocation.id,
+                name: allocation.name,
+                monthlyInvestment: invested,
+                expectedValue: expectedVal,
+                riskLevel: allocation.riskLevel
+            )
+        }
+    }
+
     var body: some View {
         ZStack(alignment: .bottom) {
             ScrollView {
                 VStack(spacing: 24) {
-                    summaryCard
-
-                    scenarioComparisonCard
-
-                    leveragedGraphCard
-
+                    targetVsEstimatedCard
+                    assumptionsWarningSection
+                    
+                    riskTypeSection
+                    totalInvestmentCard
+                    scenarioTable
+                    
                     interactiveAdjusters
-
+                    repaymentStrategyCard
+                    leveragedGraphCard
+                    
                     bankDetailsCard
-
                     recommendationCard
-
                     strategyBuilderCard
-
-                    if let portfolio = activeResult.portfolio {
-                        portfolioTableCard(portfolio: portfolio)
-                    }
-
-                    investmentBreakdownSection
-
-                    milestonesTableCard
-
-                    finalSummaryCard
                 }
-                .padding()
-                .padding(.bottom, 100)
+                .padding(.horizontal, 20)
+                .padding(.bottom, 120)
             }
-            .background(AppTheme.appBackground(for: .light))
+            .background(AppTheme.appBackground(for: colorScheme))
 
             if !isFromTracker {
                 savePlanFooter
@@ -80,6 +100,16 @@ struct Plan3DetailView: View {
         }
         .navigationTitle("Leveraged Investing")
         .navigationBarTitleDisplayMode(.inline)
+        .alert("Action Successful", isPresented: $showingSaveAlert) {
+            Button("OK", role: .cancel) { }
+        } message: {
+            Text(alertMessage)
+        }
+        .alert("Plan Assumptions", isPresented: $showAssumptionsAlert) {
+            Button("Got It", role: .cancel) { }
+        } message: {
+            Text("This projection assumes steady growth based on historical performance, timely loan repayments, and no significant market crashes. Actual returns may vary.")
+        }
     }
 
     private var savePlanFooter: some View {
@@ -108,9 +138,287 @@ struct Plan3DetailView: View {
         .padding(.horizontal, 24)
         .padding(.bottom, 24)
         .background(
-            LinearGradient(colors: [.clear, .white.opacity(0.9), .white], startPoint: .top, endPoint: .bottom)
-                .frame(height: 120)
+            ZStack {
+                BlurView(style: .systemUltraThinMaterial)
+                LinearGradient(colors: [Color(UIColor.systemBackground).opacity(0.6), Color(UIColor.systemBackground)], startPoint: .top, endPoint: .bottom)
+            }
+            .ignoresSafeArea()
+            .frame(height: 120)
         )
+    }
+
+    private var targetVsEstimatedCard: some View {
+        let target = InvestmentPlannerEngine.parseAmount(input.targetAmount)
+        let strat = currentStrategy
+        // Net Wealth (In-Hand) = finalValue if deduction (already subtracted), or finalValue - totalEMI if pocket
+        let netWealth = isEMIDeductionOn ? strat.finalValue : strat.netProfit
+        let grossValue = strat.finalValue + (isEMIDeductionOn ? strat.totalEMIPaid : 0)
+        
+        return HStack(spacing: 16) {
+            VStack(alignment: .leading, spacing: 8) {
+                Text("Target Amount")
+                    .font(.subheadline)
+                    .foregroundColor(.secondary)
+                Text("₹\(formatL(target))")
+                    .font(.title3)
+                    .fontWeight(.bold)
+                    .foregroundColor(.primary)
+            }
+            .frame(maxWidth: .infinity, alignment: .leading)
+            .padding(16)
+            .background(AppTheme.cardBackground)
+            .cornerRadius(16)
+            .shadow(color: AppTheme.adaptiveShadow.opacity(0.3), radius: 6)
+
+            VStack(alignment: .leading, spacing: 4) {
+                HStack(spacing: 4) {
+                    Text("In-Hand (Net)")
+                        .font(.subheadline)
+                        .foregroundColor(.secondary)
+                    Image(systemName: "info.circle")
+                        .font(.caption2)
+                        .foregroundColor(.secondary)
+                }
+                Text("₹\(formatL(netWealth))")
+                    .font(.title3)
+                    .fontWeight(.bold)
+                    .foregroundColor(.blue)
+                
+                Text("Overall: ₹\(formatL(grossValue))")
+                    .font(.system(size: 10))
+                    .foregroundColor(.secondary)
+            }
+            .frame(maxWidth: .infinity, alignment: .leading)
+            .padding(16)
+            .background(AppTheme.cardBackground)
+            .cornerRadius(16)
+            .shadow(color: AppTheme.adaptiveShadow.opacity(0.3), radius: 6)
+        }
+    }
+
+    private var riskTypeSection: some View {
+        VStack(alignment: .leading, spacing: 16) {
+            Text("Investment Profile")
+                .font(.headline)
+            
+            HStack(spacing: 12) {
+                RiskOptionCard(title: "Low", icon: "shield.fill", color: .green, isSelected: selectedScenario == "Conservative") {
+                    selectedScenario = "Conservative"
+                    recalculate()
+                }
+                RiskOptionCard(title: "Mid", icon: "chart.bar.fill", color: .orange, isSelected: selectedScenario == "Moderate") {
+                    selectedScenario = "Moderate"
+                    recalculate()
+                }
+                RiskOptionCard(title: "High", icon: "flame.fill", color: .red, isSelected: selectedScenario == "Aggressive") {
+                    selectedScenario = "Aggressive"
+                    recalculate()
+                }
+            }
+        }
+    }
+
+    private var totalInvestmentCard: some View {
+        VStack(spacing: 12) {
+            HStack(spacing: 8) {
+                Image(systemName: "indianrupeesign.circle.fill")
+                    .foregroundColor(.blue)
+                    .font(.title3)
+                HStack {
+                    Text("Overall Growth Summary")
+                        .font(.subheadline)
+                        .fontWeight(.bold)
+                    Spacer()
+                    Text("₹\(formatL(totalInvested))")
+                        .font(.subheadline)
+                        .fontWeight(.bold)
+                    Text("Invested")
+                        .font(.caption2)
+                        .foregroundColor(.secondary)
+                }
+            }
+            .frame(maxWidth: .infinity, alignment: .leading)
+
+            Divider()
+
+            VStack(spacing: 8) {
+                HStack {
+                    Text("Scenario").font(.caption).foregroundColor(.secondary).frame(maxWidth: .infinity, alignment: .leading)
+                    Text("Gain/Loss").font(.caption).foregroundColor(.secondary).frame(maxWidth: .infinity, alignment: .trailing)
+                    Text("Final Value").font(.caption).foregroundColor(.secondary).frame(maxWidth: .infinity, alignment: .trailing)
+                }
+                
+                ForEach(activeResult.scenarios) { scenario in
+                    HStack {
+                        Text(scenario.name).font(.system(size: 11, weight: .medium)).frame(maxWidth: .infinity, alignment: .leading)
+                        Text("\(scenario.gainLoss >= 0 ? "+" : "")\(formatL(scenario.gainLoss))")
+                            .font(.system(size: 11, weight: .bold))
+                            .foregroundColor(scenario.gainLoss >= 0 ? .green : .red)
+                            .frame(maxWidth: .infinity, alignment: .trailing)
+                        Text("₹\(formatL(scenario.finalValue))")
+                            .font(.system(size: 11, weight: .bold))
+                            .foregroundColor(.primary)
+                            .frame(maxWidth: .infinity, alignment: .trailing)
+                    }
+                    .padding(.vertical, 4)
+                }
+            }
+        }
+        .padding(20)
+        .background(AppTheme.cardBackground)
+        .cornerRadius(20)
+        .shadow(color: AppTheme.adaptiveShadow.opacity(0.3), radius: 8)
+    }
+
+    private var scenarioTable: some View {
+        VStack(spacing: 16) {
+            VStack(spacing: 0) {
+                HStack(spacing: 0) {
+                    TableHeaderCell(text: "Investment Type", alignment: .leading,  flex: 2.5)
+                    TableHeaderCell(text: "Invested",        alignment: .trailing, flex: 1.5)
+                    TableHeaderCell(text: "Expected",        alignment: .trailing, flex: 1.5)
+                    TableHeaderCell(text: "Risk",            alignment: .trailing, flex: 1.2)
+                }
+                .padding(.vertical, 12)
+                .padding(.horizontal, 8)
+                .background(Color(UIColor.secondarySystemBackground))
+
+                Group {
+                    ForEach(planAssets) { asset in
+                        HStack(spacing: 0) {
+                            Text(asset.name).font(.caption).foregroundColor(.primary).frame(maxWidth: .infinity * 2.5, alignment: .leading)
+                            Text("₹\(Int(asset.monthlyInvestment))").font(.caption).foregroundColor(.primary).frame(maxWidth: .infinity * 1.5, alignment: .trailing)
+                            Text("₹\(formatL(asset.expectedValue))").font(.caption).foregroundColor(.secondary).frame(maxWidth: .infinity * 1.5, alignment: .trailing)
+                            Text(asset.riskLevel.rawValue.capitalized).font(.system(size: 10, weight: .bold))
+                                .foregroundColor(asset.riskLevel == .high ? .red : (asset.riskLevel == .low ? .green : .orange))
+                                .frame(maxWidth: .infinity * 1.2, alignment: .trailing)
+                        }
+                        .padding(.vertical, 8)
+                        .padding(.horizontal, 8)
+                        
+                        if asset.id != planAssets.last?.id {
+                            Divider()
+                        }
+                    }
+                }
+            }
+            .background(Color(UIColor.tertiarySystemBackground))
+            .cornerRadius(12)
+            .overlay(
+                RoundedRectangle(cornerRadius: 12)
+                    .stroke(Color.gray.opacity(0.2), lineWidth: 1)
+            )
+        }
+        .padding(20)
+        .background(AppTheme.cardBackground)
+        .cornerRadius(20)
+        .shadow(color: AppTheme.adaptiveShadow.opacity(0.3), radius: 8)
+    }
+
+    private var repaymentStrategyCard: some View {
+        VStack(alignment: .leading, spacing: 16) {
+            Text("Repayment Strategy")
+                .font(.headline)
+            
+            Text("How would you like to handle your loan EMIs? This selection changes your net wealth outcome.")
+                .font(.caption)
+                .foregroundColor(.secondary)
+
+            HStack(spacing: 12) {
+                // Option 1: Automated
+                StrategyOptionButton(
+                    title: "Automated",
+                    subtitle: "Pay from Growth",
+                    description: "EMIs are deducted from returns.",
+                    isSelected: isEMIDeductionOn,
+                    action: { 
+                        isEMIDeductionOn = true
+                        recalculate()
+                    }
+                )
+                
+                // Option 2: Manual
+                StrategyOptionButton(
+                    title: "Manual",
+                    subtitle: "Pay from Pocket",
+                    description: "Pay EMIs from monthly savings.",
+                    isSelected: !isEMIDeductionOn,
+                    action: { 
+                        isEMIDeductionOn = false
+                        recalculate()
+                    }
+                )
+            }
+        }
+        .padding(20)
+        .background(AppTheme.cardBackground)
+        .cornerRadius(20)
+        .shadow(color: AppTheme.adaptiveShadow.opacity(0.3), radius: 8)
+    }
+
+    private var assumptionsWarningSection: some View {
+        HStack(alignment: .top, spacing: 12) {
+            Image(systemName: "exclamationmark.triangle.fill")
+                .foregroundColor(.orange)
+            
+            VStack(alignment: .leading, spacing: 4) {
+                HStack {
+                    Text("Important Notice")
+                        .font(.subheadline)
+                        .fontWeight(.bold)
+                    
+                    Spacer()
+                    
+                    Button(action: {
+                        alertMessage = "This plan assumes steady market growth based on historical data, timely loan repayments, and no major economic crashes. Calculations account for tax-efficient arbitrage spreads where applicable."
+                        showingSaveAlert = true // Reusing for generic alerts if needed, or add showAssumptionsAlert
+                    }) {
+                        Image(systemName: "info.circle")
+                            .foregroundColor(.blue)
+                            .font(.caption)
+                    }
+                }
+                Text("This plan is based on certain assumptions. Kindly pursue this plan at your own risk.")
+                    .font(.caption)
+                    .foregroundColor(.secondary)
+            }
+        }
+        .padding(16)
+        .background(Color.orange.opacity(0.1))
+        .cornerRadius(16)
+        .overlay(
+            RoundedRectangle(cornerRadius: 16)
+                .stroke(Color.orange.opacity(0.3), lineWidth: 1)
+        )
+    }
+
+    private var roiSummaryCard: some View {
+        HStack(spacing: 20) {
+            VStack(alignment: .leading, spacing: 4) {
+                Text("Expected Market ROI")
+                    .font(.caption)
+                    .foregroundColor(.secondary)
+                Text("\(String(format: "%.1f", activeResult.portfolio?.blendedCAGR ?? 0))%")
+                    .font(.headline)
+                    .foregroundColor(.blue)
+            }
+            
+            Spacer()
+            
+            VStack(alignment: .trailing, spacing: 4) {
+                Text("Arb. Strategy Spread")
+                    .font(.caption)
+                    .foregroundColor(.secondary)
+                let spread = (currentStrategy.netProfit / (activeResult.loanAmount > 0 ? activeResult.loanAmount : 1)) * 100
+                Text("\(String(format: "%.1f", spread))%")
+                    .font(.headline)
+                    .foregroundColor(spread >= 0 ? .green : .red)
+            }
+        }
+        .padding(16)
+        .background(AppTheme.cardBackground)
+        .cornerRadius(16)
+        .shadow(color: AppTheme.adaptiveShadow.opacity(0.2), radius: 4)
     }
 
     private func recalculate() {
@@ -132,59 +440,7 @@ struct Plan3DetailView: View {
         }
     }
 
-    private var summaryCard: some View {
-        let healthScore = appState.currentProfile?.financialHealthReport?.investmentScore ?? 50
-        let isSafe = healthScore >= 60
 
-        return VStack(alignment: .leading, spacing: 12) {
-            HStack {
-                VStack(alignment: .leading, spacing: 4) {
-                    Text("Arbitrage Potential")
-                        .font(.headline)
-                    Text("Loan interest vs Portfolio growth")
-                        .font(.caption).foregroundColor(.secondary)
-                }
-                Spacer()
-                ZStack {
-                    Circle().stroke(Color.blue.opacity(0.1), lineWidth: 6)
-                    Circle().trim(from: 0, to: 0.75).stroke(Color.blue, style: StrokeStyle(lineWidth: 6, lineCap: .round))
-                    Text("\(Int(currentStrategy.netProfit > 0 ? 88 : 42))%").font(.system(size: 10, weight: .bold))
-                }
-                .frame(width: 45, height: 45)
-            }
-
-            Divider()
-
-            HStack(spacing: 20) {
-                VStack(alignment: .leading) {
-                    Text("Net Wealth").font(.caption).foregroundColor(.secondary)
-                    Text("₹\(formatS_Final(currentStrategy.netProfit))").font(.headline).bold().foregroundColor(currentStrategy.netProfit > 0 ? .green : .red)
-                }
-                VStack(alignment: .leading) {
-                    Text("Market ROI").font(.caption).foregroundColor(.secondary)
-                    Text("\(String(format: "%.1f", activeResult.portfolio?.blendedCAGR ?? 0))%").font(.headline).bold().foregroundColor(.blue)
-                }
-                VStack(alignment: .leading) {
-                    Text("Total ROI").font(.caption).foregroundColor(.secondary)
-                    Text("\(String(format: "%.1f", (currentStrategy.netProfit / (activeResult.loanAmount > 0 ? activeResult.loanAmount : 1)) * 100))%").font(.headline).bold()
-                }
-            }
-
-            HStack {
-                Image(systemName: isSafe ? "checkmark.shield.fill" : "exclamationmark.triangle.fill")
-                    .foregroundColor(isSafe ? .green : .orange)
-                Text(isSafe ? "Financial health is strong for leverage." : "Caution: Strategy suggested based on current grade.")
-                    .font(.system(size: 11, weight: .medium))
-            }
-            .padding(10)
-            .background((isSafe ? Color.green : Color.orange).opacity(0.1))
-            .cornerRadius(10)
-        }
-        .padding(20)
-        .background(AppTheme.cardBackground)
-        .cornerRadius(20)
-        .shadow(color: AppTheme.adaptiveShadow.opacity(0.3), radius: 8)
-    }
 
     private var scenarioComparisonCard: some View {
         VStack(alignment: .leading, spacing: 16) {
@@ -344,13 +600,6 @@ struct Plan3DetailView: View {
 
             StrategyCircularChart(total: activeResult.loanAmount, phases: lumpsumPhases, mode: "Lumpsum")
 
-            HStack {
-                Text("Deduct EMI from Investment").font(.subheadline).foregroundColor(.secondary)
-                Spacer()
-                Toggle("", isOn: $isEMIDeductionOn)
-                    .labelsHidden()
-                    .onChange(of: isEMIDeductionOn) { _, _ in recalculate() }
-            }
             Text(isEMIDeductionOn ? "EMI is automatically withdrawn from the investment." : "EMI is paid from your surplus monthly.")
                 .font(.caption2).foregroundColor(.secondary).italic()
         }
@@ -359,249 +608,6 @@ struct Plan3DetailView: View {
         .cornerRadius(24)
     }
 
-    private func portfolioTableCard(portfolio: PortfolioBlueprint) -> some View {
-        VStack(spacing: 0) {
-            HStack {
-                Text("Total Investment : ")
-                    .font(.subheadline).foregroundColor(.secondary)
-                Text("₹\(formatL(activeResult.loanAmount))")
-                    .font(.headline).fontWeight(.bold).foregroundColor(.primary)
-                Text("(in \(activeResult.tenure) years)")
-                    .font(.caption).foregroundColor(.secondary)
-            }
-            .frame(maxWidth: .infinity, alignment: .leading)
-            .padding(20)
-
-            Divider()
-
-            VStack(spacing: 12) {
-                ScenarioHeaderRow()
-
-                let c = activeResult.conservative
-                let m = activeResult.moderate
-                let a = activeResult.aggressive
-                
-                let isCons = selectedScenario == "Conservative"
-                let isMod = selectedScenario == "Moderate"
-                
-                let crashImpact = isCons ? 0.15 : (isMod ? 0.25 : 0.35)
-                let bullImpact = isCons ? 0.15 : (isMod ? 0.25 : 0.40)
-                
-                let worstGain = currentStrategy.netProfit - (currentStrategy.finalValue * crashImpact)
-                let worstFinal = currentStrategy.finalValue * (1 - crashImpact)
-                
-                let bestGain = currentStrategy.netProfit + (currentStrategy.finalValue * bullImpact)
-                let bestFinal = currentStrategy.finalValue * (1 + bullImpact)
-                
-                let scenarioSubtext = "(\(selectedScenario))"
-                
-                ScenarioDataRow(scenario: "Worst case \(scenarioSubtext)", gainLoss: formatG(worstGain), finalValue: formatG(worstFinal), isNegative: worstGain < 0)
-                ScenarioDataRow(scenario: "Conservative", gainLoss: formatG(c.netProfit), finalValue: formatG(c.finalValue), isNegative: c.netProfit < 0)
-                ScenarioDataRow(scenario: "Moderate", gainLoss: formatG(m.netProfit), finalValue: formatG(m.finalValue), isNegative: m.netProfit < 0)
-                ScenarioDataRow(scenario: "Aggressive", gainLoss: formatG(a.netProfit), finalValue: formatG(a.finalValue), isNegative: a.netProfit < 0)
-                ScenarioDataRow(scenario: "Bull Market \(scenarioSubtext)", gainLoss: formatG(bestGain), finalValue: formatG(bestFinal), isNegative: bestGain < 0)
-            }
-            .padding(20)
-
-            Divider()
-
-            VStack(spacing: 0) {
-                HStack(spacing: 0) {
-                    TableHeaderCell(text: "Investment Type", alignment: .leading,  flex: 2.5)
-                    TableHeaderCell(text: "Expected Amt",    alignment: .trailing, flex: 1.5)
-                    TableHeaderCell(text: "Invested Amt",    alignment: .trailing, flex: 1.5)
-                    TableHeaderCell(text: "Risk Type",       alignment: .trailing, flex: 1.2)
-                }
-                .padding(.vertical, 12)
-                .padding(.horizontal, 20)
-                .background(Color(UIColor.systemGray6))
-
-                ForEach(portfolio.allocations) { asset in
-                    let invested = activeResult.loanAmount * (asset.percentage / 100)
-                    let expected = invested * pow(1 + asset.expectedCAGR / 100, Double(activeResult.tenure))
-                    InvestmentTableRow(type: asset.name,
-                                       invested: "₹\(formatL(invested))",
-                                       expected: "₹\(formatL(expected))",
-                                       risk: asset.riskLevel.rawValue.capitalized,
-                                       riskColor: asset.riskLevel == .low ? .green : (asset.riskLevel == .mid ? .orange : .red))
-                    .padding(.horizontal, 12)
-                    
-                    if asset.id != portfolio.allocations.last?.id {
-                        Divider()
-                    }
-                }
-            }
-        }
-        .background(AppTheme.cardBackground)
-        .cornerRadius(24)
-        .shadow(color: AppTheme.adaptiveShadow.opacity(0.3), radius: 8)
-    }
-
-    private func formatG(_ v: Double) -> String {
-        let prefix = v < 0 ? "" : "+"
-        let absV = abs(v)
-        let formatted: String
-        if absV >= 10000000 { formatted = String(format: "%.1fCr", absV / 10000000) }
-        else if absV >= 100000 { formatted = String(format: "%.1fL", absV / 100000) }
-        else { formatted = String(format: "%.0fK", absV / 1000) }
-        
-        return v < 0 ? "-\(formatted)" : "\(prefix)\(formatted)"
-    }
-
-    private var investmentBreakdownSection: some View {
-        VStack(alignment: .leading, spacing: 20) {
-            Text("Yearly Breakdown")
-                .font(.headline)
-
-            ScrollView(.horizontal, showsIndicators: false) {
-                HStack(alignment: .bottom, spacing: 16) {
-                    ForEach(0..<currentStrategy.yearlyBreakdown.count, id: \.self) { index in
-                        let yearData = currentStrategy.yearlyBreakdown[index]
-                        YearlyBarItem(
-                            yearLabel: "\(Calendar.current.component(.year, from: Date()) + index)",
-                            topValue: formatL(yearData.netYearlyProfit),
-                            bottomValue: formatL(yearData.startValue),
-                            isSelected: selectedYearIndex == index,
-                            height: calculateBarHeight(yearData.startValue)
-                        )
-                        .onTapGesture { withAnimation { selectedYearIndex = index } }
-                    }
-                }
-            }
-        }
-        .padding(24)
-        .background(AppTheme.cardBackground)
-        .cornerRadius(24)
-    }
-
-    private var milestonesTableCard: some View {
-        VStack(alignment: .leading, spacing: 16) {
-            Text("Monthly Performance")
-                .font(.headline)
-
-            if selectedYearIndex < currentStrategy.yearlyBreakdown.count {
-                let year = currentStrategy.yearlyBreakdown[selectedYearIndex]
-                VStack(spacing: 0) {
-                    HStack {
-                        Text("Month").bold().frame(maxWidth: .infinity, alignment: .leading)
-                        Text("Start").bold().frame(width: 85, alignment: .trailing)
-                        if isEMIDeductionOn {
-                            Text("EMI").bold().frame(width: 50, alignment: .trailing)
-                        }
-                        Text("Growth").bold().frame(width: 60, alignment: .trailing)
-                        Text("End").bold().frame(width: 70, alignment: .trailing)
-                    }
-                    .font(.system(size: 9, weight: .bold)).foregroundColor(.secondary).padding(.bottom, 12)
-
-                    Divider()
-
-                    ForEach(year.monthlySteps) { step in
-                        HStack(spacing: 4) {
-                            Text(step.month).frame(maxWidth: .infinity, alignment: .leading)
-
-                            HStack(spacing: 1) {
-                                if step.investment > 0 && selectedYearIndex == 0 {
-                                    Text(formatL(step.startValue)).font(.system(size: 9))
-                                    Text("+").foregroundColor(.blue).font(.system(size: 8))
-                                    Text(formatL(step.investment)).font(.system(size: 9)).bold()
-                                } else {
-                                    Text(formatL(step.startValue))
-                                }
-                            }
-                            .frame(width: 85, alignment: .trailing)
-
-                            if isEMIDeductionOn {
-                                Text(step.emiFromPocket > 0 ? formatL(step.emiFromPocket) : "-")
-                                    .font(.system(size: 10))
-                                    .frame(width: 50, alignment: .trailing)
-                                    .foregroundColor(.orange)
-                            }
-
-                            Text((step.growth >= 0 ? "+" : "") + formatL(step.growth))
-                                .font(.system(size: 10))
-                                .frame(width: 60, alignment: .trailing)
-                                .foregroundColor(step.growth >= 0 ? .green : .red)
-
-                            Text(formatL(step.endValue))
-                                .frame(width: 70, alignment: .trailing).bold()
-                        }
-                        .font(.system(size: 11)).padding(.vertical, 12)
-                        Divider()
-                    }
-                }
-            }
-        }
-        .padding(24)
-        .background(AppTheme.cardBackground)
-        .cornerRadius(24)
-    }
-
-    private var finalSummaryCard: some View {
-        let strat = currentStrategy
-        let loanAmt = activeResult.loanAmount
-        let totalRepayment = strat.totalEMIPaid
-        let interestCost = Swift.max(0, totalRepayment - loanAmt)
-
-        return VStack(alignment: .leading, spacing: 20) {
-            Text("Outcome Summary")
-                .font(.headline)
-
-            VStack(spacing: 16) {
-                SummaryRow(label: "Capital Borrowed", value: formatL(loanAmt), color: .primary)
-                SummaryRow(label: "Interest Cost", value: formatL(interestCost), color: .red)
-                SummaryRow(label: "Total Bank Repayment", value: formatL(totalRepayment), color: .secondary)
-
-                Divider()
-
-                SummaryRow(label: "Final Portfolio Value", value: formatL(strat.finalValue), color: .blue)
-
-                HStack {
-                    VStack(alignment: .leading, spacing: 4) {
-                        Text("Net Wealth Gain").font(.caption).foregroundColor(.secondary)
-                        Text("₹\(formatS_Final(strat.netProfit))").font(.title2).bold().foregroundColor(strat.netProfit > 0 ? .green : .red)
-                    }
-                    Spacer()
-                    VStack(alignment: .trailing, spacing: 4) {
-                        Text("Arb. Spread").font(.caption).foregroundColor(.secondary)
-                        Text("\(String(format: "%.1f", (strat.netProfit / (loanAmt > 0 ? loanAmt : 1)) * 100))%").font(.title3).bold()
-                    }
-                }
-                .padding()
-                .background(Color.secondary.opacity(0.05))
-                .cornerRadius(12)
-            }
-
-            Text(isEMIDeductionOn ?
-                "*Results shown with EMI automated from your portfolio. No out-of-pocket costs after initial setup." :
-                "*Results shown with EMI paid from your monthly surplus. Maximum capital growth retained.")
-                .font(.caption2).foregroundColor(.secondary).italic()
-        }
-        .padding(24)
-        .background(AppTheme.cardBackground)
-        .cornerRadius(24)
-        .shadow(color: AppTheme.adaptiveShadow.opacity(0.3), radius: 8)
-    }
-
-    private func formatS_Final(_ v: Double) -> String {
-        let absV = abs(v)
-        let sign = v < 0 ? "-" : ""
-        if absV >= 10000000 { return "\(sign)\(String(format: "%.1fCr", absV / 10000000))" }
-        if absV >= 100000 { return "\(sign)\(String(format: "%.1fL", absV / 100000))" }
-        return "\(sign)\(String(format: "%.0fK", absV / 1000))"
-    }
-
-    struct SummaryRow: View {
-        let label: String
-        let value: String
-        let color: Color
-        var body: some View {
-            HStack {
-                Text(label).font(.subheadline).foregroundColor(.secondary)
-                Spacer()
-                Text("₹\(value)").font(.subheadline).bold().foregroundColor(color)
-            }
-        }
-    }
     private func formatL(_ v: Double) -> String {
         let absV = abs(v)
         if absV >= 10000000 { return String(format: "%.1fCr", v / 10000000) }
@@ -610,29 +616,8 @@ struct Plan3DetailView: View {
         return String(format: "%.0f", v)
     }
 
-    private func calculateBarHeight(_ value: Double) -> CGFloat {
-        let maxV = currentStrategy.yearlyBreakdown.map { $0.startValue }.max() ?? 1
-        return CGFloat(max(40, (value / (maxV > 0 ? maxV : 1)) * 120))
-    }
-}
-
-struct YearlyBarItem: View {
-    let yearLabel: String
-    let topValue: String
-    let bottomValue: String
-    let isSelected: Bool
-    let height: CGFloat
-
-    var body: some View {
-        VStack(spacing: 8) {
-            Text(topValue).font(.system(size: 9, weight: .bold)).foregroundColor(.green)
-            RoundedRectangle(cornerRadius: 8)
-                .fill(isSelected ? Color.blue : Color.blue.opacity(0.15))
-                .frame(width: 40, height: height)
-                .overlay(RoundedRectangle(cornerRadius: 8).stroke(Color.blue.opacity(0.3), lineWidth: 1))
-            Text(yearLabel).font(.caption2).bold().foregroundColor(isSelected ? .primary : .secondary)
-            Text(bottomValue).font(.system(size: 8)).foregroundColor(.secondary)
-        }
+    private func monthLabel(for i: Int) -> String {
+        ["Jan", "Feb", "Mar", "Apr", "May", "Jun", "Jul", "Aug", "Sep", "Oct", "Nov", "Dec"][i % 12]
     }
 }
 
@@ -643,15 +628,12 @@ struct StrategyCircularChart: View {
 
     var body: some View {
         ZStack {
-
             Circle()
                 .stroke(Color.secondary.opacity(0.1), lineWidth: 20)
                 .frame(width: 170, height: 170)
 
             ForEach(0..<12) { i in
-                let angle = Angle(degrees: Double(i) * 30 - 90)
                 let interval = max(1, 12 / max(1, phases))
-
                 let isHighlighted = mode == "Lumpsum" && (i % interval == 0) && (i / interval < phases)
 
                 Circle()
@@ -659,47 +641,53 @@ struct StrategyCircularChart: View {
                     .stroke(isHighlighted ? Color.blue.gradient : Color.secondary.opacity(0.15).gradient, style: StrokeStyle(lineWidth: 20, lineCap: .round))
                     .frame(width: 170, height: 170)
                     .rotationEffect(.degrees(-90))
-
-                Text(monthLabel(for: i).uppercased())
-                    .font(.system(size: 8, weight: .bold, design: .rounded))
-                    .foregroundColor(isHighlighted ? .blue : .secondary.opacity(0.5))
-                    .offset(x: 105 * cos(angle.radians), y: 105 * sin(angle.radians))
             }
 
             VStack(spacing: 4) {
-                Text("TOTAL PRINCIPAL")
-                    .font(.system(size: 9, weight: .black))
-                    .foregroundColor(.secondary)
-                    .opacity(0.8)
-
-                Text("₹\(formatS(total))")
-                    .font(.system(size: 28, weight: .bold, design: .rounded))
-                    .foregroundColor(.primary)
-
-                if phases >= 1 {
-                    HStack(spacing: 4) {
-                        Image(systemName: "arrow.up.circle.fill")
-                        Text("\(phases) \(phases == 1 ? "Injection" : "Injections")")
-                    }
-                    .font(.system(size: 10, weight: .bold))
-                    .padding(.horizontal, 10)
-                    .padding(.vertical, 4)
-                    .background(Color.blue.opacity(0.1))
-                    .foregroundColor(.blue)
-                    .cornerRadius(20)
-                }
+                Text("₹\(InvestmentPlannerEngine.formatL_Internal(total))")
+                    .font(.system(size: 24, weight: .bold, design: .rounded))
+                Text("\(phases) Injection phases")
+                    .font(.caption2).foregroundColor(.secondary)
             }
         }
-        .frame(height: 240)
+        .frame(height: 200)
     }
+}
 
-    private func formatS(_ v: Double) -> String {
-        if v >= 10000000 { return String(format: "%.1fCr", v / 10000000) }
-        if v >= 100000 { return String(format: "%.1fL", v / 100000) }
-        return String(format: "%.0fK", v / 1000)
+struct StrategyOptionButton: View {
+    let title: String
+    let subtitle: String
+    let description: String
+    let isSelected: Bool
+    let action: () -> Void
+
+    var body: some View {
+        Button(action: action) {
+            VStack(alignment: .leading, spacing: 6) {
+                HStack {
+                    Text(title).font(.subheadline).bold()
+                    Spacer()
+                    Image(systemName: isSelected ? "checkmark.circle.fill" : "circle")
+                }
+                Text(description).font(.system(size: 10)).foregroundColor(.secondary).multilineTextAlignment(.leading)
+            }
+            .padding(12)
+            .background(isSelected ? Color.blue.opacity(0.1) : Color.gray.opacity(0.05))
+            .cornerRadius(12)
+            .overlay(RoundedRectangle(cornerRadius: 12).stroke(isSelected ? Color.blue : Color.clear, lineWidth: 1))
+        }
     }
+}
 
-    private func monthLabel(for i: Int) -> String {
-        ["Jan", "Feb", "Mar", "Apr", "May", "Jun", "Jul", "Aug", "Sep", "Oct", "Nov", "Dec"][i]
+#Preview {
+    Plan3PreviewWrapper()
+}
+
+struct Plan3PreviewWrapper: View {
+    var body: some View {
+        let sampleInput = InvestmentPlanInputModel(investmentType: "Lumpsum", amount: "5,00,000", liquidity: "Moderate", riskType: "Moderate", timePeriod: "5", scheduleInvestmentDate: Date(), scheduleSIPDate: Date(), purposeOfInvestment: "Wealth Creation", targetAmount: "15,00,000", savedAmount: "50,000", hasEmergencyFund: true)
+        let plan3 = InvestmentPlannerEngine.generateFullPlan(input: sampleInput).plan3 ?? Plan3Result.empty()
+        Plan3DetailView(input: sampleInput, result: plan3)
+            .environment(AppStateManager.withSampleData())
     }
 }
