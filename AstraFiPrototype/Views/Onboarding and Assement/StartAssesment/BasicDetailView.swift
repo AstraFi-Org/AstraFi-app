@@ -473,7 +473,7 @@ struct EFNecessityCard: View {
             }
 
             HStack(spacing: 6) {
-                Image(systemName: "info.circle.fill")
+                Image(systemName: "info.circle")
                     .font(.system(size: 11))
                     .foregroundStyle(AppTheme.auraIndigo)
                 Text("Park it in a liquid fund — not equities. You'll enter your current amount on the next screen.")
