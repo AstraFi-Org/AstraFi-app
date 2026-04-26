@@ -84,13 +84,9 @@ struct NewInvestmentPlanView: View {
                         dismiss()
                     }
                 } label: {
-                    HStack(spacing: 4) {
-                        Image(systemName: "chevron.left")
-                            .font(.system(size: 16, weight: .bold))
-                        Text("Back")
-                            .font(.system(size: 16, weight: .medium))
-                    }
-                    .foregroundColor(.primary)
+                    Image(systemName: "chevron.left")
+                        .font(.system(size: 16, weight: .bold))
+                        .foregroundColor(.primary)
                 }
             }
         }
@@ -151,30 +147,9 @@ struct NewInvestmentPlanView: View {
     }
 
     // MARK: - Bottom Nav
+    @ViewBuilder
     private var bottomNav: some View {
-        Button {
-            UIImpactFeedbackGenerator(style: .medium).impactOccurred()
-            if currentStep < totalSteps - 1 {
-                withAnimation(.spring(response: 0.35)) { currentStep += 1 }
-            } else {
-                showResultView = true
-            }
-        } label: {
-            HStack(spacing: 8) {
-                Text(currentStep < totalSteps - 1 ? "Continue" : "Generate My Plan")
-                    .font(.headline).fontWeight(.bold)
-            }
-            .foregroundColor(.white)
-            .frame(maxWidth: .infinity)
-            .padding(.vertical, 17)
-            .background(goalAccentColor)
-            .cornerRadius(14)
-            .shadow(color: goalAccentColor.opacity(0.32), radius: 10, x: 0, y: 5)
-        }
-        .padding(.horizontal, 20)
-        .padding(.bottom, 36)
-        .padding(.top, 14)
-        .background(.ultraThinMaterial)
+        // Bottom nav removed because all goals now use the GoalSavingPlanSection inline.
     }
 
     // MARK: - Step Content
@@ -347,7 +322,7 @@ struct NewInvestmentPlanView: View {
         case "Business Fund":
             BusinessQuestionnaire(goalAccentColor: goalAccentColor)
         default:
-            OtherQuestionnaire(input: $input, stepId: stepId)
+            OtherQuestionnaire(goalAccentColor: goalAccentColor)
         }
     }
 
@@ -507,13 +482,13 @@ struct GoalStep: Identifiable {
             ]
         }
 
-        // ✅ Education & Retirement skip the generic target step —
-        //    their questionnaires collect goal-specific data themselves
+        // ✅ All specific goals skip the generic steps and use their own standalone questionnaire with GoalSavingPlanSection
         switch goal {
-        case "Retirement", "Education", "Home Purchase", "Vehicle", "Travel / Trip", "Wedding", "Wealth Creation", "Business Fund":
-            return goalSteps + [sipStep, stratStep]
+        case "Education", "Retirement", "Home Purchase", "Vehicle", "Travel / Trip", "Wedding", "Wealth Creation", "Business Fund":
+            return goalSteps
         default:
-            return [targetStep] + goalSteps + [sipStep, stratStep]
+            // "Other" goals now also use the standalone questionnaire
+            return goalSteps
         }
     }
 }

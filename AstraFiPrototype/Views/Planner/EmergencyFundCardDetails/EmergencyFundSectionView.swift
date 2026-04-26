@@ -153,11 +153,11 @@ struct EmergencyFundSectionView: View {
     private var currentSaved: Double { profile?.basicDetails.emergencyFundAmount ?? 0 }
 
     // MARK: Emergency Fund Target Calculation
-    // Rule: 6× monthly expenses (personal finance standard)
-    // Fallback: 6× gross income if expenses unknown
+    // Rule: 6× monthly income (user request)
+    // Fallback: 6× monthly expenses
     private var emergencyFundTarget: Double {
-        if monthlyExpenses > 0 { return monthlyExpenses * 6 }
         if monthlyIncome > 0   { return monthlyIncome * 6 }
+        if monthlyExpenses > 0 { return monthlyExpenses * 6 }
         return 0
     }
 

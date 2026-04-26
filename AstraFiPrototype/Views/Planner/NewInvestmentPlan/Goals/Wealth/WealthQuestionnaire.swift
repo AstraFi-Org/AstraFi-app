@@ -57,6 +57,12 @@ struct WealthQuestionnaire: View {
     @State private var input = WealthPlanInputModel()
     let goalAccentColor: Color
 
+    @Environment(AppStateManager.self) private var appState
+    @Environment(\.dismiss) private var dismiss
+    
+    @State private var savingPlan: SavingPlanOption? = nil
+    @State private var expectedSIPAmount: String = ""
+
     var body: some View {
         VStack(spacing: 16) {
             
@@ -166,6 +172,28 @@ struct WealthQuestionnaire: View {
                     accentColor: goalAccentColor
                 )
                 .transition(.move(edge: .bottom).combined(with: .opacity))
+                
+                // ── 5 & 6. Universal Goal Saving Plan Section
+                GoalSavingPlanSection(
+                    savingPlan: $savingPlan,
+                    expectedSIPAmount: $expectedSIPAmount,
+                    projectedMFCorpus: projectedMFCorpus,
+                    projectedStocksCorpus: projectedStocksCorpus,
+                    totalCorpus: additionalNeedValue,
+                    goalAccentColor: goalAccentColor,
+                    onSave: {
+                        let trackerInput = buildTrackerInput()
+                        let planModel = InvestmentPlanModel(
+                            name: "Wealth Plan",
+                            dateSaved: DateFormatter.localizedString(from: Date(), dateStyle: .medium, timeStyle: .none),
+                            targetGoal: "Wealth Creation",
+                            input: trackerInput
+                        )
+                        appState.savePlan(planModel)
+                        dismiss()
+                    },
+                    destination: WealthResultView(input: buildTrackerInput())
+                )
             }
             
             Spacer(minLength: 40)
@@ -178,6 +206,54 @@ struct WealthQuestionnaire: View {
         !input.targetAmount.isEmpty &&
         !input.targetYears.isEmpty &&
         input.wealthStrategy != nil
+    }
+    
+    private var projectedMFCorpus: Double {
+        let sip = Double(expectedSIPAmount) ?? 0
+        let years = Double(input.targetYears) ?? 1
+        let months = years * 12
+        let rate = 0.12 / 12
+        guard rate > 0 && months > 0 else { return 0 }
+        return sip * ((pow(1 + rate, months) - 1) / rate) * (1 + rate)
+    }
+
+    private var projectedStocksCorpus: Double {
+        let sip = Double(expectedSIPAmount) ?? 0
+        let years = Double(input.targetYears) ?? 1
+        let months = years * 12
+        let rate = 0.15 / 12
+        guard rate > 0 && months > 0 else { return 0 }
+        return sip * ((pow(1 + rate, months) - 1) / rate) * (1 + rate)
+    }
+    
+    private var additionalNeedValue: Double {
+        let targetAmt = Double(input.targetAmount) ?? 0
+        let savedAmt = Double(input.savedAmount) ?? 0
+        let years = Double(input.targetYears) ?? 1
+        let expectedReturn = input.wealthStrategy?.expectedReturn ?? 0.12
+        let futureValueOfSavings = savedAmt * pow(1 + expectedReturn, years)
+        return max(0, targetAmt - futureValueOfSavings)
+    }
+    
+    private func buildTrackerInput() -> InvestmentPlanInputModel {
+        var trackerInput = InvestmentPlanInputModel(
+            investmentType: "Monthly SIP",
+            amount: savingPlan == .sip ? expectedSIPAmount : "0",
+            liquidity: "Medium",
+            riskType: input.wealthStrategy?.rawValue ?? "Moderate",
+            timePeriod: input.targetYears.isEmpty ? "10" : input.targetYears,
+            scheduleInvestmentDate: Date(),
+            scheduleSIPDate: Date(),
+            purposeOfInvestment: "Wealth Creation",
+            targetAmount: input.targetAmount.isEmpty ? "0" : input.targetAmount,
+            savedAmount: input.savedAmount.isEmpty ? "0" : input.savedAmount,
+            hasEmergencyFund: true
+        )
+        // Wealth-specific data
+        trackerInput.wealthIntent = input.wealthStrategy?.rawValue
+        trackerInput.goalPlanType = savingPlan?.rawValue
+        trackerInput.goalSIPAmount = expectedSIPAmount
+        return trackerInput
     }
 }
 

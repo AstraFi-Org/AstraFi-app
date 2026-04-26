@@ -216,48 +216,52 @@ final class AppStateManager {
     
     var mfService = MFService.shared
     
+    private func cleanDouble(_ s: String) -> Double {
+        let cleaned = s.replacingOccurrences(of: "₹", with: "").replacingOccurrences(of: ",", with: "").trimmingCharacters(in: .whitespaces)
+        return Double(cleaned) ?? 0
+    }
+
     func updateProfile(from assessmentData: CompleteAssessmentData) {
+        let incomeValue = cleanDouble(assessmentData.income)
+        let expensesValue = cleanDouble(assessmentData.expenditure)
+        let emergencyValue = cleanDouble(assessmentData.emergencyFundAmount)
+        
+        let existing = self.currentProfile
+        
         let signUp = AstraSignUp(
-            signUpName: assessmentData.name,
-            email: assessmentData.email.isEmpty ? "user@example.com" : assessmentData.email,
-            password: assessmentData.password
+            signUpName: assessmentData.name.isEmpty ? (existing?.signUp.signUpName ?? "") : assessmentData.name,
+            email: assessmentData.email.isEmpty ? (existing?.signUp.email ?? "user@example.com") : assessmentData.email,
+            password: assessmentData.password.isEmpty ? (existing?.signUp.password ?? "") : assessmentData.password
         )
         
-        let rawIncome = Double(assessmentData.income) ?? 0
-        let incomeValue = rawIncome.isFinite ? rawIncome : 0
-        let incomeAfterTaxValue = incomeValue // Removed 20% default tax estimate
-        
-        let rawExpenses = Double(assessmentData.expenditure) ?? 0
-        let expensesValue = rawExpenses.isFinite ? rawExpenses : 0
-        
-        let rawEmergency = Double(assessmentData.emergencyFundAmount) ?? 0
-        let emergencyValue = rawEmergency.isFinite ? rawEmergency : 0
+        let assessmentAge = Int(assessmentData.age)
+        let finalAge = (assessmentAge ?? 0) > 0 ? (assessmentAge ?? 0) : (existing?.basicDetails.age ?? 0)
         
         let basic = AstraBasicDetails(
-            name: assessmentData.name,
-            age: Int(assessmentData.age) ?? 0,
+            name: assessmentData.name.isEmpty ? (existing?.basicDetails.name ?? "") : assessmentData.name,
+            age: finalAge,
             gender: assessmentData.gender == .male ? .male : .female,
             maritalStatus: .single,
-            adultDependents: self.currentProfile?.basicDetails.adultDependents ?? Int(assessmentData.numberOfDependents) ?? 1,
-            childDependents: 0,
+            adultDependents: Int(assessmentData.numberOfDependents) ?? existing?.basicDetails.adultDependents ?? 1,
+            childDependents: existing?.basicDetails.childDependents ?? 0,
             incomeType: assessmentData.incomeType == .fixed ? .fixed : .variable,
-            monthlyIncome: incomeValue,
-            monthlyIncomeAfterTax: incomeValue, // Removed 20% default tax estimate
-            monthlyExpenses: expensesValue,
-            emergencyFundAmount: emergencyValue,
-            activeInvestment: !assessmentData.investmentEntries.isEmpty,
+            monthlyIncome: incomeValue > 0 ? incomeValue : (existing?.basicDetails.monthlyIncome ?? 0),
+            monthlyIncomeAfterTax: incomeValue > 0 ? incomeValue : (existing?.basicDetails.monthlyIncomeAfterTax ?? 0),
+            monthlyExpenses: expensesValue > 0 ? expensesValue : (existing?.basicDetails.monthlyExpenses ?? 0),
+            emergencyFundAmount: emergencyValue > 0 ? emergencyValue : (existing?.basicDetails.emergencyFundAmount ?? 0),
+            activeInvestment: !assessmentData.investmentEntries.isEmpty || !(existing?.investments.isEmpty ?? true),
             riskTolerance: Self.deriveRiskTolerance(
-                savingsRate: incomeAfterTaxValue > 0 ? (incomeAfterTaxValue - expensesValue) / incomeAfterTaxValue : 0,
+                savingsRate: incomeValue > 0 ? (incomeValue - expensesValue) / incomeValue : 0,
                 investmentCount: assessmentData.investmentEntries.count
             ),
             investmentHorizon: Self.deriveInvestmentHorizon(
-                age: Int(assessmentData.age) ?? 30,
+                age: finalAge,
                 dependents: Int(assessmentData.numberOfDependents) ?? 0
             )
         )
         
-        let profileInvestments = assessmentData.investmentEntries.map { entry in
-            let rawAmt = Double(entry.amount) ?? 0
+        let profileInvestments = assessmentData.investmentEntries.isEmpty ? (existing?.investments ?? []) : assessmentData.investmentEntries.map { entry in
+            let rawAmt = cleanDouble(entry.amount)
             var inv = AstraInvestment(
                 investmentType: mapInvestmentType(entry.type),
                 investmentName: entry.fundName,
@@ -285,9 +289,9 @@ final class AppStateManager {
             return inv
         }
         
-        let profileLoans = assessmentData.loanEntries.map { entry in
-            let rawAmt  = Double(entry.amount)       ?? 0
-            let rawRate = Double(entry.interestRate) ?? 0
+        let profileLoans = assessmentData.loanEntries.isEmpty ? (existing?.loans ?? []) : assessmentData.loanEntries.map { entry in
+            let rawAmt  = cleanDouble(entry.amount)
+            let rawRate = cleanDouble(entry.interestRate)
             // The assessment field is labelled "Tenure (Months)" — store as-is.
             // Do NOT multiply by 12; that would turn 15 months into 180 months.
             let tenureMonths = Int(entry.tenure) ?? 0
@@ -308,19 +312,19 @@ final class AppStateManager {
             return loan
         }
         
-        let profileInsurances = assessmentData.insuranceEntries.map { entry in
+        let profileInsurances = assessmentData.insuranceEntries.isEmpty ? (existing?.insurances ?? []) : assessmentData.insuranceEntries.map { entry in
             var ins = AstraInsurance(
                 insuranceType: mapInsuranceType(entry.currentType),
                 provider: entry.insurer,
                 policyNumber: entry.policyNumber,
-                sumAssured: Double(entry.coverAmount) ?? 0,
-                annualPremium: Double(entry.annualPremium) ?? 0,
+                sumAssured: cleanDouble(entry.coverAmount),
+                annualPremium: cleanDouble(entry.annualPremium),
                 startDate: entry.startDate,
                 expiryDate: entry.expiryDate
             )
             
-            ins.basePremium = Double(entry.basePremium) ?? (ins.annualPremium * 0.8)
-            ins.taxesGST = Double(entry.taxesGST) ?? (ins.annualPremium * 0.18)
+            ins.basePremium = cleanDouble(entry.basePremium)
+            ins.taxesGST = cleanDouble(entry.taxesGST)
             ins.premiumFrequency = entry.premiumFrequency
             
             switch entry.details {
@@ -399,12 +403,16 @@ final class AppStateManager {
         let totalLi = liabilities.totalLiabilities
         let netWorth = totalAs - totalLi
         
-        let savingsRate = incomeAfterTaxValue > 0 ? ((incomeAfterTaxValue - expensesValue) / incomeAfterTaxValue) * 100 : 0
+        let reportIncome = basic.monthlyIncome
+        let reportExpenses = basic.monthlyExpenses
+        let reportEmergency = basic.emergencyFundAmount
+        
+        let savingsRate = reportIncome > 0 ? ((reportIncome - reportExpenses) / reportIncome) * 100 : 0
         
         let totalEMIs = profileLoans.reduce(0.0) { $0 + $1.calculatedEMI }
-        let dti = incomeValue > 0 ? (totalEMIs / incomeValue) : 0
+        let dti = reportIncome > 0 ? (totalEMIs / reportIncome) : 0
         
-        let efMonths = expensesValue > 0 ? (emergencyValue / expensesValue) : 0
+        let efMonths = reportExpenses > 0 ? (reportEmergency / reportExpenses) : 0
         
         let report = AstraFinancialHealthReport(
             netWorth: netWorth,
@@ -434,9 +442,9 @@ final class AppStateManager {
             
             // Merge Investments
             for newInv in newInvestments {
-                if !existingProfile.investments.contains(where: { 
-                    $0.investmentName.lowercased() == newInv.investmentName.lowercased() && 
-                    abs($0.investmentAmount - newInv.investmentAmount) < 1.0 
+                if !existingProfile.investments.contains(where: {
+                    $0.investmentName.lowercased() == newInv.investmentName.lowercased() &&
+                    abs($0.investmentAmount - newInv.investmentAmount) < 1.0
                 }) {
                     existingProfile.investments.append(newInv)
                 }
@@ -444,8 +452,8 @@ final class AppStateManager {
             
             // Merge Loans
             for newLoan in newLoans {
-                if !existingProfile.loans.contains(where: { 
-                    abs($0.loanAmount - newLoan.loanAmount) < 1.0 && 
+                if !existingProfile.loans.contains(where: {
+                    abs($0.loanAmount - newLoan.loanAmount) < 1.0 &&
                     $0.loanType == newLoan.loanType
                 }) {
                     existingProfile.loans.append(newLoan)
@@ -454,8 +462,8 @@ final class AppStateManager {
             
             // Merge Insurances
             for newIns in newInsurances {
-                if !existingProfile.insurances.contains(where: { 
-                    $0.policyNumber == newIns.policyNumber || 
+                if !existingProfile.insurances.contains(where: {
+                    $0.policyNumber == newIns.policyNumber ||
                     ($0.insuranceType == newIns.insuranceType && abs($0.sumAssured - newIns.sumAssured) < 1.0)
                 }) {
                     existingProfile.insurances.append(newIns)
@@ -463,10 +471,19 @@ final class AppStateManager {
             }
             
             // Update basic details but preserve existing fields if they were more detailed
-            existingProfile.basicDetails.monthlyIncome = incomeValue
-            existingProfile.basicDetails.monthlyIncomeAfterTax = incomeValue
-            existingProfile.basicDetails.monthlyExpenses = expensesValue
-            existingProfile.basicDetails.emergencyFundAmount = emergencyValue
+            // Update basic details only if non-zero values provided (prevents overwriting on skip)
+            if incomeValue > 0 {
+                existingProfile.basicDetails.monthlyIncome = incomeValue
+                existingProfile.basicDetails.monthlyIncomeAfterTax = incomeValue
+            }
+            if expensesValue > 0 {
+                existingProfile.basicDetails.monthlyExpenses = expensesValue
+            }
+            // Allow setting EF to 0 if explicitly entered as "0", but usually cleanDouble returns 0 for empty too.
+            // For now, let's assume > 0 means update.
+            if emergencyValue > 0 || (assessmentData.emergencyFundAmount == "0") {
+                existingProfile.basicDetails.emergencyFundAmount = emergencyValue
+            }
             
             self.currentProfile = existingProfile
         } else {

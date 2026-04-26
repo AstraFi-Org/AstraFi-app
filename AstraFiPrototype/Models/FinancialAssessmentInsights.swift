@@ -90,16 +90,19 @@ struct FinancialAssessmentInsights: Hashable, Codable {
     }
 
     static func build(profile: AstraUserProfile?, data: CompleteAssessmentData?) -> FinancialAssessmentInsights {
-        let grossIncomeRaw = profile?.basicDetails.monthlyIncome ?? parseNumber(data?.income)
+        let grossFromData = parseNumber(data?.income)
+        let grossIncomeRaw = (grossFromData > 0) ? grossFromData : (profile?.basicDetails.monthlyIncome ?? 0)
         let grossIncome = max(0, grossIncomeRaw)
 
-        let takeHomeIncomeRaw = profile?.basicDetails.monthlyIncomeAfterTax ?? (grossIncome * (1.0 - AppStateManager.defaultTaxRate))
+        let takeHomeIncomeRaw = (grossFromData > 0) ? (grossFromData * (1.0 - AppStateManager.defaultTaxRate)) : (profile?.basicDetails.monthlyIncomeAfterTax ?? (grossIncome * (1.0 - AppStateManager.defaultTaxRate)))
         let takeHomeIncome = max(0, takeHomeIncomeRaw)
 
-        let expensesRaw = profile?.basicDetails.monthlyExpenses ?? parseNumber(data?.expenditure)
+        let expFromData = parseNumber(data?.expenditure)
+        let expensesRaw = (expFromData > 0) ? expFromData : (profile?.basicDetails.monthlyExpenses ?? 0)
         let expenses = max(0, expensesRaw)
 
-        let emergencyFundRaw = profile?.basicDetails.emergencyFundAmount ?? parseNumber(data?.emergencyFundAmount)
+        let efFromData = parseNumber(data?.emergencyFundAmount)
+        let emergencyFundRaw = (efFromData > 0 || (data?.emergencyFundAmount == "0")) ? efFromData : (profile?.basicDetails.emergencyFundAmount ?? 0)
         let emergencyFund = max(0, emergencyFundRaw)
 
         let savings = max(0, takeHomeIncome - expenses)

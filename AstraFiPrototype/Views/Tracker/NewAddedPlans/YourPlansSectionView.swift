@@ -12,26 +12,29 @@ struct TrackerYourPlansSection: View {
             }
             VStack(spacing: 12) {
                 ForEach(plans) { plan in
-                    if plan.name.contains("Plan 1") {
-                        let full = InvestmentPlannerEngine.generateFullPlan(input: plan.input)
+                    let full = InvestmentPlannerEngine.generateFullPlan(input: plan.input)
+                    
+                    if plan.name == "Pure Investment" {
                         NavigationLink(destination: Plan1DetailView(input: plan.input, result: full.plan1, isFromTracker: true)) {
                             PlanCard(plan: plan)
                         }
                         .buttonStyle(PlainButtonStyle())
-                    } else {
-                        let full = InvestmentPlannerEngine.generateFullPlan(input: plan.input)
-                        if let p2 = full.plan2 {
-                            NavigationLink(destination: Plan2DetailView(input: plan.input, result: p2, isFromTracker: true)) {
-                                PlanCard(plan: plan)
-                            }
-                            .buttonStyle(PlainButtonStyle())
-                        } else {
-
-                            NavigationLink(destination: Plan1DetailView(input: plan.input, result: full.plan1, isFromTracker: true)) {
-                                PlanCard(plan: plan)
-                            }
-                            .buttonStyle(PlainButtonStyle())
+                    } else if plan.name == "Loan Strategy", let p2 = full.plan2 {
+                        NavigationLink(destination: Plan2DetailView(input: plan.input, result: p2, isFromTracker: true)) {
+                            PlanCard(plan: plan)
                         }
+                        .buttonStyle(PlainButtonStyle())
+                    } else if plan.name == "Leveraged Investing", let p3 = full.plan3 {
+                        NavigationLink(destination: Plan3DetailView(input: plan.input, result: p3, isFromTracker: true)) {
+                            PlanCard(plan: plan)
+                        }
+                        .buttonStyle(PlainButtonStyle())
+                    } else {
+                        // Fallback
+                        NavigationLink(destination: Plan1DetailView(input: plan.input, result: full.plan1, isFromTracker: true)) {
+                            PlanCard(plan: plan)
+                        }
+                        .buttonStyle(PlainButtonStyle())
                     }
                 }
             }

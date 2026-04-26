@@ -190,7 +190,7 @@ struct BasicDetailView: View {
             }
             ToolbarItem(placement: .navigationBarTrailing) {
                 Button("Skip") {
-                    appState.setupEmptyProfile(name: "User")
+                    appState.updateProfile(from: data)
                     appState.isAssessmentSkipped = true
                     appState.showDashboard = true
                 }
@@ -345,7 +345,7 @@ struct EFSharePromptCard: View {
                     .font(.system(size: 20))
                     .foregroundStyle(AppTheme.auraGreen)
                 VStack(alignment: .leading, spacing: 2) {
-                    Text("That's great! 🎉")
+                    Text("That's great!")
                         .font(.system(size: 15, weight: .bold, design: .rounded))
                         .foregroundStyle(AppTheme.auraGreen)
                     Text("Having an emergency fund puts you ahead of most people.")
@@ -413,7 +413,7 @@ struct EFNecessityCard: View {
     let expenses: Double
     var onProceed: (() -> Void)? = nil
 
-    private var target: Double { max(income * 6, expenses * 6) }
+    private var target: Double { income * 6 }
     private var monthlyStep: Double { target / 12 }
 
     @State private var ringProgress: Double = 0
