@@ -59,24 +59,6 @@ struct EmergencyFundInsightSheet: View {
 
     // MARK: - Sub-views
 
-    private var headerView: some View {
-        Section {
-            HStack(spacing: 14) {
-                Image(systemName: "exclamationmark.shield.fill")
-                    .font(.title2).foregroundStyle(Color(hex: "#32ADE6"))
-                    .frame(width: 52, height: 52)
-                    .background(Color(hex: "#32ADE6").opacity(0.1))
-                    .clipShape(RoundedRectangle(cornerRadius: 14, style: .continuous))
-                VStack(alignment: .leading, spacing: 3) {
-                    Text("Emergency Fund").font(.title3).bold()
-                    Text(step == 0 ? "Tell us where your fund is kept" : "Fund analysis & recommendations")
-                        .font(.subheadline).foregroundStyle(.secondary)
-                }
-            }
-        }
-        .listRowBackground(Color.clear).listRowSeparator(.hidden)
-        .listRowInsets(EdgeInsets(top: 16, leading: 20, bottom: 12, trailing: 20))
-    }
 
     private var currentStatusSection: some View {
         Section(header: Text("Current Fund Status").font(.footnote).textCase(.uppercase)) {
@@ -251,7 +233,6 @@ struct EmergencyFundInsightSheet: View {
     var body: some View {
         NavigationStack {
             List {
-                headerView
 
                 if step == 0 {
                     currentStatusSection

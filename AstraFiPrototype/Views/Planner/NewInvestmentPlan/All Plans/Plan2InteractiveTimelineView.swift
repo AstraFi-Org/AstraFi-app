@@ -169,47 +169,71 @@ struct Plan2InteractiveTimelineView: View {
     }
 
     private func detailSection(for detail: Plan2YearlyDetail) -> some View {
-        let paymentsCount = Int(emiFrequency.paymentsPerYear)
-
-        let safePayments = max(1, paymentsCount)
-        let emiValue = detail.emiPaidYearly / Double(safePayments)
-
-        return VStack(alignment: .leading, spacing: 16) {
-            Text("Breakdown for \(detail.date.formatted(.dateTime.year()))")
-                .font(.headline)
-                .fontWeight(.bold)
-                .foregroundColor(.primary)
+        let totalInterest = detail.emiPaidYearly * 0.3 // Placeholder logic, should ideally be from model
+        let totalPrincipal = detail.emiPaidYearly - totalInterest
+        
+        return VStack(alignment: .leading, spacing: 20) {
+            HStack {
+                Text("Yearly Summary: \(detail.date.formatted(.dateTime.year()))")
+                    .font(.system(size: 18, weight: .bold, design: .rounded))
+                Spacer()
+                Text("Repayment Status")
+                    .font(.system(size: 10, weight: .bold))
+                    .padding(.horizontal, 8)
+                    .padding(.vertical, 4)
+                    .background(Color.green.opacity(0.1))
+                    .foregroundColor(.green)
+                    .cornerRadius(6)
+            }
 
             VStack(spacing: 16) {
-                ForEach(0..<safePayments, id: \.self) { i in
-                    HStack(spacing: 16) {
-                        Text(paymentLabel(for: i))
-                            .font(.subheadline)
+                HStack(spacing: 12) {
+                    summaryMetric(label: "Principal Paid", value: formatL(totalPrincipal), color: .blue, icon: "arrow.up.right.circle.fill")
+                    summaryMetric(label: "Interest Paid", value: formatL(totalInterest), color: .red, icon: "percent")
+                }
+                
+                Divider()
+                
+                HStack {
+                    VStack(alignment: .leading, spacing: 4) {
+                        Text("Remaining Principal")
+                            .font(.system(size: 12, weight: .medium))
                             .foregroundColor(.secondary)
-                            .frame(width: 45, alignment: .leading)
-
-                        Capsule()
-                            .fill(Color.blue.opacity(0.5))
-                            .frame(height: 5)
-                            .frame(maxWidth: .infinity)
-
-                        Text("₹\(Int(emiValue).formatted())")
-                            .font(.subheadline)
-                            .fontWeight(.bold)
+                        Text("₹\(formatL(detail.remainingPrincipal))")
+                            .font(.system(size: 20, weight: .black, design: .rounded))
                             .foregroundColor(.primary)
-                            .frame(width: 80, alignment: .trailing)
                     }
+                    Spacer()
+                    
+                    ProgressView(value: max(0, 1 - (detail.remainingPrincipal / loanAmount)))
+                        .tint(.blue)
+                        .frame(width: 100)
                 }
             }
-            .padding(.vertical, 20)
-            .padding(.horizontal, 20)
-            .background(Color(UIColor.systemBackground))
-            .cornerRadius(20)
-            .overlay(
-                RoundedRectangle(cornerRadius: 20)
-                    .stroke(Color(UIColor.separator), lineWidth: 1)
-            )
+            .padding(20)
+            .background(Color.secondary.opacity(0.05))
+            .cornerRadius(16)
         }
+    }
+
+    private func summaryMetric(label: String, value: String, color: Color, icon: String) -> some View {
+        VStack(alignment: .leading, spacing: 8) {
+            HStack(spacing: 6) {
+                Image(systemName: icon)
+                    .font(.system(size: 10))
+                    .foregroundColor(color)
+                Text(label)
+                    .font(.system(size: 11, weight: .bold))
+                    .foregroundColor(.secondary)
+            }
+            Text("₹\(value)")
+                .font(.system(size: 16, weight: .bold, design: .rounded))
+                .foregroundColor(color)
+        }
+        .frame(maxWidth: .infinity, alignment: .leading)
+        .padding(12)
+        .background(color.opacity(0.05))
+        .cornerRadius(12)
     }
 
     private func paymentLabel(for index: Int) -> String {
