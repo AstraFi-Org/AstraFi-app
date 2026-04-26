@@ -23,31 +23,65 @@ struct InvestmentPlanResultView: View {
             VStack(spacing: 32) {
                 // Header Message
                 VStack(spacing: 16) {
-//                    ZStack {
-//                        Circle()
-//                            .fill(LinearGradient(colors: [.purple.opacity(0.15), .blue.opacity(0.1)], startPoint: .top, endPoint: .bottom))
-//                            .frame(width: 80, height: 80)
-//                            .blur(radius: 10)
-//                        
-//                        Image(systemName: "sparkles")
-//                            .font(.system(size: 40))
-//                            .foregroundStyle(
-//                                LinearGradient(colors: [.purple, .blue], startPoint: .topLeading, endPoint: .bottomTrailing)
-//                            )
-//                            .shadow(color: .purple.opacity(0.3), radius: 10, x: 0, y: 5)
-//                    }
+                    //                    let profile = appState.currentProfile
+                    //                    let isPortfolioHighRisk = profile.riskProfile == .high
+                    //                    let goalCategory = input.goalCategory
+                    //
+                    //                    VStack(spacing: 8) {
+                    //                        Text("Your Investment Profile")
+                    //                            .font(.system(size: 28, weight: .bold, design: .rounded))
+                    //                        Text("Risk profile: \(profile.riskProfile.rawValue)")
+                    //                            .font(.title2)
+                    //                            .foregroundColor(isPortfolioHighRisk ? .red : .green)
+                    //                            .bold()
+                    //                    }
+                    //                    .padding()
+                    //
+                    //                    VStack(spacing: 12) {
+                    //                        Text("Investment Goal: \(goalCategory.rawValue)")
+                    //                            .font(.title3)
+                    //                            .bold()
+                    //                        Text("Target Amount: ₹\(input.targetAmount)")
+                    //                            .font(.title3)
+                    //                    }
+                    //
+                    //                    Spacer()
+                    //
+                    //                    Text("Plan Recommendations")
+                    //                        .font(.system(size: 20, weight: .bold, design: .rounded))
+                    //                        .padding(.bottom, 8)
+                    //
+                    //                    ForEach(results.planSummaries) { plan in
+                    //                        HStack {
+                    //                            Text(plan.title)
+                    //                                .bold()
+                    //                            Spacer()
+                    //                            Text(plan.estimatedYield)
+                    //                                .foregroundColor(.secondary)
+                    //                        }
+                    //                        .padding(.horizontal)
+                    //                        .padding(.vertical, 8)
+                    //                        .background(AppTheme.secondaryBackground)
+                    //                        .cornerRadius(12)
+                    //                    }
+                    //                    .padding(.horizontal)
+                    //
+                    //                    Spacer()
+                    //                        .frame(height: 40)
+                    //                }
+                    //                .frame(maxWidth: .infinity)
+                    //                .background(
+                    //                    RoundedRectangle(cornerRadius: 20)
+                    //                        .fill(AppTheme.cardBackground)
+                    //                        .shadow(color: AppTheme.adaptiveShadow.opacity(0.2), radius: 8)
+                    //                )
                     
-//                    VStack(spacing: 8) {
-//                        Text("We've Analyzed Your Path")
-//                            .font(.system(size: 26, weight: .bold, design: .rounded))
-                        
-                        let targetVal = Double(input.targetAmount.replacingOccurrences(of: ",", with: "")) ?? 0
-                        Text("Based on your target of ₹\(targetVal >= 100000 ? String(format: "%.1fL", targetVal / 100000) : input.targetAmount), we've identified the most efficient paths to your goal.")
-                            .font(.system(size: 15, design: .rounded))
-                            .multilineTextAlignment(.center)
-                            .foregroundStyle(.secondary)
-                            .padding(.horizontal, 20)
-                    }
+                    let targetVal = Double(input.targetAmount.replacingOccurrences(of: ",", with: "")) ?? 0
+                    Text("Based on your target of ₹\(targetVal >= 100000 ? String(format: "%.1fL", targetVal / 100000) : input.targetAmount), we've identified the most efficient paths to your goal.")
+                        .font(.system(size: 15, design: .rounded))
+                        .multilineTextAlignment(.center)
+                        .foregroundStyle(.secondary)
+                        .padding(.horizontal, 20)
                 }
                 .padding(.top, 24)
                 
@@ -198,119 +232,121 @@ struct InvestmentPlanResultView: View {
         .padding()
         .navigationTitle("Plan Unavailable")
     }
-}
-
-// Redesigned StrategySelectionCard
-struct StrategySelectionCard: View {
-    let id: Int
-    let title: String
-    let subtitle: String
-    let icon: String
-    let color: Color
-    var bestFor: String = ""
-    var metric: String = ""
-    var isRecommended: Bool = false
     
-    @State private var isAnimatingGlow = false
     
-    var body: some View {
-        VStack(alignment: .leading, spacing: 0) {
-            if isRecommended {
-                HStack(spacing: 6) {
-                    Image(systemName: "sparkles")
-                        .font(.system(size: 10))
-                    Text("ASTRA CHOICE")
-                        .font(.system(size: 10, weight: .black, design: .rounded))
-                    Spacer()
-                    Text("RECOMMENDED")
-                        .font(.system(size: 9, weight: .bold))
-                        .opacity(0.8)
-                }
-                .padding(.horizontal, 16)
-                .padding(.vertical, 8)
-                .background(
-                    LinearGradient(colors: [Color(hex: "#BF5AF2"), Color(hex: "#5E5CE6")], startPoint: .leading, endPoint: .trailing)
-                )
-                .foregroundStyle(.white)
-            }
-            
-            VStack(alignment: .leading, spacing: 16) {
-                HStack(alignment: .center, spacing: 14) {
-                    ZStack {
-                        Circle()
-                            .fill(color.opacity(0.1))
-                            .frame(width: 50, height: 50)
-                        
-                        Image(systemName: icon)
-                            .font(.system(size: 22))
-                            .foregroundStyle(color)
+    // Redesigned StrategySelectionCard
+    struct StrategySelectionCard: View {
+        let id: Int
+        let title: String
+        let subtitle: String
+        let icon: String
+        let color: Color
+        var bestFor: String = ""
+        var metric: String = ""
+        var isRecommended: Bool = false
+        
+        @State private var isAnimatingGlow = false
+        
+        var body: some View {
+            VStack(alignment: .leading, spacing: 0) {
+                if isRecommended {
+                    HStack(spacing: 6) {
+                        Image(systemName: "sparkles")
+                            .font(.system(size: 10))
+                        Text("ASTRA CHOICE")
+                            .font(.system(size: 10, weight: .black, design: .rounded))
+                        Spacer()
+                        Text("RECOMMENDED")
+                            .font(.system(size: 9, weight: .bold))
+                            .opacity(0.8)
                     }
-                    
-                    VStack(alignment: .leading, spacing: 4) {
-                        Text(title)
-                            .font(.system(size: 18, weight: .bold, design: .rounded))
-                            .foregroundStyle(.primary)
-                        
-                        Text(subtitle)
-                            .font(.system(size: 14, design: .rounded))
-                            .foregroundStyle(.secondary)
-                            .lineLimit(2)
-                            .fixedSize(horizontal: false, vertical: true)
-                    }
-                    
-                    Spacer()
-                    
-                    Image(systemName: "chevron.right")
-                        .font(.system(size: 14, weight: .bold))
-                        .foregroundStyle(.secondary.opacity(0.5))
+                    .padding(.horizontal, 16)
+                    .padding(.vertical, 8)
+                    .background(
+                        LinearGradient(colors: [Color(hex: "#BF5AF2"), Color(hex: "#5E5CE6")], startPoint: .leading, endPoint: .trailing)
+                    )
+                    .foregroundStyle(.white)
                 }
                 
-                HStack {
-                    HStack(spacing: 6) {
-                        Image(systemName: "bolt.fill")
-                            .font(.system(size: 10))
-                            .foregroundStyle(color)
-                        Text(bestFor)
-                            .font(.system(size: 12, weight: .bold, design: .rounded))
+                VStack(alignment: .leading, spacing: 16) {
+                    HStack(alignment: .center, spacing: 14) {
+                        ZStack {
+                            Circle()
+                                .fill(color.opacity(0.1))
+                                .frame(width: 50, height: 50)
+                            
+                            Image(systemName: icon)
+                                .font(.system(size: 22))
+                                .foregroundStyle(color)
+                        }
+                        
+                        VStack(alignment: .leading, spacing: 4) {
+                            Text(title)
+                                .font(.system(size: 18, weight: .bold, design: .rounded))
+                                .foregroundStyle(.primary)
+                            
+                            Text(subtitle)
+                                .font(.system(size: 14, design: .rounded))
+                                .foregroundStyle(.secondary)
+                                .lineLimit(2)
+                                .fixedSize(horizontal: false, vertical: true)
+                        }
+                        
+                        Spacer()
+                        
+                        Image(systemName: "chevron.right")
+                            .font(.system(size: 14, weight: .bold))
+                            .foregroundStyle(.secondary.opacity(0.5))
                     }
-                    .padding(.horizontal, 10)
-                    .padding(.vertical, 6)
-                    .background(color.opacity(0.08))
-                    .clipShape(Capsule())
                     
-                    Spacer()
-                    
-                    Text(metric)
-                        .font(.system(size: 12, weight: .semibold, design: .monospaced))
-                        .foregroundStyle(.secondary)
+                    HStack {
+                        HStack(spacing: 6) {
+                            Image(systemName: "bolt.fill")
+                                .font(.system(size: 10))
+                                .foregroundStyle(color)
+                            Text(bestFor)
+                                .font(.system(size: 12, weight: .bold, design: .rounded))
+                        }
                         .padding(.horizontal, 10)
                         .padding(.vertical, 6)
-                        .background(Color.secondary.opacity(0.05))
-                        .clipShape(RoundedRectangle(cornerRadius: 8))
+                        .background(color.opacity(0.08))
+                        .clipShape(Capsule())
+                        
+                        Spacer()
+                        
+                        Text(metric)
+                            .font(.system(size: 12, weight: .semibold, design: .monospaced))
+                            .foregroundStyle(.secondary)
+                            .padding(.horizontal, 10)
+                            .padding(.vertical, 6)
+                            .background(Color.secondary.opacity(0.05))
+                            .clipShape(RoundedRectangle(cornerRadius: 8))
+                    }
                 }
+                .padding(16)
+                .background(AppTheme.cardBackground)
             }
-            .padding(16)
-            .background(AppTheme.cardBackground)
-        }
-        .clipShape(RoundedRectangle(cornerRadius: 20, style: .continuous))
-        .overlay {
-            RoundedRectangle(cornerRadius: 20, style: .continuous)
-                .stroke(isRecommended ? .purple.opacity(0.5) : .secondary.opacity(0.1), lineWidth: isRecommended ? 2 : 1)
-        }
-        .shadow(
-            color: isRecommended
+            .clipShape(RoundedRectangle(cornerRadius: 20, style: .continuous))
+            .overlay {
+                RoundedRectangle(cornerRadius: 20, style: .continuous)
+                    .stroke(isRecommended ? .purple.opacity(0.5) : .secondary.opacity(0.1), lineWidth: isRecommended ? 2 : 1)
+            }
+            .shadow(
+                color: isRecommended
                 ? .purple.opacity(isAnimatingGlow ? 0.25 : 0.15)
                 : .black.opacity(0.04),
-            radius: isAnimatingGlow ? 16 : 12,
-            x: 0,
-            y: isAnimatingGlow ? 8 : 6
-        )
-        .onAppear {
-            if isRecommended {
-                withAnimation(.easeInOut(duration: 2.0).repeatForever(autoreverses: true)) {
-                    isAnimatingGlow = true
+                radius: isAnimatingGlow ? 16 : 12,
+                x: 0,
+                y: isAnimatingGlow ? 8 : 6
+            )
+            .onAppear {
+                if isRecommended {
+                    withAnimation(.easeInOut(duration: 2.0).repeatForever(autoreverses: true)) {
+                        isAnimatingGlow = true
+                    }
                 }
             }
         }
     }
+    
 }
