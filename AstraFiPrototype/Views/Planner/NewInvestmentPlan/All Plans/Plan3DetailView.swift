@@ -7,6 +7,7 @@ struct Plan3DetailView: View {
 
     var input: InvestmentPlanInputModel
     var result: Plan3Result
+    var isFromTracker: Bool = false
 
     @State private var selectedScenario: String = "Moderate"
     @State private var investmentMode: String = "Lumpsum"
@@ -66,7 +67,9 @@ struct Plan3DetailView: View {
             }
             .background(AppTheme.appBackground(for: .light))
 
-            savePlanFooter
+            if !isFromTracker {
+                savePlanFooter
+            }
         }
         .onAppear {
             loanOverride = InvestmentPlannerEngine.parseAmount(input.targetAmount)

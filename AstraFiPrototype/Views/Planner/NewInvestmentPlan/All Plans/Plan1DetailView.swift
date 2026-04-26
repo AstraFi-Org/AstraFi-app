@@ -8,6 +8,7 @@ struct Plan1DetailView: View {
     @State private var animateChart = false
     @State private var showingSaveAlert = false
     @State private var alertMessage = ""
+    @State private var showAssumptionsAlert = false
 
     var input: InvestmentPlanInputModel
     var result: Plan1Result
@@ -24,16 +25,17 @@ struct Plan1DetailView: View {
         ZStack(alignment: .bottom) {
             ScrollView {
                 VStack(spacing: 24) {
-                    goalProgressCard
+                    targetVsEstimatedCard
+                    assumptionsWarningSection
                     interactiveAdjusters
-                    overviewMetrics
                     riskTypeSection
                     totalInvestmentCard
                     scenarioTable
+                    smartTipSection
                     investmentRecommendations
                 }
                 .padding(.horizontal, 20)
-                .padding(.bottom, 120) 
+                .padding(.bottom, 120)
             }
             .onChange(of: selectedRisk) { _, _ in
                 recalculate()
@@ -44,13 +46,18 @@ struct Plan1DetailView: View {
             }
         }
         .alert("Action Successful", isPresented: $showingSaveAlert) {
-             Button("View in Tracker") { 
+             Button("View in Tracker") {
                  appState.showDashboard = true
                  dismiss()
              }
              Button("OK", role: .cancel) { }
         } message: {
              Text(alertMessage)
+        }
+        .alert("Plan Assumptions", isPresented: $showAssumptionsAlert) {
+            Button("Got It", role: .cancel) { }
+        } message: {
+            Text("This projection assumes steady growth based on historical performance, reinvestment of returns, and no significant market crashes. Actual returns may vary.")
         }
         .navigationTitle("Investment Recommendation")
         .navigationBarTitleDisplayMode(.inline)
@@ -148,7 +155,7 @@ struct Plan1DetailView: View {
         .background(
             ZStack {
                 BlurView(style: .systemUltraThinMaterial)
-                LinearGradient(colors: [.white.opacity(0.8), .white], startPoint: .top, endPoint: .bottom)
+                LinearGradient(colors: [Color(UIColor.systemBackground).opacity(0.6), Color(UIColor.systemBackground)], startPoint: .top, endPoint: .bottom)
             }
             .ignoresSafeArea()
             .frame(height: 100)
@@ -164,6 +171,11 @@ struct Plan1DetailView: View {
                     .font(.headline)
                 Spacer()
             }
+            
+            Text("We think you need to maintain this SIP for the given timeline. You can adjust the timeline or SIP amount below to see how it impacts your projected corpus.")
+                .font(.footnote)
+                .foregroundColor(.secondary)
+                .frame(maxWidth: .infinity, alignment: .leading)
 
             VStack(alignment: .leading, spacing: 10) {
                 HStack {
@@ -217,112 +229,109 @@ struct Plan1DetailView: View {
         }
     }
 
-    private var goalProgressCard: some View {
-        let target = (Double(input.targetAmount.replacingOccurrences(of: ",", with: "")) ?? 1000000)
+    private var targetVsEstimatedCard: some View {
+        let target = InvestmentPlannerEngine.parseAmount(input.targetAmount)
         let projected = activeResult.projectedValue
-        let progress = Swift.min(projected / Swift.max(1.0, target), 1.0)
-        let isMet = projected >= target
-        let diff = projected - target
-
-        return VStack(alignment: .leading, spacing: 16) {
-            HStack {
-                VStack(alignment: .leading, spacing: 4) {
-                    Text("Goal Progress").font(.subheadline).foregroundColor(.secondary)
-                    Text("\(Int(progress * 100))% Achieved")
-                        .font(.title2).fontWeight(.bold)
-                        .foregroundColor(.primary)
-                }
-                Spacer()
-                Image(systemName: isMet ? "checkmark.seal.fill" : "target")
-                    .font(.title)
-                    .foregroundColor(isMet ? .green : .cyan)
+        
+        return HStack(spacing: 16) {
+            VStack(alignment: .leading, spacing: 8) {
+                Text("Target Amount")
+                    .font(.subheadline)
+                    .foregroundColor(.secondary)
+                Text("₹\(formatL_Detail(target))")
+                    .font(.title3)
+                    .fontWeight(.bold)
+                    .foregroundColor(.primary)
             }
+            .frame(maxWidth: .infinity, alignment: .leading)
+            .padding(16)
+            .background(AppTheme.cardBackground)
+            .cornerRadius(16)
+            .shadow(color: AppTheme.adaptiveShadow.opacity(0.3), radius: 6)
 
-            ProgressView(value: progress)
-                .tint(isMet ? .green : .cyan)
-                .scaleEffect(x: 1, y: 2, anchor: .center)
-                .padding(.vertical, 4)
-
-            HStack {
-                VStack(alignment: .leading, spacing: 2) {
-                    Text("Current Focus").font(.caption).foregroundColor(.secondary)
-                    Text("₹\(formatL_Detail(activeResult.totalInvested)) Invested").font(.footnote).fontWeight(.semibold)
-                }
-                Spacer()
-                VStack(alignment: .trailing, spacing: 2) {
-                    Text(isMet ? "Surplus" : "Gap").font(.caption).foregroundColor(.secondary)
-                    Text("₹\(formatL_Detail(abs(diff)))")
-                        .font(.footnote).fontWeight(.bold)
-                        .foregroundColor(.primary)
-                }
+            VStack(alignment: .leading, spacing: 8) {
+                Text("Estimated Corpus")
+                    .font(.subheadline)
+                    .foregroundColor(.secondary)
+                Text("₹\(formatL_Detail(projected))")
+                    .font(.title3)
+                    .fontWeight(.bold)
+                    .foregroundColor(.green)
             }
-
-            Divider()
-
-            HStack {
-                Text("Target: ₹\(formatL_Detail(target))")
-                    .font(.caption).fontWeight(.medium).foregroundColor(.secondary)
-                Spacer()
-                Text("Estimated: ₹\(formatL_Detail(projected))")
-                    .font(.caption).fontWeight(.bold).foregroundColor(.primary)
-            }
+            .frame(maxWidth: .infinity, alignment: .leading)
+            .padding(16)
+            .background(AppTheme.cardBackground)
+            .cornerRadius(16)
+            .shadow(color: AppTheme.adaptiveShadow.opacity(0.3), radius: 6)
         }
-        .padding(20)
-        .background(AppTheme.cardBackground)
-        .cornerRadius(24)
-        .shadow(color: AppTheme.adaptiveShadow, radius: 15, x: 0, y: 8)
     }
 
-    private var overviewMetrics: some View {
-        VStack(spacing: 12) {
-            MetricRow(label: "Blended return rate",         value: "\(String(format: "%.1f", activeResult.portfolio.blendedCAGR))%", color: .cyan, icon: "percent")
-            MetricRow(label: "Monthly SIP amount",          value: "₹\(Int(sipOverride).formatted())",   color: .blue, icon: "calendar.badge.clock")
-            MetricRow(label: "Initial Lumpsum",             value: "₹\(input.savedAmount)",  color: .orange, icon: "arrow.down.circle.fill")
-            MetricRow(label: "Projected Goal Value",        value: "₹\(formatL_Detail(activeResult.projectedValue))", color: .purple, icon: "chart.line.uptrend.xyaxis")
-            MetricRow(label: "Duration",                    value: "\(tenureOverride) Years", color: .secondary, icon: "clock.fill")
-            if !activeResult.reachesGoal {
-                MetricRow(label: "Shortfall Amount",        value: "₹\(formatL_Detail(activeResult.shortfall))", color: .red, icon: "exclamationmark.triangle.fill")
+    private var assumptionsWarningSection: some View {
+        HStack(alignment: .top, spacing: 12) {
+            Image(systemName: "exclamationmark.triangle.fill")
+                .foregroundColor(.orange)
+            
+            VStack(alignment: .leading, spacing: 4) {
+                Text("Important Notice")
+                    .font(.subheadline)
+                    .fontWeight(.bold)
+                Text("This plan is based on certain assumptions. Kindly pursue this plan at your own risk.")
+                    .font(.caption)
+                    .foregroundColor(.secondary)
+            }
+            Spacer()
+            
+            Button(action: {
+                showAssumptionsAlert = true
+            }) {
+                Image(systemName: "info.circle")
+                    .font(.title2)
+                    .foregroundColor(.blue)
             }
         }
-        .padding(20)
-        .background(AppTheme.cardBackground)
-        .cornerRadius(20)
-        .shadow(color: AppTheme.adaptiveShadow, radius: 12, x: 0, y: 4)
+        .padding(16)
+        .background(Color.orange.opacity(0.1))
+        .cornerRadius(16)
+        .overlay(
+            RoundedRectangle(cornerRadius: 16)
+                .stroke(Color.orange.opacity(0.3), lineWidth: 1)
+        )
+    }
+
+    private var riskTypePicker: some View {
+        HStack {
+            HStack(spacing: 6) {
+                Image(systemName: "chart.bar.fill")
+                    .foregroundColor(.cyan)
+                    .font(.body)
+                Text("Risk Type : ")
+                    .font(.subheadline)
+                    .foregroundColor(.secondary)
+            }
+
+            Menu {
+                Button("Low") { selectedRisk = "Low" }
+                Button("Mid") { selectedRisk = "Mid" }
+                Button("High") { selectedRisk = "High" }
+            } label: {
+                HStack(spacing: 4) {
+                    Text(selectedRisk)
+                        .font(.subheadline)
+                        .fontWeight(.bold)
+                    Image(systemName: "chevron.up.down")
+                        .font(.system(size: 10))
+                }
+                .foregroundColor(.primary)
+                .padding(.horizontal, 12)
+                .padding(.vertical, 4)
+                .background(Color.orange.opacity(0.15))
+                .cornerRadius(8)
+            }
+        }
     }
 
     private var riskTypeSection: some View {
         VStack(spacing: 16) {
-            HStack {
-                HStack(spacing: 6) {
-                    Image(systemName: "chart.bar.fill")
-                        .foregroundColor(.cyan)
-                        .font(.body)
-                    Text("Risk Type : ")
-                        .font(.subheadline)
-                        .foregroundColor(.secondary)
-                }
-
-                Menu {
-                    Button("Low") { selectedRisk = "Low" }
-                    Button("Mid") { selectedRisk = "Mid" }
-                    Button("High") { selectedRisk = "High" }
-                } label: {
-                    HStack(spacing: 4) {
-                        Text(selectedRisk)
-                            .font(.subheadline)
-                            .fontWeight(.bold)
-                        Image(systemName: "chevron.up.down")
-                            .font(.system(size: 10))
-                    }
-                    .foregroundColor(.primary)
-                    .padding(.horizontal, 12)
-                    .padding(.vertical, 4)
-                    .background(Color.orange.opacity(0.15))
-                    .cornerRadius(8)
-                }
-            }
-            .frame(maxWidth: .infinity, alignment: .leading)
-
             DonutChartView(segments: activeResult.portfolio.allocations.map { ($0.name, $0.percentage, colorForAsset($0.name)) }, animate: animateChart)
                 .frame(height: 260)
         }
@@ -372,40 +381,99 @@ struct Plan1DetailView: View {
     }
 
     private var scenarioTable: some View {
-        VStack(spacing: 0) {
-            HStack(spacing: 0) {
-                TableHeaderCell(text: "Investment Type", alignment: .leading,  flex: 2.5)
-                TableHeaderCell(text: "Invested",        alignment: .trailing, flex: 1.5)
-                TableHeaderCell(text: "Expected",        alignment: .trailing, flex: 1.5)
-                TableHeaderCell(text: "Risk",            alignment: .trailing, flex: 1.2)
-            }
-            .padding(.vertical, 12)
-            .padding(.horizontal, 8)
-            .background(Color.tableHeaderBackground)
+        VStack(spacing: 16) {
+            riskTypePicker
 
-            Group {
-                ForEach(activeResult.assets) { asset in
-                    InvestmentTableRow(type: asset.name,
-                                       invested: "₹\(Int(asset.monthlyInvestment))",
-                                       expected: "₹\(formatL_Detail(asset.expectedValue))",
-                                       risk: riskText(asset.riskLevel),
-                                       riskColor: riskColor(asset.riskLevel))
-                    if asset.id != activeResult.assets.last?.id {
-                        Divider()
+            VStack(spacing: 0) {
+                HStack(spacing: 0) {
+                    TableHeaderCell(text: "Investment Type", alignment: .leading,  flex: 2.5)
+                    TableHeaderCell(text: "Invested",        alignment: .trailing, flex: 1.5)
+                    TableHeaderCell(text: "Expected",        alignment: .trailing, flex: 1.5)
+                    TableHeaderCell(text: "Risk",            alignment: .trailing, flex: 1.2)
+                }
+                .padding(.vertical, 12)
+                .padding(.horizontal, 8)
+                .background(Color(UIColor.secondarySystemBackground))
+
+                Group {
+                    ForEach(activeResult.assets) { asset in
+                        InvestmentTableRow(type: asset.name,
+                                           invested: "₹\(Int(asset.monthlyInvestment))",
+                                           expected: "₹\(formatL_Detail(asset.expectedValue))",
+                                           risk: riskText(asset.riskLevel),
+                                           riskColor: riskColor(asset.riskLevel))
+                        if asset.id != activeResult.assets.last?.id {
+                            Divider()
+                        }
                     }
                 }
             }
+            .background(Color(UIColor.tertiarySystemBackground))
+            .cornerRadius(12)
+            .overlay(
+                RoundedRectangle(cornerRadius: 12)
+                    .stroke(Color.tableBorder, lineWidth: 1)
+            )
         }
-        .background(Color.subtleBackground)
-        .cornerRadius(12)
-        .overlay(
-            RoundedRectangle(cornerRadius: 12)
-                .stroke(Color.tableBorder, lineWidth: 1)
-        )
         .padding(20)
         .background(AppTheme.cardBackground)
         .cornerRadius(20)
         .shadow(color: AppTheme.adaptiveShadow, radius: 12, x: 0, y: 4)
+    }
+
+    private var smartTipSection: some View {
+        VStack(alignment: .leading, spacing: 16) {
+            HStack {
+                Image(systemName: "lightbulb.fill")
+                    .foregroundColor(.yellow)
+                Text("Smart Tips for Better Growth")
+                    .font(.headline)
+            }
+            
+            VStack(alignment: .leading, spacing: 12) {
+                HStack(alignment: .top, spacing: 12) {
+                    Image(systemName: "chart.line.uptrend.xyaxis")
+                        .foregroundColor(.blue)
+                        .frame(width: 20)
+                        .padding(.top, 2)
+                    Text("Analyze your investments periodically. Add a lumpsum amount when the market is at an all-time low to maximize future gains.")
+                        .font(.subheadline)
+                        .foregroundColor(.secondary)
+                }
+                
+                HStack(alignment: .top, spacing: 12) {
+                    Image(systemName: "arrow.up.right.circle.fill")
+                        .foregroundColor(.green)
+                        .frame(width: 20)
+                        .padding(.top, 2)
+                    Text("Consider stepping up your SIP amount every 6 months or whenever your income increases to reach your goal faster.")
+                        .font(.subheadline)
+                        .foregroundColor(.secondary)
+                }
+            }
+            
+            Divider()
+            
+            HStack(alignment: .top, spacing: 12) {
+                Image(systemName: "crown.fill")
+                    .foregroundColor(.purple)
+                    .font(.title3)
+                Text("To unlock advanced insights, market timing alerts, and automated step-up recommendations, upgrade to ")
+                    .font(.caption)
+                    .foregroundColor(.secondary) +
+                Text("AstraPremium.")
+                    .font(.caption)
+                    .fontWeight(.bold)
+                    .foregroundColor(.purple)
+            }
+            .padding(12)
+            .background(Color.purple.opacity(0.1))
+            .cornerRadius(12)
+        }
+        .padding(20)
+        .background(AppTheme.cardBackground)
+        .cornerRadius(20)
+        .shadow(color: AppTheme.adaptiveShadow, radius: 10, x: 0, y: 4)
     }
 
     private var investmentRecommendations: some View {

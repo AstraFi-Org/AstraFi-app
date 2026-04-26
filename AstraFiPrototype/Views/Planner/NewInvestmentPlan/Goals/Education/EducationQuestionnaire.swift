@@ -1,20 +1,125 @@
 import SwiftUI
 
+// MARK: - Lifestyle Option
+enum LifestyleOption: String, CaseIterable, Identifiable {
+    case lavish, normal, average
+    var id: String { rawValue }
+
+    var label: String {
+        switch self {
+        case .lavish: return "Lavish"
+        case .normal: return "Normal"
+        case .average: return "Average"
+        }
+    }
+    
+    var emoji: String {
+        switch self {
+        case .lavish: return "🥂"
+        case .normal: return "🏡"
+        case .average: return "🎒"
+        }
+    }
+    
+    var color: Color {
+        switch self {
+        case .lavish: return .purple
+        case .normal: return .blue
+        case .average: return .orange
+        }
+    }
+    
+    var description: String {
+        switch self {
+        case .lavish: return "Five star hostel, eating out 3-4 days/wk"
+        case .normal: return "Normal hostel, eating out 2-3 days/wk"
+        case .average: return "Mess food, low cost transport"
+        }
+    }
+    
+    var detailedDescription: String {
+        switch self {
+        case .lavish: return "Five star hostel + MessFood + eating out 3-4 days in a week, local commute and cabs, 1 international trips, high class social fun and health and other."
+        case .normal: return "Normal Hostel + MessFood + eating out 2-3 days in a week, local commute and auto, domestic trips, social fun and health and other."
+        case .average: return "MessFood + eating out 1 days in a week, public low cost transport and auto, 1-2 local trips throughout the course, limited social fun and health and other."
+        }
+    }
+}
+
 // MARK: - Education Plan Input Model
 @Observable
 class EducationPlanInputModel {
     var yearsUntilCourse: String = ""
     var courseAmount: String = ""
     var location: EducationLocation? = nil
+    var lifestyle: LifestyleOption? = nil
+    var savingPlan: SavingPlanOption? = nil
+    var expectedSIPAmount: String = ""
     var courseDurationYears: Int = 2
     
     // Computed monthly living expenses based on location
     var computedMonthlyLiving: Double {
         guard let location = location else { return 0 }
-        switch location {
-        case .india: return 25000 // Normal lifestyle in India
-        case .abroad: return 150000 // Normal lifestyle Abroad (~$1800)
+        let base: Double = location == .india ? 25000 : 150000
+        var multiplier: Double {
+            switch lifestyle {
+            case .lavish: return 2.0
+            case .normal: return 1.0
+            case .average: return 0.6
+            case nil: return 1.0
+            }
         }
+        return base * multiplier
+    }
+    
+    var totalCorpus: Double {
+        let amt = Double(courseAmount) ?? 0
+        let yrs = Double(Int(yearsUntilCourse) ?? 0)
+        let inflatedCourse = amt * pow(1.06, yrs)
+        
+        let totalLivingCost = computedMonthlyLiving * 12 * Double(courseDurationYears)
+        let inflatedLiving = totalLivingCost * pow(1.06, yrs)
+        
+        return inflatedCourse + inflatedLiving
+    }
+    
+    var projectedMFCorpus: Double {
+        let sip = Double(expectedSIPAmount) ?? 0
+        let years = Double(Int(yearsUntilCourse) ?? 0)
+        let months = years * 12
+        let rate = 0.12 / 12
+        guard rate > 0 && months > 0 else { return 0 }
+        return sip * ((pow(1 + rate, months) - 1) / rate) * (1 + rate)
+    }
+    
+    var projectedStocksCorpus: Double {
+        let sip = Double(expectedSIPAmount) ?? 0
+        let years = Double(Int(yearsUntilCourse) ?? 0)
+        let months = years * 12
+        let rate = 0.15 / 12
+        guard rate > 0 && months > 0 else { return 0 }
+        return sip * ((pow(1 + rate, months) - 1) / rate) * (1 + rate)
+    }
+    
+    func toTrackerModel() -> InvestmentPlanInputModel {
+        return InvestmentPlanInputModel(
+            investmentType: "Monthly SIP",
+            amount: savingPlan == .sip ? expectedSIPAmount : "0",
+            liquidity: "Medium",
+            riskType: "Moderate",
+            timePeriod: yearsUntilCourse,
+            scheduleInvestmentDate: Date(),
+            scheduleSIPDate: Date(),
+            purposeOfInvestment: "Education",
+            targetAmount: String(format: "%.0f", totalCorpus),
+            savedAmount: "0",
+            hasEmergencyFund: true,
+            investmentMentality: .mutualFunds,
+            educationFor: "Self",
+            educationDurationYrs: courseDurationYears,
+            educationLocation: location == .india ? "India" : "Abroad",
+            yearsUntilEducation: Int(yearsUntilCourse)
+        )
     }
 }
 enum EducationLocation {
@@ -26,12 +131,16 @@ enum EducationLocation {
 
 // MARK: - Education Questionnaire
 struct EducationQuestionnaire: View {
+    @Environment(AppStateManager.self) private var appState
+    @Environment(\.dismiss) private var dismiss
     @State private var input = EducationPlanInputModel()
+    @State private var showLifestyleDetails: Bool = false
     //@StateObject private var input = EducationPlanInputModel()
     let profileAge: Int?
     let goalAccentColor: Color
 
     var body: some View {
+        @Bindable var input = input
         ScrollView(showsIndicators: false) {
             VStack(spacing: 16) {
 
@@ -165,8 +274,59 @@ struct EducationQuestionnaire: View {
                     }
                 }
 
-                // ── 4. Course Duration Card (shows after location selected)
+                // ── 3.5. Lifestyle Card (shows after location selected)
                 if input.location != nil {
+                    SectionCard {
+                        VStack(alignment: .leading, spacing: 0) {
+                            HStack {
+                                SectionHeader2(
+                                    icon: "bed.double.fill",
+                                    iconColor: .purple,
+                                    title: "Living Lifestyle",
+                                    subtitle: "Expected standard of living"
+                                )
+                                Spacer()
+                                Button {
+                                    showLifestyleDetails.toggle()
+                                } label: {
+                                    Image(systemName: "info.circle")
+                                        .font(.system(size: 18))
+                                        .foregroundStyle(.purple)
+                                }
+                                .sheet(isPresented: $showLifestyleDetails) {
+                                    LifestyleDetailsSheet()
+                                        .presentationDetents([.medium, .large])
+                                }
+                            }
+                            .padding(.bottom, 14)
+
+                            Divider()
+
+                            EducationLifestyleRow(
+                                lifestyle: .lavish,
+                                isSelected: input.lifestyle == .lavish
+                            ) { input.lifestyle = .lavish }
+
+                            Divider().padding(.leading, 54)
+
+                            EducationLifestyleRow(
+                                lifestyle: .normal,
+                                isSelected: input.lifestyle == .normal
+                            ) { input.lifestyle = .normal }
+
+                            Divider().padding(.leading, 54)
+
+                            EducationLifestyleRow(
+                                lifestyle: .average,
+                                isSelected: input.lifestyle == .average
+                            ) { input.lifestyle = .average }
+                        }
+                    }
+                    .transition(.move(edge: .bottom).combined(with: .opacity))
+                }
+
+                // ── 4. Course Duration Card (shows after lifestyle selected)
+                if input.lifestyle != nil {
                     SectionCard {
                         VStack(spacing: 16) {
                             SectionHeader2(
@@ -199,9 +359,32 @@ struct EducationQuestionnaire: View {
                         durationYears: input.courseDurationYears,
                         yearsToSave: Int(input.yearsUntilCourse) ?? 1,
                         location: input.location ?? .india,
+                        lifestyle: input.lifestyle ?? .normal,
                         accentColor: goalAccentColor
                     )
                     .transition(.move(edge: .bottom).combined(with: .opacity))
+                    
+                    // ── 6 & 7. Universal Goal Saving Plan Section
+                    GoalSavingPlanSection(
+                        savingPlan: $input.savingPlan,
+                        expectedSIPAmount: $input.expectedSIPAmount,
+                        projectedMFCorpus: input.projectedMFCorpus,
+                        projectedStocksCorpus: input.projectedStocksCorpus,
+                        totalCorpus: input.totalCorpus,
+                        goalAccentColor: goalAccentColor,
+                        onSave: {
+                            let trackerInput = input.toTrackerModel()
+                            let planModel = InvestmentPlanModel(
+                                name: "Education Plan",
+                                dateSaved: DateFormatter.localizedString(from: Date(), dateStyle: .medium, timeStyle: .none),
+                                targetGoal: "Education",
+                                input: trackerInput
+                            )
+                            appState.savePlan(planModel)
+                            dismiss()
+                        },
+                        destination: EducationResultView(input: input.toTrackerModel())
+                    )
                 }
 
                 Spacer(minLength: 40)
@@ -211,13 +394,22 @@ struct EducationQuestionnaire: View {
         .scrollDismissesKeyboard(.interactively)
         .onTapGesture { hideKeyboard() }
         .animation(.spring(response: 0.5, dampingFraction: 0.8), value: input.location)
+        .animation(.spring(response: 0.5, dampingFraction: 0.8), value: input.lifestyle)
+        .animation(.spring(response: 0.5, dampingFraction: 0.8), value: input.savingPlan)
         .animation(.spring(response: 0.5, dampingFraction: 0.8), value: showInsights)
     }
 
     private var showInsights: Bool {
         !input.courseAmount.isEmpty &&
         !input.yearsUntilCourse.isEmpty &&
-        input.location != nil
+        input.location != nil &&
+        input.lifestyle != nil
+    }
+
+    private func fmt(_ v: Double) -> String {
+        if v >= 10_000_000 { return String(format: "₹%.2f Cr", v / 10_000_000) }
+        if v >= 100_000    { return String(format: "₹%.2f L", v / 100_000) }
+        return "₹\(Int(v))"
     }
 
     private func inflatedAmount(_ base: Double) -> String {
@@ -272,6 +464,107 @@ private struct EducationLocationRow: View {
     }
 }
 
+// MARK: - Education Lifestyle Row
+private struct EducationLifestyleRow: View {
+    let lifestyle: LifestyleOption
+    let isSelected: Bool
+    let action: () -> Void
+
+    var body: some View {
+        Button(action: action) {
+            HStack(spacing: 14) {
+                Text(lifestyle.emoji)
+                    .font(.system(size: 22))
+                    .frame(width: 40, height: 40)
+                    .background(lifestyle.color.opacity(0.1),
+                                in: RoundedRectangle(cornerRadius: 10, style: .continuous))
+
+                VStack(alignment: .leading, spacing: 2) {
+                    Text(lifestyle.label)
+                        .font(.system(size: 15, weight: .bold, design: .rounded))
+                        .foregroundStyle(isSelected ? lifestyle.color : .primary)
+                    Text(lifestyle.description)
+                        .font(.system(size: 12, design: .rounded))
+                        .foregroundStyle(.secondary)
+                        .lineLimit(2)
+                }
+
+                Spacer()
+
+                ZStack {
+                    Circle()
+                        .stroke(isSelected ? lifestyle.color : Color.secondary.opacity(0.3), lineWidth: 2)
+                        .frame(width: 22, height: 22)
+                    if isSelected {
+                        Circle().fill(lifestyle.color).frame(width: 13, height: 13)
+                    }
+                }
+            }
+            .padding(.vertical, 10)
+        }
+        .buttonStyle(.plain)
+        .animation(.spring(response: 0.25, dampingFraction: 0.7), value: isSelected)
+    }
+}
+
+// MARK: - Lifestyle Details Sheet
+struct LifestyleDetailsSheet: View {
+    @Environment(\.dismiss) var dismiss
+
+    var body: some View {
+        NavigationStack {
+            ScrollView {
+                VStack(alignment: .leading, spacing: 24) {
+                    VStack(alignment: .leading, spacing: 8) {
+                        Text("Lifestyle Details")
+                            .font(.system(size: 28, weight: .bold, design: .rounded))
+                        Text("Detailed breakdown of living options.")
+                            .font(.system(size: 15))
+                            .foregroundStyle(.secondary)
+                    }
+                    .padding(.horizontal)
+
+                    VStack(spacing: 16) {
+                        ForEach(LifestyleOption.allCases) { option in
+                            VStack(alignment: .leading, spacing: 8) {
+                                HStack {
+                                    Text(option.emoji)
+                                    Text(option.label)
+                                        .font(.system(size: 18, weight: .bold))
+                                        .foregroundStyle(option.color)
+                                }
+                                Text(option.detailedDescription)
+                                    .font(.system(size: 14))
+                                    .foregroundStyle(.secondary)
+                            }
+                            .padding()
+                            .frame(maxWidth: .infinity, alignment: .leading)
+                            .background(Color(.secondarySystemGroupedBackground))
+                            .cornerRadius(12)
+                        }
+                    }
+                    .padding(.horizontal)
+
+                    Spacer(minLength: 40)
+                }
+                .padding(.top, 24)
+            }
+            .background(Color(.systemGroupedBackground))
+            .toolbar {
+                ToolbarItem(placement: .topBarTrailing) {
+                    Button("Done") { dismiss() }
+                        .fontWeight(.bold)
+                        .tint(.purple)
+                        .buttonStyle(.borderedProminent)
+                        .clipShape(Capsule())
+                }
+            }
+            .navigationTitle("Lifestyles")
+            .navigationBarTitleDisplayMode(.inline)
+        }
+    }
+}
+
 // MARK: - Education Insight Card
 struct EducationInsightCard: View {
     let courseAmount: Double
@@ -279,6 +572,7 @@ struct EducationInsightCard: View {
     let durationYears: Int
     let yearsToSave: Int
     let location: EducationLocation
+    let lifestyle: LifestyleOption
     let accentColor: Color
 
     private var totalLivingCost: Double {
@@ -334,7 +628,7 @@ struct EducationInsightCard: View {
                             .foregroundStyle(accentColor)
                     }
                     .sheet(isPresented: $showFactors) {
-                        EducationExpenseSheet(location: location, accentColor: accentColor)
+                        EducationExpenseSheet(location: location, lifestyle: lifestyle, accentColor: accentColor)
                             .presentationDetents([.medium, .large])
                     }
                 }
@@ -442,7 +736,6 @@ struct EducationInsightCard: View {
                     .background(Color.green.opacity(0.06), in: RoundedRectangle(cornerRadius: 10, style: .continuous))
                 }
 
-                // Footer note
                 HStack {
                     Spacer()
                     Text("Assumes 6% inflation · 12% SIP · 6.5% FD returns")
@@ -474,13 +767,55 @@ struct EducationInsightCard: View {
                 .foregroundStyle(.primary)
         }
     }
+
+    private func savingOptionRow(icon: String, color: Color, title: String, value: String, note: String) -> some View {
+        HStack(spacing: 12) {
+            ZStack {
+                Circle()
+                    .fill(color.opacity(0.10))
+                    .frame(width: 34, height: 34)
+                Image(systemName: icon)
+                    .font(.system(size: 13, weight: .semibold))
+                    .foregroundStyle(color)
+            }
+            VStack(alignment: .leading, spacing: 2) {
+                Text(title)
+                    .font(.system(size: 13, weight: .bold, design: .rounded))
+                Text(note)
+                    .font(.system(size: 11, design: .rounded))
+                    .foregroundStyle(.secondary)
+            }
+            Spacer()
+            Text(value)
+                .font(.system(size: 13, weight: .bold, design: .rounded))
+                .foregroundStyle(color)
+        }
+        .padding(10)
+        .background(color.opacity(0.05),
+                    in: RoundedRectangle(cornerRadius: 10, style: .continuous))
+    }
+
+    private func fmt(_ v: Double) -> String {
+        if v >= 10_000_000 { return String(format: "₹%.1f Cr", v / 10_000_000) }
+        if v >= 100_000    { return String(format: "₹%.1f L", v / 100_000) }
+        return "₹\(Int(v))"
+    }
 }
 
 // MARK: - Expense Sheet Component
 struct EducationExpenseSheet: View {
     let location: EducationLocation
+    let lifestyle: LifestyleOption
     let accentColor: Color
     @Environment(\.dismiss) var dismiss
+
+    private var multiplier: Double {
+        switch lifestyle {
+        case .lavish: return 2.0
+        case .normal: return 1.0
+        case .average: return 0.6
+        }
+    }
 
     var body: some View {
         NavigationStack {
@@ -491,7 +826,7 @@ struct EducationExpenseSheet: View {
                     VStack(alignment: .leading, spacing: 8) {
                         Text("Assumed Monthly Expenses")
                             .font(.system(size: 28, weight: .bold, design: .rounded))
-                        Text("Detailed breakdown for a normal lifestyle \(location == .india ? "in India" : "abroad").")
+                        Text("Detailed breakdown for a \(lifestyle.label.lowercased()) lifestyle \(location == .india ? "in India" : "abroad").")
                             .font(.system(size: 15))
                             .foregroundStyle(.secondary)
                     }
@@ -500,17 +835,17 @@ struct EducationExpenseSheet: View {
                     // Breakdown List
                     VStack(spacing: 0) {
                         if location == .india {
-                            expenseRow(icon: "fork.knife", color: .orange, title: "Food & Dining", subtitle: "Mess food + eating out", amount: 8000)
-                            expenseRow(icon: "bus.fill", color: .blue, title: "Transport", subtitle: "Local commute & auto", amount: 4000)
-                            expenseRow(icon: "airplane", color: .indigo, title: "Travel", subtitle: "2 domestic trips (annualized)", amount: 5000)
-                            expenseRow(icon: "music.note.house.fill", color: .purple, title: "Social & Fun", subtitle: "2 parties or movie nights", amount: 3000)
-                            expenseRow(icon: "pills.fill", color: .red, title: "Misc & Health", subtitle: "Personal care & supplies", amount: 5000)
+                            expenseRow(icon: "fork.knife", color: .orange, title: "Food & Dining", subtitle: "Mess food + eating out", amount: 8000 * multiplier)
+                            expenseRow(icon: "bus.fill", color: .blue, title: "Transport", subtitle: "Local commute & auto", amount: 4000 * multiplier)
+                            expenseRow(icon: "airplane", color: .indigo, title: "Travel", subtitle: "Domestic trips (annualized)", amount: 5000 * multiplier)
+                            expenseRow(icon: "music.note.house.fill", color: .purple, title: "Social & Fun", subtitle: "Parties or movie nights", amount: 3000 * multiplier)
+                            expenseRow(icon: "pills.fill", color: .red, title: "Misc & Health", subtitle: "Personal care & supplies", amount: 5000 * multiplier)
                         } else {
-                            expenseRow(icon: "house.fill", color: .green, title: "Rent & Utilities", subtitle: "Shared apartment + bills", amount: 80000)
-                            expenseRow(icon: "cart.fill", color: .orange, title: "Food & Groceries", subtitle: "Home cooking + occasional dining", amount: 30000)
-                            expenseRow(icon: "tram.fill", color: .blue, title: "Transport", subtitle: "Public transport pass", amount: 15000)
-                            expenseRow(icon: "airplane", color: .indigo, title: "International Travel", subtitle: "Annual trips (annualized)", amount: 15000)
-                            expenseRow(icon: "sparkles", color: .purple, title: "Misc & Social", subtitle: "Student activities & fun", amount: 10000)
+                            expenseRow(icon: "house.fill", color: .green, title: "Rent & Utilities", subtitle: "Shared apartment + bills", amount: 80000 * multiplier)
+                            expenseRow(icon: "cart.fill", color: .orange, title: "Food & Groceries", subtitle: "Home cooking + occasional dining", amount: 30000 * multiplier)
+                            expenseRow(icon: "tram.fill", color: .blue, title: "Transport", subtitle: "Public transport pass", amount: 15000 * multiplier)
+                            expenseRow(icon: "airplane", color: .indigo, title: "International Travel", subtitle: "Annual trips (annualized)", amount: 15000 * multiplier)
+                            expenseRow(icon: "sparkles", color: .purple, title: "Misc & Social", subtitle: "Student activities & fun", amount: 10000 * multiplier)
                         }
                     }
                     .padding(8)
@@ -524,7 +859,8 @@ struct EducationExpenseSheet: View {
                             .font(.system(size: 14, weight: .bold))
                             .foregroundStyle(.secondary)
                         
-                        Text("₹\(Int(location == .india ? 25000 : 150000).formattedWithComma)")
+                        let totalBase = location == .india ? 25000.0 : 150000.0
+                        Text("₹\(Int(totalBase * multiplier).formattedWithComma)")
                             .font(.system(size: 44, weight: .black, design: .rounded))
                             .foregroundStyle(accentColor)
                     }
@@ -549,7 +885,7 @@ struct EducationExpenseSheet: View {
                         .clipShape(Capsule())
                 }
             }
-            .navigationTitle("Normal Lifestyle")
+            .navigationTitle("\(lifestyle.label) Lifestyle")
             .navigationBarTitleDisplayMode(.inline)
         }
     }
@@ -586,40 +922,6 @@ struct EducationExpenseSheet: View {
         }
     }
 }
-
-    private func savingOptionRow(icon: String, color: Color, title: String, value: String, note: String) -> some View {
-        HStack(spacing: 12) {
-            ZStack {
-                Circle()
-                    .fill(color.opacity(0.10))
-                    .frame(width: 34, height: 34)
-                Image(systemName: icon)
-                    .font(.system(size: 13, weight: .semibold))
-                    .foregroundStyle(color)
-            }
-            VStack(alignment: .leading, spacing: 2) {
-                Text(title)
-                    .font(.system(size: 13, weight: .bold, design: .rounded))
-                Text(note)
-                    .font(.system(size: 11, design: .rounded))
-                    .foregroundStyle(.secondary)
-            }
-            Spacer()
-            Text(value)
-                .font(.system(size: 13, weight: .bold, design: .rounded))
-                .foregroundStyle(color)
-        }
-        .padding(10)
-        .background(color.opacity(0.05),
-                    in: RoundedRectangle(cornerRadius: 10, style: .continuous))
-    }
-
-    private func fmt(_ v: Double) -> String {
-        if v >= 10_000_000 { return String(format: "₹%.1f Cr", v / 10_000_000) }
-        if v >= 100_000    { return String(format: "₹%.1f L", v / 100_000) }
-        return "₹\(Int(v))"
-    }
-
 
 // MARK: - Preview
 #Preview {

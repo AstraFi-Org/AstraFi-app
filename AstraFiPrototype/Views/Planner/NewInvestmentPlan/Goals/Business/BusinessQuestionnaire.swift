@@ -57,6 +57,12 @@ struct BusinessQuestionnaire: View {
     @State private var input = BusinessPlanInputModel()
     let goalAccentColor: Color
 
+    @Environment(AppStateManager.self) private var appState
+    @Environment(\.dismiss) private var dismiss
+    
+    @State private var savingPlan: SavingPlanOption? = nil
+    @State private var expectedSIPAmount: String = ""
+
     var body: some View {
         VStack(spacing: 16) {
             
@@ -167,6 +173,28 @@ struct BusinessQuestionnaire: View {
                     accentColor: goalAccentColor
                 )
                 .transition(.move(edge: .bottom).combined(with: .opacity))
+                
+                // ── 5 & 6. Universal Goal Saving Plan Section
+                GoalSavingPlanSection(
+                    savingPlan: $savingPlan,
+                    expectedSIPAmount: $expectedSIPAmount,
+                    projectedMFCorpus: projectedMFCorpus,
+                    projectedStocksCorpus: projectedStocksCorpus,
+                    totalCorpus: netTargetValue,
+                    goalAccentColor: goalAccentColor,
+                    onSave: {
+                        let trackerInput = buildTrackerInput()
+                        let planModel = InvestmentPlanModel(
+                            name: "Business Plan",
+                            dateSaved: DateFormatter.localizedString(from: Date(), dateStyle: .medium, timeStyle: .none),
+                            targetGoal: "Business Fund",
+                            input: trackerInput
+                        )
+                        appState.savePlan(planModel)
+                        dismiss()
+                    },
+                    destination: BusinessResultView(input: buildTrackerInput())
+                )
             }
             
             Spacer(minLength: 40)
@@ -179,6 +207,53 @@ struct BusinessQuestionnaire: View {
         !input.yearsUntilStart.isEmpty &&
         !input.initialCapitalNeeded.isEmpty &&
         input.businessType != nil
+    }
+    
+    private var projectedMFCorpus: Double {
+        let sip = Double(expectedSIPAmount) ?? 0
+        let years = Double(input.yearsUntilStart) ?? 1
+        let months = years * 12
+        let rate = 0.12 / 12
+        guard rate > 0 && months > 0 else { return 0 }
+        return sip * ((pow(1 + rate, months) - 1) / rate) * (1 + rate)
+    }
+
+    private var projectedStocksCorpus: Double {
+        let sip = Double(expectedSIPAmount) ?? 0
+        let years = Double(input.yearsUntilStart) ?? 1
+        let months = years * 12
+        let rate = 0.15 / 12
+        guard rate > 0 && months > 0 else { return 0 }
+        return sip * ((pow(1 + rate, months) - 1) / rate) * (1 + rate)
+    }
+    
+    private var netTargetValue: Double {
+        let currentCapital = Double(input.initialCapitalNeeded) ?? 0
+        let savedAmt = Double(input.savedAmount) ?? 0
+        let years = Double(input.yearsUntilStart) ?? 1
+        let inflation = input.businessType?.annualInflation ?? 0.08
+        let futureCapital = currentCapital * pow(1 + inflation, years)
+        return max(0, futureCapital - savedAmt)
+    }
+    
+    private func buildTrackerInput() -> InvestmentPlanInputModel {
+        var trackerInput = InvestmentPlanInputModel(
+            investmentType: "Monthly SIP",
+            amount: savingPlan == .sip ? expectedSIPAmount : "0",
+            liquidity: "Low",
+            riskType: "High",
+            timePeriod: input.yearsUntilStart.isEmpty ? "5" : input.yearsUntilStart,
+            scheduleInvestmentDate: Date(),
+            scheduleSIPDate: Date(),
+            purposeOfInvestment: "Business Fund",
+            targetAmount: String(format: "%.0f", netTargetValue),
+            savedAmount: input.savedAmount.isEmpty ? "0" : input.savedAmount,
+            hasEmergencyFund: true
+        )
+        // Business-specific data
+        trackerInput.goalPlanType = savingPlan?.rawValue
+        trackerInput.goalSIPAmount = expectedSIPAmount
+        return trackerInput
     }
 }
 

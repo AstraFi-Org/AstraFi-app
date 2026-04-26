@@ -27,7 +27,12 @@ struct RetirementQuestionnaire: View {
     let profileAge: Int?
     let goalAccentColor: Color
 
+    @Environment(AppStateManager.self) private var appState
+    @Environment(\.dismiss) private var dismiss
+    
     @State private var showExpenseSheet = false
+    @State private var savingPlan: SavingPlanOption? = nil
+    @State private var expectedSIPAmount: String = ""
 
     var body: some View {
         ScrollView(showsIndicators: false){
@@ -210,41 +215,30 @@ struct RetirementQuestionnaire: View {
                     .transition(.move(edge: .bottom).combined(with: .opacity))
                 }
                 
-                // ── 4. Plan Section
-                SectionCard {
-                    VStack(alignment: .leading, spacing: 16) {
-                        SectionHeader2(
-                            icon: "lightbulb.fill",
-                            iconColor: .orange,
-                            title: "Your Savings Plan",
-                            subtitle: "How will you build this corpus?"
+                // ── 4. Plan Section (Universal)
+                GoalSavingPlanSection(
+                    savingPlan: $savingPlan,
+                    expectedSIPAmount: $expectedSIPAmount,
+                    projectedMFCorpus: projectedMFCorpus,
+                    projectedStocksCorpus: projectedStocksCorpus,
+                    totalCorpus: getTargetCorpusValue(),
+                    goalAccentColor: goalAccentColor,
+                    onSave: {
+                        let planModel = InvestmentPlanModel(
+                            name: "Retirement Plan",
+                            dateSaved: DateFormatter.localizedString(from: Date(), dateStyle: .medium, timeStyle: .none),
+                            targetGoal: "Retirement",
+                            input: buildTrackerInput()
                         )
-                        
-                        Divider()
-                        
-                        PlanSegmentChips(
-                            selection: Binding(
-                                get: { input.retirementPlanType ?? "" },
-                                set: { input.retirementPlanType = $0 }
-                            ),
-                            options: ["Will start SIP", "Bank / FD", "No Plan"]
-                        )
-                        
-                        if let plan = input.retirementPlanType, !plan.isEmpty {
-                            Divider()
-                            planDetailsView(for: plan)
-                                .transition(.asymmetric(
-                                    insertion: .move(edge: .trailing).combined(with: .opacity),
-                                    removal: .opacity
-                                ))
-                        }
-                    }
-                }
+                        appState.savePlan(planModel)
+                        dismiss()
+                    },
+                    destination: RetirementResultView(input: buildTrackerInput())
+                )
                 
                 Spacer(minLength: 40)
             }
             .animation(.spring(response: 0.5, dampingFraction: 0.8), value: input.lifestylePreference)
-            .animation(.spring(), value: input.retirementPlanType)
             .sheet(isPresented: $showExpenseSheet) {
                 LifestyleExpenseSheet(preference: input.lifestylePreference ?? "Normal")
                     .presentationDetents([.medium, .large])
@@ -254,89 +248,31 @@ struct RetirementQuestionnaire: View {
         .scrollDismissesKeyboard(.interactively)
         .onTapGesture { hideKeyboard() }
     }
-    @ViewBuilder
-    private func planDetailsView(for plan: String) -> some View {
-        VStack(spacing: 16) {
-            if plan == "Will start SIP" {
+    
+    private var projectedMFCorpus: Double {
+        let sip = Double(expectedSIPAmount) ?? 0
+        let years = Double(max(1, (input.retirementAge ?? 60) - (profileAge ?? 35)))
+        let months = years * 12
+        let rate = 0.12 / 12
+        guard rate > 0 && months > 0 else { return 0 }
+        return sip * ((pow(1 + rate, months) - 1) / rate) * (1 + rate)
+    }
 
-                // ✅ Simple inline row
-                HStack {
-                    Label("Monthly SIP Amount", systemImage: "indianrupeesign.circle.fill")
-                        .font(.system(size: 15, design: .rounded))
-                        .foregroundStyle(.secondary)
-                    Spacer()
-                    TextField("e.g. 50,000", text: Binding(
-                        get: { input.retirementSIPAmount ?? "" },
-                        set: { input.retirementSIPAmount = $0 }
-                    ))
-                    .keyboardType(.numberPad)
-                    .multilineTextAlignment(.trailing)
-                    .font(.system(size: 15, weight: .semibold, design: .rounded))
-                    .frame(width: 110)
-                }
-
-                if let sipStr = input.retirementSIPAmount, let sip = Double(sipStr), sip > 0 {
-                    SIPInsightCard(
-                        sipAmount: sip,
-                        targetCorpus: getTargetCorpusValue(),
-                        yearsToInvest: (input.retirementAge ?? 60) - (profileAge ?? 35)
-                    )
-                }
-
-            } else if plan == "Bank / FD" {
-                VStack(spacing: 14) {
-                    LabeledField(label: "Savings Frequency", icon: "calendar") {
-                        PlanSegmentChips(
-                            selection: Binding(
-                                get: { input.retirementFDFrequency ?? "Monthly" },
-                                set: { input.retirementFDFrequency = $0 }
-                            ),
-                            options: ["Monthly", "Quarterly", "Yearly"]
-                        )
-                    }
-
-                    Divider()
-
-                    // ✅ Simple inline row
-                    HStack {
-                        Label("Amount (\(input.retirementFDFrequency ?? "Monthly"))",
-                              systemImage: "building.columns.fill")
-                            .font(.system(size: 15, design: .rounded))
-                            .foregroundStyle(.secondary)
-                        Spacer()
-                        TextField("e.g. 20,000", text: Binding(
-                            get: { input.retirementFDAmount ?? "" },
-                            set: { input.retirementFDAmount = $0 }
-                        ))
-                        .keyboardType(.numberPad)
-                        .multilineTextAlignment(.trailing)
-                        .font(.system(size: 15, weight: .semibold, design: .rounded))
-                        .frame(width: 110)
-                    }
-
-                    if let amtStr = input.retirementFDAmount, let amt = Double(amtStr), amt > 0 {
-                        FDInsightCard(
-                            amount: amt,
-                            frequency: input.retirementFDFrequency ?? "Monthly",
-                            targetCorpus: getTargetCorpusValue(),
-                            yearsToInvest: (input.retirementAge ?? 60) - (profileAge ?? 35)
-                        )
-                    }
-                }
-            } else {
-                InsightCard(
-                    title: "Planning is Freedom",
-                    icon: "flag.checkered",
-                    iconColor: .blue,
-                    message: "Starting today is your biggest advantage. Every year of delay requires a 20% higher investment later to reach the same goal.",
-                    scenarios: [
-                        "Compounding works best over time",
-                        "Inflation starts eating savings now",
-                        "Healthcare costs rise 10% annually"
-                    ]
-                )
-            }
-        }
+    private var projectedStocksCorpus: Double {
+        let sip = Double(expectedSIPAmount) ?? 0
+        let years = Double(max(1, (input.retirementAge ?? 60) - (profileAge ?? 35)))
+        let months = years * 12
+        let rate = 0.15 / 12
+        guard rate > 0 && months > 0 else { return 0 }
+        return sip * ((pow(1 + rate, months) - 1) / rate) * (1 + rate)
+    }
+    
+    private func buildTrackerInput() -> InvestmentPlanInputModel {
+        var trackerInput = input
+        trackerInput.investmentType = "Monthly SIP"
+        trackerInput.amount = savingPlan == .sip ? expectedSIPAmount : "0"
+        trackerInput.targetAmount = String(format: "%.0f", getTargetCorpusValue())
+        return trackerInput
     }
 
     private func getTargetCorpusValue() -> Double {
@@ -407,250 +343,7 @@ struct LifestyleChoiceCard: View {
     }
 }
 
-// MARK: - FD Insight Card (redesigned)
-struct FDInsightCard: View {
-    let amount: Double
-    let frequency: String
-    let targetCorpus: Double
-    let yearsToInvest: Int
 
-    var body: some View {
-        VStack(alignment: .leading, spacing: 16) {
-
-            // Header
-            HStack(spacing: 10) {
-                ZStack {
-                    RoundedRectangle(cornerRadius: 8, style: .continuous)
-                        .fill(Color.orange.opacity(0.12))
-                        .frame(width: 32, height: 32)
-                    Text("⚠️").font(.system(size: 15))
-                }
-                VStack(alignment: .leading, spacing: 1) {
-                    Text("Risk Alert: Low Real Growth")
-                        .font(.system(size: 14, weight: .bold, design: .rounded))
-                    Text("FD Returns vs Inflation")
-                        .font(.system(size: 12, design: .rounded))
-                        .foregroundStyle(.secondary)
-                }
-                Spacer()
-            }
-
-            Text(message)
-                .font(.system(size: 13, design: .rounded))
-                .foregroundStyle(.primary.opacity(0.8))
-                .lineSpacing(3)
-
-            // Growth block
-            VStack(alignment: .leading, spacing: 10) {
-                Label("GROWTH ESTIMATE (7%)", systemImage: "chart.bar.fill")
-                    .font(.system(size: 10, weight: .bold))
-                    .foregroundStyle(.secondary)
-
-                HStack {
-                    VStack(alignment: .leading, spacing: 4) {
-                        Text("Total Saved")
-                            .font(.system(size: 11, design: .rounded))
-                            .foregroundStyle(.secondary)
-                        Text(fmtL(totalSaved))
-                            .font(.system(size: 14, weight: .bold, design: .rounded))
-                    }
-                    Spacer()
-                    VStack(alignment: .trailing, spacing: 4) {
-                        Text("Final Value")
-                            .font(.system(size: 11, design: .rounded))
-                            .foregroundStyle(.secondary)
-                        Text(fmtCr(estimatedFinalValue))
-                            .font(.system(size: 14, weight: .bold, design: .rounded))
-                            .foregroundStyle(.orange)
-                    }
-                }
-                .padding(12)
-                .background(Color.orange.opacity(0.06), in: RoundedRectangle(cornerRadius: 10, style: .continuous))
-
-                Text("Real growth after inflation is only ~1% per year with FD.")
-                    .font(.system(size: 11, design: .rounded))
-                    .foregroundStyle(.secondary)
-                    .italic()
-            }
-
-            Divider()
-
-            // Key risks
-            VStack(alignment: .leading, spacing: 8) {
-                Label("KEY RISKS", systemImage: "exclamationmark.triangle.fill")
-                    .font(.system(size: 10, weight: .bold))
-                    .foregroundStyle(.secondary)
-
-                riskRow("Tax Impact: FD interest is fully taxable as per your slab.")
-                riskRow("Inflation Risk: Lifestyle costs rise faster than FD interest.")
-            }
-        }
-        .padding(16)
-        .background(Color.orange.opacity(0.05), in: RoundedRectangle(cornerRadius: 14, style: .continuous))
-        .overlay(
-            RoundedRectangle(cornerRadius: 14, style: .continuous)
-                .stroke(Color.orange.opacity(0.18), lineWidth: 1)
-        )
-    }
-
-    private func riskRow(_ text: String) -> some View {
-        HStack(alignment: .top, spacing: 8) {
-            Circle().fill(Color.red.opacity(0.6)).frame(width: 5, height: 5).padding(.top, 5)
-            Text(text).font(.system(size: 12, design: .rounded)).foregroundStyle(.secondary)
-        }
-    }
-
-    private var totalSaved: Double {
-        let f: Double = frequency == "Monthly" ? 12 : (frequency == "Quarterly" ? 4 : 1)
-        return amount * f * Double(yearsToInvest)
-    }
-    private var estimatedFinalValue: Double {
-        let f: Double = frequency == "Monthly" ? 12 : (frequency == "Quarterly" ? 4 : 1)
-        let n = Double(max(1, yearsToInvest)) * f
-        let r = 0.07 / f
-        return amount * ((pow(1 + r, n) - 1) / r) * (1 + r)
-    }
-    private var message: String {
-        estimatedFinalValue >= targetCorpus
-        ? "Even with conservative returns, your \(fmtL(amount)) \(frequency.lowercased()) savings may reach your goal. But taxes will significantly reduce this amount."
-        : "Your projected FD value of \(fmtCr(estimatedFinalValue)) is far below the target of \(fmtCr(targetCorpus)). Consider equity/SIP for higher growth."
-    }
-    private func fmtCr(_ v: Double) -> String {
-        v >= 10_000_000 ? String(format: "₹%.1f Cr", v/10_000_000) : v >= 100_000 ? String(format: "₹%.1f L", v/100_000) : "₹\(Int(v))"
-    }
-    private func fmtL(_ v: Double) -> String { String(format: "₹%.0f L", v/100_000) }
-}
-
-// MARK: - SIP Insight Card (redesigned)
-struct SIPInsightCard: View {
-    let sipAmount: Double
-    let targetCorpus: Double
-    let yearsToInvest: Int
-
-    var body: some View {
-        VStack(alignment: .leading, spacing: 16) {
-
-            // Header
-            HStack(spacing: 10) {
-                ZStack {
-                    RoundedRectangle(cornerRadius: 8, style: .continuous)
-                        .fill((onTrack ? Color.green : Color.orange).opacity(0.12))
-                        .frame(width: 32, height: 32)
-                    Text(onTrack ? "✅" : "⚠️").font(.system(size: 15))
-                }
-                VStack(alignment: .leading, spacing: 1) {
-                    Text(onTrack ? "You're on track!" : "Gap Detected")
-                        .font(.system(size: 14, weight: .bold, design: .rounded))
-                    Text(onTrack ? "Healthy Plan" : "Adjustment Needed")
-                        .font(.system(size: 12, design: .rounded))
-                        .foregroundStyle(onTrack ? .green : .orange)
-                }
-                Spacer()
-            }
-
-            Text(message)
-                .font(.system(size: 13, design: .rounded))
-                .foregroundStyle(.primary.opacity(0.8))
-                .lineSpacing(3)
-
-            // Breakdown
-            VStack(alignment: .leading, spacing: 10) {
-                Label("WEALTH GROWTH BREAKDOWN", systemImage: "chart.line.uptrend.xyaxis")
-                    .font(.system(size: 10, weight: .bold))
-                    .foregroundStyle(.secondary)
-
-                HStack(spacing: 0) {
-                    VStack(alignment: .leading, spacing: 4) {
-                        Text("Invested").font(.system(size: 11, design: .rounded)).foregroundStyle(.secondary)
-                        Text(fmtL(totalInvested)).font(.system(size: 13, weight: .bold, design: .rounded))
-                    }
-                    Spacer()
-                    Image(systemName: "plus").font(.caption).foregroundStyle(.secondary)
-                    Spacer()
-                    VStack(alignment: .leading, spacing: 4) {
-                        Text("Growth (12%)").font(.system(size: 11, design: .rounded)).foregroundStyle(.secondary)
-                        Text(fmtCr(estimatedGrowth)).font(.system(size: 13, weight: .bold, design: .rounded)).foregroundStyle(.green)
-                    }
-                    Spacer()
-                    Image(systemName: "equal").font(.caption).foregroundStyle(.secondary)
-                    Spacer()
-                    VStack(alignment: .trailing, spacing: 4) {
-                        Text("Final Value").font(.system(size: 11, design: .rounded)).foregroundStyle(.secondary)
-                        Text(fmtCr(estimatedFinalValue)).font(.system(size: 13, weight: .bold, design: .rounded)).foregroundStyle(.blue)
-                    }
-                }
-                .padding(12)
-                .background(Color(.secondarySystemGroupedBackground), in: RoundedRectangle(cornerRadius: 10, style: .continuous))
-
-                Text("Your wealth grows \(wealthMultiplier)x through compounding over \(yearsToInvest) years.")
-                    .font(.system(size: 11, design: .rounded))
-                    .foregroundStyle(.secondary)
-                    .italic()
-            }
-
-            Divider()
-
-            // Stress test
-            VStack(alignment: .leading, spacing: 12) {
-                Label("SCENARIO STRESS TEST", systemImage: "bolt.shield.fill")
-                    .font(.system(size: 10, weight: .bold))
-                    .foregroundStyle(.secondary)
-
-                ScenarioImpactRow(
-                    title: "Medical Emergency",
-                    impact: "Withdraw ₹20L at age 50",
-                    loss: fmtCr(medicalImpactLoss),
-                    icon: "heart.text.square.fill",
-                    color: .red
-                )
-                ScenarioImpactRow(
-                    title: "Delayed Start",
-                    impact: "Starting 5 years later",
-                    loss: fmtCr(delayImpactLoss),
-                    icon: "clock.badge.exclamationmark.fill",
-                    color: .orange
-                )
-            }
-        }
-        .padding(16)
-        .background(
-            (onTrack ? Color.green : Color.orange).opacity(0.05),
-            in: RoundedRectangle(cornerRadius: 14, style: .continuous)
-        )
-        .overlay(
-            RoundedRectangle(cornerRadius: 14, style: .continuous)
-                .stroke((onTrack ? Color.green : Color.orange).opacity(0.18), lineWidth: 1)
-        )
-    }
-
-    private var totalInvested: Double { sipAmount * 12 * Double(yearsToInvest) }
-    private var estimatedFinalValue: Double {
-        let n = Double(max(1, yearsToInvest)) * 12; let r = 0.12 / 12
-        return sipAmount * ((pow(1 + r, n) - 1) / r) * (1 + r)
-    }
-    private var estimatedGrowth: Double { estimatedFinalValue - totalInvested }
-    private var wealthMultiplier: String { String(format: "%.0f", estimatedFinalValue / totalInvested) }
-    private var onTrack: Bool { estimatedFinalValue >= targetCorpus }
-    private var medicalImpactLoss: Double { 2_000_000 * (pow(1.12, 10) - 1) }
-    private var delayImpactLoss: Double {
-        let r = 0.12 / 12
-        let nF = Double(yearsToInvest) * 12; let nD = Double(max(0, yearsToInvest - 5)) * 12
-        return sipAmount * ((pow(1+r,nF)-1)/r)*(1+r) - sipAmount * ((pow(1+r,nD)-1)/r)*(1+r)
-    }
-    private var message: String {
-        onTrack
-        ? "At 12% returns, your monthly SIP of ₹\(Int(sipAmount)) is projected to reach \(fmtCr(estimatedFinalValue)), exceeding your goal of \(fmtCr(targetCorpus))."
-        : "To reach \(fmtCr(targetCorpus)) in \(yearsToInvest) years, you need ~₹\(Int(calculateRequiredSIP())) monthly. You are currently ₹\(Int(calculateRequiredSIP() - sipAmount)) short."
-    }
-    private func calculateRequiredSIP() -> Double {
-        let n = Double(max(1, yearsToInvest)) * 12; let r = 0.12 / 12
-        return targetCorpus * (r / (pow(1 + r, n) - 1)) / (1 + r)
-    }
-    private func fmtCr(_ v: Double) -> String {
-        v >= 10_000_000 ? String(format: "₹%.1f Cr", v/10_000_000) : v >= 100_000 ? String(format: "₹%.1f L", v/100_000) : "₹\(Int(v))"
-    }
-    private func fmtL(_ v: Double) -> String { String(format: "₹%.0f L", v/100_000) }
-}
 
 // MARK: - Scenario Impact Row (unchanged logic, tightened padding)
 struct ScenarioImpactRow: View {

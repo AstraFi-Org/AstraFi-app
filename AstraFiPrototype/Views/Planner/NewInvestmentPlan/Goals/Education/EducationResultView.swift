@@ -5,7 +5,6 @@ struct EducationResultView: View {
     
     var body: some View {
         InvestmentPlanResultView(input: input)
-            .navigationTitle("Education Plan")
     }
 }
 
