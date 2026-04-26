@@ -193,7 +193,6 @@ final class AppStateManager {
                 insights: assessmentInsights
             )
             
-            // Check if we already have an assessment for this month/year and update it
             let cal = Calendar.current
             if let index = profile.monthlyHealthAssessments.firstIndex(where: {
                 cal.isDate($0.date, equalTo: Date(), toGranularity: .month) &&
@@ -274,8 +273,6 @@ final class AppStateManager {
                 quantity: Double(entry.quantity),
                 livePrice: entry.livePrice
             )
-            
-            // Map transaction history
             inv.installments = entry.transactions.map { tx in
                 AstraInvestmentTransaction(
                     id: tx.id,
@@ -292,8 +289,6 @@ final class AppStateManager {
         let profileLoans = assessmentData.loanEntries.isEmpty ? (existing?.loans ?? []) : assessmentData.loanEntries.map { entry in
             let rawAmt  = cleanDouble(entry.amount)
             let rawRate = cleanDouble(entry.interestRate)
-            // The assessment field is labelled "Tenure (Months)" — store as-is.
-            // Do NOT multiply by 12; that would turn 15 months into 180 months.
             let tenureMonths = Int(entry.tenure) ?? 0
 
             var loan = AstraLoan(
@@ -306,13 +301,23 @@ final class AppStateManager {
                 loanStartDate: Date(),
                 loanTenureMonths: tenureMonths
             )
-            // Preserve the custom name the user typed (e.g. "My Car Loan").
-            // Falls back to loanType.rawValue in the UI via displayName.
             loan.loanName = entry.loanName.trimmingCharacters(in: .whitespacesAndNewlines)
             return loan
         }
         
-        let profileInsurances = assessmentData.insuranceEntries.isEmpty ? (existing?.insurances ?? []) : assessmentData.insuranceEntries.map { entry in
+        // Combine user's own insurance entries with dependent insurance entries so
+        // all policies are persisted to the profile and reflected in the report.
+        let allInsuranceEntries: [AssessmentInsuranceEntry] = {
+            var combined = assessmentData.insuranceEntries
+            for depEntry in assessmentData.dependentInsuranceEntries {
+                if !combined.contains(where: { $0.id == depEntry.id }) {
+                    combined.append(depEntry)
+                }
+            }
+            return combined
+        }()
+
+        let profileInsurances = allInsuranceEntries.isEmpty ? (existing?.insurances ?? []) : allInsuranceEntries.map { entry in
             var ins = AstraInsurance(
                 insuranceType: mapInsuranceType(entry.currentType),
                 provider: entry.insurer,
@@ -365,7 +370,6 @@ final class AppStateManager {
                     daycareProcedures: true,
                     networkHospitalsCount: 0
                 )
-                
             case .motor(let d):
                 ins.motorDetails = AstraMotorInsuranceDetails(
                     vehicleModel: d.vehicleModel,
@@ -374,7 +378,6 @@ final class AppStateManager {
                     roadsideAssistance: d.roadsideAssistance
                 )
             case .travel(_):
-                
                 break
             }
             
@@ -408,10 +411,8 @@ final class AppStateManager {
         let reportEmergency = basic.emergencyFundAmount
         
         let savingsRate = reportIncome > 0 ? ((reportIncome - reportExpenses) / reportIncome) * 100 : 0
-        
         let totalEMIs = profileLoans.reduce(0.0) { $0 + $1.calculatedEMI }
         let dti = reportIncome > 0 ? (totalEMIs / reportIncome) : 0
-        
         let efMonths = reportExpenses > 0 ? (reportEmergency / reportExpenses) : 0
         
         let report = AstraFinancialHealthReport(
@@ -440,7 +441,6 @@ final class AppStateManager {
         if var existingProfile = self.currentProfile {
             // MERGE LOGIC
             
-            // Merge Investments
             for newInv in newInvestments {
                 if !existingProfile.investments.contains(where: {
                     $0.investmentName.lowercased() == newInv.investmentName.lowercased() &&
@@ -450,7 +450,6 @@ final class AppStateManager {
                 }
             }
             
-            // Merge Loans
             for newLoan in newLoans {
                 if !existingProfile.loans.contains(where: {
                     abs($0.loanAmount - newLoan.loanAmount) < 1.0 &&
@@ -470,8 +469,6 @@ final class AppStateManager {
                 }
             }
             
-            // Update basic details but preserve existing fields if they were more detailed
-            // Update basic details only if non-zero values provided (prevents overwriting on skip)
             if incomeValue > 0 {
                 existingProfile.basicDetails.monthlyIncome = incomeValue
                 existingProfile.basicDetails.monthlyIncomeAfterTax = incomeValue
@@ -479,8 +476,6 @@ final class AppStateManager {
             if expensesValue > 0 {
                 existingProfile.basicDetails.monthlyExpenses = expensesValue
             }
-            // Allow setting EF to 0 if explicitly entered as "0", but usually cleanDouble returns 0 for empty too.
-            // For now, let's assume > 0 means update.
             if emergencyValue > 0 || (assessmentData.emergencyFundAmount == "0") {
                 existingProfile.basicDetails.emergencyFundAmount = emergencyValue
             }
@@ -503,7 +498,7 @@ final class AppStateManager {
             )
         }
         
-        recalculateFinancials() // Ensure all scores are updated with merged data
+        recalculateFinancials()
         
         Task {
             await syncMutualFundNAVs()
@@ -560,8 +555,6 @@ final class AppStateManager {
     
     // MARK: - Derived profile attributes from assessment data
 
-    /// Derives risk tolerance from savings behaviour and investment activity.
-    /// No hardcoded "medium" default — inferred from real data.
     private static func deriveRiskTolerance(savingsRate: Double, investmentCount: Int) -> AstraRiskTolerance {
         switch (savingsRate, investmentCount) {
         case (let s, let c) where s >= 0.35 && c >= 3: return .high
@@ -570,8 +563,6 @@ final class AppStateManager {
         }
     }
 
-    /// Derives investment horizon from age and number of dependents.
-    /// Younger users with few dependents → long-term; older or more dependents → shorter.
     private static func deriveInvestmentHorizon(age: Int, dependents: Int) -> AstraInvestmentHorizon {
         switch (age, dependents) {
         case (let a, _) where a < 35: return .longTerm
@@ -621,7 +612,6 @@ final class AppStateManager {
             emergencyFundMonths: efMonths
         )
         
-        // Sync goal currentAmount with dynamic total
         for i in 0..<profile.goals.count {
             let gid = profile.goals[i].id
             let linked = profile.investments.filter { $0.associatedGoalID == gid }
@@ -635,16 +625,12 @@ final class AppStateManager {
     func updateCashflow(_ cashflow: CashflowEntry) {
         if var profile = currentProfile {
             profile.cashflowData = cashflow
-            
-            // Sync totals with basic details
             profile.basicDetails.monthlyExpenses = cashflow.totalExpenses
-            
             let detailedIncome = cashflow.totalIncome
             if detailedIncome > 0 {
                 profile.basicDetails.monthlyIncome = detailedIncome
                 profile.basicDetails.monthlyIncomeAfterTax = detailedIncome
             }
-            
             currentProfile = profile
             recalculateFinancials()
         }
@@ -689,9 +675,7 @@ final class AppStateManager {
             profile.investments.append(investment)
             currentProfile = profile
             recalculateFinancials()
-            Task {
-                await syncMutualFundNAVs()
-            }
+            Task { await syncMutualFundNAVs() }
         }
     }
     
@@ -701,9 +685,7 @@ final class AppStateManager {
             profile.investments[index] = investment
             currentProfile = profile
             recalculateFinancials()
-            Task {
-                await syncMutualFundNAVs(force: true)
-            }
+            Task { await syncMutualFundNAVs(force: true) }
         }
     }
     
@@ -804,7 +786,6 @@ final class AppStateManager {
     func syncMutualFundNAVs(force: Bool = false) async {
         guard !isSyncing else { return }
         isSyncing = true
-        
         defer { isSyncing = false }
         
         await mfService.fetchMFData(force: force)
@@ -812,7 +793,6 @@ final class AppStateManager {
         guard var profile = currentProfile else { return }
         var updated = false
         
-        // Update Stock Prices
         let stockSymbols = profile.investments.compactMap { $0.investmentType == .stocks ? $0.symbol : nil }
         if !stockSymbols.isEmpty {
             let stockPrices = await StockService.shared.fetchLivePrices(symbols: stockSymbols)
@@ -828,7 +808,6 @@ final class AppStateManager {
         for i in 0..<profile.investments.count {
             let inv = profile.investments[i]
             
-            // 1. Update Market Price/NAV
             if inv.investmentType == .mutualFund {
                 if inv.schemeCode == nil {
                     if let code = mfService.findSchemeCode(for: inv.investmentName) {
@@ -844,11 +823,6 @@ final class AppStateManager {
                     updated = true
                 }
                 
-                // 2. Populate Missing Installments / Recalculate Units
-                // ✅ Bug Fix: Previously this only ran when installments were EMPTY.
-                // That meant if you had 1 installment from March, April's SIP was
-                // never added (guard was false). Now we check if a new installment
-                // is due: the expected count (months since startDate) vs actual count.
                 let expectedCount: Int = {
                     let cal = Calendar.current
                     var count = 0
@@ -873,7 +847,6 @@ final class AppStateManager {
                         )
                         profile.investments[i].installments = simulatedInstallments
                         profile.investments[i].units = sipUnits
-                        // Recalculate weighted-average purchase NAV
                         let totalPaid = simulatedInstallments.reduce(0.0) { $0 + $1.amount }
                         let totalUnits2 = simulatedInstallments.reduce(0.0) { $0 + $1.units }
                         if totalUnits2 > 0 {
@@ -881,7 +854,6 @@ final class AppStateManager {
                         }
                         updated = true
                     } else {
-                        // Lumpsum
                         if let histNAV = await mfService.fetchHistoricalNAV(schemeCode: code, date: inv.startDate) {
                             let units = inv.investmentAmount / histNAV
                             profile.investments[i].installments = [
@@ -896,9 +868,6 @@ final class AppStateManager {
             } else if inv.investmentType == .stocks {
                 guard let symbol = inv.symbol else { continue }
                 
-                // Live price is already updated in the batch call above
-                
-                // Populate Missing Installments for Stocks
                 if profile.investments[i].installments.isEmpty {
                     if inv.mode == .sip {
                         let (sipUnits, _, simulatedInstallments) = await StockService.shared.calculateHistoricalSIPUnits(
@@ -908,8 +877,6 @@ final class AppStateManager {
                         )
                         profile.investments[i].installments = simulatedInstallments
                         profile.investments[i].quantity = sipUnits
-
-                        // Bug 1 Fix: compute weighted-average entry price for SIP
                         let totalPaid = simulatedInstallments.reduce(0.0) { $0 + $1.amount }
                         let totalUnits = simulatedInstallments.reduce(0.0) { $0 + $1.units }
                         if totalUnits > 0 {
@@ -917,7 +884,6 @@ final class AppStateManager {
                         }
                         updated = true
                     } else {
-                        // Lumpsum
                         let (units, _, simulatedInstallments) = await StockService.shared.calculateLumpsumUnits(
                             symbol: symbol,
                             amount: inv.investmentAmount,
@@ -925,8 +891,6 @@ final class AppStateManager {
                         )
                         profile.investments[i].installments = simulatedInstallments
                         profile.investments[i].quantity = units
-
-                        // Bug 1 Fix: set purchaseNAV for lumpsum from the transaction NAV
                         if let tx = simulatedInstallments.first {
                             profile.investments[i].purchaseNAV = tx.nav
                         }
@@ -936,12 +900,11 @@ final class AppStateManager {
             }
         }
     
-            if updated {
-                await MainActor.run {
-                    self.currentProfile = profile
-                    self.recalculateFinancials()
-                }
+        if updated {
+            await MainActor.run {
+                self.currentProfile = profile
+                self.recalculateFinancials()
             }
         }
-    
+    }
 }

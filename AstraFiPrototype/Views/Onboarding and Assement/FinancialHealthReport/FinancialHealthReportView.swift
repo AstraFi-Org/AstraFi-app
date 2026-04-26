@@ -98,7 +98,6 @@ struct FinancialHealthReportView: View {
             InvestmentStatsGrid(total: investCount,
                                 atRisk: insights.investmentBreakdown.highRiskCount)
             .padding(.horizontal, 20).padding(.bottom, 10)
-//            .contentShape(Rectangle()).onTapGesture { riskSheet = true }
 
             DisclosureLink("How can I reduce investment risk?") { riskSheet = true }
                 .padding(.horizontal, 20).padding(.bottom, 24)
@@ -124,10 +123,10 @@ struct FinancialHealthReportView: View {
             ReportSectionTitle("Insurance Coverage")
             ReportInsuranceCard(
                 adultDependents: profile?.basicDetails.adultDependents ?? Int(data?.numberOfDependents ?? "") ?? 1,
-                hasHealth: profile?.insurances.contains(where: { $0.insuranceType == .health })
-                    ?? (data?.insuranceEntries.contains { $0.currentType == .health } ?? false),
-                hasLife: profile?.insurances.contains(where: { [.life, .termLifeInsurance, .ulip].contains($0.insuranceType) })
-                    ?? (data?.insuranceEntries.contains { [.life, .term, .ulip].contains($0.currentType) } ?? false)
+                hasHealth: (profile?.insurances.contains(where: { $0.insuranceType == .health }) == true)
+                    || (data?.insuranceEntries.contains { $0.currentType == .health } == true),
+                hasLife: (profile?.insurances.contains(where: { [.life, .termLifeInsurance, .ulip].contains($0.insuranceType) }) == true)
+                    || (data?.insuranceEntries.contains { [.life, .term, .ulip].contains($0.currentType) } == true)
             )
             .padding(.horizontal, 20).padding(.bottom, 6)
             .contentShape(Rectangle())
@@ -192,9 +191,6 @@ struct FinancialHealthReportView: View {
         .sheet(isPresented: $showingAddGoal) { AddGoalView() }
     }
 }
-
-
-
 
 // MARK: - Preview
 #Preview {

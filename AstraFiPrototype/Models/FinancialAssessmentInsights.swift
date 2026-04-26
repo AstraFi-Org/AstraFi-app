@@ -118,7 +118,16 @@ struct FinancialAssessmentInsights: Hashable, Codable {
         let investmentBreakdown = buildInvestmentBreakdown(from: sourceSnapshots)
 
         let loanCount = profile?.loans.count ?? data?.loanEntries.count ?? 0
-        let insuranceCount = profile?.insurances.count ?? data?.insuranceEntries.count ?? 0
+
+        // Insurance count: prefer the larger of profile and assessment data.
+        // Assessment data is the source of truth when navigating to the report
+        // directly from the assessment flow (profile may not yet include the
+        // entries the user just filled in). Also include dependentInsuranceEntries
+        // so dependent policies are reflected in the report.
+        let profileInsuranceCount = profile?.insurances.count ?? 0
+        let dataInsuranceCount = (data?.insuranceEntries.count ?? 0) +
+                                 (data?.dependentInsuranceEntries.count ?? 0)
+        let insuranceCount = dataInsuranceCount > 0 ? dataInsuranceCount : profileInsuranceCount
 
         let debtRatio = computeDebtToIncomeRatio(profile: profile, data: data, grossIncome: grossIncome)
         let fixedIncome = profile?.basicDetails.incomeType == .fixed || data?.incomeType == .fixed
@@ -394,7 +403,7 @@ struct FinancialAssessmentInsights: Hashable, Codable {
             }
         }
 
-        _ = grossIncome // Keep available for future policy variants while preserving function signature.
+        _ = grossIncome
         return cards
     }
 
@@ -451,7 +460,6 @@ struct FinancialAssessmentInsights: Hashable, Codable {
             case .low:
                 low += snapshot.amount
             }
-
             if snapshot.isLowRiskLiquid {
                 lowLiquid += snapshot.amount
             }
@@ -531,16 +539,12 @@ struct FinancialAssessmentInsights: Hashable, Codable {
         }
 
         private static func isLowRiskLiquid(type: AstraInvestmentType, name: String) -> Bool {
-            if [.deposits, .bonds].contains(type) {
-                return true
-            }
+            if [.deposits, .bonds].contains(type) { return true }
             return containsAny(name, in: lowRiskLiquidKeywords)
         }
 
         private static func isLowRiskLiquid(type: AssessmentInvestmentEntry.InvestmentType, name: String) -> Bool {
-            if type == .bonds {
-                return true
-            }
+            if type == .bonds { return true }
             return containsAny(name, in: lowRiskLiquidKeywords)
         }
 
