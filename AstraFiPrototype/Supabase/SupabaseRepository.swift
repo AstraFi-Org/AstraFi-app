@@ -1154,4 +1154,8 @@ final class SupabaseRepository {
         profile.monthlyCashflowSnapshots = snapshots
         return profile
     }
+    func deleteSavedPlan(_ planId: UUID) async throws {
+        try await supabase.from("saved_plans")
+            .delete().eq("id", value: planId.uuidString).execute()
+    }
 }

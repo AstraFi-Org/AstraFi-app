@@ -190,6 +190,32 @@ final class AppStateManager {
         }
     }
     
+    func followPlan(_ plan: InvestmentPlanModel) {
+        if let index = savedPlans.firstIndex(where: { $0.id == plan.id }) {
+            savedPlans[index].isFollowed = true
+            Task {
+                if let session = try? await supabase.auth.session {
+                    try? await SupabaseRepository.shared.updatePlanFollowStatus(
+                        planId: plan.id, isFollowed: true
+                    )
+                }
+            }
+        }
+    }
+
+    func unfollowPlan(_ plan: InvestmentPlanModel) {
+        if let index = savedPlans.firstIndex(where: { $0.id == plan.id }) {
+            savedPlans[index].isFollowed = false
+            Task {
+                if let session = try? await supabase.auth.session {
+                    try? await SupabaseRepository.shared.updatePlanFollowStatus(
+                        planId: plan.id, isFollowed: false
+                    )
+                }
+            }
+        }
+    }
+    
     func saveAssessmentToHistory(score: Int, status: String, insights: [String], assessmentInsights: FinancialAssessmentInsights? = nil) {
         if var profile = currentProfile {
             let newAssessment = AstraHealthAssessment(
@@ -228,18 +254,26 @@ final class AppStateManager {
         isLoading = true
         do {
             let session = try await supabase.auth.session
-            isAuthenticated = true
-            setupEmptyProfile(name: session.user.email ?? "User")
+            
             if let profile = try? await SupabaseRepository.shared.fetchFullProfile(userId: session.user.id) {
-                        self.currentProfile = profile
-                        recalculateFinancials()
-                    }
+              
+                isAuthenticated = true
+                self.currentProfile = profile
+                recalculateFinancials()
+                showDashboard = true
+            } else {
+                try? await supabase.auth.signOut()
+            }
+            
+            if let plans = try? await SupabaseRepository.shared.fetchSavedPlans(userId: session.user.id) {
+                self.savedPlans = plans
+            }
+            
         } catch {
             // No active session — stay on onboarding/auth
         }
         isLoading = false
     }
-
     func signUp(name: String, email: String, password: String) async {
         isAuthLoading = true
         authError = nil
@@ -278,19 +312,28 @@ final class AppStateManager {
                 email: email,
                 password: password
             )
-            setupEmptyProfile(name: "")
-            isAuthenticated = true
-            if let userId = try? await supabase.auth.session.user.id,
-               let profile = try? await SupabaseRepository.shared.fetchFullProfile(userId: userId) {
+            
+            if let profile = try? await SupabaseRepository.shared.fetchFullProfile(userId: session.user.id) {
+                
                 self.currentProfile = profile
                 recalculateFinancials()
+                isAuthenticated = true
+                showDashboard = true
+            } else {
+               
+                setupEmptyProfile(name: session.user.email ?? "User")
+                isAuthenticated = true
             }
+            
+            if let plans = try? await SupabaseRepository.shared.fetchSavedPlans(userId: session.user.id) {
+                self.savedPlans = plans
+            }
+            
         } catch {
             authError = error.localizedDescription
         }
         isAuthLoading = false
     }
-
     func signOut() async {
         do {
             try await supabase.auth.signOut()
@@ -520,6 +563,8 @@ final class AppStateManager {
         
         if var existingProfile = self.currentProfile {
             // MERGE LOGIC
+            existingProfile.signUp.email = assessmentData.email.isEmpty
+                    ? existingProfile.signUp.email : assessmentData.email
             
             // Merge Investments
             for newInv in newInvestments {
@@ -719,34 +764,6 @@ final class AppStateManager {
         }
         
         self.currentProfile = profile
-    }
-    
-    func followPlan(_ plan: InvestmentPlanModel) {
-        if let index = savedPlans.firstIndex(where: { $0.id == plan.id }) {
-            savedPlans[index].isFollowed = true
-            Task {
-                if let session = try? await supabase.auth.session {
-                    try? await SupabaseRepository.shared.updatePlanFollowStatus(
-                        planId: plan.id,
-                        isFollowed: true
-                    )
-                }
-            }
-        }
-    }
-
-    func unfollowPlan(_ plan: InvestmentPlanModel) {
-        if let index = savedPlans.firstIndex(where: { $0.id == plan.id }) {
-            savedPlans[index].isFollowed = false
-            Task {
-                if let session = try? await supabase.auth.session {
-                    try? await SupabaseRepository.shared.updatePlanFollowStatus(
-                        planId: plan.id,
-                        isFollowed: false
-                    )
-                }
-            }
-        }
     }
     
     func updateCashflow(_ cashflow: CashflowEntry) {
