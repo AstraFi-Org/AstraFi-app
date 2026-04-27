@@ -8,6 +8,7 @@
 import SwiftUI
 
 struct InsuranceAdviceSheet: View {
+    @Environment(\.dismiss) private var dismiss
     let adultDependents: Int; let concerns: [AssessmentConcern]
     @State private var myAge = ""; @State private var myDisease = "None"
     @State private var depAges: [String] = []; @State private var depDiseases: [String] = []
@@ -111,7 +112,8 @@ struct InsuranceAdviceSheet: View {
     @State private var selectedInsurance: InsuranceTypeInfo?
 
     var body: some View {
-        List {
+        NavigationStack {
+            List {
 
                 if !concerns.isEmpty {
                     Section(header: Text("Action Items").font(.footnote).textCase(.uppercase)) {
@@ -186,13 +188,15 @@ struct InsuranceAdviceSheet: View {
                 }
 
                 Section {
-                    HStack {
-                        Spacer()
-                        Text("Explore Insurance Plans").font(.headline).fontWeight(.semibold).foregroundStyle(.white)
-                        Spacer()
+                    Button(action: { dismiss() }) {
+                        HStack {
+                            Spacer()
+                            Text("Explore Insurance Plans").font(.headline).fontWeight(.semibold).foregroundStyle(.white)
+                            Spacer()
+                        }
+                        .padding(.vertical, 14).background(Color.blue)
+                        .clipShape(RoundedRectangle(cornerRadius: 12, style: .continuous))
                     }
-                    .padding(.vertical, 14).background(Color.blue)
-                    .clipShape(RoundedRectangle(cornerRadius: 12, style: .continuous))
                     .listRowBackground(Color.clear)
                     .listRowInsets(EdgeInsets(top: 8, leading: 16, bottom: 16, trailing: 16))
                 }
@@ -201,16 +205,10 @@ struct InsuranceAdviceSheet: View {
             .background(Color(.systemGroupedBackground).opacity(0.5))
             .navigationTitle("Insurance Recommendations")
             .navigationBarTitleDisplayMode(.inline)
-            .alert(selectedInsurance?.title ?? "", isPresented: Binding(
-                get: { selectedInsurance != nil },
-                set: { if !$0 { selectedInsurance = nil } }
-            )) {
-                Button("OK", role: .cancel) { selectedInsurance = nil }
-            } message: {
-                if let ins = selectedInsurance {
-                    Text(insuranceAlertMessage(for: ins))
-                }
+            .sheet(item: $selectedInsurance) { type in
+                InsuranceDetailModal(type: type)
             }
+            .toolbar { ToolbarItem(placement: .topBarTrailing) { Button("Done") { dismiss() }.fontWeight(.semibold) } }
             .onAppear {
                 if depAges.count < adultDependents {
                     depAges = Array(repeating: "", count: adultDependents)
@@ -218,18 +216,7 @@ struct InsuranceAdviceSheet: View {
                     depRelations = Array(repeating: "", count: adultDependents)
                 }
             }
-    }
-
-    private func insuranceAlertMessage(for ins: InsuranceTypeInfo) -> String {
-        """
-        \(ins.description)
-
-        Cost: \(ins.cost)
-        Coverage: \(ins.coverage)
-        Who should buy: \(ins.whoShouldBuy)
-
-        \(ins.deepExplanation.whyImportant)
-        """
+        }
     }
 }
 
@@ -299,6 +286,76 @@ struct HighlightRow: View {
             Circle().fill(.secondary.opacity(0.5)).frame(width: 4, height: 4).padding(.top, 7)
             Text("\(title):").font(.caption).bold().foregroundStyle(.secondary)
             Text(value).font(.caption).foregroundStyle(.primary)
+        }
+    }
+}
+
+struct InsuranceDetailModal: View {
+    let type: InsuranceTypeInfo
+    @Environment(\.dismiss) private var dismiss
+
+    var body: some View {
+        NavigationView {
+            ScrollView {
+                VStack(alignment: .leading, spacing: 24) {
+                    // Header
+                    VStack(alignment: .leading, spacing: 12) {
+                        HStack(spacing: 16) {
+                            Image(systemName: type.icon)
+                                .font(.largeTitle)
+                                .foregroundStyle(type.color)
+                                .frame(width: 64, height: 64)
+                                .background(type.color.opacity(0.1))
+                                .clipShape(RoundedRectangle(cornerRadius: 16, style: .continuous))
+
+                            VStack(alignment: .leading, spacing: 4) {
+                                Text(type.title)
+                                    .font(.title2).bold()
+                                Text(type.isEssential ? "Essential Protection" : "Recommended Coverage")
+                                    .font(.subheadline).foregroundStyle(type.color)
+                            }
+                        }
+                    }
+                    .padding(.top, 10)
+
+                    Divider()
+
+                    // Deep Explanation Sections
+                    DetailSection(title: "What exactly it covers", content: type.deepExplanation.whatItCovers)
+                    DetailSection(title: "Real-life use case", content: type.deepExplanation.useCase, isItalic: true)
+                    DetailSection(title: "Why it is important", content: type.deepExplanation.whyImportant)
+
+                    VStack(alignment: .leading, spacing: 16) {
+                        Text("Pros").font(.headline)
+                        ForEach(type.deepExplanation.pros, id: \.self) { pro in
+                            HStack(spacing: 10) {
+                                Image(systemName: "checkmark.circle.fill").foregroundStyle(Color(hex: "#30D158"))
+                                Text(pro).font(.subheadline)
+                            }
+                        }
+                    }
+
+                    VStack(alignment: .leading, spacing: 16) {
+                        Text("Limitations").font(.headline)
+                        ForEach(type.deepExplanation.limitations, id: \.self) { limit in
+                            HStack(spacing: 10) {
+                                Image(systemName: "minus.circle.fill").foregroundStyle(.secondary)
+                                Text(limit).font(.subheadline)
+                            }
+                        }
+                    }
+
+                    Spacer(minLength: 40)
+                }
+                .padding(24)
+            }
+            .navigationTitle("Insurance Details")
+            .navigationBarTitleDisplayMode(.inline)
+            .toolbar {
+                ToolbarItem(placement: .topBarTrailing) {
+                    Button("Close") { dismiss() }
+                }
+            }
         }
     }
 }

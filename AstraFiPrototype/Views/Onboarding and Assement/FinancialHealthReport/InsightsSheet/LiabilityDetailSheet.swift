@@ -8,6 +8,7 @@
 import SwiftUI
 
 struct LiabilityDetailSheet: View {
+    @Environment(\.dismiss) private var dismiss
     let insights: FinancialAssessmentInsights
     let concerns: [AssessmentConcern]
 
@@ -127,7 +128,8 @@ struct LiabilityDetailSheet: View {
     }
 
     var body: some View {
-        List {
+        NavigationStack {
+            List {
 
                 Section(header: Text("Key Metrics").font(.footnote).textCase(.uppercase)) {
                     // Active loans
@@ -214,28 +216,11 @@ struct LiabilityDetailSheet: View {
             .background(Color(.systemGroupedBackground).opacity(0.5))
             .navigationTitle("Liability & Debt Health")
             .navigationBarTitleDisplayMode(.inline)
-            .alert(selectedLoan?.title ?? "", isPresented: Binding(
-                get: { selectedLoan != nil },
-                set: { if !$0 { selectedLoan = nil } }
-            )) {
-                Button("OK", role: .cancel) { selectedLoan = nil }
-            } message: {
-                if let loan = selectedLoan {
-                    Text(loanAlertMessage(for: loan))
-                }
+            .sheet(item: $selectedLoan) { type in
+                LoanDetailModal(type: type)
             }
-    }
-    private func loanAlertMessage(for loan: LoanTypeInfo) -> String {
-        """
-        \(loan.description)
-
-        Interest: \(loan.interestRate)
-        Tenure: \(loan.tenure)
-        Risk: \(loan.riskLevel)
-        Purpose: \(loan.purpose)
-
-        \(loan.deepExplanation.whenToTakeVsAvoid)
-        """
+            .toolbar { ToolbarItem(placement: .topBarTrailing) { Button("Done") { dismiss() }.fontWeight(.semibold) } }
+        }
     }
 }
 
@@ -306,6 +291,77 @@ struct LoanHighlightRow: View {
             Circle().fill(.secondary.opacity(0.5)).frame(width: 4, height: 4).padding(.top, 7)
             Text("\(title):").font(.caption).bold().foregroundStyle(.secondary)
             Text(value).font(.caption).foregroundStyle(.primary)
+        }
+    }
+}
+
+struct LoanDetailModal: View {
+    let type: LoanTypeInfo
+    @Environment(\.dismiss) private var dismiss
+
+    var body: some View {
+        NavigationView {
+            ScrollView {
+                VStack(alignment: .leading, spacing: 24) {
+                    // Header
+                    VStack(alignment: .leading, spacing: 12) {
+                        HStack(spacing: 16) {
+                            Image(systemName: type.icon)
+                                .font(.largeTitle)
+                                .foregroundStyle(type.tagColor)
+                                .frame(width: 64, height: 64)
+                                .background(type.tagColor.opacity(0.1))
+                                .clipShape(RoundedRectangle(cornerRadius: 16, style: .continuous))
+
+                            VStack(alignment: .leading, spacing: 4) {
+                                Text(type.title)
+                                    .font(.title2).bold()
+                                Text(type.visualTag)
+                                    .font(.subheadline).foregroundStyle(type.tagColor)
+                            }
+                        }
+                    }
+                    .padding(.top, 10)
+
+                    Divider()
+
+                    DetailSection(title: "What this loan is used for", content: type.deepExplanation.whatItIsUsedFor)
+                    DetailSection(title: "Typical interest rates", content: type.deepExplanation.typicalInterestRates)
+                    DetailSection(title: "Real-life example", content: type.deepExplanation.realLifeExample, isItalic: true)
+
+                    VStack(alignment: .leading, spacing: 16) {
+                        Text("Pros").font(.headline)
+                        ForEach(type.deepExplanation.pros, id: \.self) { pro in
+                            HStack(spacing: 10) {
+                                Image(systemName: "checkmark.circle.fill").foregroundStyle(Color(hex: "#30D158"))
+                                Text(pro).font(.subheadline)
+                            }
+                        }
+                    }
+
+                    VStack(alignment: .leading, spacing: 16) {
+                        Text("Risks / Hidden Costs").font(.headline)
+                        ForEach(type.deepExplanation.risks, id: \.self) { risk in
+                            HStack(spacing: 10) {
+                                Image(systemName: "exclamationmark.triangle.fill").foregroundStyle(Color(hex: "#FF9F0A"))
+                                Text(risk).font(.subheadline)
+                            }
+                        }
+                    }
+
+                    DetailSection(title: "When to take it vs avoid it", content: type.deepExplanation.whenToTakeVsAvoid)
+
+                    Spacer(minLength: 40)
+                }
+                .padding(24)
+            }
+            .navigationTitle("Loan Details")
+            .navigationBarTitleDisplayMode(.inline)
+            .toolbar {
+                ToolbarItem(placement: .topBarTrailing) {
+                    Button("Close") { dismiss() }
+                }
+            }
         }
     }
 }
