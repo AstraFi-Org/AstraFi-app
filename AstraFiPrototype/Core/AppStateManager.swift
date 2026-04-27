@@ -821,9 +821,9 @@ final class AppStateManager {
                             monthKey: monthKey,
                             userId: session.user.id
                         )
-                        print("✅ Cashflow saved to Supabase")
+                        print("Cashflow saved to Supabase")
                     } catch {
-                        print("❌ Cashflow save failed: \(error)")
+                        print("Cashflow save failed: \(error)")
                     }
                 }
             }
@@ -1144,7 +1144,6 @@ final class AppStateManager {
             } else if inv.investmentType == .stocks {
                 guard let symbol = inv.symbol else { continue }
                 
-                // Live price is already updated in the batch call above
                 
                 // Populate Missing Installments for Stocks
                 if profile.investments[i].installments.isEmpty {
@@ -1173,7 +1172,6 @@ final class AppStateManager {
                         profile.investments[i].installments = simulatedInstallments
                         profile.investments[i].quantity = units
 
-                        // Bug 1 Fix: set purchaseNAV for lumpsum from the transaction NAV
                         if let tx = simulatedInstallments.first {
                             profile.investments[i].purchaseNAV = tx.nav
                         }

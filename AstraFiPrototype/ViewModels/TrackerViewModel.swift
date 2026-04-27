@@ -49,15 +49,17 @@ class TrackerViewModel {
 
     func savePlan(planName: String, input: InvestmentPlanInputModel) {
         guard !savedPlanNames.contains(planName) else { return }
+        let df = DateFormatter()
+        df.dateStyle = .medium
         let newPlan = InvestmentPlanModel(
             name: planName,
-            dateSaved: "Today",
+            dateSaved: df.string(from: Date()),
             targetGoal: input.purposeOfInvestment,
             input: input
         )
         yourPlans.append(newPlan)
         savedPlanNames.insert(planName)
-        appState?.savePlan(newPlan)   // ← ADD THIS LINE
+        appState?.savePlan(newPlan)
     }
 
 
@@ -98,6 +100,16 @@ class TrackerViewModel {
     }
     func syncWithProfile(_ profile: AstraUserProfile?) {
         guard let profile = profile else { return }
+
+        // Sync saved plans from AppStateManager so they survive logout/login
+        if let appState = appState {
+            let latestPlans = appState.savedPlans
+            DispatchQueue.main.async {
+                self.yourPlans = latestPlans
+                self.savedPlanNames = Set(latestPlans.map { $0.name })
+                self.followedPlanNames = Set(latestPlans.filter { $0.isFollowed }.map { $0.name })
+            }
+        }
 
         let df = DateFormatter()
         df.dateStyle = .medium

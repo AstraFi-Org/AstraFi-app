@@ -33,10 +33,17 @@ struct TrackerView: View {
         .navigationBarTitleDisplayMode(.large)
         .background(AppTheme.appBackground(for: colorScheme))
         .onAppear {
+            viewModel.appState = appState
             viewModel.syncWithProfile(appState.currentProfile)
         }
         .onChange(of: appState.currentProfile) { oldProfile, newProfile in
+            viewModel.appState = appState
             viewModel.syncWithProfile(newProfile)
+        }
+        .onChange(of: appState.savedPlans) { _, newPlans in
+            viewModel.yourPlans = newPlans
+            viewModel.savedPlanNames = Set(newPlans.map { $0.name })
+            viewModel.followedPlanNames = Set(newPlans.filter { $0.isFollowed }.map { $0.name })
         }
     }
 }
