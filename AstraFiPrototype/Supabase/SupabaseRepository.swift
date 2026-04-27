@@ -411,7 +411,7 @@ final class SupabaseRepository {
             riskTolerance: profile.basicDetails.riskTolerance.rawValue,
             investmentHorizon: profile.basicDetails.investmentHorizon.rawValue,
             isSetuConnected: profile.isSetuConnected
-        )).execute()
+        ), onConflict: "user_id").execute()
 
         try await supabase.from("assets").upsert(AssetsRow(
             user_id: uid,
@@ -426,7 +426,7 @@ final class SupabaseRepository {
             jewelleryAmount: profile.assets.jewelleryAmount,
             luxuryBelongingsAmount: profile.assets.luxuryBelongingsAmount,
             otherAssetsAmount: profile.assets.otherAssetsAmount
-        )).execute()
+        ), onConflict: "user_id").execute()
 
         try await supabase.from("liabilities").upsert(LiabilitiesRow(
             user_id: uid,
@@ -436,7 +436,7 @@ final class SupabaseRepository {
             educationLoanAmount: profile.liabilities.educationLoanAmount,
             otherLoanAmount: profile.liabilities.otherLoanAmount,
             otherDebtAmount: profile.liabilities.otherDebtAmount
-        )).execute()
+        ), onConflict: "user_id").execute()
     }
 
     // MARK: - Goals
@@ -1024,7 +1024,7 @@ final class SupabaseRepository {
             savingsAccount: allocation.savingsAccount,
             sweepInFD: allocation.sweepInFD,
             isAllocatedByUser: allocation.isAllocatedByUser
-        )).execute()
+        ), onConflict: "user_id").execute()
     }
 
     // MARK: - Saved Plans
@@ -1153,5 +1153,9 @@ final class SupabaseRepository {
         )
         profile.monthlyCashflowSnapshots = snapshots
         return profile
+    }
+    func deleteSavedPlan(_ planId: UUID) async throws {
+        try await supabase.from("saved_plans")
+            .delete().eq("id", value: planId.uuidString).execute()
     }
 }

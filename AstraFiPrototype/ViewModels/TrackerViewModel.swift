@@ -6,6 +6,7 @@ import Observation
 
 @Observable
 class TrackerViewModel {
+    var appState: AppStateManager?
 
     var netWorth: Double = 0
     var growthAmount: Double = 0
@@ -44,47 +45,57 @@ class TrackerViewModel {
     var yourPlans: [InvestmentPlanModel] = []
     var savedPlanNames: Set<String> = []
     var followedPlanNames: Set<String> = []
-    var appState: AppStateManager?
+   
 
     func savePlan(planName: String, input: InvestmentPlanInputModel) {
-
         guard !savedPlanNames.contains(planName) else { return }
-
-        let newPlan = InvestmentPlanModel(name: planName, dateSaved: "Today", targetGoal: input.purposeOfInvestment, input: input)
+        let newPlan = InvestmentPlanModel(
+            name: planName,
+            dateSaved: "Today",
+            targetGoal: input.purposeOfInvestment,
+            input: input
+        )
         yourPlans.append(newPlan)
         savedPlanNames.insert(planName)
-        appState?.savePlan(newPlan)
-        
+        appState?.savePlan(newPlan)   // ← ADD THIS LINE
     }
 
+
     func unsavePlan(planName: String) {
+        if let plan = yourPlans.first(where: { $0.name == planName }) {
+            appState?.savedPlans.removeAll { $0.id == plan.id }
+            Task {
+                try? await SupabaseRepository.shared.deleteSavedPlan(plan.id)
+            }
+        }
         yourPlans.removeAll { $0.name == planName }
         savedPlanNames.remove(planName)
     }
 
     func followPlan(planName: String, input: InvestmentPlanInputModel) {
-
         guard !followedPlanNames.contains(planName) else { return }
-
         let targetAmount = input.targetAmount
         let targetString = targetAmount.contains("₹") ? targetAmount : "₹" + targetAmount
         let goalName = input.purposeOfInvestment
-        let newGoal = Goal(name: goalName.isEmpty ? "New Goal" : goalName, associatedFund: planName, targetAmount: targetString, collectedAmount: "₹0", timePeriod: input.timePeriod + " Years", progress: 0)
+        let newGoal = Goal(name: goalName.isEmpty ? "New Goal" : goalName,
+                           associatedFund: planName, targetAmount: targetString,
+                           collectedAmount: "₹0", timePeriod: input.timePeriod + " Years", progress: 0)
         goals.append(newGoal)
         followedPlanNames.insert(planName)
+        // Persist follow status to Supabase
         if let plan = yourPlans.first(where: { $0.name == planName }) {
-                appState?.followPlan(plan)
-            }
+            appState?.followPlan(plan)   // ← ADD THIS LINE
+        }
     }
+
 
     func unfollowPlan(planName: String) {
         goals.removeAll { $0.associatedFund == planName }
         followedPlanNames.remove(planName)
         if let plan = yourPlans.first(where: { $0.name == planName }) {
-                appState?.unfollowPlan(plan)
-            }
+            appState?.unfollowPlan(plan)   // ← ADD THIS LINE
+        }
     }
-
     func syncWithProfile(_ profile: AstraUserProfile?) {
         guard let profile = profile else { return }
 
