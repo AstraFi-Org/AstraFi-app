@@ -542,7 +542,7 @@ struct LifestyleDetailsSheet: View {
                             }
                             .padding()
                             .frame(maxWidth: .infinity, alignment: .leading)
-                            .background(Color(.secondarySystemGroupedBackground))
+                            .background(AppTheme.elevatedCardBackground)
                             .cornerRadius(12)
                         }
                     }
@@ -552,7 +552,7 @@ struct LifestyleDetailsSheet: View {
                 }
                 .padding(.top, 24)
             }
-            .background(Color(.systemGroupedBackground))
+            .background(AppTheme.darkBackground)
             .toolbar {
                 ToolbarItem(placement: .topBarTrailing) {
                     Button("Done") { dismiss() }
@@ -878,7 +878,7 @@ struct EducationExpenseSheet: View {
                 }
                 .padding(.top, 24)
             }
-            .background(Color(.systemGroupedBackground))
+            .background(AppTheme.darkBackground)
             .toolbar {
                 ToolbarItem(placement: .topBarTrailing) {
                     Button("Done") { dismiss() }
@@ -929,7 +929,7 @@ struct EducationExpenseSheet: View {
 // MARK: - Preview
 #Preview {
     ZStack {
-        Color(.systemGroupedBackground).ignoresSafeArea()
+        AppTheme.darkBackground.ignoresSafeArea()
         EducationQuestionnaire(profileAge: 28, goalAccentColor: .indigo)
             .padding(.top, 16)
     }

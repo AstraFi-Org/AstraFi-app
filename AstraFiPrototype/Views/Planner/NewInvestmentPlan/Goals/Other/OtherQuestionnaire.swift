@@ -43,7 +43,7 @@ struct OtherQuestionnaire: View {
                         TextField("e.g. Dream Hobby, World Tour", text: $input.goalName)
                             .font(.system(size: 16, weight: .semibold, design: .rounded))
                             .padding(12)
-                            .background(Color(.secondarySystemGroupedBackground), in: RoundedRectangle(cornerRadius: 10))
+                            .background(AppTheme.elevatedCardBackground, in: RoundedRectangle(cornerRadius: 10))
                     }
                 }
             }
@@ -257,7 +257,7 @@ struct OtherInsightCard: View {
 
 #Preview {
     ZStack {
-        Color(.systemGroupedBackground).ignoresSafeArea()
+        AppTheme.darkBackground.ignoresSafeArea()
         ScrollView {
             OtherQuestionnaire(goalAccentColor: .blue)
                 .padding()

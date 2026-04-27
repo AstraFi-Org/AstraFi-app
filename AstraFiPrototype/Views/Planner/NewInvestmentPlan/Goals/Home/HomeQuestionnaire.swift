@@ -493,7 +493,7 @@ struct HomePriceHikeSheet: View {
                             factorItem(icon: "chart.bar.fill", title: "General Inflation", desc: "Rising cost of cement, steel, and labor.")
                         }
                         .padding()
-                        .background(Color(.secondarySystemBackground), in: RoundedRectangle(cornerRadius: 16))
+                        .background(AppTheme.elevatedCardBackground, in: RoundedRectangle(cornerRadius: 16))
                     }
                     .padding(.horizontal)
                     
@@ -571,7 +571,7 @@ struct HomePriceHikeSheet: View {
 
 #Preview {
     ZStack {
-        Color(.systemGroupedBackground).ignoresSafeArea()
+        AppTheme.darkBackground.ignoresSafeArea()
         ScrollView {
             HomeQuestionnaire(goalAccentColor: .blue)
                 .padding()

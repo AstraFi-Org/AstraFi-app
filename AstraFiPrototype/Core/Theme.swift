@@ -32,27 +32,31 @@ struct AppTheme {
     // ── Legacy aliases (no breaks)
     static let primaryTeal         = auraIndigo
     static let primaryGreen        = auraGreen
-    static let darkTealBackground  = Color(hex: "#0A0A0F")
+    static let darkTealBackground  = Color(hex: "#111114")
 
     // ── Backgrounds
+    /// Page-level background: very dark in dark mode, iOS grouped gray in light mode
+    static let darkBackground = Color(hex: "#111114")
+    static let lightBackground = Color(hex: "#F2F2F7")
+
     static func appBackground(for colorScheme: ColorScheme) -> AnyView {
         if colorScheme == .dark {
-            return AnyView(Color(hex: "#0A0A0F").ignoresSafeArea())
+            return AnyView(darkBackground.ignoresSafeArea())
         } else {
-            return AnyView(Color(hex: "#F2F2F7").ignoresSafeArea())
+            return AnyView(lightBackground.ignoresSafeArea())
         }
     }
 
-    // ── Adaptive card surface
+    // ── Adaptive card surface (matches screenshot: dark = #1C1C1E, light = white)
     static let cardBackground = Color(UIColor { t in
         t.userInterfaceStyle == .dark
-            ? UIColor(white: 0.13, alpha: 1)
+            ? UIColor(red: 0x1C/255.0, green: 0x1C/255.0, blue: 0x1E/255.0, alpha: 1)  // #1C1C1E
             : UIColor.white
     })
 
     static let elevatedCardBackground = Color(UIColor { t in
         t.userInterfaceStyle == .dark
-            ? UIColor(white: 0.18, alpha: 1)
+            ? UIColor(red: 0x2C/255.0, green: 0x2C/255.0, blue: 0x2E/255.0, alpha: 1)  // #2C2C2E
             : UIColor(white: 0.99, alpha: 1)
     })
 
@@ -80,7 +84,7 @@ struct AppTheme {
     )
 
     static let heroGradient = LinearGradient(
-        gradient: Gradient(colors: [Color(hex: "#1C1C1E"), Color(hex: "#2C2C2E")]),
+        gradient: Gradient(colors: [Color(hex: "#111114"), Color(hex: "#1C1C1E")]),
         startPoint: .top, endPoint: .bottom
     )
 
@@ -140,20 +144,20 @@ struct GlassCardModifier: ViewModifier {
             .background(
                 RoundedRectangle(cornerRadius: radius, style: .continuous)
                     .fill(colorScheme == .dark
-                          ? Color.white.opacity(0.08)
+                          ? Color(red: 0x1C/255.0, green: 0x1C/255.0, blue: 0x1E/255.0) // #1C1C1E solid gray card
                           : Color.white.opacity(0.88))
             )
             .overlay(
                 RoundedRectangle(cornerRadius: radius, style: .continuous)
                     .stroke(
                         colorScheme == .dark
-                            ? Color.white.opacity(0.12)
+                            ? Color.white.opacity(0.06)
                             : Color.white.opacity(0.7),
-                        lineWidth: 0.75
+                        lineWidth: 0.5
                     )
             )
-            .shadow(color: Color.black.opacity(colorScheme == .dark ? 0.35 : 0.08),
-                    radius: 18, x: 0, y: 8)
+            .shadow(color: Color.black.opacity(colorScheme == .dark ? 0.5 : 0.08),
+                    radius: 14, x: 0, y: 6)
     }
 }
 

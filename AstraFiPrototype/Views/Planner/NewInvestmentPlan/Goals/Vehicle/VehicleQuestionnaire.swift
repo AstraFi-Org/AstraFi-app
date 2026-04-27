@@ -478,7 +478,7 @@ struct VehiclePriceHikeSheet: View {
                             factorItem(icon: "shippingbox.fill", title: "Raw Material Costs", desc: "Fluctuating prices of steel, aluminum, and semiconductors.")
                         }
                         .padding()
-                        .background(Color(.secondarySystemBackground), in: RoundedRectangle(cornerRadius: 16))
+                        .background(AppTheme.elevatedCardBackground, in: RoundedRectangle(cornerRadius: 16))
                     }
                     .padding(.horizontal)
                     
@@ -547,7 +547,7 @@ struct VehiclePriceHikeSheet: View {
 
 #Preview {
     ZStack {
-        Color(.systemGroupedBackground).ignoresSafeArea()
+        AppTheme.darkBackground.ignoresSafeArea()
         ScrollView {
             VehicleQuestionnaire(goalAccentColor: .green)
                 .padding()

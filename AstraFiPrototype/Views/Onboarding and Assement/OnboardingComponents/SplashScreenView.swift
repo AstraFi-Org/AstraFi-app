@@ -11,7 +11,7 @@ struct SplashScreenView: View {
     var body: some View {
         ZStack {
             // Deep dark background (premium dark mode feel)
-            Color(hex: "#0A0A0F")
+            AppTheme.darkBackground
                 .ignoresSafeArea()
 
             // Ambient glow behind logo

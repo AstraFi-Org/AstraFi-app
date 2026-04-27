@@ -478,7 +478,7 @@ struct BusinessPriceHikeSheet: View {
                             factorItem(icon: "antenna.radiowaves.left.and.right", title: "Digital Infrastructure", desc: "Cost of cloud, marketing tools, and specialized software.")
                         }
                         .padding()
-                        .background(Color(.secondarySystemBackground), in: RoundedRectangle(cornerRadius: 16))
+                        .background(AppTheme.elevatedCardBackground, in: RoundedRectangle(cornerRadius: 16))
                     }
                     .padding(.horizontal)
                     
@@ -547,7 +547,7 @@ struct BusinessPriceHikeSheet: View {
 
 #Preview {
     ZStack {
-        Color(.systemGroupedBackground).ignoresSafeArea()
+        AppTheme.darkBackground.ignoresSafeArea()
         ScrollView {
             BusinessQuestionnaire(goalAccentColor: .blue)
                 .padding()
