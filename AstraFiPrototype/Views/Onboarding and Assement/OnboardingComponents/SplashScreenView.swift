@@ -96,9 +96,9 @@ struct SplashScreenView: View {
             withAnimation(.easeOut(duration: 0.5).delay(0.4)) {
                 taglineOpacity = 1.0
             }
-            DispatchQueue.main.asyncAfter(deadline: .now() + 2.2) {
-                appState.isLoading = false
-            }
+//            DispatchQueue.main.asyncAfter(deadline: .now() + 2.2) {
+//                appState.isLoading = false
+//            }
         }
     }
 }

@@ -1,4 +1,5 @@
 import SwiftUI
+import Supabase
 
 struct BasicInformationDetailView: View {
     @Environment(\.colorScheme) var colorScheme
@@ -131,6 +132,18 @@ struct BasicInformationDetailView: View {
         profile.basicDetails.monthlyExpenses = Double(monthlyExpenses) ?? profile.basicDetails.monthlyExpenses
 
         appState.currentProfile = profile
+
+        // Sync updated profile to Supabase
+        Task {
+            do {
+                if let session = try? await supabase.auth.session {
+                    try await SupabaseRepository.shared.saveUserProfile(profile, userId: session.user.id)
+                }
+            } catch {
+                print("Failed to sync profile to Supabase: \(error)")
+            }
+        }
+
         showingSaveSuccess = true
     }
 }

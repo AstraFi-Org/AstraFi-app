@@ -165,8 +165,12 @@ final class AppStateManager {
             isSetuConnected: false
         )
     }
-    
-    var hasCompletedOnboarding: Bool = false
+
+    var hasCompletedOnboarding: Bool = UserDefaults.standard.bool(forKey: "hasCompletedOnboarding") {
+        didSet {
+            UserDefaults.standard.set(hasCompletedOnboarding, forKey: "hasCompletedOnboarding")
+        }
+    }
     
     var isAuthenticated: Bool = false
     var authError: String? = nil
@@ -246,33 +250,44 @@ final class AppStateManager {
     init() {
         Task {
             await restoreSession()
+        }
+        Task {
+            try? await Task.sleep(nanoseconds: 2_000_000_000) // wait 2 seconds
             await syncMutualFundNAVs()
         }
     }
 
     func restoreSession() async {
-        isLoading = true
+        await MainActor.run { isLoading = true }
+        async let minimumDelay: () = Task.sleep(nanoseconds: 1_500_000_000)
         do {
             let session = try await supabase.auth.session
-            
+
             if let profile = try? await SupabaseRepository.shared.fetchFullProfile(userId: session.user.id) {
-              
-                isAuthenticated = true
-                self.currentProfile = profile
+                if let plans = try? await SupabaseRepository.shared.fetchSavedPlans(userId: session.user.id) {
+                    await MainActor.run {
+                        self.savedPlans = plans
+                    }
+                }
+                try? await minimumDelay
+                await MainActor.run {
+                    self.currentProfile = profile
+                    self.isAuthenticated = true
+                    self.hasCompletedOnboarding = true
+                    self.showDashboard = true
+                    self.isLoading = false
+                }
                 recalculateFinancials()
-                showDashboard = true
             } else {
                 try? await supabase.auth.signOut()
+                try? await minimumDelay
+                await MainActor.run { isLoading = false }
             }
-            
-            if let plans = try? await SupabaseRepository.shared.fetchSavedPlans(userId: session.user.id) {
-                self.savedPlans = plans
-            }
-            
+
         } catch {
-            // No active session — stay on onboarding/auth
+            try? await minimumDelay
+            await MainActor.run { isLoading = false }
         }
-        isLoading = false
     }
     func signUp(name: String, email: String, password: String) async {
         isAuthLoading = true
@@ -283,21 +298,23 @@ final class AppStateManager {
                 password: password
             )
             try? await supabase.from("users").insert([
-                        "id": session.user.id.uuidString,
-                        "email": email
-                    ]).execute()
+                "id": session.user.id.uuidString,
+                "email": email
+            ]).execute()
             
             tempName = name
             tempEmail = email
             tempPassword = password
             setupEmptyProfile(name: name)
             isAuthenticated = true
-            // After successful sign in — load existing data
-            if let userId = try? await supabase.auth.session.user.id,
-               let profile = try? await SupabaseRepository.shared.fetchFullProfile(userId: userId) {
+            hasCompletedOnboarding = true  // ← ADD THIS
+            
+            // After successful sign up — load existing data if any
+            if let profile = try? await SupabaseRepository.shared.fetchFullProfile(userId: session.user.id) {
                 self.currentProfile = profile
                 recalculateFinancials()
             }
+            
         } catch {
             authError = error.localizedDescription
         }
@@ -318,11 +335,13 @@ final class AppStateManager {
                 self.currentProfile = profile
                 recalculateFinancials()
                 isAuthenticated = true
+                hasCompletedOnboarding = true
                 showDashboard = true
             } else {
                
                 setupEmptyProfile(name: session.user.email ?? "User")
                 isAuthenticated = true
+                hasCompletedOnboarding = true
             }
             
             if let plans = try? await SupabaseRepository.shared.fetchSavedPlans(userId: session.user.id) {
@@ -338,7 +357,8 @@ final class AppStateManager {
         do {
             try await supabase.auth.signOut()
             isAuthenticated = false
-            hasCompletedOnboarding = false
+            
+            hasCompletedOnboarding = true
             showDashboard = false
             currentProfile = nil
         } catch {
@@ -367,7 +387,7 @@ final class AppStateManager {
         
         let basic = AstraBasicDetails(
             name: assessmentData.name,
-            age: Int(assessmentData.age) ?? 0,
+            age: Int(assessmentData.age.trimmingCharacters(in: .whitespaces)) ?? 0,
             gender: assessmentData.gender == .male ? .male : .female,
             maritalStatus: .single,
             adultDependents: self.currentProfile?.basicDetails.adultDependents ?? Int(assessmentData.numberOfDependents) ?? 1,
@@ -383,7 +403,7 @@ final class AppStateManager {
                 investmentCount: assessmentData.investmentEntries.count
             ),
             investmentHorizon: Self.deriveInvestmentHorizon(
-                age: Int(assessmentData.age) ?? 30,
+                age: Int(assessmentData.age.trimmingCharacters(in: .whitespaces)) ?? 30,
                 dependents: Int(assessmentData.numberOfDependents) ?? 0
             )
         )
@@ -607,6 +627,15 @@ final class AppStateManager {
             if !assessmentData.emergencyFundAmount.isEmpty {
                 existingProfile.basicDetails.emergencyFundAmount = emergencyValue
             }
+            if !assessmentData.name.trimmingCharacters(in: .whitespaces).isEmpty {
+                existingProfile.basicDetails.name = assessmentData.name
+            }
+            let parsedAge = Int(assessmentData.age.trimmingCharacters(in: .whitespaces)) ?? 0
+            if parsedAge > 0 {
+                existingProfile.basicDetails.age = parsedAge
+            }
+            existingProfile.basicDetails.gender = assessmentData.gender == .male ? .male : .female
+            existingProfile.basicDetails.incomeType = assessmentData.incomeType == .fixed ? .fixed : .variable
             
             self.currentProfile = existingProfile
         } else {

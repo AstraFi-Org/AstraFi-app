@@ -197,13 +197,17 @@ struct LoanDetailsScreen: View {
                         }
                     }
                     
-                    Color.clear.frame(height: 100).listRowBackground(Color.clear)
+                    Section {
+                        Color.clear.frame(height: 80)
+                    }
+                    .listRowBackground(Color.clear)
                 }
             }
 
             AssessmentFooterButton(label: "Continue", enabled: true, isLast: false) {
                 if let onComplete { onComplete() } else { goNext = true }
             }
+            .allowsHitTesting(true)
         }
         .navigationTitle("Financial Assessment")
         .navigationBarBackButtonHidden(true)
