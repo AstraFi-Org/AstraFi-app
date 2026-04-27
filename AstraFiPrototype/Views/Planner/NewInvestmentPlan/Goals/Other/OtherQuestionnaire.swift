@@ -64,10 +64,7 @@ struct OtherQuestionnaire: View {
                         Text("Target Amount (₹)")
                             .font(.system(size: 14, weight: .medium, design: .rounded))
                         Spacer()
-                        TextField("e.g. 10L", text: $input.targetAmount)
-                            .keyboardType(.numberPad)
-                            .multilineTextAlignment(.trailing)
-                            .font(.system(size: 15, weight: .semibold, design: .rounded))
+                        GoalAmountField(text: $input.targetAmount, placeholder: "e.g. 10L")
                             .frame(width: 120)
                     }
                     
@@ -102,10 +99,7 @@ struct OtherQuestionnaire: View {
                         Text("Already Saved (₹)")
                             .font(.system(size: 14, weight: .medium, design: .rounded))
                         Spacer()
-                        TextField("e.g. 50K", text: $input.savedAmount)
-                            .keyboardType(.numberPad)
-                            .multilineTextAlignment(.trailing)
-                            .font(.system(size: 15, weight: .semibold, design: .rounded))
+                        GoalAmountField(text: $input.savedAmount, placeholder: "e.g. 50K")
                             .frame(width: 120)
                     }
                 }

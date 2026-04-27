@@ -57,6 +57,25 @@ struct PlanSliderStepper: View {
     }
 }
 
+struct GoalAmountField: View {
+    var label: String = ""
+    @Binding var text: String
+    var placeholder: String = ""
+    
+    var body: some View {
+        TextField(placeholder, text: Binding(
+            get: { text },
+            set: { newValue in
+                let expanded = InvestmentPlannerEngine.expandAmountSuffix(newValue)
+                text = expanded
+            }
+        ))
+        .keyboardType(.numbersAndPunctuation)
+        .multilineTextAlignment(.trailing)
+        .font(.system(size: 15, weight: .semibold, design: .rounded))
+    }
+}
+
 struct PlanSegmentChips: View {
     @Binding var selection: String
     let options: [String]
@@ -323,7 +342,6 @@ struct PlanFlowLayout: Layout {
     func sizeThatFits(proposal: ProposedViewSize, subviews: Subviews, cache: inout ()) -> CGSize {
         let width = proposal.width ?? .infinity
         var currentX: CGFloat = 0
-        var currentY: CGFloat = 0
         var lineHeight: CGFloat = 0
         var totalHeight: CGFloat = 0
         var maxWidth: CGFloat = 0

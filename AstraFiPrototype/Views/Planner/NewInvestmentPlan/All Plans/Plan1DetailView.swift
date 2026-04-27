@@ -27,17 +27,25 @@ struct Plan1DetailView: View {
                 VStack(spacing: 24) {
                     targetVsEstimatedCard
                     assumptionsWarningSection
-                    interactiveAdjusters
+                    SIPGrowthComparisonCard(monthlySIP: $sipOverride, investmentYears: $tenureOverride, selectedRisk: $selectedRisk)
+                    //interactiveAdjusters
                     riskTypeSection
                     totalInvestmentCard
                     scenarioTable
                     smartTipSection
-                    investmentRecommendations
+                    //investmentRecommendations
                 }
                 .padding(.horizontal, 20)
-                .padding(.bottom, 120)
+                .padding(.bottom, 120) 
             }
+            .background(AppTheme.appBackground(for: colorScheme))
             .onChange(of: selectedRisk) { _, _ in
+                recalculate()
+            }
+            .onChange(of: sipOverride) { _, _ in
+                recalculate()
+            }
+            .onChange(of: tenureOverride) { _, _ in
                 recalculate()
             }
 
@@ -46,7 +54,7 @@ struct Plan1DetailView: View {
             }
         }
         .alert("Action Successful", isPresented: $showingSaveAlert) {
-             Button("View in Tracker") {
+             Button("View in Tracker") { 
                  appState.showDashboard = true
                  dismiss()
              }
@@ -162,60 +170,60 @@ struct Plan1DetailView: View {
         )
     }
 
-    private var interactiveAdjusters: some View {
-        VStack(spacing: 20) {
-            HStack {
-                Image(systemName: "slider.horizontal.3")
-                    .foregroundColor(.blue)
-                Text("Interactive Adjustments")
-                    .font(.headline)
-                Spacer()
-            }
-            
-            Text("We think you need to maintain this SIP for the given timeline. You can adjust the timeline or SIP amount below to see how it impacts your projected corpus.")
-                .font(.footnote)
-                .foregroundColor(.secondary)
-                .frame(maxWidth: .infinity, alignment: .leading)
-
-            VStack(alignment: .leading, spacing: 10) {
-                HStack {
-                    Text("Monthly SIP")
-                        .font(.subheadline)
-                        .foregroundColor(.secondary)
-                    Spacer()
-                    Text("₹\(Int(sipOverride).formatted())")
-                        .font(.subheadline)
-                        .fontWeight(.bold)
-                        .foregroundColor(.blue)
-                }
-                Slider(value: $sipOverride, in: 500...500000, step: 500) { _ in
-                    recalculate()
-                }
-                .tint(.blue)
-            }
-
-            VStack(alignment: .leading, spacing: 10) {
-                HStack {
-                    Text("Time Period")
-                        .font(.subheadline)
-                        .foregroundColor(.secondary)
-                    Spacer()
-                    Text("\(tenureOverride) Years")
-                        .font(.subheadline)
-                        .fontWeight(.bold)
-                        .foregroundColor(.blue)
-                }
-                Slider(value: Binding(get: { Double(tenureOverride) }, set: { tenureOverride = Int($0) }), in: 1...30, step: 1) { _ in
-                    recalculate()
-                }
-                .tint(.blue)
-            }
-        }
-        .padding(20)
-        .background(AppTheme.cardBackground)
-        .cornerRadius(20)
-        .shadow(color: AppTheme.adaptiveShadow, radius: 10, x: 0, y: 4)
-    }
+//    private var interactiveAdjusters: some View {
+//        VStack(spacing: 20) {
+//            HStack {
+//                Image(systemName: "slider.horizontal.3")
+//                    .foregroundColor(.blue)
+//                Text("Interactive Adjustments")
+//                    .font(.headline)
+//                Spacer()
+//            }
+//            
+//            Text("We think you need to maintain this SIP for the given timeline. You can adjust the timeline or SIP amount below to see how it impacts your projected corpus.")
+//                .font(.footnote)
+//                .foregroundColor(.secondary)
+//                .frame(maxWidth: .infinity, alignment: .leading)
+//
+//            VStack(alignment: .leading, spacing: 10) {
+//                HStack {
+//                    Text("Monthly SIP")
+//                        .font(.subheadline)
+//                        .foregroundColor(.secondary)
+//                    Spacer()
+//                    Text("₹\(Int(sipOverride).formatted())")
+//                        .font(.subheadline)
+//                        .fontWeight(.bold)
+//                        .foregroundColor(.blue)
+//                }
+//                Slider(value: $sipOverride, in: 500...500000, step: 500) { _ in
+//                    recalculate()
+//                }
+//                .tint(.blue)
+//            }
+//
+//            VStack(alignment: .leading, spacing: 10) {
+//                HStack {
+//                    Text("Time Period")
+//                        .font(.subheadline)
+//                        .foregroundColor(.secondary)
+//                    Spacer()
+//                    Text("\(tenureOverride) Years")
+//                        .font(.subheadline)
+//                        .fontWeight(.bold)
+//                        .foregroundColor(.blue)
+//                }
+//                Slider(value: Binding(get: { Double(tenureOverride) }, set: { tenureOverride = Int($0) }), in: 1...30, step: 1) { _ in
+//                    recalculate()
+//                }
+//                .tint(.blue)
+//            }
+//        }
+//        .padding(20)
+//        .background(AppTheme.cardBackground)
+//        .cornerRadius(20)
+//        .shadow(color: AppTheme.adaptiveShadow, radius: 10, x: 0, y: 4)
+//    }
 
     private func recalculate() {
         let newResult = InvestmentPlannerEngine.recalculatePlan1(
@@ -318,7 +326,7 @@ struct Plan1DetailView: View {
                     Text(selectedRisk)
                         .font(.subheadline)
                         .fontWeight(.bold)
-                    Image(systemName: "chevron.up.down")
+                    Image(systemName: "chevron.up.chevron.down")
                         .font(.system(size: 10))
                 }
                 .foregroundColor(.primary)
@@ -458,13 +466,8 @@ struct Plan1DetailView: View {
                 Image(systemName: "crown.fill")
                     .foregroundColor(.purple)
                     .font(.title3)
-                Text("To unlock advanced insights, market timing alerts, and automated step-up recommendations, upgrade to ")
+                Text("\(Text("To unlock advanced insights, market timing alerts, and automated step-up recommendations, upgrade to ").foregroundColor(.secondary))\(Text("AstraPremium.").fontWeight(.bold).foregroundColor(.purple))")
                     .font(.caption)
-                    .foregroundColor(.secondary) +
-                Text("AstraPremium.")
-                    .font(.caption)
-                    .fontWeight(.bold)
-                    .foregroundColor(.purple)
             }
             .padding(12)
             .background(Color.purple.opacity(0.1))
@@ -476,19 +479,20 @@ struct Plan1DetailView: View {
         .shadow(color: AppTheme.adaptiveShadow, radius: 10, x: 0, y: 4)
     }
 
-    private var investmentRecommendations: some View {
-        RecommendedFundsCard(
-            title: "Recommended High-Growth Funds",
-            funds: [
-                RecommendedFund(name: "Axis Bluechip Fund", category: "Large Cap", returns: "14.2% p.a.", risk: "Moderate", icon: "shield.fill"),
-                RecommendedFund(name: "ICICI Prudential Flexicap Fund", category: "Flexi Cap", returns: "16.8% p.a.", risk: "Moderate", icon: "chart.bar.fill"),
-                RecommendedFund(name: "Nippon India Small Cap Fund", category: "Small Cap", returns: "22.4% p.a.", risk: "Very High", icon: "chart.line.uptrend.xyaxis")
-            ]
-        )
-    }
+//    private var investmentRecommendations: some View {
+//        RecommendedFundsCard(
+//            title: "Recommended High-Growth Funds",
+//            funds: [
+//                RecommendedFund(name: "Axis Bluechip Fund", category: "Large Cap", returns: "14.2% p.a.", risk: "Moderate"),
+//                RecommendedFund(name: "ICICI Prudential Flexicap Fund", category: "Flexi Cap", returns: "16.8% p.a.", risk: "Moderate"),
+//                RecommendedFund(name: "Nippon India Small Cap Fund", category: "Small Cap", returns: "22.4% p.a.", risk: "Very High")
+//            ]
+//        )
+//    }
 
     private func formatL_Detail(_ value: Double) -> String {
         let v = abs(value)
+        if v >= 10000000 { return String(format: "%.1fCr", value / 10000000) }
         if v >= 100000 { return String(format: "%.1fL", value / 100000) }
         if v >= 1000 { return String(format: "%.1fK", value / 1000) }
         return String(format: "%.0f", value)
@@ -593,50 +597,6 @@ struct DonutSegment: View {
             .frame(width: 180, height: 180)
             .rotationEffect(startAngle)
             .animation(.spring(response: 0.8, dampingFraction: 0.7), value: animate)
-    }
-}
-
-struct ScenarioHeaderRow: View {
-    var body: some View {
-        HStack(spacing: 8) {
-            Text("Scenario").font(.caption).fontWeight(.semibold).foregroundColor(.secondary).frame(maxWidth: .infinity, alignment: .leading)
-            Text("Gain/Loss").font(.caption).fontWeight(.semibold).foregroundColor(.secondary).frame(maxWidth: .infinity, alignment: .trailing)
-            Text("Final Value").font(.caption).fontWeight(.semibold).foregroundColor(.secondary).frame(maxWidth: .infinity, alignment: .trailing)
-        }
-    }
-}
-
-struct ScenarioDataRow: View {
-    let scenario: String
-    let gainLoss: String
-    let finalValue: String
-    let isNegative: Bool
-
-    var body: some View {
-        HStack(spacing: 8) {
-            Text(scenario).font(.caption).foregroundColor(.primary).frame(maxWidth: .infinity, alignment: .leading)
-            Text(gainLoss).font(.caption).fontWeight(.semibold).foregroundColor(.primary).frame(maxWidth: .infinity, alignment: .trailing)
-            Text(finalValue).font(.caption).fontWeight(.medium).foregroundColor(.primary).frame(maxWidth: .infinity, alignment: .trailing)
-        }
-    }
-}
-
-struct InvestmentTableRow: View {
-    let type: String
-    let invested: String
-    let expected: String
-    let risk: String
-    let riskColor: Color
-
-    var body: some View {
-        HStack(spacing: 0) {
-            Text(type).font(.caption).foregroundColor(.primary).frame(maxWidth: .infinity * 2.5, alignment: .leading)
-            Text(invested).font(.caption).foregroundColor(.primary).frame(maxWidth: .infinity * 1.5, alignment: .trailing)
-            Text(expected).font(.caption).foregroundColor(.secondary).frame(maxWidth: .infinity * 1.5, alignment: .trailing)
-            Text(risk).font(.system(size: 10, weight: .bold)).foregroundColor(riskColor).frame(maxWidth: .infinity * 1.2, alignment: .trailing)
-        }
-        .padding(.vertical, 8)
-        .padding(.horizontal, 8)
     }
 }
 

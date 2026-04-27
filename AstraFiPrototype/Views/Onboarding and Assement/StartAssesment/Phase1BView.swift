@@ -237,14 +237,8 @@ struct Phase1BView: View {
                     if let invests = doesInvest {
                         if invests {
                             InvestmentAnalyseCard(
-                                onAnalyse: {
-                                    appState.updateProfile(from: data)
-                                    goInvestments = true
-                                },
-                                onSkip: {
-                                    appState.updateProfile(from: data)
-                                    goReport = true
-                                }
+                                onAnalyse: { goInvestments = true },
+                                onSkip: { goReport = true }
                             )
                             .padding(.horizontal, 20)
                             .padding(.top, 12)
@@ -274,7 +268,6 @@ struct Phase1BView: View {
             // ── Sticky Continue Button (slides up when "Not yet" is tapped)
             if showContinueButton {
                 ContinueToReportButton {
-                    appState.updateProfile(from: data)
                     goReport = true
                 }
                 .transition(
@@ -683,7 +676,7 @@ struct EFInsightCard: View {
                     .font(.system(size: 14, design: .rounded))
                     .foregroundStyle(.secondary)
                 Spacer()
-                Text(minSavePerMonth.toCurrency(compact: true) + " / month")
+                Text("\(minSavePerMonth.toCurrency(compact: true)) / month")
                     .font(.system(size: 15, weight: .bold, design: .rounded))
                     .contentTransition(.numericText())
             }
@@ -743,7 +736,7 @@ struct EFInsightCard: View {
 }
 
 #Preview {
-    var sample = CompleteAssessmentData()
+    let sample = CompleteAssessmentData()
     sample.income = "100000"
     sample.expenditure = "45000"
     sample.emergencyFundAmount = "150000"

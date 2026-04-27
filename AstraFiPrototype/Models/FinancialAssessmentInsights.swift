@@ -90,19 +90,40 @@ struct FinancialAssessmentInsights: Hashable, Codable {
     }
 
     static func build(profile: AstraUserProfile?, data: CompleteAssessmentData?) -> FinancialAssessmentInsights {
-        let grossFromData = parseNumber(data?.income)
-        let grossIncomeRaw = (grossFromData > 0) ? grossFromData : (profile?.basicDetails.monthlyIncome ?? 0)
+        // Core metrics: prioritize assessment data if provided and non-empty
+        
+        let grossIncomeRaw: Double
+        if let data = data, !data.income.isEmpty {
+            grossIncomeRaw = parseNumber(data.income)
+        } else {
+            grossIncomeRaw = profile?.basicDetails.monthlyIncome ?? 0
+        }
         let grossIncome = max(0, grossIncomeRaw)
 
-        let takeHomeIncomeRaw = (grossFromData > 0) ? (grossFromData * (1.0 - AppStateManager.defaultTaxRate)) : (profile?.basicDetails.monthlyIncomeAfterTax ?? (grossIncome * (1.0 - AppStateManager.defaultTaxRate)))
+        let takeHomeIncomeRaw: Double
+        if let data = data, !data.income.isEmpty {
+            // If we have new income, use it. For now assuming same as gross or we could apply tax.
+            // AppStateManager uses the same value for both during update.
+            takeHomeIncomeRaw = parseNumber(data.income)
+        } else {
+            takeHomeIncomeRaw = profile?.basicDetails.monthlyIncomeAfterTax ?? (grossIncome * (1.0 - AppStateManager.defaultTaxRate))
+        }
         let takeHomeIncome = max(0, takeHomeIncomeRaw)
 
-        let expFromData = parseNumber(data?.expenditure)
-        let expensesRaw = (expFromData > 0) ? expFromData : (profile?.basicDetails.monthlyExpenses ?? 0)
+        let expensesRaw: Double
+        if let data = data, !data.expenditure.isEmpty {
+            expensesRaw = parseNumber(data.expenditure)
+        } else {
+            expensesRaw = profile?.basicDetails.monthlyExpenses ?? 0
+        }
         let expenses = max(0, expensesRaw)
 
-        let efFromData = parseNumber(data?.emergencyFundAmount)
-        let emergencyFundRaw = (efFromData > 0 || (data?.emergencyFundAmount == "0")) ? efFromData : (profile?.basicDetails.emergencyFundAmount ?? 0)
+        let emergencyFundRaw: Double
+        if let data = data, !data.emergencyFundAmount.isEmpty {
+            emergencyFundRaw = parseNumber(data.emergencyFundAmount)
+        } else {
+            emergencyFundRaw = profile?.basicDetails.emergencyFundAmount ?? 0
+        }
         let emergencyFund = max(0, emergencyFundRaw)
 
         let savings = max(0, takeHomeIncome - expenses)
@@ -110,18 +131,37 @@ struct FinancialAssessmentInsights: Hashable, Codable {
         let emergencyTarget = grossIncome * Threshold.emergencyFundMonths
         let emergencyCoverage = emergencyTarget > 0 ? emergencyFund / emergencyTarget : 0
 
+        // For investments, we prioritize assessment data if it has entries,
+        // but if it's empty and a profile exists, we assume we want to see the profile's investments.
+        // If we are in the middle of an assessment and the user hasn't reached investments yet,
+        // data?.investmentEntries might be empty.
+        
         let profileSnapshots = profile?.investments.map { InvestmentSnapshot(from: $0) } ?? []
         let assessmentSnapshots = data?.investmentEntries.map { InvestmentSnapshot(from: $0) } ?? []
-        let sourceSnapshots = profile != nil ? profileSnapshots : assessmentSnapshots
+        
+        // If assessment has data, use it. Otherwise fallback to profile.
+        let sourceSnapshots = (data != nil && !assessmentSnapshots.isEmpty) ? assessmentSnapshots : profileSnapshots
 
         let investmentCount = sourceSnapshots.count
         let investmentBreakdown = buildInvestmentBreakdown(from: sourceSnapshots)
 
-        let loanCount = profile?.loans.count ?? data?.loanEntries.count ?? 0
-        let insuranceCount = profile?.insurances.count ?? data?.insuranceEntries.count ?? 0
+        // Loans and Insurance: Similar logic - prioritize assessment entries if they exist
+        let loanCount: Int
+        if let data = data, !data.loanEntries.isEmpty {
+            loanCount = data.loanEntries.count
+        } else {
+            loanCount = profile?.loans.count ?? 0
+        }
+        
+        let insuranceCount: Int
+        if let data = data, !data.insuranceEntries.isEmpty {
+            insuranceCount = data.insuranceEntries.count
+        } else {
+            insuranceCount = profile?.insurances.count ?? 0
+        }
 
         let debtRatio = computeDebtToIncomeRatio(profile: profile, data: data, grossIncome: grossIncome)
-        let fixedIncome = profile?.basicDetails.incomeType == .fixed || data?.incomeType == .fixed
+        let fixedIncome = (data != nil) ? (data?.incomeType == .fixed) : (profile?.basicDetails.incomeType == .fixed)
 
         let concerns = buildConcerns(
             savingsRate: savingsRate,
@@ -406,11 +446,12 @@ struct FinancialAssessmentInsights: Hashable, Codable {
         guard grossIncome > 0 else { return 0 }
 
         let totalEMI: Double
-        if let profile {
+        if let data = data, !data.loanEntries.isEmpty {
+            totalEMI = data.loanEntries.reduce(0) { $0 + estimateEMI(for: $1) }
+        } else if let profile = profile {
             totalEMI = profile.loans.reduce(0) { $0 + max(0, $1.calculatedEMI) }
         } else {
-            let entries = data?.loanEntries ?? []
-            totalEMI = entries.reduce(0) { $0 + estimateEMI(for: $1) }
+            totalEMI = 0
         }
 
         return max(0, min(1, totalEMI / grossIncome))

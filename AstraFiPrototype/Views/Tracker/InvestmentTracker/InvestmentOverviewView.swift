@@ -261,15 +261,15 @@ struct InvestmentOverviewView: View {
                     HStack {
                         VStack(alignment: .leading, spacing: 2) {
                             Text("CAGR (annualised)").font(.caption).foregroundColor(.secondary)
-                            Text(String(format: "%@%.2f%%", cagr >= 0 ? "+" : "", cagr))
+                            Text("\(cagr >= 0 ? "+" : "")\(String(format: "%.2f%%", cagr))")
                                 .font(.subheadline).fontWeight(.semibold)
                                 .foregroundColor(cagr >= 0 ? .green : .red)
                         }
                         Spacer()
                         VStack(alignment: .trailing, spacing: 2) {
                             Text("Total Returns").font(.caption).foregroundColor(.secondary)
-                            Text((totalGain >= 0 ? "+" : "") + totalGain.toCurrency())
-                                .font(.subheadline).fontWeight(.semibold)
+                            Text("\((totalGain >= 0 ? "+" : ""))\(totalGain.toCurrency())")
+                                .font(.title).fontWeight(.bold)
                                 .foregroundColor(totalGain >= 0 ? .green : .red)
                         }
                     }
@@ -622,7 +622,7 @@ struct InvestmentOverviewView: View {
                                 category: inv.investmentType.rawValue,
                                 risk: riskLabel(for: inv),
                                 amount: inv.currentValue.toCurrency(),
-                                gain: (inv.currentGain >= 0 ? "+" : "") + inv.currentGain.toCurrency(),
+                                gain: "\(inv.currentGain >= 0 ? "+" : "")\(inv.currentGain.toCurrency())",
                                 startDate: df.string(from: inv.startDate),
                                 goal: goalName(for: inv)
                             )

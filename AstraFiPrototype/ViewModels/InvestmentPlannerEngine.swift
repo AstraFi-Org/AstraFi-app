@@ -1,9 +1,9 @@
 import Foundation
 
 enum Plan2Strategy {
-    case loanPlusSIPParallel    
-    case sipSprintThenBuy       
-    case hybridDownpayPlusSIP   
+    case loanPlusSIPParallel
+    case sipSprintThenBuy
+    case hybridDownpayPlusSIP
 }
 
 class InvestmentPlannerEngine {
@@ -70,7 +70,7 @@ class InvestmentPlannerEngine {
         )
     }
 
-    static func recalculatePlan1(input: InvestmentPlanInputModel, 
+    static func recalculatePlan1(input: InvestmentPlanInputModel,
                                  overridenRisk: String? = nil,
                                  overridenSIP: Double? = nil,
                                  overridenTenure: Int? = nil) -> Plan1Result {
@@ -112,7 +112,7 @@ class InvestmentPlannerEngine {
 
         return generatePlan3(
             input: customInput,
-            healthCtx: healthCtx, 
+            healthCtx: healthCtx,
             loanAmountOverride: overridenLoan,
             loanRateOverride: overridenRate,
             tenureOverride: overridenTenure,
@@ -262,7 +262,7 @@ class InvestmentPlannerEngine {
             ))
         }
 
-        let warning = points.first(where: { $0.severity == .critical })?.detail 
+        let warning = points.first(where: { $0.severity == .critical })?.detail
                    ?? points.first(where: { $0.severity == .warning })?.detail
 
         return FeasibilityResult(
@@ -429,14 +429,14 @@ class InvestmentPlannerEngine {
                                       interestType: InterestType = .compounded) -> Plan2Result? {
         let saved  = parseAmount(input.savedAmount)
         let target = parseAmount(input.targetAmount)
-        let amt    = 0.0 
+        let amt    = 0.0
         let tenure = Swift.max(1, Int(input.timePeriod) ?? 1)
         let months = tenure * 12
 
         let portfolio = buildPortfolio(risk: risk, liquidity: liquidity, goalCategory: .other, tenure: tenure, amount: target)
         let loanRate = input.interestRate ?? 9.5
         let monthlyRate = loanRate / 100 / 12
-        _ = monthlyRate 
+        _ = monthlyRate
         let bankSuffix = input.bankName.map { " via \($0)" } ?? ""
 
         switch strategy {
@@ -530,7 +530,7 @@ class InvestmentPlannerEngine {
             )
 
         case .hybridDownpayPlusSIP:
-            let dp = saved * 0.7 
+            let dp = saved * 0.7
             let loan = input.loanAmount ?? Swift.max(0, target - dp)
             let emi = calculateEMIPublic(principal: loan, rate: loanRate, years: tenure, frequency: emiFrequency, interestType: interestType)
             let totalPayments = Double(tenure) * emiFrequency.paymentsPerYear
@@ -573,7 +573,7 @@ class InvestmentPlannerEngine {
                 loanAmount: loan, loanRate: loanRate, monthlyEMI: emi,
                 totalAmountPaid: emi * totalPayments, totalInterestPaid: (emi * totalPayments) - loan,
                 monthlySIPKept: amt, sipReturns: sipRet, investmentProfit: sipRet - totalSIPInvested,
-                netWealthGain: gain, totalMonthlyCommitment: (emi * emiFrequency.paymentsPerYear / 12) + amt, 
+                netWealthGain: gain, totalMonthlyCommitment: (emi * emiFrequency.paymentsPerYear / 12) + amt,
                 roi: totalOutflow > 0 ? (gain / totalOutflow) * 100 : 0,
                 reachesGoal: reaches, shortfall: gap,
                 breakdown: [], highlights: ["Optimised Down-payment" + bankSuffix, "Lower EMI"],
@@ -671,9 +671,9 @@ class InvestmentPlannerEngine {
         let rate = loanRateOverride ?? input.interestRate ?? 10.5
         let years = tenureOverride ?? Int(input.timePeriod) ?? 5
 
-        let conservativePortfolio = buildPortfolio(risk: .low, liquidity: .mid, goalCategory: .wealthCreation, tenure: years, amount: loanAmt)
-        let moderatePortfolio = buildPortfolio(risk: .mid, liquidity: .mid, goalCategory: .wealthCreation, tenure: years, amount: loanAmt)
-        let aggressivePortfolio = buildPortfolio(risk: .high, liquidity: .mid, goalCategory: .wealthCreation, tenure: years, amount: loanAmt)
+        let conservativePortfolio = buildPlan3Portfolio(risk: .low, amount: loanAmt)
+        let moderatePortfolio = buildPlan3Portfolio(risk: .mid, amount: loanAmt)
+        let aggressivePortfolio = buildPlan3Portfolio(risk: .high, amount: loanAmt)
 
         let emi = calculateEMIPublic(principal: loanAmt, rate: rate, years: years, frequency: emiFrequency, interestType: interestType)
 
@@ -724,11 +724,23 @@ class InvestmentPlannerEngine {
             recReason = "Your high investment score allows for an aggressive strategy to maximize arbitrage gains."
         }
 
-        let scenarios = LeveragedScenarioAnalysis(
-            bestCaseReturn: agg.netProfit > 0 ? 15.0 : 12.0,
-            worstCaseReturn: cons.netProfit > 0 ? 6.0 : 4.0,
-            realisticCaseReturn: mod.netProfit > 0 ? 10.0 : 8.0
-        )
+        let scenarios = [
+            PlanScenario(name: "Worst Case (Bear)", cagr: 6.0,
+                         gainLoss: runLeveragedSimulation(name: "Bear", loanAmount: loanAmt, loanRate: rate, tenure: years, portfolio: conservativePortfolio, emiFrequency: emiFrequency, phases: lumpsumPhases, emiFromPocket: emiFromPocket, isSIPMode: investmentMode == "SIP", overridenReturn: 6.0).netProfit,
+                         finalValue: runLeveragedSimulation(name: "Bear", loanAmount: loanAmt, loanRate: rate, tenure: years, portfolio: conservativePortfolio, emiFrequency: emiFrequency, phases: lumpsumPhases, emiFromPocket: emiFromPocket, isSIPMode: investmentMode == "SIP", overridenReturn: 6.0).finalValue),
+            PlanScenario(name: "Conservative", cagr: 9.0,
+                         gainLoss: cons.netProfit,
+                         finalValue: cons.finalValue),
+            PlanScenario(name: "Moderate", cagr: 12.0,
+                         gainLoss: mod.netProfit,
+                         finalValue: mod.finalValue),
+            PlanScenario(name: "Aggressive", cagr: 15.0,
+                         gainLoss: agg.netProfit,
+                         finalValue: agg.finalValue),
+            PlanScenario(name: "Bull Market", cagr: 19.0,
+                         gainLoss: runLeveragedSimulation(name: "Bull", loanAmount: loanAmt, loanRate: rate, tenure: years, portfolio: aggressivePortfolio, emiFrequency: emiFrequency, phases: lumpsumPhases, emiFromPocket: emiFromPocket, isSIPMode: investmentMode == "SIP", overridenReturn: 19.0).netProfit,
+                         finalValue: runLeveragedSimulation(name: "Bull", loanAmount: loanAmt, loanRate: rate, tenure: years, portfolio: aggressivePortfolio, emiFrequency: emiFrequency, phases: lumpsumPhases, emiFromPocket: emiFromPocket, isSIPMode: investmentMode == "SIP", overridenReturn: 19.0).finalValue)
+        ]
 
         return Plan3Result(
             loanAmount: loanAmt, loanRate: rate, tenure: years, monthlyEMI: emi,
@@ -736,6 +748,34 @@ class InvestmentPlannerEngine {
             recommendedStrategy: recStrategy, recommendationReason: recReason, scenarios: scenarios,
             portfolio: moderatePortfolio
         )
+    }
+
+    private static func buildPlan3Portfolio(risk: AstraRiskLevel, amount: Double) -> PortfolioBlueprint {
+        let allocations: [AssetAllocation]
+        
+        switch risk {
+        case .high: // Aggressive: 65% Stocks, 30% MF, 5% FD
+            allocations = [
+                AssetAllocation(name: "Direct Equity / Stocks", percentage: 65, expectedCAGR: 16.5, riskLevel: .high),
+                AssetAllocation(name: "High Growth Mutual Funds", percentage: 30, expectedCAGR: 13.5, riskLevel: .high),
+                AssetAllocation(name: "FD / Fixed Income (Safety)", percentage: 5, expectedCAGR: 7.0, riskLevel: .low)
+            ]
+        case .mid: // Moderate: 65% MF, 30% Stocks, 5% FD
+            allocations = [
+                AssetAllocation(name: "Growth Mutual Funds", percentage: 65, expectedCAGR: 13.5, riskLevel: .mid),
+                AssetAllocation(name: "Equity Stocks", percentage: 30, expectedCAGR: 16.5, riskLevel: .high),
+                AssetAllocation(name: "FD / Fixed Income", percentage: 5, expectedCAGR: 7.0, riskLevel: .low)
+            ]
+        case .low: // Conservative: 55% MF, 35% Small Cap, 10% FD
+            allocations = [
+                AssetAllocation(name: "Conservative Mutual Funds", percentage: 55, expectedCAGR: 11.5, riskLevel: .low),
+                AssetAllocation(name: "Small Cap Opportunities", percentage: 35, expectedCAGR: 18.0, riskLevel: .high),
+                AssetAllocation(name: "FD / Savings (Safety)", percentage: 10, expectedCAGR: 7.2, riskLevel: .low)
+            ]
+        }
+        
+        let blended = allocations.reduce(0.0) { $0 + ($1.percentage * $1.expectedCAGR / 100) }
+        return PortfolioBlueprint(allocations: allocations, blendedCAGR: blended, riskLabel: risk.rawValue.capitalized)
     }
 
     private static func runLeveragedSimulation(
@@ -747,7 +787,8 @@ class InvestmentPlannerEngine {
         emiFrequency: EMIFrequency,
         phases: Int,
         emiFromPocket: Bool,
-        isSIPMode: Bool = false
+        isSIPMode: Bool = false,
+        overridenReturn: Double? = nil
     ) -> LeveragedStrategyResult {
         let months = tenure * 12
         let monthsPerPayment = Int(12 / emiFrequency.paymentsPerYear)
@@ -785,7 +826,8 @@ class InvestmentPlannerEngine {
                 }
             }
 
-            let monthlyGrowth = investedPool * getDeterministicMonthlyReturn(portfolio: portfolio, month: m)
+            let monthlyReturnRate = overridenReturn != nil ? (overridenReturn! / 12.0 / 100.0) : getDeterministicMonthlyReturn(portfolio: portfolio, month: m)
+            let monthlyGrowth = investedPool * monthlyReturnRate
             investedPool += monthlyGrowth
 
             var emiPaidThisMonth = 0.0
@@ -795,11 +837,8 @@ class InvestmentPlannerEngine {
                     totalInvestedOrPaid += emi
                 } else {
                     investedPool -= emi
-                    if investedPool < 0 {
-                        if survivalDuration == nil {
-                            survivalDuration = Int(ceil(Double(m)/12.0))
-                        }
-                        investedPool = 0
+                    if investedPool < 0 && survivalDuration == nil {
+                        survivalDuration = Int(ceil(Double(m)/12.0))
                     }
                 }
             }
@@ -876,13 +915,13 @@ class InvestmentPlannerEngine {
         var x = p; x.name = "Loan Strategy"; return x
     }
 
-    private static func sipFutureValue(monthly: Double, rateCAGR: Double, years: Int) -> Double {
+    static func sipFutureValue(monthly: Double, rateCAGR: Double, years: Int) -> Double {
         let r = rateCAGR / 100 / 12; let m = Double(years * 12)
         if r == 0 { return monthly * m }
         return monthly * (pow(1+r, m) - 1) / r * (1+r)
     }
 
-    private static func lumpsumFutureValue(amount: Double, rateCAGR: Double, years: Int) -> Double {
+    static func lumpsumFutureValue(amount: Double, rateCAGR: Double, years: Int) -> Double {
         return amount * pow(1 + rateCAGR/100, Double(years))
     }
 
@@ -923,12 +962,42 @@ class InvestmentPlannerEngine {
         let cleaned = s.components(separatedBy: CharacterSet.decimalDigits.union(CharacterSet(charactersIn: ".")).inverted).joined()
         return (Double(cleaned) ?? 0) * multiplier
     }
+
+    static func expandAmountSuffix(_ s: String) -> String {
+        let lower = s.lowercased().trimmingCharacters(in: .whitespaces)
+        if lower.isEmpty { return "" }
+        
+        var multiplier: Double? = nil
+        var suffixLen = 0
+        
+        if lower.hasSuffix("cr") {
+            multiplier = 10_000_000
+            suffixLen = 2
+        } else if lower.hasSuffix("l") {
+            multiplier = 100_000
+            suffixLen = 1
+        } else if lower.hasSuffix("k") {
+            multiplier = 1000
+            suffixLen = 1
+        }
+        
+        guard let m = multiplier else { return s }
+        
+        let numericPart = String(lower.dropLast(suffixLen)).trimmingCharacters(in: .whitespaces)
+        let cleaned = numericPart.components(separatedBy: CharacterSet.decimalDigits.union(CharacterSet(charactersIn: ".")).inverted).joined()
+        
+        if let val = Double(cleaned) {
+            let total = val * m
+            return String(format: "%.0f", total)
+        }
+        return s
+    }
     static func calculateEMIPublic(principal: Double, rate: Double, years: Int, frequency: EMIFrequency = .quarterly, interestType: InterestType = .compounded) -> Double {
-        let n = Double(years) * frequency.paymentsPerYear 
+        let n = Double(years) * frequency.paymentsPerYear
 
         switch interestType {
         case .compounded:
-            let r = (rate / 100.0) / frequency.paymentsPerYear 
+            let r = (rate / 100.0) / frequency.paymentsPerYear
             guard r > 0, n > 0 else { return n > 0 ? principal / n : 0 }
             let pqr = pow(1 + r, n)
             let emi = (principal * r * pqr) / (pqr - 1)
@@ -943,7 +1012,11 @@ class InvestmentPlannerEngine {
         }
     }
 
-    private static func formatL_Internal(_ v: Double) -> String { String(format: "%.1fL", v / 100000) }
+    static func formatL_Internal(_ v: Double) -> String {
+        let absV = abs(v)
+        if absV >= 10000000 { return String(format: "%.1fCr", v / 10000000) }
+        return String(format: "%.1fL", v / 100000)
+    }
     private static func mapRiskLevel(_ t: String) -> AstraRiskLevel { AstraRiskLevel(rawValue: t.lowercased()) ?? .mid }
     private static func mapLiquidityLevel(_ t: String) -> AstraLiquidityLevel { AstraLiquidityLevel(rawValue: t.lowercased()) ?? .mid }
 }

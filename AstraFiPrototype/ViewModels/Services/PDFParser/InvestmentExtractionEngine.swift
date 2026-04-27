@@ -7,8 +7,6 @@ class InvestmentExtractionEngine {
         let lines = text.components(separatedBy: .newlines)
         var normalizedAssets: [String: NormalizedAsset] = [:]
         
-        let isinMap = identifyISINs(in: text)
-        
         var activeISIN: String?
         var activeAssetName: String?
         

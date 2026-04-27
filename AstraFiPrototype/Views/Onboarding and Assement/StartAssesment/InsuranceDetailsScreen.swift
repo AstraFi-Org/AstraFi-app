@@ -4,6 +4,7 @@ internal import UniformTypeIdentifiers
 struct InsuranceDetailsScreen: View {
     @Bindable var data: CompleteAssessmentData
     @Environment(\.dismiss) private var dismiss
+    @Environment(AppStateManager.self) private var appState
     @State private var goNext           = false
     @State private var showFilePicker    = false
     @State private var uploadedFileName: String? = nil
@@ -206,6 +207,17 @@ struct InsuranceDetailsScreen: View {
             }
 
             AssessmentFooterButton(label: "See My Report", enabled: true, isLast: true) {
+                // Merge dependent insurance policies into the main insuranceEntries
+                // so the report and AppStateManager both see them as one unified list.
+                for depEntry in data.dependentInsuranceEntries {
+                    if !data.insuranceEntries.contains(where: { $0.id == depEntry.id }) {
+                        data.insuranceEntries.append(depEntry)
+                    }
+                }
+                // Persist insurance (and all other assessment) data to the profile
+                // before navigating to the report so that the report always reads
+                // from an up-to-date profile rather than the raw assessment object.
+                appState.updateProfile(from: data)
                 goNext = true
             }
         }

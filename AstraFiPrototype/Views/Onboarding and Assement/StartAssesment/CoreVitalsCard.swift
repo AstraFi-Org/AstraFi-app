@@ -48,7 +48,7 @@ struct FinancialKnowledgeSheet: View {
             )
         } else if savingsRate >= 10 {
             return (
-                "info.circle.fill",
+                "info.circle",
                 AppTheme.vibrantOrange,
                 "Room for improvement",
                 "Your \(Int(savingsRate))% saving rate is a solid start, but the 30% target is within reach. Review your 'wants' spending — small cuts add up to big gains."
@@ -396,10 +396,10 @@ struct CoreVitalsCard: View {
                     showKnowledge = true
                 } label: {
                     ZStack {
-                        Circle()
-                            .fill(AppTheme.auraIndigo.opacity(0.12))
-                            .frame(width: 28, height: 28)
-                        Image(systemName: "info")
+//                        Circle()
+//                            .fill(AppTheme.auraIndigo.opacity(0.12))
+//                            .frame(width: 28, height: 28)
+                        Image(systemName: "info.circle")
                             .font(.system(size: 12, weight: .bold))
                             .foregroundStyle(AppTheme.auraIndigo)
                     }

@@ -58,7 +58,6 @@ struct NewInvestmentPlanView: View {
             AppTheme.appBackground(for: colorScheme).ignoresSafeArea()
 
             VStack(spacing: 0) {
-                progressHeader
 
                 ScrollView {
                     VStack(alignment: .leading, spacing: 24) {
@@ -157,16 +156,7 @@ struct NewInvestmentPlanView: View {
     private var stepContent: some View {
         let step = steps[currentStep]
 
-        VStack(alignment: .leading, spacing: 8) {
-            HStack(spacing: 10) {
-                Text(step.emoji).font(.title2)
-                Text(step.title).font(.title2).fontWeight(.bold)
-            }
-            Text(step.subtitle)
-                .font(.subheadline)
-                .foregroundColor(.secondary)
-                .fixedSize(horizontal: false, vertical: true)
-        }
+
 
         stepFields(for: step.id)
     }
@@ -426,13 +416,6 @@ struct GoalStep: Identifiable {
 //        }
 //    }
     static func steps(for goal: String, profile: AstraUserProfile?) -> [GoalStep] {
-        let targetStep = GoalStep(id: "target", title: "Your Goal",
-                                  subtitle: "Define what you want to achieve", emoji: "🎯")
-        let sipStep    = GoalStep(id: "investment", title: "Investment Amount",
-                                  subtitle: "How much can you invest monthly?", emoji: "💸")
-        let stratStep  = GoalStep(id: "strategy", title: "Strategy",
-                                  subtitle: "Risk, asset class & liquidity", emoji: "🧠")
-
         var goalSteps: [GoalStep] = []
         switch goal {
         case "Retirement":

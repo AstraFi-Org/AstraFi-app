@@ -87,10 +87,7 @@ struct WealthQuestionnaire: View {
                                 .foregroundStyle(.secondary)
                         }
                         Spacer()
-                        TextField("e.g. 5 Cr", text: $input.targetAmount)
-                            .keyboardType(.numberPad)
-                            .multilineTextAlignment(.trailing)
-                            .font(.system(size: 15, weight: .semibold, design: .rounded))
+                        GoalAmountField(text: $input.targetAmount, placeholder: "e.g. 5 Cr")
                             .frame(width: 120)
                     }
                     
@@ -130,10 +127,7 @@ struct WealthQuestionnaire: View {
                                 .foregroundStyle(.secondary)
                         }
                         Spacer()
-                        TextField("e.g. 10L", text: $input.savedAmount)
-                            .keyboardType(.numberPad)
-                            .multilineTextAlignment(.trailing)
-                            .font(.system(size: 15, weight: .semibold, design: .rounded))
+                        GoalAmountField(text: $input.savedAmount, placeholder: "e.g. 10L")
                             .frame(width: 120)
                     }
                 }

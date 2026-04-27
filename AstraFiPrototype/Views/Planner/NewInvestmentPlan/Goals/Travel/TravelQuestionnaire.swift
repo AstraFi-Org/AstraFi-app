@@ -113,10 +113,7 @@ struct TravelQuestionnaire: View {
                                 .foregroundStyle(.secondary)
                         }
                         Spacer()
-                        TextField("e.g. 3L", text: $input.currentTripCost)
-                            .keyboardType(.numberPad)
-                            .multilineTextAlignment(.trailing)
-                            .font(.system(size: 15, weight: .semibold, design: .rounded))
+                        GoalAmountField(text: $input.currentTripCost, placeholder: "e.g. 3L")
                             .frame(width: 120)
                     }
                     
@@ -131,10 +128,7 @@ struct TravelQuestionnaire: View {
                                 .foregroundStyle(.secondary)
                         }
                         Spacer()
-                        TextField("e.g. 50K", text: $input.savedAmount)
-                            .keyboardType(.numberPad)
-                            .multilineTextAlignment(.trailing)
-                            .font(.system(size: 15, weight: .semibold, design: .rounded))
+                        GoalAmountField(text: $input.savedAmount, placeholder: "e.g. 50K")
                             .frame(width: 120)
                     }
                 }
