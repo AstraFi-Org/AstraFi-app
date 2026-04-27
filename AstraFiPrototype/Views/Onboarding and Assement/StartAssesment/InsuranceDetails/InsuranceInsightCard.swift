@@ -169,7 +169,7 @@ struct InsuranceInsightCard: View {
                         .foregroundStyle(.secondary)
                 }
                 Spacer()
-                Text(isCoverAdequate ? "Adequate" : "Under-insured")
+                Text(isCoverAdequate ? "Adequate" : "UnderInsured")
                     .font(.system(size: 14, weight: .bold, design: .rounded))
                     .foregroundStyle(isCoverAdequate ? AppTheme.auraGreen : AppTheme.vibrantOrange)
                     .contentTransition(.identity)
@@ -199,7 +199,7 @@ struct InsuranceInsightCard: View {
             }
 
             if isCoverAdequate {
-                Text("✓  Cover ≥ 10× annual income — well-protected")
+                Text("✓  Cover ≥ 10× annual income  wellprotected")
                     .font(.system(size: 11, design: .rounded))
                     .foregroundStyle(.secondary)
             } else if income > 0 {
@@ -276,7 +276,7 @@ struct InsuranceInsightCard: View {
     private var overallStatusMessage: (String, Color, String) {
         if isExpired {
             return ("exclamationmark.triangle.fill", AppTheme.vibrantRed,
-                    "Your policy has expired. Renew immediately — any claim during this gap will be rejected.")
+                    "Your policy has expired. Renew immediately any claim during this gap will be rejected.")
         }
         if isExpiringSoon {
             return ("exclamationmark.circle.fill", AppTheme.vibrantOrange,
@@ -288,14 +288,14 @@ struct InsuranceInsightCard: View {
         }
         if hasUninsuredDependents {
             return ("person.crop.circle.badge.exclamationmark.fill", AppTheme.vibrantOrange,
-                    "\(numDependents) dependent\(numDependents > 1 ? "s" : "") ha\(numDependents > 1 ? "ve" : "s") no insurance. A single hospitalisation can wipe out months of savings — add a family floater or individual health plan.")
+                    "\(numDependents) dependent\(numDependents > 1 ? "s" : "") ha\(numDependents > 1 ? "ve" : "s") no insurance. A single hospitalisation can wipe out months of savings add a family floater or individual health plan.")
         }
         if partiallyInsuredDependents {
             return ("exclamationmark.circle.fill", AppTheme.vibrantOrange,
                     "Some dependents still lack coverage. Complete their policies to ensure the whole family is protected.")
         }
         return ("checkmark.seal.fill", AppTheme.auraGreen,
-                "You and your family appear well-covered. Review your cover every 2–3 years as income and responsibilities grow.")
+                "You and your family appear well Covered. Review your cover every 2–3 years as income and responsibilities grow.")
     }
 
     // MARK: - Not insured View
@@ -338,7 +338,7 @@ struct InsuranceInsightCard: View {
                     icon: "chart.line.downtrend.xyaxis",
                     color: AppTheme.vibrantRed,
                     title: "Tax Benefits Missed",
-                    detail: "Health insurance premiums qualify for ₹25,000–₹50,000 deduction under Sec 80D. You're leaving this tax saving on the table."
+                    detail: "Health insurance premiums qualify for ₹25,000 – ₹50,000 deduction under Sec 80D. You're leaving this tax saving on the table."
                 )
             }
 
@@ -348,7 +348,7 @@ struct InsuranceInsightCard: View {
                     .font(.system(size: 11))
                     .foregroundStyle(AppTheme.auraGold)
                     .padding(.top, 1)
-                Text("Start with a ₹5–10 lakh health plan and a term life cover of 10–15× your annual income — both combined cost less than ₹1,500/month for most people under 30.")
+                Text("Start with a ₹5–10 lakh health plan and a term life cover of 10–15× your annual income  both combined cost less than ₹1,500/month for most people under 30.")
                     .font(.system(size: 11, design: .rounded))
                     .foregroundStyle(.secondary)
                     .fixedSize(horizontal: false, vertical: true)
@@ -506,7 +506,7 @@ struct InsuranceKnowledgeSheet: View {
                         rows: [
                             ("Self & Family (< 60 yrs)", "Deduction up to ₹25,000"),
                             ("Parents (< 60 yrs)", "Additional ₹25,000"),
-                            ("Senior Citizen Parents", "Up to ₹50,000 — total deduction ₹75,000"),
+                            ("Senior Citizen Parents", "Up to ₹50,000  total deduction ₹75,000"),
                             ("Preventive Health Check-up", "₹5,000 within the above limits")
                         ]
                     )
@@ -589,7 +589,7 @@ struct InsuranceKnowledgeSheet: View {
 
 // MARK: - Preview
 
-#Preview("Insured – Good") {
+#Preview("Insured  Good") {
     InsuranceInsightCard(
         isInsured: true,
         coverAmountStr: "15000000",
@@ -604,7 +604,7 @@ struct InsuranceKnowledgeSheet: View {
     .background(Color(.systemGroupedBackground))
 }
 
-#Preview("Insured – Under-covered") {
+#Preview("Insured  UnderCovered") {
     InsuranceInsightCard(
         isInsured: true,
         coverAmountStr: "500000",

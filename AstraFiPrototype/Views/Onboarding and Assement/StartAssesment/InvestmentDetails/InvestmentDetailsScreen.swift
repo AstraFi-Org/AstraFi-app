@@ -162,63 +162,30 @@ struct InvestmentDetailsScreen: View {
                                         }
                                         
                                         if showSuggestions && activeEntryID == entry.id && entry.type == .mutualFund {
-                                            ScrollView {
-                                                VStack(alignment: .leading, spacing: 10) {
-                                                    ForEach(mfSearchResults) { scheme in
-                                                        Button {
-                                                            entry.fundName = scheme.name
-                                                            entry.isin = scheme.isin
-                                                            entry.schemeCode = scheme.schemeCode
-                                                            showSuggestions = false
-                                                            recalculateInvestment(entry: $entry)
-                                                        } label: {
-                                                            VStack(alignment: .leading) {
-                                                                Text(scheme.name)
-                                                                    .font(.subheadline)
-                                                                    .foregroundColor(.primary)
-                                                                    .multilineTextAlignment(.leading)
-                                                                Text(scheme.isin)
-                                                                    .font(.caption2)
-                                                                    .foregroundColor(.secondary)
-                                                            }
-                                                            .padding(.vertical, 4)
-                                                        }
-                                                        Divider()
-                                                    }
-                                                }
-                                                .padding(8)
+                                            MFSearchSuggestionsView(results: mfSearchResults) { scheme in
+                                                entry.fundName = scheme.name
+                                                entry.isin = scheme.isin
+                                                entry.schemeCode = scheme.schemeCode
+                                                showSuggestions = false
+                                                recalculateInvestment(entry: $entry)
                                             }
-                                            .frame(maxHeight: 200)
-                                            .background(Color(.systemGray6))
-                                            .cornerRadius(8)
-                                            .shadow(radius: 2)
                                         }
                                     }
                                 }
 
-//                                Section() {
-                                    HStack {
-//                                        if entry.type == .stocks {
-//                                            Text("Total Value")
-//                                        } else {
-//                                            Text("₹")
-//                                        }
-//                                        AssessmentField(
-//                                            icon: "indianrupeesign",
-//                                            label: "Invested Amount",
-//                                            placeholder: "e.g. 10000",
-//                                            text: $entry.amount
-//                                        )
-                                        Text("Invested Amount")
-                                        Spacer()
-                                        TextField("Amount", text: $entry.amount)
-                                            .keyboardType(.numberPad)
-                                            .multilineTextAlignment(.trailing)
-                                            .frame(width: 150)
-                                            .onChange(of: entry.amount) { _, _ in
-                                                recalculateInvestment(entry: $entry)
-                                            }
-                                    }
+                                HStack {
+                                    Text(entry.mode == .sip ? "SIP Amount" : "Invested Amount")
+                                    Spacer()
+                                    TextField("Amount", text: $entry.amount)
+                                        .keyboardType(.numberPad)
+                                        .multilineTextAlignment(.trailing)
+                                        .frame(width: 150)
+                                        .onChange(of: entry.amount) { _, _ in
+                                            recalculateInvestment(entry: $entry)
+                                        }
+                                }
+
+                                    
 
                                     DatePicker("Investment Date", selection: $entry.startDate, displayedComponents: .date)
                                         .onChange(of: entry.startDate) { _, _ in
@@ -240,7 +207,7 @@ struct InvestmentDetailsScreen: View {
                                 if !entry.amount.isEmpty {
                                     if entry.mode == .sip {
                                         // ── SIP Calculation Card ──────────────────────────
-                                        let installmentCount = sipInstallmentCount(startDate: entry.startDate, frequency: entry.frequency)
+                                        let installmentCount = sipInstallmentCount(from: entry.startDate, frequency: entry.frequency)
                                         let sipAmt = Double(entry.amount) ?? 0
                                         let totalInvested = entry.totalInvested ?? (sipAmt * Double(installmentCount))
                                         let currentValue  = entry.currentValue ?? 0
@@ -442,27 +409,37 @@ struct InvestmentDetailsScreen: View {
     }
     
     // MARK: - Logic Helpers
-
-    /// Returns the number of SIP installments that have occurred from `startDate` up to today,
     /// based on the chosen frequency. Used to compute total invested for non-API types.
-    private func sipInstallmentCount(startDate: Date, frequency: AssessmentInvestmentEntry.AssessmentSIPFrequency) -> Int {
-        let today = Date()
-        guard startDate <= today else { return 0 }
-        let cal = Calendar.current
+    private func sipInstallmentCount(from startDate: Date,
+                                     to endDate: Date = Date(),
+                                     frequency: AssessmentInvestmentEntry.AssessmentSIPFrequency
+                                 ) -> Int {
+        let calendar = Calendar.current
+        let start = calendar.startOfDay(for: startDate)
+        let end = calendar.startOfDay(for: endDate)
+        
+        if start > end { return 0 }
+        
+        let components: Calendar.Component
+        let divisor: Int
+        
         switch frequency {
         case .weekly:
-            let weeks = cal.dateComponents([.weekOfYear], from: startDate, to: today).weekOfYear ?? 0
-            return max(1, weeks + 1)
+            components = .weekOfYear
+            divisor = 1
         case .monthly:
-            let months = cal.dateComponents([.month], from: startDate, to: today).month ?? 0
-            return max(1, months + 1)
+            components = .month
+            divisor = 1
         case .quarterly:
-            let months = cal.dateComponents([.month], from: startDate, to: today).month ?? 0
-            return max(1, (months / 3) + 1)
+            components = .month
+            divisor = 3
         case .yearly:
-            let years = cal.dateComponents([.year], from: startDate, to: today).year ?? 0
-            return max(1, years + 1)
+            components = .year
+            divisor = 1
         }
+        
+        let diff = calendar.dateComponents([components], from: start, to: end).value(for: components) ?? 0
+        return max(0, (diff / divisor) + 1)
     }
 
     private func recalculateInvestment(entry: Binding<AssessmentInvestmentEntry>) {
@@ -476,7 +453,7 @@ struct InvestmentDetailsScreen: View {
             
             if type == .stocks, let symbol = entry.wrappedValue.symbol {
                 if isSIP {
-                    result = await StockService.shared.calculateHistoricalSIPUnits(symbol: symbol, monthlyAmount: investedAmount, startDate: startDate)
+                    result = await StockService.shared.calculateHistoricalSIPUnits(symbol: symbol, monthlyAmount: investedAmount, startDate: startDate, frequency: entry.wrappedValue.frequency)
                 } else {
                     result = await StockService.shared.calculateLumpsumUnits(symbol: symbol, amount: investedAmount, startDate: startDate)
                 }
@@ -488,7 +465,7 @@ struct InvestmentDetailsScreen: View {
                 }
             } else if type == .mutualFund, let isin = entry.wrappedValue.isin {
                 if isSIP {
-                    result = await MFService.shared.calculateHistoricalSIPUnits(schemeCode: entry.wrappedValue.schemeCode ?? "", monthlyAmount: investedAmount, startDate: startDate)
+                    result = await MFService.shared.calculateHistoricalSIPUnits(schemeCode: entry.wrappedValue.schemeCode ?? "", monthlyAmount: investedAmount, startDate: startDate, frequency: entry.wrappedValue.frequency)
                 } else {
                     // Simple lumpsum for MF
                     if let nav = await MFService.shared.fetchHistoricalNAV(schemeCode: entry.wrappedValue.schemeCode ?? "", date: startDate) {
@@ -540,5 +517,40 @@ struct InvestmentDetailsScreen: View {
 
     NavigationStack {
         InvestmentDetailsScreen(data: data)
+    }
+}
+
+// MARK: - Supporting Views
+struct MFSearchSuggestionsView: View {
+    let results: [MFScheme]
+    let onSelect: (MFScheme) -> Void
+    
+    var body: some View {
+        ScrollView {
+            VStack(alignment: .leading, spacing: 10) {
+                ForEach(results) { scheme in
+                    Button {
+                        onSelect(scheme)
+                    } label: {
+                        VStack(alignment: .leading) {
+                            Text(scheme.name)
+                                .font(.subheadline)
+                                .foregroundColor(.primary)
+                                .multilineTextAlignment(.leading)
+                            Text(scheme.isin)
+                                .font(.caption2)
+                                .foregroundColor(.secondary)
+                        }
+                        .padding(.vertical, 4)
+                    }
+                    Divider()
+                }
+            }
+            .padding(8)
+        }
+        .frame(maxHeight: 200)
+        .background(Color(.systemGray6))
+        .cornerRadius(8)
+        .shadow(radius: 2)
     }
 }
