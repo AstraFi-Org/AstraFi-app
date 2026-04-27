@@ -12,8 +12,8 @@ struct FinancialHealthReportView: View {
     private var userName: String { profile?.basicDetails.name ?? data?.name ?? "User" }
 
     @State private var spendingSheet      = false
-    @State private var insuranceSheet     = false
-    @State private var liabilityDetail    = false
+    @State private var navigateToInsurance = false
+    @State private var navigateToLiability = false
     @State private var showingAddGoal     = false
     @State private var navigateToVitals   = false
     @State private var navigateToRisk     = false
@@ -71,8 +71,8 @@ struct FinancialHealthReportView: View {
                 switch param {
                 case .vitals:        navigateToVitals    = true
                 case .investment:    navigateToRisk      = true
-                case .liabilities:   liabilityDetail     = true
-                case .insurance:     insuranceSheet      = true
+                case .liabilities:   navigateToLiability = true
+                case .insurance:     navigateToInsurance = true
                 case .emergencyFund: navigateToEmergency = true
                 }
             }
@@ -131,7 +131,7 @@ struct FinancialHealthReportView: View {
             .padding(.horizontal, 20).padding(.bottom, 6)
             .contentShape(Rectangle())
 
-            DisclosureLink("Help me choose the right insurance") { insuranceSheet = true }
+            DisclosureLink("Help me choose the right insurance") { navigateToInsurance = true }
                 .padding(.horizontal, 20).padding(.bottom, 28)
         }
     }
@@ -178,13 +178,13 @@ struct FinancialHealthReportView: View {
                 set: { appState.updateCashflow($0) }
             ))
         }
-        .sheet(isPresented: $insuranceSheet) {
+        .navigationDestination(isPresented: $navigateToInsurance) {
             InsuranceAdviceSheet(
                 adultDependents: profile?.basicDetails.adultDependents ?? Int(data?.numberOfDependents ?? "") ?? 1,
                 concerns: insights.activeConcerns.filter { $0.parameter == .insurance }
             )
         }
-        .sheet(isPresented: $liabilityDetail) {
+        .navigationDestination(isPresented: $navigateToLiability) {
             LiabilityDetailSheet(insights: insights,
                                  concerns: insights.activeConcerns.filter { $0.parameter == .liabilities })
         }
@@ -193,16 +193,16 @@ struct FinancialHealthReportView: View {
 }
 
 // MARK: - Preview
-#Preview {
-    NavigationStack {
-        let dummyData: CompleteAssessmentData = {
-            let d = CompleteAssessmentData()
-            d.name = "Akash"; d.income = "134890"
-            d.expenditure = "51000"; d.numberOfDependents = "4"
-            d.insuranceEntries.append(AssessmentInsuranceEntry(details: .life(AssessmentInsuranceEntry.LifeDetails())))
-            return d
-        }()
-        FinancialHealthReportView(data: dummyData)
-    }
-    .environment(AppStateManager.withSampleData())
-}
+//#Preview {
+//    NavigationStack {
+//        let dummyData: CompleteAssessmentData = {
+//            let d = CompleteAssessmentData()
+//            d.name = "Akash"; d.income = "134890"
+//            d.expenditure = "51000"; d.numberOfDependents = "4"
+//            d.insuranceEntries.append(AssessmentInsuranceEntry(details: .life(AssessmentInsuranceEntry.LifeDetails())))
+//            return d
+//        }()
+//        FinancialHealthReportView(data: dummyData)
+//    }
+//    .environment(AppStateManager.withSampleData())
+//}
