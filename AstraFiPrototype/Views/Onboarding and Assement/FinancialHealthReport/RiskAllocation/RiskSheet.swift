@@ -24,7 +24,6 @@ struct RiskSheet: View {
     }
 
     var body: some View {
-        NavigationStack {
             List {
 
                 // Risk Breakdown
@@ -95,8 +94,6 @@ struct RiskSheet: View {
             .listStyle(.insetGrouped)
             .navigationTitle("Investment Risk")
             .navigationBarTitleDisplayMode(.inline)
-            .toolbar { ToolbarItem(placement: .topBarTrailing) { Button("Done") { dismiss() }.fontWeight(.semibold) } }
-        }
     }
 }
 

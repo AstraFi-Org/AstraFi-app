@@ -166,7 +166,7 @@ struct FinancialHealthReportView: View {
         .navigationTitle("Financial Health Report")
         .navigationBarTitleDisplayMode(.inline)
         .onAppear { withAnimation(.easeOut(duration: 1.4)) { animatedScore = score } }
-        .sheet(isPresented: $vitalsDetail) {
+        .navigationDestination(isPresented: $vitalsDetail) {
             VitalsDetailSheet(income: insights.monthlyIncome,
                               expenses: insights.monthlyExpenses,
                               savings: insights.monthlySavings,
@@ -179,7 +179,7 @@ struct FinancialHealthReportView: View {
                 set: { appState.updateCashflow($0) }
             ))
         }
-        .sheet(isPresented: $riskSheet) {
+        .navigationDestination(isPresented: $riskSheet) {
             RiskSheet(insights: insights,
                       concerns: insights.activeConcerns.filter { $0.parameter == .investment })
         }
@@ -193,7 +193,7 @@ struct FinancialHealthReportView: View {
             LiabilityDetailSheet(insights: insights,
                                  concerns: insights.activeConcerns.filter { $0.parameter == .liabilities })
         }
-        .sheet(isPresented: $emergencyDetail) {
+        .navigationDestination(isPresented: $emergencyDetail) {
             EmergencyFundInsightSheet(insights: insights)
         }
         .sheet(isPresented: $showingAddGoal) { AddGoalView() }

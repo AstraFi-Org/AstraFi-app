@@ -251,10 +251,8 @@ struct InvestmentPlanResultView: View {
             VStack(alignment: .leading, spacing: 0) {
                 if isRecommended {
                     HStack(spacing: 6) {
-                        Image(systemName: "sparkles")
-                            .font(.system(size: 10))
-                        Text("ASTRA CHOICE")
-                            .font(.system(size: 10, weight: .black, design: .rounded))
+//                        Text("ASTRA CHOICE")
+//                            .font(.system(size: 10, weight: .black, design: .rounded))
                         Spacer()
                         Text("RECOMMENDED")
                             .font(.system(size: 9, weight: .bold))
