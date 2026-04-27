@@ -74,7 +74,7 @@ struct BasicDetailView: View {
                             text: $data.age,
                             keyboard: .numberPad
                         )
-                        HStack{
+                        VStack(alignment: .leading, spacing: 6) {
                             AssessmentField(
                                 icon: "indianrupeesign.circle.fill",
                                 label: "Monthly Disposable Income (₹)",
@@ -82,8 +82,18 @@ struct BasicDetailView: View {
                                 text: $data.income,
                                 keyboard: .numberPad
                             )
-                            Text("Disposable (inhand) income means income after all taxs and other deductions.")
-                                .font(.callout)
+                            HStack(alignment: .top, spacing: 6) {
+                                Image(systemName: "info.circle")
+                                    .font(.system(size: 12))
+                                    .foregroundStyle(AppTheme.auraIndigo)
+                                    .padding(.top, 1)
+                                
+                                Text("Disposable (inhand) income means income after all taxes and other deductions.")
+                                    .font(.system(size: 11, design: .rounded))
+                                    .foregroundStyle(.secondary)
+                                    .fixedSize(horizontal: false, vertical: true)
+                            }
+                            .padding(.horizontal, 4)
                         }
                         AssessmentField(
                             icon: "cart.fill",

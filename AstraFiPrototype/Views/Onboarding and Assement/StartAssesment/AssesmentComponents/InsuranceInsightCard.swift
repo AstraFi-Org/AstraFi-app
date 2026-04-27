@@ -89,7 +89,6 @@ struct InsuranceInsightCard: View {
                             .foregroundStyle(AppTheme.auraIndigo)
                     }
                 }
-                .buttonStyle(.plain)
                 .accessibilityLabel("Insurance insights and tips")
             }
             .padding(.bottom, 16)
