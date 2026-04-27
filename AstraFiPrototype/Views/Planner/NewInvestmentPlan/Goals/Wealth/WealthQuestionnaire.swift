@@ -480,7 +480,7 @@ struct WealthCompoundingSheet: View {
                             factorItem(icon: "arrow.up.circle.fill", title: "Reinvestment", desc: "Dividends and gains are reinvested to grow your principal amount.")
                         }
                         .padding()
-                        .background(Color(.secondarySystemBackground), in: RoundedRectangle(cornerRadius: 16))
+                        .background(AppTheme.elevatedCardBackground, in: RoundedRectangle(cornerRadius: 16))
                     }
                     .padding(.horizontal)
                     
@@ -549,7 +549,7 @@ struct WealthCompoundingSheet: View {
 
 #Preview {
     ZStack {
-        Color(.systemGroupedBackground).ignoresSafeArea()
+        AppTheme.darkBackground.ignoresSafeArea()
         ScrollView {
             WealthQuestionnaire(goalAccentColor: .red)
                 .padding()

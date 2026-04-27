@@ -11,7 +11,7 @@ struct SplashScreenView: View {
     var body: some View {
         ZStack {
             // Deep dark background (premium dark mode feel)
-            Color(hex: "#0A0A0F")
+            AppTheme.darkBackground
                 .ignoresSafeArea()
 
             // Ambient glow behind logo
@@ -62,7 +62,7 @@ struct SplashScreenView: View {
                         .frame(width: 82, height: 82)
 
                     // Star icon
-                    Image(.logo)
+                    Image(.splashScreen)
                         .scaledToFit()
                         .frame(width: 570, height: 570)
                         .clipShape(Ellipse())

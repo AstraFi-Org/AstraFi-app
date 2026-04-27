@@ -23,13 +23,13 @@ struct AppRootView: View {
                 OnboardingPagesView()
             }
         }
+        .onTapGesture {
+            hideKeyboard()
+        }
         .animation(.easeInOut(duration: 0.4), value: appState.isLoading)
         .animation(.easeInOut(duration: 0.35), value: appState.hasCompletedOnboarding)
         .animation(.easeInOut(duration: 0.35), value: appState.isAuthenticated)
         .animation(.easeInOut(duration: 0.35), value: appState.showDashboard)
-        .task {
-            await appState.syncMutualFundNAVs()
-        }
     }
 }
 

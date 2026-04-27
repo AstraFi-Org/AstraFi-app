@@ -231,7 +231,6 @@ struct EmergencyFundInsightSheet: View {
     }
 
     var body: some View {
-        NavigationStack {
             List {
 
                 if step == 0 {
@@ -249,12 +248,6 @@ struct EmergencyFundInsightSheet: View {
             .listStyle(.insetGrouped)
             .navigationTitle("Emergency Fund")
             .navigationBarTitleDisplayMode(.inline)
-            .toolbar {
-                ToolbarItem(placement: .topBarTrailing) {
-                    Button("Done") { dismiss() }.fontWeight(.semibold)
-                }
-            }
-        }
     }
 }
 

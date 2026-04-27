@@ -69,20 +69,19 @@ struct Plan3DetailView: View {
                 VStack(spacing: 24) {
                     targetVsEstimatedCard
                     assumptionsWarningSection
-                    
+                    leveragedGraphCard
+                    interactiveAdjusters
                     riskTypeSection
                     totalInvestmentCard
                     scenarioTable
-                    
-                    interactiveAdjusters
                     repaymentStrategyCard
-                    leveragedGraphCard
                     
-                    bankDetailsCard
                     emiBreakdownCard
-                    amortizationSummaryCard
+                    bankDetailsCard
                     
                     strategyBuilderCard
+                    amortizationSummaryCard
+                    
                     recommendationCard
                 }
                 .padding(.horizontal, 20)
@@ -177,9 +176,6 @@ struct Plan3DetailView: View {
                 HStack(spacing: 4) {
                     Text("In-Hand (Net)")
                         .font(.subheadline)
-                        .foregroundColor(.secondary)
-                    Image(systemName: "info.circle")
-                        .font(.caption2)
                         .foregroundColor(.secondary)
                 }
                 Text("₹\(formatL(netWealth))")
@@ -373,15 +369,15 @@ struct Plan3DetailView: View {
                     Spacer()
                     
                     Button(action: {
-                        alertMessage = "This plan assumes steady market growth based on historical data, timely loan repayments, and no major economic crashes. Calculations account for tax-efficient arbitrage spreads where applicable."
-                        showingSaveAlert = true // Reusing for generic alerts if needed, or add showAssumptionsAlert
+                        alertMessage = "Leveraged Investing (Plan 3) involves borrowing capital at a lower interest rate and investing it in assets with higher expected returns. This strategy aims to build wealth by capturing the 'spread' between investment growth and loan interest."
+                        showingSaveAlert = true
                     }) {
                         Image(systemName: "info.circle")
                             .foregroundColor(.blue)
                             .font(.caption)
                     }
                 }
-                Text("This plan is based on certain assumptions. Kindly pursue this plan at your own risk.")
+                Text("Plan Logic: Take a loan and invest it as per the descriptive plan shown below to see how you can build significant wealth.")
                     .font(.caption)
                     .foregroundColor(.secondary)
             }
@@ -714,8 +710,6 @@ struct Plan3DetailView: View {
     private var recommendationCard: some View {
         VStack(alignment: .leading, spacing: 12) {
             HStack {
-                Image(systemName: "sparkles")
-                    .foregroundColor(.purple)
                 Text("Astra Recommendation").font(.headline)
             }
             Text(activeResult.recommendationReason)

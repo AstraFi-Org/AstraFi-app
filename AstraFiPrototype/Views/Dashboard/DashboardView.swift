@@ -31,6 +31,8 @@ struct DashboardView: View {
             }
             .padding(.horizontal, AppTheme.auraPadding)
             .padding(.bottom, 48)
+            .contentShape(Rectangle())
+            .onTapGesture { hideKeyboard() }
         }
         .navigationTitle("Home")
         .navigationBarTitleDisplayMode(.large)

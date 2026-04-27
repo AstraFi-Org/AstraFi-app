@@ -9,7 +9,13 @@ struct FinancialHealthReportView: View {
     var data: CompleteAssessmentData?
 
     private var profile: AstraUserProfile? { appState.currentProfile }
-    private var userName: String { profile?.basicDetails.name ?? data?.name ?? "User" }
+    private var userName: String {
+        let name = profile?.basicDetails.name ?? ""
+        if name.isEmpty || name.contains("@") {
+            return profile?.signUp.signUpName ?? data?.name ?? "User"
+        }
+        return name
+    }
 
     @State private var spendingSheet   = false
     @State private var riskSheet       = false
@@ -17,6 +23,8 @@ struct FinancialHealthReportView: View {
     @State private var vitalsDetail    = false
     @State private var liabilityDetail = false
     @State private var emergencyDetail = false
+    @State private var navigateToLiability  = false
+    @State private var navigateToInsurance  = false
     @State private var showingAddGoal  = false
     @State private var animatedScore: Double = 0
     @State private var vitalsPeriod: VitalsPeriod = .monthly
@@ -71,8 +79,8 @@ struct FinancialHealthReportView: View {
                 switch param {
                 case .vitals:        vitalsDetail    = true
                 case .investment:    riskSheet       = true
-                case .liabilities:   liabilityDetail = true
-                case .insurance:     insuranceSheet  = true
+                case .liabilities:   navigateToLiability = true
+                case .insurance:     navigateToInsurance = true
                 case .emergencyFund: emergencyDetail = true
                 }
             }
@@ -99,8 +107,8 @@ struct FinancialHealthReportView: View {
                                 atRisk: insights.investmentBreakdown.highRiskCount)
             .padding(.horizontal, 20).padding(.bottom, 10)
 
-            DisclosureLink("How can I reduce investment risk?") { riskSheet = true }
-                .padding(.horizontal, 20).padding(.bottom, 24)
+//            DisclosureLink("How can I reduce investment risk?") { riskSheet = true }
+//                .padding(.horizontal, 20).padding(.bottom, 24)
         }
     }
 
@@ -113,8 +121,8 @@ struct FinancialHealthReportView: View {
                               statusMessage: insights.emergencyStatusMessage)
             .padding(.horizontal, 20).padding(.bottom, 6)
             .contentShape(Rectangle())
-            DisclosureLink("How to improve emergency-fund liquidity?") { emergencyDetail = true }
-                .padding(.horizontal, 20).padding(.bottom, 24)
+//            DisclosureLink("How to improve emergency-fund liquidity?") { emergencyDetail = true }
+//                .padding(.horizontal, 20).padding(.bottom, 24)
         }
     }
 
@@ -131,8 +139,8 @@ struct FinancialHealthReportView: View {
             .padding(.horizontal, 20).padding(.bottom, 6)
             .contentShape(Rectangle())
 
-            DisclosureLink("Help me choose the right insurance") { insuranceSheet = true }
-                .padding(.horizontal, 20).padding(.bottom, 28)
+//            DisclosureLink("Help me choose the right insurance") { insuranceSheet = true }
+//                .padding(.horizontal, 20).padding(.bottom, 28)
         }
     }
 
@@ -158,7 +166,7 @@ struct FinancialHealthReportView: View {
         .navigationTitle("Financial Health Report")
         .navigationBarTitleDisplayMode(.inline)
         .onAppear { withAnimation(.easeOut(duration: 1.4)) { animatedScore = score } }
-        .sheet(isPresented: $vitalsDetail) {
+        .navigationDestination(isPresented: $vitalsDetail) {
             VitalsDetailSheet(income: insights.monthlyIncome,
                               expenses: insights.monthlyExpenses,
                               savings: insights.monthlySavings,
@@ -171,21 +179,21 @@ struct FinancialHealthReportView: View {
                 set: { appState.updateCashflow($0) }
             ))
         }
-        .sheet(isPresented: $riskSheet) {
+        .navigationDestination(isPresented: $riskSheet) {
             RiskSheet(insights: insights,
                       concerns: insights.activeConcerns.filter { $0.parameter == .investment })
         }
-        .sheet(isPresented: $insuranceSheet) {
+        .navigationDestination(isPresented: $navigateToInsurance) {
             InsuranceAdviceSheet(
                 adultDependents: profile?.basicDetails.adultDependents ?? Int(data?.numberOfDependents ?? "") ?? 1,
                 concerns: insights.activeConcerns.filter { $0.parameter == .insurance }
             )
         }
-        .sheet(isPresented: $liabilityDetail) {
+        .navigationDestination(isPresented: $navigateToLiability) {
             LiabilityDetailSheet(insights: insights,
                                  concerns: insights.activeConcerns.filter { $0.parameter == .liabilities })
         }
-        .sheet(isPresented: $emergencyDetail) {
+        .navigationDestination(isPresented: $emergencyDetail) {
             EmergencyFundInsightSheet(insights: insights)
         }
         .sheet(isPresented: $showingAddGoal) { AddGoalView() }

@@ -20,7 +20,6 @@ struct VitalsDetailSheet: View {
     }
 
     var body: some View {
-        NavigationStack {
             List {
 
                 // Key metrics — each in its own grouped row
@@ -105,11 +104,5 @@ struct VitalsDetailSheet: View {
             .listStyle(.insetGrouped)
             .navigationTitle("Financial Vitals")
             .navigationBarTitleDisplayMode(.inline)
-            .toolbar {
-                ToolbarItem(placement: .topBarTrailing) {
-                    Button("Done") { dismiss() }.fontWeight(.semibold)
-                }
-            }
-        }
     }
 }

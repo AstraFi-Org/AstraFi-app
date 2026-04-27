@@ -8,6 +8,7 @@ struct AstraFiPrototypeApp: App {
         WindowGroup {
             AppRootView()
                 .environment(appState)
+                .preferredColorScheme(.dark)
         }
     }
 }

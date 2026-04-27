@@ -119,7 +119,6 @@ struct Plan1DetailView: View {
                 showingSaveAlert = true
             }) {
                 HStack {
-                    Image(systemName: isSaved ? "star.fill" : "star")
                     Text(isSaved ? "Saved" : "Save")
                 }
                 .frame(maxWidth: .infinity)
@@ -147,7 +146,6 @@ struct Plan1DetailView: View {
                 showingSaveAlert = true
             }) {
                 HStack {
-                    Image(systemName: isFollowed ? "checkmark.circle.fill" : "plus.circle.fill")
                     Text(isFollowed ? "Following" : "Follow Plan")
                 }
                 .font(.headline).fontWeight(.bold)

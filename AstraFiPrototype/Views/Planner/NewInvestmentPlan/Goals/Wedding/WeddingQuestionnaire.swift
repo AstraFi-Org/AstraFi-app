@@ -476,7 +476,7 @@ struct WeddingPriceHikeSheet: View {
                             factorItem(icon: "camera.fill", title: "Photography & Media", desc: "Specialized wedding cinematography and AI-driven edits.")
                         }
                         .padding()
-                        .background(Color(.secondarySystemBackground), in: RoundedRectangle(cornerRadius: 16))
+                        .background(AppTheme.elevatedCardBackground, in: RoundedRectangle(cornerRadius: 16))
                     }
                     .padding(.horizontal)
                     
@@ -545,7 +545,7 @@ struct WeddingPriceHikeSheet: View {
 
 #Preview {
     ZStack {
-        Color(.systemGroupedBackground).ignoresSafeArea()
+        AppTheme.darkBackground.ignoresSafeArea()
         ScrollView {
             WeddingQuestionnaire(goalAccentColor: .pink)
                 .padding()

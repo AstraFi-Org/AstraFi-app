@@ -74,10 +74,10 @@ struct Plan2DetailView: View {
             HStack(spacing: 16) {
                 VStack(alignment: .leading, spacing: 6) {
                     Text("Target Goal")
-                        .font(.system(size: 14, weight: .semibold, design: .rounded))
+                        .font(.system(size: 14, weight: .semibold))
                         .foregroundColor(.secondary)
                     Text("₹\(formatL_Detail(InvestmentPlannerEngine.parseAmount(input.targetAmount)))")
-                        .font(.system(size: 28, weight: .black, design: .rounded))
+                        .font(.system(size: 28, weight: .black))
                         .foregroundColor(.primary)
                 }
                 
@@ -85,10 +85,10 @@ struct Plan2DetailView: View {
                 
                 VStack(alignment: .trailing, spacing: 6) {
                     Text("Monthly EMI")
-                        .font(.system(size: 14, weight: .semibold, design: .rounded))
+                        .font(.system(size: 14, weight: .semibold))
                         .foregroundColor(.secondary)
                     Text("₹\(Int(activeResult.monthlyEMI).formatted())")
-                        .font(.system(size: 28, weight: .black, design: .rounded))
+                        .font(.system(size: 28, weight: .black))
                         .foregroundColor(.red)
                 }
             }
@@ -105,7 +105,7 @@ struct Plan2DetailView: View {
                 }
                 
                 Text("Complete this goal today, repay amount in installments.")
-                    .font(.system(size: 13, weight: .medium, design: .rounded))
+                    .font(.system(size: 13, weight: .medium))
                     .foregroundColor(.secondary)
             }
             .frame(maxWidth: .infinity, alignment: .leading)
@@ -133,7 +133,6 @@ struct Plan2DetailView: View {
                 showingSaveAlert = true
             }) {
                 HStack {
-                    Image(systemName: isSaved ? "star.fill" : "star")
                     Text(isSaved ? "Saved" : "Save")
                 }
                 .frame(maxWidth: .infinity)
@@ -159,7 +158,6 @@ struct Plan2DetailView: View {
                 showingSaveAlert = true
             }) {
                 HStack {
-                    Image(systemName: isFollowed ? "checkmark.circle.fill" : "plus.circle.fill")
                     Text(isFollowed ? "Following" : "Follow Plan")
                 }
                 .font(.headline).fontWeight(.bold)
