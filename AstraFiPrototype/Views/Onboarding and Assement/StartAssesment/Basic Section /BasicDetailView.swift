@@ -196,7 +196,9 @@ struct BasicDetailView: View {
         .navigationBarBackButtonHidden(true)
         .toolbar {
             ToolbarItem(placement: .navigationBarLeading) {
-                Button { dismiss() } label: {
+                Button {
+                    appState.showPostAuthOnboarding = true
+                } label: {
                     Image(systemName: "chevron.left")
                         .fontWeight(.semibold)
                         .foregroundColor(.primary)

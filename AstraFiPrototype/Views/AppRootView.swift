@@ -9,15 +9,14 @@ struct AppRootView: View {
             if appState.isLoading {
                 SplashScreenView()
 
+            } else if appState.showPostAuthOnboarding {
+                PostAuthOnboardingView()
+
             } else if appState.showDashboard {
                 FinalTab()
 
             } else if appState.isAuthenticated {
-                if appState.showDashboard {
-                    FinalTab()
-                } else {
-                    StartAssesmentView()
-                }
+                StartAssesmentView()
 
             } else if appState.hasCompletedOnboarding {
                 NavigationStack {

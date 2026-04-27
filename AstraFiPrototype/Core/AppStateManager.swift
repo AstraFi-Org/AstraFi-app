@@ -177,6 +177,7 @@ final class AppStateManager {
     var isAuthLoading: Bool = false
     
     var showDashboard: Bool = false
+    var showPostAuthOnboarding: Bool = false
     
     var tempName: String = ""
     var tempEmail: String = ""
@@ -307,6 +308,7 @@ final class AppStateManager {
             tempPassword = password
             setupEmptyProfile(name: name)
             isAuthenticated = true
+            showPostAuthOnboarding = true
             hasCompletedOnboarding = true  // ← ADD THIS
             
             // After successful sign up — load existing data if any
@@ -335,12 +337,14 @@ final class AppStateManager {
                 self.currentProfile = profile
                 recalculateFinancials()
                 isAuthenticated = true
+                showPostAuthOnboarding = true
                 hasCompletedOnboarding = true
                 showDashboard = true
             } else {
                
                 setupEmptyProfile(name: session.user.email ?? "User")
                 isAuthenticated = true
+                showPostAuthOnboarding = true
                 hasCompletedOnboarding = true
             }
             
