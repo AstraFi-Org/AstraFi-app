@@ -66,6 +66,8 @@ struct NewInvestmentPlanView: View {
                     }
                     .padding(.horizontal, 16)
                     .padding(.top, 24)
+                    .contentShape(Rectangle())
+                    .onTapGesture { hideKeyboard() }
                 }
             }
 

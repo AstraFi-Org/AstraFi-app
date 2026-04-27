@@ -90,7 +90,7 @@ struct PlanSegmentChips: View {
                         .font(.system(size: 14, weight: .medium))
                         .padding(.horizontal, 16)
                         .padding(.vertical, 8)
-                        .background(selection == option ? Color.blue : Color.gray.opacity(0.1))
+                        .background(selection == option ? Color.blue : AppTheme.elevatedCardBackground)
                         .foregroundColor(selection == option ? .white : .primary)
                         .cornerRadius(20)
                 }
@@ -113,7 +113,7 @@ struct PlanEnumSegmentChips<T: Hashable & RawRepresentable>: View where T.RawVal
                         .font(.system(size: 14, weight: .medium))
                         .padding(.horizontal, 16)
                         .padding(.vertical, 8)
-                        .background(selection == option ? Color.blue : Color.gray.opacity(0.1))
+                        .background(selection == option ? Color.blue : AppTheme.elevatedCardBackground)
                         .foregroundColor(selection == option ? .white : .primary)
                         .cornerRadius(20)
                 }
@@ -136,7 +136,7 @@ struct PlanStackedChips: View {
                         .font(.system(size: 13, weight: .medium))
                         .padding(.horizontal, 14)
                         .padding(.vertical, 8)
-                        .background(selection == option ? Color.blue : Color.gray.opacity(0.1))
+                        .background(selection == option ? Color.blue : AppTheme.elevatedCardBackground)
                         .foregroundColor(selection == option ? .white : .primary)
                         .cornerRadius(10)
                 }
@@ -166,7 +166,7 @@ struct PlanMenuPicker: View {
             }
             .padding(.horizontal, 16)
             .padding(.vertical, 12)
-            .background(Color.gray.opacity(0.1))
+            .background(AppTheme.elevatedCardBackground)
             .cornerRadius(12)
         }
     }
@@ -184,7 +184,7 @@ struct PlanAssetRow: View {
                     .font(.title3)
                     .foregroundColor(isSelected ? .white : .blue)
                     .frame(width: 40, height: 40)
-                    .background(isSelected ? Color.blue : Color.blue.opacity(0.1))
+                    .background(isSelected ? Color.blue : AppTheme.elevatedCardBackground)
                     .cornerRadius(10)
                 
                 VStack(alignment: .leading, spacing: 2) {
@@ -283,7 +283,7 @@ struct ProfileBanner: View {
             Spacer()
         }
         .padding(14)
-        .background(Color.green.opacity(0.04))
+        .background(AppTheme.elevatedCardBackground.opacity(0.4))
         .cornerRadius(16)
         .overlay(
             RoundedRectangle(cornerRadius: 16)
@@ -387,8 +387,8 @@ struct SectionCard<Content: View>: View {
     var body: some View {
         content
             .padding(18)
-            .background(.background, in: RoundedRectangle(cornerRadius: 18, style: .continuous))
-            .shadow(color: .black.opacity(0.06), radius: 12, x: 0, y: 4)
+            .background(AppTheme.cardBackground, in: RoundedRectangle(cornerRadius: 18, style: .continuous))
+            .shadow(color: AppTheme.adaptiveShadow, radius: 12, x: 0, y: 4)
     }
 }
 

@@ -377,7 +377,7 @@ struct ScenarioImpactRow: View {
             }
         }
         .padding(10)
-        .background(Color(.secondarySystemGroupedBackground), in: RoundedRectangle(cornerRadius: 10, style: .continuous))
+        .background(AppTheme.elevatedCardBackground, in: RoundedRectangle(cornerRadius: 10, style: .continuous))
     }
 }
 
@@ -545,7 +545,7 @@ struct LifestyleExpenseSheet: View {
                         }
                     }
                     .padding(16)
-                    .background(.background, in: RoundedRectangle(cornerRadius: 16, style: .continuous))
+                    .background(AppTheme.cardBackground, in: RoundedRectangle(cornerRadius: 16, style: .continuous))
                     .shadow(color: .black.opacity(0.05), radius: 8, x: 0, y: 3)
 
                     VStack(alignment: .leading, spacing: 6) {
@@ -563,7 +563,7 @@ struct LifestyleExpenseSheet: View {
                 }
                 .padding(20)
             }
-            .background(Color(.systemGroupedBackground))
+            .background(AppTheme.darkBackground)
             .navigationTitle("\(preference) Lifestyle")
             .navigationBarTitleDisplayMode(.inline)
             .toolbar {
@@ -639,7 +639,7 @@ struct LifestyleExpenseRow: View {
 // MARK: - Preview
 #Preview {
     ZStack {
-        Color(.systemGroupedBackground).ignoresSafeArea()
+        AppTheme.darkBackground.ignoresSafeArea()
         ScrollView {
             RetirementQuestionnaire(
                 input: .constant(InvestmentPlanInputModel.sampleRetirement),
@@ -649,13 +649,5 @@ struct LifestyleExpenseRow: View {
             )
             .padding(.top, 16)
         }
-    }
-}
-extension View {
-    func hideKeyboard() {
-        UIApplication.shared.sendAction(
-            #selector(UIResponder.resignFirstResponder),
-            to: nil, from: nil, for: nil
-        )
     }
 }

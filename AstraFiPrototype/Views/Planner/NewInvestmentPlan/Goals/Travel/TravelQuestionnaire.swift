@@ -478,7 +478,7 @@ struct TravelPriceHikeSheet: View {
                             factorItem(icon: "ticket.fill", title: "Dynamic Pricing", desc: "AI-driven hotel and flight pricing based on real-time demand.")
                         }
                         .padding()
-                        .background(Color(.secondarySystemBackground), in: RoundedRectangle(cornerRadius: 16))
+                        .background(AppTheme.elevatedCardBackground, in: RoundedRectangle(cornerRadius: 16))
                     }
                     .padding(.horizontal)
                     
@@ -547,7 +547,7 @@ struct TravelPriceHikeSheet: View {
 
 #Preview {
     ZStack {
-        Color(.systemGroupedBackground).ignoresSafeArea()
+        AppTheme.darkBackground.ignoresSafeArea()
         ScrollView {
             TravelQuestionnaire(goalAccentColor: .blue)
                 .padding()

@@ -23,6 +23,9 @@ struct TrackerMoneyFlowSection: View {
                         .symbolRenderingMode(.hierarchical)
                         .foregroundStyle(AppTheme.auraIndigo)
                 }
+                Text("Click on any Month to see income and expense of that month")
+                    .font(.callout)
+                
             }
 
             // Card

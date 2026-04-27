@@ -14,7 +14,7 @@ struct ParameterSection: View {
 
     var body: some View {
         VStack(alignment: .leading, spacing: 0) {
-            ReportSectionTitle("5 Parameters")
+            ReportSectionTitle("Detail Overview")
             Text("Tap any parameter to explore details and recommendations.")
                 .font(.subheadline).foregroundStyle(.secondary)
                 .padding(.horizontal, 20).padding(.bottom, 14)

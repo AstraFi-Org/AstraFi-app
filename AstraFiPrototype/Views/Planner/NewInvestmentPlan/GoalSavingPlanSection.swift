@@ -165,7 +165,7 @@ public struct GoalSavingPlanSection<Destination: View>: View {
                                 .frame(maxWidth: .infinity, alignment: .leading)
                             }
                             .padding(12)
-                            .background(Color(.secondarySystemGroupedBackground), in: RoundedRectangle(cornerRadius: 10, style: .continuous))
+                            .background(AppTheme.elevatedCardBackground, in: RoundedRectangle(cornerRadius: 10, style: .continuous))
                         }
                     }
                 }
