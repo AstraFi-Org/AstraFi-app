@@ -225,7 +225,7 @@ class TrackerViewModel {
             // Extract month from "yyyy-MM"
             let components = key.split(separator: "-")
             if components.count == 2, let m = Int(components[1]) {
-                let mName = df.shortMonthSymbols[m - 1]
+                let mName = df.shortMonthSymbols[max(0, min(11, m - 1))]
                 
                 for src in snap.incomeSources {
                     items.append(MoneyFlowChartItem(month: mName, type: "Income", category: src.name, amount: src.amount))

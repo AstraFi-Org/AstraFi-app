@@ -25,10 +25,10 @@ struct LiabilityDetailSheet: View {
             deepExplanation: LoanDeepExplanation(
                 whatItIsUsedFor: "Purchasing residential or commercial property.",
                 typicalInterestRates: "8% to 10% annually depending on credit score and bank.",
-                realLifeExample: "Buying a ₹50L apartment with a 20-year loan allows you to own an asset while paying monthly installments instead of rent.",
+                realLifeExample: "Buying a ₹50L apartment with a 20 year loan allows you to own an asset while paying monthly installments instead of rent.",
                 pros: ["Asset creation over time", "Tax benefits on principal and interest", "Lowest interest rates among all loans"],
                 risks: ["Long-term financial commitment", "Property value fluctuations"],
-                whenToTakeVsAvoid: "Take when you have a stable income and a 10-20% down payment ready. Avoid if your job is unstable or the EMI exceeds 40% of your take-home pay."
+                whenToTakeVsAvoid: "Take when you have a stable income and a 10-20% down payment ready. Avoid if your job is unstable or the EMI exceeds 40% of your take home pay."
             )
         ),
         LoanTypeInfo(
@@ -102,7 +102,7 @@ struct LiabilityDetailSheet: View {
                 whatItIsUsedFor: "Revolving credit on daily purchases when the full balance isn't paid.",
                 typicalInterestRates: "2.5% to 3.5% per month, which is ~30% to 42% annually.",
                 realLifeExample: "Buying a ₹1L iPhone on credit card and paying only the 'Minimum Due'. It could take 10+ years to clear the debt and cost 3x the phone's price.",
-                pros: ["Interest-free period (up to 45 days)", "Reward points and cashback", "Builds credit score if paid in full"],
+                pros: ["Interest free period (up to 45 days)", "Reward points and cashback", "Builds credit score if paid in full"],
                 risks: ["Exorbitant interest rates", "Negative impact on credit score", "Encourages impulsive spending"],
                 whenToTakeVsAvoid: "Use as a payment tool and pay 100% of the bill every month. Avoid carrying a balance at all costs—it is a financial emergency."
             )
@@ -111,8 +111,8 @@ struct LiabilityDetailSheet: View {
 
     private let loanAgeStrategies: [LoanAgeStrategy] = [
         LoanAgeStrategy(range: "Age 20–30", recommendations: ["Avoid personal loans", "Use education loan if needed", "Build credit score"], insight: "Focus on growth, avoid unnecessary debt.", color: Color(hex: "#30D158"), icon: "leaf.fill"),
-        LoanAgeStrategy(range: "Age 30–45", recommendations: ["Home loan is acceptable", "Car loan manageable if income stable", "Avoid high-interest loans"], insight: "Use debt to build assets, not liabilities.", color: Color(hex: "#FFCC00"), icon: "house.fill"),
-        LoanAgeStrategy(range: "Age 45+", recommendations: ["Reduce outstanding loans", "Avoid new long-term loans", "Focus on becoming debt-free"], insight: "Shift from borrowing to financial stability.", color: Color(hex: "#FF3B30"), icon: "lock.shield.fill")
+        LoanAgeStrategy(range: "Age 30–45", recommendations: ["Home loan is acceptable", "Car loan manageable if income stable", "Avoid high interest loans"], insight: "Use debt to build assets, not liabilities.", color: Color(hex: "#FFCC00"), icon: "house.fill"),
+        LoanAgeStrategy(range: "Age 45+", recommendations: ["Reduce outstanding loans", "Avoid new long term loans", "Focus on becoming debt free"], insight: "Shift from borrowing to financial stability.", color: Color(hex: "#FF3B30"), icon: "lock.shield.fill")
     ]
 
     @State private var selectedLoan: LoanTypeInfo?
@@ -142,7 +142,7 @@ struct LiabilityDetailSheet: View {
                     // Debt-to-income gauge
                     VStack(alignment: .leading, spacing: 10) {
                         HStack {
-                            Text("Debt-to-Income Ratio").font(.subheadline)
+                            Text("Debt to Income Ratio").font(.subheadline)
                             Spacer()
                             Text("\(Int(insights.debtToIncomeRatio * 100))%").font(.subheadline).bold().foregroundStyle(dtiColor)
                             Text(dtiLabel).font(.caption).bold().foregroundStyle(dtiColor)
@@ -198,6 +198,7 @@ struct LiabilityDetailSheet: View {
                     SmartLoanInsightsCard()
                         .listRowInsets(EdgeInsets(top: 8, leading: 16, bottom: 16, trailing: 16))
                         .listRowBackground(Color.clear).listRowSeparator(.hidden)
+                    //Spacer()
                 }
 
                 if !concerns.isEmpty {
@@ -372,6 +373,7 @@ struct SmartLoanInsightsCard: View {
                 SmartInsightRow(text: "Always compare loan vs investment opportunity")
                 SmartInsightRow(text: "Avoid borrowing for lifestyle upgrades")
             }
+            Spacer()
         }
         .padding(20)
         .background(Color(hex: "#FFCC00").opacity(0.08))

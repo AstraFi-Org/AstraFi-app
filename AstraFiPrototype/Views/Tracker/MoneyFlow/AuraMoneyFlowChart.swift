@@ -14,7 +14,7 @@ struct AuraMoneyFlowChart: View {
 
     // MARK: Data model
     struct ChartEntry: Identifiable, Equatable {
-        let id = UUID()
+        var id: String { "\(dateKey)-\(category)" }
         let month: String
         let dateKey: String
         let category: String
@@ -47,8 +47,13 @@ struct AuraMoneyFlowChart: View {
             for key in snapshots.keys.sorted() {
                 guard let snap = snapshots[key] else { continue }
                 let parts = key.split(separator: "-")
-                let mIdx  = max(0, min(11, (Int(parts[1]) ?? 1) - 1))
-                let lbl   = months[mIdx]
+                let mIdx: Int
+                if parts.count >= 2, let parsedM = Int(parts[1]) {
+                    mIdx = max(0, min(11, parsedM - 1))
+                } else {
+                    mIdx = 0
+                }
+                let lbl = months[mIdx]
 
                 if snap.incomeSources.isEmpty && snap.expenseSources.isEmpty {
                     data.append(.init(month: lbl, dateKey: key,
@@ -138,7 +143,7 @@ struct AuraMoneyFlowChart: View {
             }
             .chartXSelection(value: $selectedMonth)
             .chartScrollableAxes(.horizontal)
-            .chartXVisibleDomain(length: min(chartData.count, 10))
+            .chartXVisibleDomain(length: max(1, min(uniqueMonths.count, 6)))
             .chartXAxis {
                 AxisMarks { val in
                     AxisValueLabel()
@@ -179,7 +184,18 @@ struct AuraMoneyFlowChart: View {
             .padding(.top, 12)
             .padding(.bottom, 20)
             .animation(.easeInOut(duration: 0.2), value: selectedMonth)
+            
+            HStack(spacing: 6) {
+                Image(systemName: "info.circle")
+                    .font(.system(size: 14))
+                    .foregroundStyle(AppTheme.auraIndigo)
+                Text("Click on any Month to see income and expense of that month")
+                    .font(.system(size: 13, design: .rounded))
+                    .foregroundStyle(.secondary)
+            }
+            .padding(.top, 4)
         }
+        
     }
 
     private var legendStrip: some View {
@@ -261,6 +277,7 @@ struct AuraMoneyFlowChart: View {
     }
 
     private func shortAmount(_ v: Double) -> String {
+        guard v.isFinite else { return "₹0" }
         let a = abs(v)
         let s = v < 0 ? "-" : ""
         if a >= 1_00_00_000 { return "\(s)₹\(String(format: "%.1f", a/1_00_00_000))Cr" }

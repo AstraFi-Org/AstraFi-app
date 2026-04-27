@@ -63,12 +63,10 @@ struct SplashScreenView: View {
 
                     // Star icon
                     Image(.splashScreen)
+                        .resizable()
                         .scaledToFit()
-                        .frame(width: 570, height: 570)
-                        .clipShape(Ellipse())
-                        .font(.system(size: 34, weight: .bold))
+                        .frame(width: 48, height: 48)
                         .foregroundStyle(.white)
-                        .symbolEffect(.pulse)
                 }
                 .scaleEffect(logoScale)
                 .opacity(logoOpacity)

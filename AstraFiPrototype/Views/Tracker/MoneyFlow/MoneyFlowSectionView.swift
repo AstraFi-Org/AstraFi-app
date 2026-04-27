@@ -33,15 +33,7 @@ struct TrackerMoneyFlowSection: View {
                     .auraCardStyle(radius: 24)
                     .onTapGesture { showingDetailSheet = true }
 
-                HStack(spacing: 6) {
-                    Image(systemName: "info.circle")
-                        .font(.system(size: 14))
-                        .foregroundStyle(AppTheme.auraIndigo)
-                    Text("Click on any Month to see income and expense of that month")
-                        .font(.system(size: 13, design: .rounded))
-                        .foregroundStyle(.secondary)
-                }
-                .padding(.top, 4)
+                
             } else {
                 TrackerEmptyState(icon: "chart.bar.fill", message: "No data available yet.")
                     .auraCardStyle(radius: 24)
