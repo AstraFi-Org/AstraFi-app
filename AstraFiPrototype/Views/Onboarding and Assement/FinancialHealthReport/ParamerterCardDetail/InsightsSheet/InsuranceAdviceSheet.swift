@@ -113,61 +113,61 @@ struct InsuranceAdviceSheet: View {
     var body: some View {
         List {
 
-//                if !concerns.isEmpty {
-//                    Section(header: Text("Action Items").font(.footnote).textCase(.uppercase)) {
-//                        ForEach(concerns) { ConcernCard(concern: $0)
-//                                .listRowInsets(EdgeInsets(top: 6, leading: 16, bottom: 6, trailing: 16))
-//                                .listRowBackground(Color.clear).listRowSeparator(.hidden)
-//                        }
-//                    }
-//                }
+                if !concerns.isEmpty {
+                    Section(header: Text("Action Items").font(.footnote).textCase(.uppercase)) {
+                        ForEach(concerns) { ConcernCard(concern: $0)
+                                .listRowInsets(EdgeInsets(top: 6, leading: 16, bottom: 6, trailing: 16))
+                                .listRowBackground(Color.clear).listRowSeparator(.hidden)
+                        }
+                    }
+                }
 
                 // Health credentials
-//                Section(header: Text("Health Profile").font(.footnote).textCase(.uppercase)) {
-//                    VStack(alignment: .leading, spacing: 12) {
-//                        Text("Your Details").font(.caption).bold().foregroundStyle(.secondary)
-//                        HStack(spacing: 12) {
-//                            HStack {
-//                                Image(systemName: "person.fill").foregroundStyle(.secondary)
-//                                TextField("Your Age", text: $myAge).keyboardType(.numberPad).font(.subheadline)
-//                            }
-//                            .padding(10).background(Color(.secondarySystemBackground))
-//                            .clipShape(RoundedRectangle(cornerRadius: 10))
-//                            Picker("Condition", selection: $myDisease) {
-//                                ForEach(diseases, id: \.self) { Text($0) }
-//                            }.pickerStyle(.menu)
-//                        }
-//                    }
-//                    .padding(.vertical, 4)
-//
-//                    if adultDependents > 0 {
-//                        VStack(alignment: .leading, spacing: 12) {
-//                            Text("Dependents").font(.caption).bold().foregroundStyle(.secondary)
-//                            ForEach(0..<adultDependents, id: \.self) { i in
-//                                HStack(spacing: 8) {
-//                                    Text("Dep \(i+1)").font(.caption2).foregroundStyle(.secondary).frame(width: 36)
-//                                    TextField("Age", text: Binding(
-//                                        get: { depAges.indices.contains(i) ? depAges[i] : "" },
-//                                        set: { if depAges.indices.contains(i) { depAges[i] = $0 } else { depAges.append($0) } }
-//                                    )).keyboardType(.numberPad).font(.subheadline)
-//                                        .padding(8).background(Color(.secondarySystemBackground))
-//                                        .clipShape(RoundedRectangle(cornerRadius: 8)).frame(width: 60)
-//                                    TextField("Relation", text: Binding(
-//                                        get: { depRelations.indices.contains(i) ? depRelations[i] : "" },
-//                                        set: { if depRelations.indices.contains(i) { depRelations[i] = $0 } else { depRelations.append($0) } }
-//                                    )).font(.subheadline)
-//                                        .padding(8).background(Color(.secondarySystemBackground))
-//                                        .clipShape(RoundedRectangle(cornerRadius: 8))
-//                                    Picker("", selection: Binding(
-//                                        get: { depDiseases.indices.contains(i) ? depDiseases[i] : "None" },
-//                                        set: { if depDiseases.indices.contains(i) { depDiseases[i] = $0 } else { depDiseases.append($0) } }
-//                                    )) { ForEach(diseases, id: \.self) { Text($0) } }.pickerStyle(.menu)
-//                                }
-//                            }
-//                        }
-//                        .padding(.vertical, 4)
-//                    }
-//                }
+                Section(header: Text("Health Profile").font(.footnote).textCase(.uppercase)) {
+                    VStack(alignment: .leading, spacing: 12) {
+                        Text("Your Details").font(.caption).bold().foregroundStyle(.secondary)
+                        HStack(spacing: 12) {
+                            HStack {
+                                Image(systemName: "person.fill").foregroundStyle(.secondary)
+                                TextField("Your Age", text: $myAge).keyboardType(.numberPad).font(.subheadline)
+                            }
+                            .padding(10).background(Color(.secondarySystemBackground))
+                            .clipShape(RoundedRectangle(cornerRadius: 10))
+                            Picker("Condition", selection: $myDisease) {
+                                ForEach(diseases, id: \.self) { Text($0) }
+                            }.pickerStyle(.menu)
+                        }
+                    }
+                    .padding(.vertical, 4)
+
+                    if adultDependents > 0 {
+                        VStack(alignment: .leading, spacing: 12) {
+                            Text("Dependents").font(.caption).bold().foregroundStyle(.secondary)
+                            ForEach(0..<adultDependents, id: \.self) { i in
+                                HStack(spacing: 8) {
+                                    Text("Dep \(i+1)").font(.caption2).foregroundStyle(.secondary).frame(width: 36)
+                                    TextField("Age", text: Binding(
+                                        get: { depAges.indices.contains(i) ? depAges[i] : "" },
+                                        set: { if depAges.indices.contains(i) { depAges[i] = $0 } else { depAges.append($0) } }
+                                    )).keyboardType(.numberPad).font(.subheadline)
+                                        .padding(8).background(Color(.secondarySystemBackground))
+                                        .clipShape(RoundedRectangle(cornerRadius: 8)).frame(width: 60)
+                                    TextField("Relation", text: Binding(
+                                        get: { depRelations.indices.contains(i) ? depRelations[i] : "" },
+                                        set: { if depRelations.indices.contains(i) { depRelations[i] = $0 } else { depRelations.append($0) } }
+                                    )).font(.subheadline)
+                                        .padding(8).background(Color(.secondarySystemBackground))
+                                        .clipShape(RoundedRectangle(cornerRadius: 8))
+                                    Picker("", selection: Binding(
+                                        get: { depDiseases.indices.contains(i) ? depDiseases[i] : "None" },
+                                        set: { if depDiseases.indices.contains(i) { depDiseases[i] = $0 } else { depDiseases.append($0) } }
+                                    )) { ForEach(diseases, id: \.self) { Text($0) } }.pickerStyle(.menu)
+                                }
+                            }
+                        }
+                        .padding(.vertical, 4)
+                    }
+                }
 
                 Section(header: Text("Insurance Essentials").font(.footnote).textCase(.uppercase)) {
                     ForEach(insuranceTypes) { type in
@@ -185,31 +185,13 @@ struct InsuranceAdviceSheet: View {
                         .listRowBackground(Color.clear).listRowSeparator(.hidden)
                 }
 
-                Section {
-                    HStack {
-                        Spacer()
-                        Text("Explore Insurance Plans").font(.headline).fontWeight(.semibold).foregroundStyle(.white)
-                        Spacer()
-                    }
-                    .padding(.vertical, 14).background(Color.blue)
-                    .clipShape(RoundedRectangle(cornerRadius: 12, style: .continuous))
-                    .listRowBackground(Color.clear)
-                    .listRowInsets(EdgeInsets(top: 8, leading: 16, bottom: 16, trailing: 16))
-                }
             }
             .listStyle(.plain)
             .background(Color(.systemGroupedBackground).opacity(0.5))
             .navigationTitle("Insurance Recommendations")
             .navigationBarTitleDisplayMode(.inline)
-            .alert(selectedInsurance?.title ?? "", isPresented: Binding(
-                get: { selectedInsurance != nil },
-                set: { if !$0 { selectedInsurance = nil } }
-            )) {
-                Button("OK", role: .cancel) { selectedInsurance = nil }
-            } message: {
-                if let ins = selectedInsurance {
-                    Text(insuranceAlertMessage(for: ins))
-                }
+            .sheet(item: $selectedInsurance) { type in
+                InsuranceDetailModal(type: type)
             }
             .onAppear {
                 if depAges.count < adultDependents {
@@ -218,18 +200,6 @@ struct InsuranceAdviceSheet: View {
                     depRelations = Array(repeating: "", count: adultDependents)
                 }
             }
-    }
-
-    private func insuranceAlertMessage(for ins: InsuranceTypeInfo) -> String {
-        """
-        \(ins.description)
-
-        Cost: \(ins.cost)
-        Coverage: \(ins.coverage)
-        Who should buy: \(ins.whoShouldBuy)
-
-        \(ins.deepExplanation.whyImportant)
-        """
     }
 }
 
@@ -299,6 +269,76 @@ struct HighlightRow: View {
             Circle().fill(.secondary.opacity(0.5)).frame(width: 4, height: 4).padding(.top, 7)
             Text("\(title):").font(.caption).bold().foregroundStyle(.secondary)
             Text(value).font(.caption).foregroundStyle(.primary)
+        }
+    }
+}
+
+struct InsuranceDetailModal: View {
+    let type: InsuranceTypeInfo
+    @Environment(\.dismiss) private var dismiss
+
+    var body: some View {
+        NavigationView {
+            ScrollView {
+                VStack(alignment: .leading, spacing: 24) {
+                    // Header
+                    VStack(alignment: .leading, spacing: 12) {
+                        HStack(spacing: 16) {
+                            Image(systemName: type.icon)
+                                .font(.largeTitle)
+                                .foregroundStyle(type.color)
+                                .frame(width: 64, height: 64)
+                                .background(type.color.opacity(0.1))
+                                .clipShape(RoundedRectangle(cornerRadius: 16, style: .continuous))
+
+                            VStack(alignment: .leading, spacing: 4) {
+                                Text(type.title)
+                                    .font(.title2).bold()
+                                Text(type.isEssential ? "Essential Protection" : "Recommended Coverage")
+                                    .font(.subheadline).foregroundStyle(type.color)
+                            }
+                        }
+                    }
+                    .padding(.top, 10)
+
+                    Divider()
+
+                    // Deep Explanation Sections
+                    DetailSection(title: "What exactly it covers", content: type.deepExplanation.whatItCovers)
+                    DetailSection(title: "Real-life use case", content: type.deepExplanation.useCase, isItalic: true)
+                    DetailSection(title: "Why it is important", content: type.deepExplanation.whyImportant)
+
+                    VStack(alignment: .leading, spacing: 16) {
+                        Text("Pros").font(.headline)
+                        ForEach(type.deepExplanation.pros, id: \.self) { pro in
+                            HStack(spacing: 10) {
+                                Image(systemName: "checkmark.circle.fill").foregroundStyle(Color(hex: "#30D158"))
+                                Text(pro).font(.subheadline)
+                            }
+                        }
+                    }
+
+                    VStack(alignment: .leading, spacing: 16) {
+                        Text("Limitations").font(.headline)
+                        ForEach(type.deepExplanation.limitations, id: \.self) { limit in
+                            HStack(spacing: 10) {
+                                Image(systemName: "minus.circle.fill").foregroundStyle(.secondary)
+                                Text(limit).font(.subheadline)
+                            }
+                        }
+                    }
+
+                    Spacer(minLength: 40)
+                }
+                .padding(24)
+            }
+            .navigationTitle("Insurance Details")
+            .navigationBarTitleDisplayMode(.inline)
+            .toolbar {
+                ToolbarItem(placement: .topBarTrailing) {
+                    Button("Close") { dismiss() }
+                }
+            }
         }
     }
 }
