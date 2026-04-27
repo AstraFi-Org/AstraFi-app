@@ -86,7 +86,7 @@ struct ParsedInvestmentListView: View {
             .toolbar {
                 ToolbarItem(placement: .cancellationAction) {
                     Button(action: {
-                        onConfirm()
+                        onCancel()
                         dismiss()
                     }, label: {
                         Image(systemName: "xmark")

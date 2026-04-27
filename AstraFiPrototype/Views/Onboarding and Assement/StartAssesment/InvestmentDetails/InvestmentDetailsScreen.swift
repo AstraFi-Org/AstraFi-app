@@ -17,15 +17,15 @@ struct InvestmentDetailsScreen: View {
     
     @State private var showingBreakdown = false
     @State private var breakdownEntry: AssessmentInvestmentEntry? = nil
-
+    
     var body: some View {
         ZStack(alignment: .bottom) {
             Color(.systemGroupedBackground).ignoresSafeArea()
-
+            
             VStack(spacing: 0) {
                 AssessmentProgressHeader(progress: 0.6, title: "Your Investments", subtitle: "Tell us where you've invested to see your portfolio growth.")
                     .padding(.top, 16).padding(.horizontal, 20).padding(.bottom, 12)
-
+                
                 Form {
                     Section(header: Text("Import Investments"), footer: Text("Upload your NSDL/CDSL CAS (PDF) or an Excel export (CSV) to automatically estimate your net worth.")) {
                         if importViewModel.isLoading {
@@ -45,7 +45,7 @@ struct InvestmentDetailsScreen: View {
                             }
                         }
                     }
-
+                    
                     Section {
                         Button {
                             withAnimation(.spring()) {
@@ -55,7 +55,7 @@ struct InvestmentDetailsScreen: View {
                             Label("Add Investment Manually", systemImage: "plus.circle.fill")
                         }
                     }
-
+                    
                     if data.investmentEntries.isEmpty {
                         Section {
                             Text("No investments added yet.").foregroundStyle(.secondary)
@@ -77,13 +77,13 @@ struct InvestmentDetailsScreen: View {
                                         Text(type.rawValue).tag(type)
                                     }
                                 }
-
+                                
                                 Picker("Investment Mode", selection: $entry.mode) {
                                     ForEach(AssessmentInvestmentEntry.InvestmentMode.allCases, id: \.self) { mode in
                                         Text(mode.rawValue).tag(mode)
                                     }
                                 }.pickerStyle(.segmented)
-
+                                
                                 if entry.type == .stocks {
                                     Button {
                                         activeEntryID = entry.id
@@ -103,7 +103,7 @@ struct InvestmentDetailsScreen: View {
                                         }
                                         .padding(.vertical, 4)
                                     }
-
+                                    
                                     HStack {
                                         Text("Qty").font(.subheadline).foregroundColor(.secondary)
                                         TextField("Calculated Shares", text: $entry.quantity)
@@ -147,7 +147,7 @@ struct InvestmentDetailsScreen: View {
                                                     }
                                                 }
                                         }
-
+                                        
                                         if showSuggestions && activeEntryID == entry.id && entry.type == .mutualFund {
                                             MFSearchSuggestionsView(results: mfSearchResults) { scheme in
                                                 entry.fundName = scheme.name
@@ -159,7 +159,7 @@ struct InvestmentDetailsScreen: View {
                                         }
                                     } // closes VStack (fund name)
                                 } // closes else (not stocks, not ppf)
-
+                                
                                 HStack {
                                     Text("Invested Amount")
                                     Spacer()
@@ -171,12 +171,12 @@ struct InvestmentDetailsScreen: View {
                                             recalculateInvestment(entry: $entry)
                                         }
                                 }
-
+                                
                                 DatePicker("Investment Date", selection: $entry.startDate, displayedComponents: .date)
                                     .onChange(of: entry.startDate) { _, _ in
                                         recalculateInvestment(entry: $entry)
                                     }
-
+                                
                                 if entry.mode == .sip {
                                     Picker("SIP Frequency", selection: $entry.frequency) {
                                         ForEach(AssessmentInvestmentEntry.AssessmentSIPFrequency.allCases) { freq in
@@ -187,54 +187,16 @@ struct InvestmentDetailsScreen: View {
                                         recalculateInvestment(entry: $entry)
                                     }
                                 }
-
-//<<<<<<< HEAD
-//                                HStack {
-//                                    Text(entry.mode == .sip ? "SIP Amount" : "Invested Amount")
-//                                    Spacer()
-//                                    TextField("Amount", text: $entry.amount)
-//                                        .keyboardType(.numberPad)
-//                                        .multilineTextAlignment(.trailing)
-//                                        .frame(width: 150)
-//                                        .onChange(of: entry.amount) { _, _ in
-//                                            recalculateInvestment(entry: $entry)
-//                                        }
-//                                }
-//
-//                                    
-//
-//                                    DatePicker("Investment Date", selection: $entry.startDate, displayedComponents: .date)
-//                                        .onChange(of: entry.startDate) { _, _ in
-//                                            recalculateInvestment(entry: $entry)
-//                                        }
-//
-//                                    if entry.mode == .sip {
-//                                        Picker("SIP Frequency", selection: $entry.frequency) {
-//                                            ForEach(AssessmentInvestmentEntry.AssessmentSIPFrequency.allCases) { freq in
-//                                                Text(freq.rawValue).tag(freq)
-//                                            }
-//                                        }
-//                                        .onChange(of: entry.frequency) { _, _ in
-//                                            recalculateInvestment(entry: $entry)
-//                                        }
-//                                    }
-//                                
-//                                
-//                                if !entry.amount.isEmpty {
-//                                    if entry.mode == .sip {
-//                                        // ── SIP Calculation Card ──────────────────────────
-//                                        let installmentCount = sipInstallmentCount(from: entry.startDate, frequency: entry.frequency)
-//=======
-//                                if !entry.amount.isEmpty {
-//                                    if entry.mode == .sip {
-//                                        let installmentCount = sipInstallmentCount(startDate: entry.startDate, frequency: entry.frequency)
-//>>>>>>> origin/vipul
+                                
+                                if !entry.amount.isEmpty {
+                                    if entry.mode == .sip {
+                                        let installmentCount = sipInstallmentCount(startDate: entry.startDate, frequency: entry.frequency)
                                         let sipAmt = Double(entry.amount) ?? 0
                                         let totalInvested = entry.totalInvested ?? (sipAmt * Double(installmentCount))
                                         let currentValue  = entry.currentValue ?? 0
                                         let diff = currentValue - totalInvested
                                         let growthRate = entry.growthRate ?? (totalInvested > 0 ? ((currentValue - totalInvested) / totalInvested) * 100 : 0)
-
+                                        
                                         VStack(alignment: .leading, spacing: 10) {
                                             HStack {
                                                 Image(systemName: "arrow.triangle.2.circlepath")
@@ -291,7 +253,7 @@ struct InvestmentDetailsScreen: View {
                                                 .stroke(Color.blue.opacity(0.2), lineWidth: 1)
                                         )
                                         .cornerRadius(10)
-
+                                        
                                     } else {
                                         VStack(alignment: .leading, spacing: 8) {
                                             HStack {
@@ -320,24 +282,24 @@ struct InvestmentDetailsScreen: View {
                                         .cornerRadius(8)
                                     } // closes else (lumpsum)
                                 } // closes if !entry.amount.isEmpty
-
+                                
                             } // closes Section content
                         } // closes ForEach
                     } // closes else (entries not empty)
-
+                    
                     Section {
                         Color.clear.frame(height: 80)
                     }
                     .listRowBackground(Color.clear)
-
+                    
                 } // closes Form
             } // closes VStack
-
+            
             // Footer sits inside ZStack, above the Form
             AssessmentFooterButton(label: "Continue", enabled: true, isLast: false) {
                 if let onComplete { onComplete() } else { goNext = true }
             }
-
+            
         } // closes ZStack
         .navigationTitle("Financial Assessment")
         .navigationBarTitleDisplayMode(.inline)
@@ -358,7 +320,7 @@ struct InvestmentDetailsScreen: View {
         }
         .fileImporter(
             isPresented: $showFilePicker,
-            allowedContentTypes: [.pdf, .commaSeparatedText],
+            allowedContentTypes: [UTType.pdf, UTType.commaSeparatedText],
             allowsMultipleSelection: false
         ) { result in
             if case .success(let urls) = result, let url = urls.first {
@@ -399,40 +361,44 @@ struct InvestmentDetailsScreen: View {
             }
         }
     }
-
-
+    
+    
     private func sipInstallmentCount(startDate: Date, frequency: AssessmentInvestmentEntry.AssessmentSIPFrequency) -> Int {
         let today = Date()
         guard startDate <= today else { return 0 }
         let cal = Calendar.current
+        
+        let component: Calendar.Component
+        let divisor: Int
+        
         switch frequency {
         case .weekly:
-            components = .weekOfYear
+            component = .weekOfYear
             divisor = 1
         case .monthly:
-            components = .month
+            component = .month
             divisor = 1
         case .quarterly:
-            components = .month
+            component = .month
             divisor = 3
         case .yearly:
-            components = .year
+            component = .year
             divisor = 1
         }
         
-        let diff = calendar.dateComponents([components], from: start, to: end).value(for: components) ?? 0
+        let diff = cal.dateComponents([component], from: startDate, to: today).value(for: component) ?? 0
         return max(0, (diff / divisor) + 1)
     }
-
+    
     private func recalculateInvestment(entry: Binding<AssessmentInvestmentEntry>) {
         guard let investedAmount = Double(entry.wrappedValue.amount), investedAmount > 0 else { return }
         let type = entry.wrappedValue.type
         let isSIP = entry.wrappedValue.mode == .sip
         let startDate = entry.wrappedValue.startDate
-
+        
         Task {
             var result: (totalUnits: Double, totalInvested: Double, installments: [AstraInvestmentTransaction]) = (0, 0, [])
-
+            
             if type == .stocks, let symbol = entry.wrappedValue.symbol {
                 if isSIP {
                     result = await StockService.shared.calculateHistoricalSIPUnits(symbol: symbol, monthlyAmount: investedAmount, startDate: startDate, frequency: entry.wrappedValue.frequency)
@@ -464,7 +430,7 @@ struct InvestmentDetailsScreen: View {
             }
         }
     }
-
+    
     private func finalizeCalculation(entry: Binding<AssessmentInvestmentEntry>, result: (totalUnits: Double, totalInvested: Double, installments: [AstraInvestmentTransaction])) {
         entry.wrappedValue.quantity = String(format: "%.4f", result.totalUnits)
         entry.wrappedValue.totalInvested = result.totalInvested
@@ -486,46 +452,47 @@ struct InvestmentDetailsScreen: View {
             }
         }
     }
-}
-
-#Preview {
-    @Previewable var data = CompleteAssessmentData()
-    NavigationStack {
-        InvestmentDetailsScreen(data: data)
-    }
-}
-
-// MARK: - Supporting Views
-struct MFSearchSuggestionsView: View {
-    let results: [MFScheme]
-    let onSelect: (MFScheme) -> Void
     
-    var body: some View {
-        ScrollView {
-            VStack(alignment: .leading, spacing: 10) {
-                ForEach(results) { scheme in
-                    Button {
-                        onSelect(scheme)
-                    } label: {
-                        VStack(alignment: .leading) {
-                            Text(scheme.name)
-                                .font(.subheadline)
-                                .foregroundColor(.primary)
-                                .multilineTextAlignment(.leading)
-                            Text(scheme.isin)
-                                .font(.caption2)
-                                .foregroundColor(.secondary)
+    
+    //#Preview {
+    //    @Previewable var data = CompleteAssessmentData()
+    //    NavigationStack {
+    //        InvestmentDetailsScreen(data: data)
+    //    }
+    //}
+    
+    // MARK: - Supporting Views
+    struct MFSearchSuggestionsView: View {
+        let results: [MFScheme]
+        let onSelect: (MFScheme) -> Void
+        
+        var body: some View {
+            ScrollView {
+                VStack(alignment: .leading, spacing: 10) {
+                    ForEach(results) { scheme in
+                        Button {
+                            onSelect(scheme)
+                        } label: {
+                            VStack(alignment: .leading) {
+                                Text(scheme.name)
+                                    .font(.subheadline)
+                                    .foregroundColor(.primary)
+                                    .multilineTextAlignment(.leading)
+                                Text(scheme.isin)
+                                    .font(.caption2)
+                                    .foregroundColor(.secondary)
+                            }
+                            .padding(.vertical, 4)
                         }
-                        .padding(.vertical, 4)
+                        Divider()
                     }
-                    Divider()
                 }
+                .padding(8)
             }
-            .padding(8)
+            .frame(maxHeight: 200)
+            .background(Color(.systemGray6))
+            .cornerRadius(8)
+            .shadow(radius: 2)
         }
-        .frame(maxHeight: 200)
-        .background(Color(.systemGray6))
-        .cornerRadius(8)
-        .shadow(radius: 2)
     }
 }
