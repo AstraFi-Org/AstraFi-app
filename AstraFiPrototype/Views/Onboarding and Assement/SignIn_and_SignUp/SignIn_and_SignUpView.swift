@@ -55,10 +55,23 @@ struct SignInView: View {
                 .padding(.bottom, 32)
 
                 // Login
-                AuthPrimaryButton(title: "Sign In") {
-                    appState.isAuthenticated = true
+                AuthPrimaryButton(title: "Log In") {
+                    Task {
+                        await appState.signIn(email: email, password: password)
+                    }
                 }
-                .padding(.bottom, 28)
+
+                if let error = appState.authError {
+                    Text(error)
+                        .font(.system(size: 13))
+                        .foregroundColor(.red)
+                        .padding(.top, 8)
+                }
+
+                if appState.isAuthLoading {
+                    ProgressView()
+                        .padding(.top, 8)
+                }
 
                 AuthOrDivider().padding(.bottom, 24)
                 AuthAppleButton().padding(.bottom, 32)
@@ -181,12 +194,22 @@ struct SignUpView: View {
                     .padding(.bottom, 28)
 
                     AuthPrimaryButton(title: "Create Account") {
-                        appState.tempName = name
-                        appState.tempEmail = email
-                        appState.tempPassword = password
-                        appState.isAuthenticated = true
+                        Task {
+                            await appState.signUp(name: name, email: email, password: password)
+                        }
                     }
-                    .padding(.bottom, 20)
+
+                    if let error = appState.authError {
+                        Text(error)
+                            .font(.system(size: 13))
+                            .foregroundColor(.red)
+                            .padding(.top, 8)
+                    }
+
+                    if appState.isAuthLoading {
+                        ProgressView()
+                            .padding(.top, 8)
+                    }
 
                     HStack(spacing: 4) {
                         Spacer()

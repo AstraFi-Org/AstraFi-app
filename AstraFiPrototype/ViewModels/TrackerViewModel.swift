@@ -44,6 +44,7 @@ class TrackerViewModel {
     var yourPlans: [InvestmentPlanModel] = []
     var savedPlanNames: Set<String> = []
     var followedPlanNames: Set<String> = []
+    var appState: AppStateManager?
 
     func savePlan(planName: String, input: InvestmentPlanInputModel) {
 
@@ -52,6 +53,8 @@ class TrackerViewModel {
         let newPlan = InvestmentPlanModel(name: planName, dateSaved: "Today", targetGoal: input.purposeOfInvestment, input: input)
         yourPlans.append(newPlan)
         savedPlanNames.insert(planName)
+        appState?.savePlan(newPlan)
+        
     }
 
     func unsavePlan(planName: String) {
@@ -69,11 +72,17 @@ class TrackerViewModel {
         let newGoal = Goal(name: goalName.isEmpty ? "New Goal" : goalName, associatedFund: planName, targetAmount: targetString, collectedAmount: "₹0", timePeriod: input.timePeriod + " Years", progress: 0)
         goals.append(newGoal)
         followedPlanNames.insert(planName)
+        if let plan = yourPlans.first(where: { $0.name == planName }) {
+                appState?.followPlan(plan)
+            }
     }
 
     func unfollowPlan(planName: String) {
         goals.removeAll { $0.associatedFund == planName }
         followedPlanNames.remove(planName)
+        if let plan = yourPlans.first(where: { $0.name == planName }) {
+                appState?.unfollowPlan(plan)
+            }
     }
 
     func syncWithProfile(_ profile: AstraUserProfile?) {

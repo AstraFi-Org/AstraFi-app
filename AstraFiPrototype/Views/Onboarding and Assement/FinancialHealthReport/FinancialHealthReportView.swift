@@ -9,7 +9,13 @@ struct FinancialHealthReportView: View {
     var data: CompleteAssessmentData?
 
     private var profile: AstraUserProfile? { appState.currentProfile }
-    private var userName: String { profile?.basicDetails.name ?? data?.name ?? "User" }
+    private var userName: String {
+        let name = profile?.basicDetails.name ?? ""
+        if name.isEmpty || name.contains("@") {
+            return profile?.signUp.signUpName ?? data?.name ?? "User"
+        }
+        return name
+    }
 
     @State private var spendingSheet   = false
     @State private var riskSheet       = false

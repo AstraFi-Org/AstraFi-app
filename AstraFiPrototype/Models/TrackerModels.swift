@@ -181,10 +181,19 @@ struct InvestmentPlanInputModel: Codable, Hashable {
     }
 }
 
+//struct InvestmentPlanModel: Identifiable, Hashable {
+//    let id = UUID()
+//    let name: String
+//    let dateSaved: String
+//    let targetGoal: String
+//    let input: InvestmentPlanInputModel
+//}
+
 struct InvestmentPlanModel: Identifiable, Hashable {
-    let id = UUID()
+    var id: UUID = UUID()
     let name: String
     let dateSaved: String
     let targetGoal: String
     let input: InvestmentPlanInputModel
+    var isFollowed: Bool = false  // ADD THIS
 }
