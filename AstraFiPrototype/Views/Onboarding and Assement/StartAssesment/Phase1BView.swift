@@ -450,7 +450,7 @@ struct InvestmentAnalyseCard: View {
             VStack(alignment: .leading, spacing: 6) {
                 Text("Would you like us to analyse your investments?")
                     .font(.system(size: 14, weight: .semibold, design: .rounded))
-                Text("We'll map your portfolio, check diversification, and show you how much your money is actually working — so you can make smarter moves.")
+                Text("We'll map your portfolio, check diversification, and show you how much your money is actually working so you can make smarter moves.")
                     .font(.system(size: 12, design: .rounded))
                     .foregroundStyle(.secondary)
                     .fixedSize(horizontal: false, vertical: true)
@@ -459,7 +459,7 @@ struct InvestmentAnalyseCard: View {
             // 3 benefit pills
             HStack(spacing: 8) {
                 benefitPill(icon: "chart.pie.fill",          color: AppTheme.auraIndigo,    text: "Diversification")
-                benefitPill(icon: "arrow.up.right",          color: AppTheme.auraGreen,     text: "Growth check")
+                benefitPill(icon: "arrow.up.right",          color: AppTheme.auraGreen,     text: "Growth")
                 benefitPill(icon: "exclamationmark.triangle",color: AppTheme.vibrantOrange, text: "Risk alerts")
             }
 
