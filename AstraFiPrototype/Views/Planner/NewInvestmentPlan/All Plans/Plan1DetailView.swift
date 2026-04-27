@@ -33,7 +33,7 @@ struct Plan1DetailView: View {
                     totalInvestmentCard
                     scenarioTable
                     smartTipSection
-                    investmentRecommendations
+                    //investmentRecommendations
                 }
                 .padding(.horizontal, 20)
                 .padding(.bottom, 120) 
@@ -479,16 +479,16 @@ struct Plan1DetailView: View {
         .shadow(color: AppTheme.adaptiveShadow, radius: 10, x: 0, y: 4)
     }
 
-    private var investmentRecommendations: some View {
-        RecommendedFundsCard(
-            title: "Recommended High-Growth Funds",
-            funds: [
-                RecommendedFund(name: "Axis Bluechip Fund", category: "Large Cap", returns: "14.2% p.a.", risk: "Moderate", icon: "shield.fill"),
-                RecommendedFund(name: "ICICI Prudential Flexicap Fund", category: "Flexi Cap", returns: "16.8% p.a.", risk: "Moderate", icon: "chart.bar.fill"),
-                RecommendedFund(name: "Nippon India Small Cap Fund", category: "Small Cap", returns: "22.4% p.a.", risk: "Very High", icon: "chart.line.uptrend.xyaxis")
-            ]
-        )
-    }
+//    private var investmentRecommendations: some View {
+//        RecommendedFundsCard(
+//            title: "Recommended High-Growth Funds",
+//            funds: [
+//                RecommendedFund(name: "Axis Bluechip Fund", category: "Large Cap", returns: "14.2% p.a.", risk: "Moderate"),
+//                RecommendedFund(name: "ICICI Prudential Flexicap Fund", category: "Flexi Cap", returns: "16.8% p.a.", risk: "Moderate"),
+//                RecommendedFund(name: "Nippon India Small Cap Fund", category: "Small Cap", returns: "22.4% p.a.", risk: "Very High")
+//            ]
+//        )
+//    }
 
     private func formatL_Detail(_ value: Double) -> String {
         let v = abs(value)

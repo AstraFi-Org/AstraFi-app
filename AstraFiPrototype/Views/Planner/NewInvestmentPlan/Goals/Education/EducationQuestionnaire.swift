@@ -170,23 +170,23 @@ struct EducationQuestionnaire: View {
                                 .frame(width: 80)
                         }
 
-                        if let age = profileAge, let years = Int(input.yearsUntilCourse), years > 0 {
-                            HStack(spacing: 8) {
-                                Image(systemName: "person.crop.circle.fill.badge.checkmark")
-                                    .font(.system(size: 12))
-                                    .foregroundStyle(.blue)
-                                Text("You'll be \(age + years) years old")
-                                    .font(.system(size: 13, weight: .medium, design: .rounded))
-                                    .foregroundStyle(.blue)
-                                Text("· when you start")
-                                    .font(.system(size: 12, design: .rounded))
-                                    .foregroundStyle(.secondary)
-                                Spacer()
-                            }
-                            .padding(.horizontal, 12)
-                            .padding(.vertical, 8)
-                            .background(.blue.opacity(0.06), in: RoundedRectangle(cornerRadius: 10, style: .continuous))
-                        }
+//                        if let age = profileAge, let years = Int(input.yearsUntilCourse), years > 0 {
+//                            HStack(spacing: 8) {
+//                                Image(systemName: "person.crop.circle.fill.badge.checkmark")
+//                                    .font(.system(size: 12))
+//                                    .foregroundStyle(.blue)
+//                                Text("You'll be \(age + years) years old")
+//                                    .font(.system(size: 13, weight: .medium, design: .rounded))
+//                                    .foregroundStyle(.blue)
+//                                Text("· when you start")
+//                                    .font(.system(size: 12, design: .rounded))
+//                                    .foregroundStyle(.secondary)
+//                                Spacer()
+//                            }
+//                            .padding(.horizontal, 12)
+//                            .padding(.vertical, 8)
+//                            .background(.blue.opacity(0.06), in: RoundedRectangle(cornerRadius: 10, style: .continuous))
+//                        }
 
                         if let years = Int(input.yearsUntilCourse), years > 0 {
                             HStack {

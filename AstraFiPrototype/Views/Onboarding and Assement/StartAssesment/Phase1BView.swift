@@ -292,7 +292,7 @@ struct Phase1BView: View {
             }
         }
         .navigationDestination(isPresented: $goReport) {
-            FinancialHealthReportView()
+            FinancialHealthReportView(data: data)
         }
         .navigationDestination(isPresented: $goInvestments) {
             InvestmentDetailsScreen(data: data)

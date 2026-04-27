@@ -55,7 +55,7 @@ struct SignInView: View {
                 .padding(.bottom, 32)
 
                 // Login
-                AuthPrimaryButton(title: "Log In") {
+                AuthPrimaryButton(title: "Sign In") {
                     appState.isAuthenticated = true
                 }
                 .padding(.bottom, 28)
@@ -190,7 +190,7 @@ struct SignUpView: View {
 
                     HStack(spacing: 4) {
                         Spacer()
-                        Button("Already have an account? Log in") { showSignUp = false }
+                        Button("Already have an account? Sign in") { showSignUp = false }
                             .font(.system(size: 15))
                             .foregroundStyle(brandGradient)
                         Spacer()

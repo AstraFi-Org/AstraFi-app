@@ -139,9 +139,9 @@ struct EmergencyFundSectionView: View {
     @State private var pSavings: Double = 0
     @State private var pSweepFD: Double = 0
 
-    @State private var showManage:         Bool = false
-    @State private var showEditSheet:      Bool = false
-    @State private var showRecommendSheet: Bool = false
+    @State private var showManage:          Bool = false
+    @State private var showEditSheet:       Bool = false
+    @State private var showRecommendScreen: Bool = false
 
     // MARK: Profile accessors
     private var profile: AstraUserProfile? { appState.currentProfile }
@@ -254,13 +254,13 @@ struct EmergencyFundSectionView: View {
             ManageAllocationSheet(currentHolding: currentSaved, pTBills: $pTBills, pSavings: $pSavings, pSweepFD: $pSweepFD, onSave: saveAllocation)
                 .environment(appState)
         }
-        .sheet(isPresented: $showRecommendSheet) {
-            AllocationRecommendationSheet(
+        .navigationDestination(isPresented: $showRecommendScreen) {
+            AllocationRecommendationScreen(
                 currentHolding: currentSaved,
                 riskTolerance: profile?.basicDetails.riskTolerance ?? .medium,
                 pTBills: $pTBills, pSavings: $pSavings, pSweepFD: $pSweepFD,
-                onAccept: { saveAllocation(); showRecommendSheet = false },
-                onCustomize: { showRecommendSheet = false; DispatchQueue.main.asyncAfter(deadline: .now() + 0.35) { showEditSheet = true } }
+                onAccept: { saveAllocation(); showRecommendScreen = false },
+                onCustomize: { showRecommendScreen = false; DispatchQueue.main.asyncAfter(deadline: .now() + 0.35) { showEditSheet = true } }
             )
             .environment(appState)
         }
@@ -411,7 +411,7 @@ struct EmergencyFundSectionView: View {
                     }
                     Button {
                         withAnimation(.spring(response: 0.38, dampingFraction: 0.82)) {
-                            if hasAllocation { showManage.toggle() } else { showRecommendSheet = true }
+                            if hasAllocation { showManage.toggle() } else { showRecommendScreen = true }
                         }
                     } label: {
                         HStack(spacing: 4) {
@@ -580,39 +580,6 @@ struct ManageAllocationSheet: View {
     }
 }
 
-// MARK: - Instrument Info Sheet (private)
-private struct InstrumentInfoSheet: View {
-    let info: InstrumentInfoContent
-    @Environment(\.dismiss) var dismiss
-    var body: some View {
-        NavigationStack {
-            ScrollView {
-                VStack(alignment: .leading, spacing: 20) {
-                    Text(info.headline).font(.system(size: 15, design: .rounded)).foregroundStyle(.secondary).padding(.horizontal, 20).padding(.top, 8)
-                    Text(info.detail).font(.system(size: 15, design: .rounded)).lineSpacing(4).padding(.horizontal, 20)
-                    VStack(spacing: 12) {
-                        chip(icon: "percent",   label: info.rateNote,      color: Color(hex: "#30D158"))
-                        chip(icon: "bolt.fill", label: info.liquidityNote, color: Color(hex: "#007AFF"))
-                    }.padding(.horizontal, 20)
-                    HStack(alignment: .top, spacing: 8) {
-                        Image(systemName: "building.columns").font(.system(size: 13)).foregroundStyle(.secondary).padding(.top, 1)
-                        Text("Rates are indicative based on RBI benchmark data and may vary. Always verify current rates with your bank or broker before investing.").font(.system(size: 12, design: .rounded)).foregroundStyle(.secondary).fixedSize(horizontal: false, vertical: true)
-                    }.padding(14).background(Color(.systemFill)).clipShape(RoundedRectangle(cornerRadius: 12, style: .continuous)).padding(.horizontal, 20)
-                    Spacer(minLength: 32)
-                }
-            }
-            .navigationTitle(info.name).navigationBarTitleDisplayMode(.inline)
-            .toolbar { ToolbarItem(placement: .confirmationAction) { Button("Done") { dismiss() }.fontWeight(.semibold) } }
-        }
-    }
-    private func chip(icon: String, label: String, color: Color) -> some View {
-        HStack(spacing: 10) {
-            ZStack { Circle().fill(color.opacity(0.12)).frame(width: 32, height: 32); Image(systemName: icon).font(.system(size: 13, weight: .semibold)).foregroundStyle(color) }
-            Text(label).font(.system(size: 13, design: .rounded)).fixedSize(horizontal: false, vertical: true); Spacer()
-        }.padding(12).background(color.opacity(0.07)).clipShape(RoundedRectangle(cornerRadius: 12, style: .continuous))
-    }
-}
-
 // MARK: - Instrument Info Content Model (private)
 private struct InstrumentInfoContent: Identifiable {
     var id: String { name }
@@ -628,9 +595,8 @@ private struct InstrumentInfoContent: Identifiable {
         rateNote: "Interest: ~5.2% p.a. (7-day sweep-in average, SBI/HDFC/ICICI)", liquidityNote: "Liquidity: Next-day — broken FD funds credited by next working day")
 }
 
-// MARK: - Allocation Recommendation Sheet
-struct AllocationRecommendationSheet: View {
-    @Environment(\.dismiss) var dismiss
+// MARK: - Allocation Recommendation Screen
+struct AllocationRecommendationScreen: View {
     @Environment(AppStateManager.self) var appState
 
     let currentHolding: Double
@@ -654,16 +620,24 @@ struct AllocationRecommendationSheet: View {
     private var annualReturn: Double { currentHolding * blendedReturn }
 
     var body: some View {
-        NavigationStack {
-            ScrollView {
-                VStack(spacing: 24) {
-                    profileBadge; rationaleView
-                    instrumentsSection
-                    returnSummary; actionButtons
-                }.padding(.horizontal, 20).padding(.top, 8).padding(.bottom, 32)
+        ScrollView {
+            VStack(spacing: 24) {
+                profileBadge; rationaleView
+                instrumentsSection
+                returnSummary; actionButtons
+            }.padding(.horizontal, 20).padding(.top, 8).padding(.bottom, 32)
+        }
+        .navigationTitle("Recommended Plan")
+        .navigationBarTitleDisplayMode(.inline)
+        .alert(activeInfo?.name ?? "", isPresented: .init(
+            get: { activeInfo != nil },
+            set: { if !$0 { activeInfo = nil } }
+        )) {
+            Button("OK", role: .cancel) { activeInfo = nil }
+        } message: {
+            if let info = activeInfo {
+                Text("\(info.headline)\n\n\(info.detail)\n\n\(info.rateNote)\n\(info.liquidityNote)")
             }
-            .navigationTitle("Recommended Plan").navigationBarTitleDisplayMode(.inline)
-            .toolbar { ToolbarItem(placement: .cancellationAction) { Button("Cancel") { dismiss() } } }
         }
         .sheet(item: $activeGuide) { HowToInvestFullGuideSheet(guide: $0) }
     }
@@ -691,7 +665,7 @@ struct AllocationRecommendationSheet: View {
             instrRow(name: "Saving Account", icon: "banknote.fill",         color: Color(hex: "#007AFF"), pct: rec.s, rate: EFInstrumentRate.savingsAccount, liq: "Instant access", info: .savingsAccount, guide: .savingsAccount)
             instrRow(name: "Sweep-in FD",    icon: "arrow.2.squarepath",    color: Color(hex: "#FF9F0A"), pct: rec.f, rate: EFInstrumentRate.sweepInFD,      liq: "Next-day",       info: .sweepInFD, guide: .sweepInFD)
         }
-        .sheet(item: $activeInfo) { InstrumentInfoSheet(info: $0).presentationDetents([.medium]).presentationDragIndicator(.visible) }
+        // activeInfo and showInfo are wired via instrRow's info button
     }
 
     private func instrRow(name: String, icon: String, color: Color, pct: Double, rate: Double, liq: String, info: InstrumentInfoContent, guide: HowToInvestGuide) -> some View {

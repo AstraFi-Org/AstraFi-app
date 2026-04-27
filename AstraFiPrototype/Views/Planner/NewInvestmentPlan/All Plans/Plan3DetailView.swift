@@ -79,8 +79,11 @@ struct Plan3DetailView: View {
                     leveragedGraphCard
                     
                     bankDetailsCard
-                    recommendationCard
+                    emiBreakdownCard
+                    amortizationSummaryCard
+                    
                     strategyBuilderCard
+                    recommendationCard
                 }
                 .padding(.horizontal, 20)
                 .padding(.bottom, 120)
@@ -553,59 +556,213 @@ struct Plan3DetailView: View {
     }
 
     private var bankDetailsCard: some View {
-        VStack(spacing: 16) {
-            Text("Bank & Interest Config")
-                .font(.headline).frame(maxWidth: .infinity, alignment: .leading)
-            HStack {
-                TextField("Bank Name", text: $bankName).textFieldStyle(.roundedBorder)
-                TextField("ROI %", value: $interestRate, format: .number).textFieldStyle(.roundedBorder).keyboardType(.decimalPad).frame(width: 80)
+        VStack(alignment: .leading, spacing: 20) {
+            HStack(spacing: 8) {
+                Image(systemName: "building.columns.fill")
+                    .foregroundColor(.blue)
+                Text("Loan Configuration")
+                    .font(.headline)
             }
-            .onChange(of: interestRate) { _, _ in recalculate() }
-
-            Picker("EMI Type", selection: $emiFrequency) {
-                Text("Monthly").tag(EMIFrequency.monthly)
-                Text("Quarterly").tag(EMIFrequency.quarterly)
+            
+            VStack(spacing: 16) {
+                HStack(spacing: 12) {
+                    VStack(alignment: .leading, spacing: 6) {
+                        Text("Bank Name").font(.caption).foregroundColor(.secondary)
+                        TextField("e.g. HDFC", text: $bankName)
+                            .textFieldStyle(.plain)
+                            .padding(12)
+                            .background(Color.secondary.opacity(0.1))
+                            .cornerRadius(10)
+                    }
+                    
+                    VStack(alignment: .leading, spacing: 6) {
+                        Text("Interest Rate").font(.caption).foregroundColor(.secondary)
+                        HStack {
+                            TextField("ROI", value: $interestRate, format: .number)
+                                .keyboardType(.decimalPad)
+                                .textFieldStyle(.plain)
+                            Text("%").font(.subheadline).foregroundColor(.secondary)
+                        }
+                        .padding(12)
+                        .background(Color.secondary.opacity(0.1))
+                        .cornerRadius(10)
+                        .frame(width: 100)
+                    }
+                }
+                .onChange(of: interestRate) { _, _ in recalculate() }
+                
+                VStack(alignment: .leading, spacing: 8) {
+                    Text("Payment Frequency").font(.caption).foregroundColor(.secondary)
+                    Picker("EMI Type", selection: $emiFrequency) {
+                        Text("Monthly").tag(EMIFrequency.monthly)
+                        Text("Quarterly").tag(EMIFrequency.quarterly)
+                    }
+                    .pickerStyle(.segmented)
+                    .onChange(of: emiFrequency) { _, _ in recalculate() }
+                }
             }
-            .pickerStyle(.segmented)
-            .onChange(of: emiFrequency) { _, _ in recalculate() }
         }
         .padding(20)
         .background(AppTheme.cardBackground)
         .cornerRadius(20)
+        .shadow(color: AppTheme.adaptiveShadow.opacity(0.2), radius: 10)
+    }
+
+    private var emiBreakdownCard: some View {
+        let monthlyEMI = activeResult.monthlyEMI
+        let totalInterest = currentStrategy.totalEMIPaid - activeResult.loanAmount
+        
+        return VStack(spacing: 20) {
+            HStack {
+                VStack(alignment: .leading, spacing: 4) {
+                    Text("Monthly EMI")
+                        .font(.subheadline)
+                        .foregroundColor(.secondary)
+                    Text("₹\(Int(monthlyEMI).formatted())")
+                        .font(.title2)
+                        .fontWeight(.black)
+                        .foregroundColor(.primary)
+                }
+                Spacer()
+                ZStack {
+                    Circle()
+                        .fill(AppTheme.accentGradient.opacity(0.1))
+                        .frame(width: 50, height: 50)
+                    Image(systemName: "calendar.badge.clock")
+                        .foregroundColor(.blue)
+                }
+            }
+            
+            Divider()
+            
+            HStack(spacing: 24) {
+                VStack(alignment: .leading, spacing: 4) {
+                    Text("Loan Principal")
+                        .font(.caption)
+                        .foregroundColor(.secondary)
+                    Text("₹\(formatL(activeResult.loanAmount))")
+                        .font(.subheadline)
+                        .fontWeight(.bold)
+                }
+                
+                VStack(alignment: .leading, spacing: 4) {
+                    Text("Total Interest")
+                        .font(.caption)
+                        .foregroundColor(.secondary)
+                    Text("₹\(formatL(totalInterest))")
+                        .font(.subheadline)
+                        .fontWeight(.bold)
+                        .foregroundColor(.red)
+                }
+                
+                Spacer()
+            }
+        }
+        .padding(20)
+        .background(AppTheme.cardBackground)
+        .cornerRadius(20)
+        .shadow(color: AppTheme.adaptiveShadow.opacity(0.2), radius: 10)
+    }
+
+    private var amortizationSummaryCard: some View {
+        VStack(alignment: .leading, spacing: 16) {
+            HStack {
+                Image(systemName: "chart.bar.doc.horizontal.fill")
+                    .foregroundColor(.orange)
+                Text("Repayment Timeline")
+                    .font(.headline)
+                Spacer()
+                Text("\(tenureOverride) Years").font(.caption).foregroundColor(.secondary)
+            }
+            
+            VStack(spacing: 12) {
+                HStack {
+                    Text("Year").font(.caption).foregroundColor(.secondary).frame(width: 40, alignment: .leading)
+                    Text("Principal").font(.caption).foregroundColor(.secondary).frame(maxWidth: .infinity, alignment: .trailing)
+                    Text("Interest").font(.caption).foregroundColor(.secondary).frame(maxWidth: .infinity, alignment: .trailing)
+                    Text("Balance").font(.caption).foregroundColor(.secondary).frame(maxWidth: .infinity, alignment: .trailing)
+                }
+                
+                Divider()
+                
+                let yearlyData = currentStrategy.yearlyBreakdown
+                ForEach(yearlyData.prefix(5)) { year in
+                    HStack {
+                        Text("\(year.year)").font(.system(size: 11, weight: .bold)).frame(width: 40, alignment: .leading)
+                        Text("₹\(formatL(activeResult.loanAmount / Double(tenureOverride)))").font(.system(size: 11)).frame(maxWidth: .infinity, alignment: .trailing)
+                        Text("₹\(formatL((currentStrategy.totalEMIPaid - activeResult.loanAmount) / Double(tenureOverride)))").font(.system(size: 11)).foregroundColor(.red).frame(maxWidth: .infinity, alignment: .trailing)
+                        let remaining = activeResult.loanAmount - (Double(year.year) * (activeResult.loanAmount / Double(tenureOverride)))
+                        Text("₹\(formatL(max(0, remaining)))").font(.system(size: 11, weight: .semibold)).frame(maxWidth: .infinity, alignment: .trailing)
+                    }
+                }
+                
+                if tenureOverride > 5 {
+                    Text("+ \(tenureOverride - 5) more years")
+                        .font(.caption2)
+                        .foregroundColor(.secondary)
+                        .frame(maxWidth: .infinity, alignment: .center)
+                        .padding(.top, 4)
+                }
+            }
+        }
+        .padding(20)
+        .background(AppTheme.cardBackground)
+        .cornerRadius(20)
+        .shadow(color: AppTheme.adaptiveShadow.opacity(0.2), radius: 10)
     }
 
     private var recommendationCard: some View {
         VStack(alignment: .leading, spacing: 12) {
             HStack {
-                Image(systemName: "star.fill").foregroundColor(.yellow)
+                Image(systemName: "sparkles")
+                    .foregroundColor(.purple)
                 Text("Astra Recommendation").font(.headline)
             }
             Text(activeResult.recommendationReason)
-                .font(.subheadline).foregroundColor(.secondary)
+                .font(.subheadline)
+                .foregroundColor(.secondary)
+                .lineSpacing(4)
         }
         .padding(20)
         .frame(maxWidth: .infinity, alignment: .leading)
-        .background(AppTheme.cardBackground)
+        .background(
+            ZStack {
+                AppTheme.cardBackground
+                LinearGradient(colors: [.purple.opacity(0.05), .clear], startPoint: .topLeading, endPoint: .bottomTrailing)
+            }
+        )
         .cornerRadius(20)
+        .shadow(color: AppTheme.adaptiveShadow.opacity(0.2), radius: 10)
     }
 
     private var strategyBuilderCard: some View {
         VStack(spacing: 20) {
             HStack {
-                Text("Strategy Builder").font(.headline)
+                VStack(alignment: .leading, spacing: 4) {
+                    Text("Strategy Builder").font(.headline)
+                    Text("Phase-wise capital injection").font(.caption).foregroundColor(.secondary)
+                }
                 Spacer()
-                Stepper("\(lumpsumPhases) Phase(s)", value: $lumpsumPhases, in: 1...12)
+                Stepper("", value: $lumpsumPhases, in: 1...12)
                     .onChange(of: lumpsumPhases) { _, _ in recalculate() }
             }
 
             StrategyCircularChart(total: activeResult.loanAmount, phases: lumpsumPhases, mode: "Lumpsum")
 
-            Text(isEMIDeductionOn ? "EMI is automatically withdrawn from the investment." : "EMI is paid from your surplus monthly.")
-                .font(.caption2).foregroundColor(.secondary).italic()
+            HStack(spacing: 8) {
+                Image(systemName: "info.circle.fill")
+                    .font(.caption)
+                    .foregroundColor(.blue)
+                Text(isEMIDeductionOn ? "EMI is automatically withdrawn from the investment." : "EMI is paid from your surplus monthly.")
+                    .font(.system(size: 10))
+                    .foregroundColor(.secondary)
+                    .italic()
+            }
         }
         .padding(24)
         .background(AppTheme.cardBackground)
         .cornerRadius(24)
+        .shadow(color: AppTheme.adaptiveShadow.opacity(0.2), radius: 10)
     }
 
     private func formatL(_ v: Double) -> String {

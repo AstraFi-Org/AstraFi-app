@@ -22,24 +22,6 @@ struct VitalsDetailSheet: View {
     var body: some View {
         NavigationStack {
             List {
-                // Header icon + label
-                Section {
-                    HStack(spacing: 14) {
-                        Image(systemName: "heart.text.square.fill")
-                            .font(.title2).foregroundStyle(Color(hex: "#FF2D55"))
-                            .frame(width: 52, height: 52)
-                            .background(Color(hex: "#FF2D55").opacity(0.1))
-                            .clipShape(RoundedRectangle(cornerRadius: 14, style: .continuous))
-                        VStack(alignment: .leading, spacing: 3) {
-                            Text("Financial Vitals").font(.title3).bold()
-                            Text("Your income, expense and savings breakdown")
-                                .font(.subheadline).foregroundStyle(.secondary)
-                        }
-                    }
-                    .listRowInsets(EdgeInsets(top: 16, leading: 20, bottom: 16, trailing: 20))
-                }
-                .listRowBackground(Color.clear)
-                .listRowSeparator(.hidden)
 
                 // Key metrics — each in its own grouped row
                 Section(header: Text("Monthly Snapshot").font(.footnote).textCase(.uppercase)) {
