@@ -6,6 +6,10 @@
 	objectVersion = 77;
 	objects = {
 
+/* Begin PBXBuildFile section */
+		92498A192F9F323400ADC565 /* Supabase in Frameworks */ = {isa = PBXBuildFile; productRef = 92498A182F9F323400ADC565 /* Supabase */; };
+/* End PBXBuildFile section */
+
 /* Begin PBXFileReference section */
 		3FF5E8B52F39D4B600C20EE6 /* AstraFiPrototype.app */ = {isa = PBXFileReference; explicitFileType = wrapper.application; includeInIndex = 0; path = AstraFiPrototype.app; sourceTree = BUILT_PRODUCTS_DIR; };
 /* End PBXFileReference section */
@@ -23,6 +27,7 @@
 			isa = PBXFrameworksBuildPhase;
 			buildActionMask = 2147483647;
 			files = (
+				92498A192F9F323400ADC565 /* Supabase in Frameworks */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};
@@ -65,6 +70,7 @@
 			);
 			name = AstraFiPrototype;
 			packageProductDependencies = (
+				92498A182F9F323400ADC565 /* Supabase */,
 			);
 			productName = AstraFiPrototype;
 			productReference = 3FF5E8B52F39D4B600C20EE6 /* AstraFiPrototype.app */;
@@ -94,6 +100,9 @@
 			);
 			mainGroup = 3FF5E8AC2F39D4B600C20EE6;
 			minimizedProjectReferenceProxies = 1;
+			packageReferences = (
+				92498A172F9F323400ADC565 /* XCRemoteSwiftPackageReference "supabase-swift" */,
+			);
 			preferredProjectObjectVersion = 77;
 			productRefGroup = 3FF5E8B62F39D4B600C20EE6 /* Products */;
 			projectDirPath = "";
@@ -334,6 +343,25 @@
 			defaultConfigurationName = Release;
 		};
 /* End XCConfigurationList section */
+
+/* Begin XCRemoteSwiftPackageReference section */
+		92498A172F9F323400ADC565 /* XCRemoteSwiftPackageReference "supabase-swift" */ = {
+			isa = XCRemoteSwiftPackageReference;
+			repositoryURL = "https://github.com/supabase/supabase-swift.git";
+			requirement = {
+				kind = upToNextMajorVersion;
+				minimumVersion = 2.5.1;
+			};
+		};
+/* End XCRemoteSwiftPackageReference section */
+
+/* Begin XCSwiftPackageProductDependency section */
+		92498A182F9F323400ADC565 /* Supabase */ = {
+			isa = XCSwiftPackageProductDependency;
+			package = 92498A172F9F323400ADC565 /* XCRemoteSwiftPackageReference "supabase-swift" */;
+			productName = Supabase;
+		};
+/* End XCSwiftPackageProductDependency section */
 	};
 	rootObject = 3FF5E8AD2F39D4B600C20EE6 /* Project object */;
 }

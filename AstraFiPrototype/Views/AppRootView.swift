@@ -30,9 +30,6 @@ struct AppRootView: View {
         .animation(.easeInOut(duration: 0.35), value: appState.hasCompletedOnboarding)
         .animation(.easeInOut(duration: 0.35), value: appState.isAuthenticated)
         .animation(.easeInOut(duration: 0.35), value: appState.showDashboard)
-        .task {
-            await appState.syncMutualFundNAVs()
-        }
     }
 }
 
