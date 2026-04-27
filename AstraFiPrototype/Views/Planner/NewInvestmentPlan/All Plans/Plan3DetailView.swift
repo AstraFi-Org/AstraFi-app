@@ -377,7 +377,7 @@ struct Plan3DetailView: View {
                             .font(.caption)
                     }
                 }
-                Text("Plan Logic: Take a loan and invest it as per the descriptive plan shown below to see how you can build significant wealth.")
+                Text("Plan Logic Take a loan and invest it as per the descriptive plan shown below to see how you can build significant wealth.")
                     .font(.caption)
                     .foregroundColor(.secondary)
             }
