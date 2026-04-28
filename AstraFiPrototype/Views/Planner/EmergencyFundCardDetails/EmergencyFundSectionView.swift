@@ -546,7 +546,7 @@ struct ManageAllocationSheet: View {
             }
             .navigationTitle("Manage Allocation").navigationBarTitleDisplayMode(.inline)
             .toolbar {
-                ToolbarItem(placement: .cancellationAction) { Button("Cancel") { dismiss() } }
+//                ToolbarItem(placement: .cancellationAction) { Button("Cancel") { dismiss() } }
                 ToolbarItem(placement: .confirmationAction) { Button("Save") { onSave(); dismiss() }.fontWeight(.semibold) }
             }
         }

@@ -130,7 +130,6 @@ struct Plan3DetailView: View {
             appState.showDashboard = true
         }) {
             HStack(spacing: 12) {
-                Image(systemName: "star.fill")
                 Text("Save & Follow Plan")
                     .font(.headline).fontWeight(.bold)
             }
