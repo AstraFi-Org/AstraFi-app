@@ -8,6 +8,25 @@ final class SupabaseRepository {
     private let encoder = JSONEncoder()
     private let decoder = JSONDecoder()
 
+    // For Supabase `date` columns (returned as "yyyy-MM-dd", not a full ISO8601 timestamp)
+    private let dateFmt: DateFormatter = {
+        let f = DateFormatter()
+        f.dateFormat = "yyyy-MM-dd"
+        f.locale = Locale(identifier: "en_US_POSIX")
+        f.timeZone = TimeZone(secondsFromGMT: 0)
+        return f
+    }()
+
+    // Parses either a plain date ("yyyy-MM-dd") or a full ISO8601 timestamp
+    private func parseDate(_ str: String) -> Date? {
+        return dateFmt.date(from: str) ?? fmt.date(from: str)
+    }
+
+    // Formats a Date for a Supabase `date` column
+    private func formatDate(_ date: Date) -> String {
+        return dateFmt.string(from: date)
+    }
+
     // MARK: - Codable Row Types for Upsert
 
     private struct UserProfileRow: Encodable {
@@ -449,8 +468,8 @@ final class SupabaseRepository {
             targetAmount: goal.targetAmount,
             currentAmount: goal.currentAmount,
             manualSavingsContribution: goal.manualSavingsContribution,
-            startDate: fmt.string(from: goal.startDate),
-            targetDate: fmt.string(from: goal.targetDate)
+            startDate: formatDate(goal.startDate),
+            targetDate: formatDate(goal.targetDate)
         )).execute()
     }
 
@@ -476,8 +495,8 @@ final class SupabaseRepository {
                 targetAmount: row.targetAmount,
                 currentAmount: row.currentAmount,
                 manualSavingsContribution: row.manualSavingsContribution,
-                startDate: fmt.date(from: row.startDate) ?? Date(),
-                targetDate: fmt.date(from: row.targetDate) ?? Date()
+                startDate: parseDate(row.startDate) ?? Date(),
+                targetDate: parseDate(row.targetDate) ?? Date()
             )
         }
     }
@@ -499,7 +518,7 @@ final class SupabaseRepository {
             investmentName: inv.investmentName,
             investmentAmount: inv.investmentAmount,
             mode: inv.mode.rawValue,
-            startDate: fmt.string(from: inv.startDate),
+            startDate: formatDate(inv.startDate),
             schemeCode: inv.schemeCode,
             isin: inv.isin,
             lastNAV: inv.lastNAV,
@@ -517,7 +536,7 @@ final class SupabaseRepository {
                 id: tx.id.uuidString,
                 investment_id: inv.id.uuidString,
                 user_id: userId.uuidString,
-                date: fmt.string(from: tx.date),
+                date: formatDate(tx.date),
                 type: tx.type.rawValue,
                 amount: tx.amount,
                 nav: tx.nav,
@@ -571,7 +590,7 @@ final class SupabaseRepository {
             let txs = txRows.filter { $0.investment_id == row.id }.map { tx in
                 AstraInvestmentTransaction(
                     id: tx.id,
-                    date: fmt.date(from: tx.date) ?? Date(),
+                    date: parseDate(tx.date) ?? Date(),
                     type: tx.type == "Sell" ? .sell : .buy,
                     amount: tx.amount,
                     nav: tx.nav,
@@ -584,7 +603,7 @@ final class SupabaseRepository {
                 subtype: row.subtype.flatMap { AstraInvestmentSubtype(rawValue: $0) },
                 investmentName: row.investmentName,
                 investmentAmount: row.investmentAmount,
-                startDate: fmt.date(from: row.startDate) ?? Date(),
+                startDate: parseDate(row.startDate) ?? Date(),
                 associatedGoalID: row.associatedGoalID,
                 mode: AstraInvestmentMode(rawValue: row.mode) ?? .lumpsum,
                 schemeCode: row.schemeCode,
@@ -625,8 +644,8 @@ final class SupabaseRepository {
             compoundingFrequency: loan.compoundingFrequency.rawValue,
             emiAmount: loan.emiAmount,
             emiFrequency: loan.emiFrequency.rawValue,
-            loanStartDate: fmt.string(from: loan.loanStartDate),
-            firstEMIDate: loan.firstEMIDate.map { fmt.string(from: $0) },
+loanStartDate: formatDate(loan.loanStartDate),
+firstEMIDate: loan.firstEMIDate.map { formatDate($0) },
             loanTenureMonths: loan.loanTenureMonths,
             installmentsPaid: loan.installmentsPaid,
             prepaymentPenaltyPercentage: loan.prepaymentPenaltyPercentage,
@@ -647,7 +666,7 @@ final class SupabaseRepository {
                 loan_id: loan.id.uuidString,
                 user_id: userId.uuidString,
                 emiNumber: payment.emiNumber,
-                date: fmt.string(from: payment.date),
+                date: formatDate(payment.date),
                 amountPaid: payment.amountPaid,
                 interestComponent: payment.interestComponent,
                 principalComponent: payment.principalComponent,
@@ -663,7 +682,7 @@ final class SupabaseRepository {
                 loan_id: loan.id.uuidString,
                 user_id: userId.uuidString,
                 amount: prepayment.amount,
-                date: fmt.string(from: prepayment.date)
+                date: formatDate(prepayment.date)
             )).execute()
         }
     }
@@ -720,13 +739,13 @@ final class SupabaseRepository {
         return loanRows.map { row in
             let payments = payRows.filter { $0.loan_id == row.id }.map { p in
                 AstraLoanPayment(id: p.id, emiNumber: p.emiNumber,
-                    date: fmt.date(from: p.date) ?? Date(),
+                    date: parseDate(p.date) ?? Date(),
                     amountPaid: p.amountPaid, interestComponent: p.interestComponent,
                     principalComponent: p.principalComponent, remainingBalance: p.remainingBalance,
                     status: AstraPaymentStatus(rawValue: p.status) ?? .pending, penalty: p.penalty)
             }
             let prepayments = prepRows.filter { $0.loan_id == row.id }.map { p in
-                AstraPrepayment(id: p.id, amount: p.amount, date: fmt.date(from: p.date) ?? Date())
+AstraPrepayment(id: p.id, amount: p.amount, date: parseDate(p.date) ?? Date())
             }
             let rateHistory: [AstraRateChange] = row.interestRateHistory
                 .flatMap { try? decoder.decode([AstraRateChange].self, from: Data($0.utf8)) } ?? []
@@ -738,13 +757,13 @@ final class SupabaseRepository {
                 loanAmount: row.loanAmount, interestRate: row.interestRate,
                 interestType: AstraInterestType(rawValue: row.interestType) ?? .compound,
                 compoundingFrequency: AstraCompoundingFrequency(rawValue: row.compoundingFrequency) ?? .monthly,
-                loanStartDate: fmt.date(from: row.loanStartDate) ?? Date(),
+loanStartDate: parseDate(row.loanStartDate) ?? Date(),
                 loanTenureMonths: row.loanTenureMonths
             )
             loan.loanName = row.loanName
             loan.emiAmount = row.emiAmount
             loan.emiFrequency = AstraEMIFrequency(rawValue: row.emiFrequency) ?? .monthly
-            loan.firstEMIDate = row.firstEMIDate.flatMap { fmt.date(from: $0) }
+loan.firstEMIDate = row.firstEMIDate.flatMap { parseDate($0) }
             loan.installmentsPaid = row.installmentsPaid
             loan.prepaymentPenaltyPercentage = row.prepaymentPenaltyPercentage
             loan.isFloatingRate = row.isFloatingRate
@@ -788,11 +807,11 @@ final class SupabaseRepository {
             taxesGST: ins.taxesGST,
             addOnCost: ins.addOnCost,
             premiumFrequency: ins.premiumFrequency.rawValue,
-            startDate: fmt.string(from: ins.startDate),
-            expiryDate: ins.expiryDate.map { fmt.string(from: $0) },
+startDate: formatDate(ins.startDate),
+expiryDate: ins.expiryDate.map { formatDate($0) },
             surrenderValue: ins.surrenderValue,
             lockInPeriodMonths: ins.lockInPeriodMonths,
-            maturityDate: ins.maturityDate.map { fmt.string(from: $0) },
+maturityDate: ins.maturityDate.map { formatDate($0) },
             expectedMaturityAmount: ins.expectedMaturityAmount,
             lifeDetails: lifeJSON,
             healthDetails: healthJSON,
@@ -805,7 +824,7 @@ final class SupabaseRepository {
                 id: claim.id.uuidString,
                 insurance_id: ins.id.uuidString,
                 user_id: userId.uuidString,
-                date: fmt.string(from: claim.date),
+date: formatDate(claim.date),
                 amount: claim.amount,
                 status: claim.status.rawValue,
                 description: claim.description
@@ -817,7 +836,7 @@ final class SupabaseRepository {
                 id: payment.id.uuidString,
                 insurance_id: ins.id.uuidString,
                 user_id: userId.uuidString,
-                date: fmt.string(from: payment.date),
+                date: formatDate(payment.date),
                 amount: payment.amount,
                 status: payment.status.rawValue
             )).execute()
@@ -861,12 +880,12 @@ final class SupabaseRepository {
 
         return insRows.map { row in
             let claims = claimRows.filter { $0.insurance_id == row.id }.map { c in
-                AstraClaim(id: c.id, date: fmt.date(from: c.date) ?? Date(),
+AstraClaim(id: c.id, date: parseDate(c.date) ?? Date(),
                     amount: c.amount, status: AstraClaimStatus(rawValue: c.status) ?? .pending,
                     description: c.description)
             }
             let payments = payRows.filter { $0.insurance_id == row.id }.map { p in
-                AstraInsurancePayment(id: p.id, date: fmt.date(from: p.date) ?? Date(),
+AstraInsurancePayment(id: p.id, date: parseDate(p.date) ?? Date(),
                     amount: p.amount, status: AstraPaymentStatus(rawValue: p.status) ?? .pending)
             }
             var ins = AstraInsurance(
@@ -874,8 +893,8 @@ final class SupabaseRepository {
                 insuranceType: AstraInsuranceType(rawValue: row.insuranceType) ?? .other,
                 provider: row.provider, policyNumber: row.policyNumber,
                 sumAssured: row.sumAssured, annualPremium: row.annualPremium,
-                startDate: fmt.date(from: row.startDate) ?? Date(),
-                expiryDate: row.expiryDate.flatMap { fmt.date(from: $0) }
+                startDate: parseDate(row.startDate) ?? Date(),
+                expiryDate: row.expiryDate.flatMap { parseDate($0) }
             )
             ins.basePremium = row.basePremium
             ins.taxesGST = row.taxesGST
@@ -883,7 +902,7 @@ final class SupabaseRepository {
             ins.premiumFrequency = AstraPremiumFrequency(rawValue: row.premiumFrequency) ?? .yearly
             ins.surrenderValue = row.surrenderValue
             ins.lockInPeriodMonths = row.lockInPeriodMonths
-            ins.maturityDate = row.maturityDate.flatMap { fmt.date(from: $0) }
+ins.maturityDate = row.maturityDate.flatMap { parseDate($0) }
             ins.expectedMaturityAmount = row.expectedMaturityAmount
             ins.lifeDetails   = row.lifeDetails.flatMap   { try? decoder.decode(AstraLifeInsuranceDetails.self,   from: Data($0.utf8)) }
             ins.healthDetails = row.healthDetails.flatMap { try? decoder.decode(AstraHealthInsuranceDetails.self, from: Data($0.utf8)) }
