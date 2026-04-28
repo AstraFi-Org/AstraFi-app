@@ -22,7 +22,7 @@ struct InvestmentPlanResultView: View {
         ScrollView(showsIndicators: false) {
             VStack(spacing: 32) {
                 // Header Message
-                VStack(spacing: 16) {
+                VStack(alignment:.leading,spacing: 16) {
                     //                    let profile = appState.currentProfile
                     //                    let isPortfolioHighRisk = profile.riskProfile == .high
                     //                    let goalCategory = input.goalCategory

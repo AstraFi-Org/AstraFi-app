@@ -71,10 +71,10 @@ class InvestmentPlannerEngine {
     }
 
     static func recalculatePlan1(input: InvestmentPlanInputModel,
-                                 overridenRisk: String? = nil,
+                                 overridenRisk: AstraRiskLevel? = nil,
                                  overridenSIP: Double? = nil,
                                  overridenTenure: Int? = nil) -> Plan1Result {
-        let risk = overridenRisk != nil ? mapRiskLevel(overridenRisk!) : mapRiskLevel(input.riskType)
+        let risk = overridenRisk ?? mapRiskLevel(input.riskType)
         let goalCategory = InvestmentGoalCategory.from(purpose: input.purposeOfInvestment)
         let liquid = mapLiquidityLevel(input.liquidity)
 
@@ -297,65 +297,106 @@ class InvestmentPlannerEngine {
                                        amount: Double = 0.0) -> PortfolioBlueprint {
         var allocations: [AssetAllocation]
         
-        if amount >= 25000 {
-            switch risk {
-            case .low:
-                allocations = [
-                    AssetAllocation(name: "Corporate Bond Fund", percentage: 25, expectedCAGR: 7.5, riskLevel: .low),
-                    AssetAllocation(name: "Short Duration Debt", percentage: 20, expectedCAGR: 7.0, riskLevel: .low),
-                    AssetAllocation(name: "Liquid Fund", percentage: 15, expectedCAGR: 6.5, riskLevel: .low),
-                    AssetAllocation(name: "Large Cap Index", percentage: 15, expectedCAGR: 13.0, riskLevel: .mid),
-                    AssetAllocation(name: "Bluechip Equity", percentage: 10, expectedCAGR: 13.5, riskLevel: .mid),
-                    AssetAllocation(name: "Gold ETF", percentage: 10, expectedCAGR: 9.0, riskLevel: .low),
-                    AssetAllocation(name: "SGBs / Silver", percentage: 5, expectedCAGR: 9.5, riskLevel: .low),
-                ]
-            case .mid:
-                allocations = [
-                    AssetAllocation(name: "Flexi Cap MF", percentage: 20, expectedCAGR: 12.0, riskLevel: .mid),
-                    AssetAllocation(name: "Large & Mid Cap MF", percentage: 20, expectedCAGR: 13.0, riskLevel: .mid),
-                    AssetAllocation(name: "Index Fund", percentage: 15, expectedCAGR: 13.5, riskLevel: .low),
-                    AssetAllocation(name: "Corporate Bond Fund", percentage: 15, expectedCAGR: 7.5, riskLevel: .low),
-                    AssetAllocation(name: "Small Cap MF", percentage: 10, expectedCAGR: 16.0, riskLevel: .high),
-                    AssetAllocation(name: "Multi Asset Fund", percentage: 10, expectedCAGR: 10.0, riskLevel: .mid),
-                    AssetAllocation(name: "Gold / Silver ETF", percentage: 10, expectedCAGR: 9.0, riskLevel: .low),
-                ]
-            case .high:
-                allocations = [
-                    AssetAllocation(name: "Small Cap MF (Agg.)", percentage: 20, expectedCAGR: 17.0, riskLevel: .high),
-                    AssetAllocation(name: "Small Cap MF (Std.)", percentage: 15, expectedCAGR: 16.0, riskLevel: .high),
-                    AssetAllocation(name: "Mid Cap MF", percentage: 20, expectedCAGR: 15.0, riskLevel: .high),
-                    AssetAllocation(name: "Flexi Cap MF", percentage: 15, expectedCAGR: 13.0, riskLevel: .mid),
-                    AssetAllocation(name: "Sectoral / Thematic", percentage: 10, expectedCAGR: 18.0, riskLevel: .high),
-                    AssetAllocation(name: "Global Equity", percentage: 10, expectedCAGR: 14.0, riskLevel: .high),
-                    AssetAllocation(name: "Large Cap Index", percentage: 10, expectedCAGR: 13.0, riskLevel: .mid),
-                ]
-            }
-        } else {
-            switch risk {
-            case .low:
-                allocations = [
-                    AssetAllocation(name: "Debt MF", percentage: 40, expectedCAGR: 7.0, riskLevel: .low),
-                    AssetAllocation(name: "Liquid Fund", percentage: 30, expectedCAGR: 7.0, riskLevel: .low),
-                    AssetAllocation(name: "Index Fund", percentage: 20, expectedCAGR: 14.0, riskLevel: .mid),
-                    AssetAllocation(name: "Gold ETF", percentage: 10, expectedCAGR: 24.0, riskLevel: .low),
-                ]
-            case .mid:
-                allocations = [
-                    AssetAllocation(name: "Flexi Cap MF", percentage: 35, expectedCAGR: 12.0, riskLevel: .mid),
-                    AssetAllocation(name: "Index Fund", percentage: 25, expectedCAGR: 14.0, riskLevel: .low),
-                    AssetAllocation(name: "Debt MF", percentage: 20, expectedCAGR: 7.0, riskLevel: .low),
-                    AssetAllocation(name: "Small Cap MF", percentage: 10, expectedCAGR: 14.0, riskLevel: .high),
-                    AssetAllocation(name: "REITs / Gold", percentage: 10, expectedCAGR: 24.0, riskLevel: .mid),
-                ]
-            case .high:
-                 allocations = [
-                    AssetAllocation(name: "Small Cap MF (Aggressive)", percentage: 40, expectedCAGR: 16.0, riskLevel: .high),
-                    AssetAllocation(name: "Mid Cap MF (Growth)", percentage: 30, expectedCAGR: 14.0, riskLevel: .high),
-                    AssetAllocation(name: "Flexi Cap MF", percentage: 10, expectedCAGR: 12.0, riskLevel: .mid),
-                    AssetAllocation(name: "Direct Equity / Global", percentage: 15, expectedCAGR: 24.0, riskLevel: .high),
-                    AssetAllocation(name: "Debt MF (Liquidity)", percentage: 5, expectedCAGR: 7.0, riskLevel: .low),
-                ]
-            }
+        switch risk {
+        case .low:
+            allocations = [
+                AssetAllocation(name: "Corporate Bond / Debt Fund", percentage: 35, expectedCAGR: 7.5, riskLevel: .low, 
+                                role: "Stability",
+                                description: "Invests in high-quality debt instruments issued by companies and the government.", 
+                                fundExamples: ["Example: Corporate bond mutual funds"],
+                                howItWorks: "Fixed-income instruments that pay regular interest. Less volatile than stocks.",
+                                whyIncluded: "Provides capital protection and steady returns to offset market risks."),
+                AssetAllocation(name: "Liquid / Short-Term Fund", percentage: 25, expectedCAGR: 6.5, riskLevel: .low, 
+                                role: "Liquidity",
+                                description: "Ultra-safe funds that invest in very short-term debt securities.", 
+                                fundExamples: ["Example: Liquid or Overnight Funds"],
+                                howItWorks: "Invests in assets maturing in 91 days or less. Very low price fluctuations.",
+                                whyIncluded: "Ensures you can access your cash quickly without losing capital value."),
+                AssetAllocation(name: "Large Cap Index Fund", percentage: 20, expectedCAGR: 13.0, riskLevel: .mid, 
+                                role: "Stable Growth",
+                                description: "A passive fund that tracks the top 50 or 100 largest companies in India.", 
+                                fundExamples: ["Example: Nifty 50 Index Fund (tracks top 50 companies)"],
+                                howItWorks: "Market-linked. Value changes based on the performance of India's biggest companies.",
+                                whyIncluded: "Captures the growth of the broader economy with lower volatility than mid/small caps."),
+                AssetAllocation(name: "Bluechip Equity", percentage: 15, expectedCAGR: 14.0, riskLevel: .mid, 
+                                role: "Consistent Returns",
+                                description: "Investments in established, market-leading companies with strong track records.", 
+                                fundExamples: ["Example: Bluechip Focused Equity Funds"],
+                                howItWorks: "Directly linked to corporate earnings and stock market growth of stable giants.",
+                                whyIncluded: "Aims for reliable dividends and long-term capital appreciation."),
+                AssetAllocation(name: "Small Cap (Minimal Exposure)", percentage: 5, expectedCAGR: 18.0, riskLevel: .high, 
+                                role: "Growth Boost",
+                                description: "Small portion allocated to fast-growing emerging companies.", 
+                                fundExamples: ["Example: Nifty Smallcap 250 Index"],
+                                howItWorks: "High-risk, market-linked. Can grow significantly but is highly volatile.",
+                                whyIncluded: "Provides a small 'kicker' to help beat inflation over a 3-5 year period.")
+            ]
+        case .mid:
+            allocations = [
+                AssetAllocation(name: "Flexi Cap Fund", percentage: 30, expectedCAGR: 14.5, riskLevel: .mid, 
+                                role: "Adaptive Growth",
+                                description: "A diversified fund that can invest in companies of any size (Large, Mid, or Small).", 
+                                fundExamples: ["Example: Multi-Cap or Flexi Cap Mutual Funds"],
+                                howItWorks: "Fund manager dynamically shifts money based on where the best opportunities are.",
+                                whyIncluded: "Offers optimal risk-adjusted returns by adapting to different market cycles."),
+                AssetAllocation(name: "Large & Mid Cap Fund", percentage: 25, expectedCAGR: 15.0, riskLevel: .mid, 
+                                role: "Balanced Growth",
+                                description: "Invests equally in stable Large Cap giants and high-growth Mid Cap firms.", 
+                                fundExamples: ["Example: Large & Mid Cap Hybrid Equity Funds"],
+                                howItWorks: "Market-linked. Combines the safety of top firms with the agility of mid-sized ones.",
+                                whyIncluded: "Balances high growth potential with a layer of established company stability."),
+                AssetAllocation(name: "Index Fund", percentage: 20, expectedCAGR: 13.5, riskLevel: .mid, 
+                                role: "Market Stability",
+                                description: "Invests in a predefined bucket of stocks like the Nifty 50 or Sensex.", 
+                                fundExamples: ["Example: Broad Market Index Funds"],
+                                howItWorks: "Mirrors the performance of the entire stock market. No manager risk.",
+                                whyIncluded: "Ensures your portfolio doesn't underperform the overall stock market average."),
+                AssetAllocation(name: "Small Cap Fund", percentage: 15, expectedCAGR: 18.5, riskLevel: .high, 
+                                role: "High Growth",
+                                description: "Focuses on young companies that have the potential to become future giants.", 
+                                fundExamples: ["Example: Active Small Cap Mutual Funds"],
+                                howItWorks: "Aggressive market-linked growth. High price swings but high long-term gains.",
+                                whyIncluded: "Significantly accelerates wealth creation over 5+ year periods."),
+                AssetAllocation(name: "Corporate Bond Fund", percentage: 10, expectedCAGR: 7.5, riskLevel: .low, 
+                                role: "Stability",
+                                description: "Invests in debt of high-rated companies for predictable income.", 
+                                fundExamples: ["Example: AAA-rated Corporate Bond Funds"],
+                                howItWorks: "Debt-based returns. Acts as a safety net when the stock market is volatile.",
+                                whyIncluded: "Provides a reliable anchor to protect your portfolio during market corrections.")
+            ]
+        case .high:
+            allocations = [
+                AssetAllocation(name: "Small Cap Fund", percentage: 35, expectedCAGR: 19.5, riskLevel: .high, 
+                                role: "Aggressive Growth",
+                                description: "Maximum exposure to emerging small-sized companies with multi-bagger potential.", 
+                                fundExamples: ["Example: Small Cap Focused Growth Funds"],
+                                howItWorks: "Highly volatile market-linked investment. Can have sharp drops and huge gains.",
+                                whyIncluded: "Designed for users with long horizons who want to maximize their final wealth."),
+                AssetAllocation(name: "Mid Cap Fund", percentage: 25, expectedCAGR: 17.5, riskLevel: .high, 
+                                role: "Growth Acceleration",
+                                description: "Invests in medium-sized companies that are rapidly expanding their business.", 
+                                fundExamples: ["Example: Midcap Opportunities Funds"],
+                                howItWorks: "Focused on the 'middle' segment of the market. High growth with high risk.",
+                                whyIncluded: "Provides the primary engine for capital appreciation in an aggressive plan."),
+                AssetAllocation(name: "Direct Equity / Thematic", percentage: 20, expectedCAGR: 22.0, riskLevel: .high, 
+                                role: "High Conviction",
+                                description: "Focused bets on specific high-performing sectors or individual stock picks.", 
+                                fundExamples: ["Example: Technology, Banking, or ESG Thematic Funds"],
+                                howItWorks: "Concentrated portfolio. Value changes rapidly based on sector performance.",
+                                whyIncluded: "Aims to significantly outperform the market by betting on trending sectors."),
+                AssetAllocation(name: "Flexi Cap Fund", percentage: 15, expectedCAGR: 14.0, riskLevel: .mid, 
+                                role: "Risk Balance",
+                                description: "A flexible equity fund used to maintain some diversification across sizes.", 
+                                fundExamples: ["Example: Parag Parikh or Quant Style Flexi Caps"],
+                                howItWorks: "Hybrid market-linked strategy. Provides a secondary layer of diversification.",
+                                whyIncluded: "Ensures the portfolio isn't too concentrated in just one segment of the market."),
+                AssetAllocation(name: "Large Cap Index Fund", percentage: 5, expectedCAGR: 13.0, riskLevel: .mid, 
+                                role: "Stability Anchor",
+                                description: "A small portion in safe large-cap stocks to prevent a total portfolio crash.", 
+                                fundExamples: ["Example: Nifty 50 Passive Index Fund"],
+                                howItWorks: "Passive market tracker. Provides basic stability to the aggressive mix.",
+                                whyIncluded: "Acts as a safety valve to preserve some capital during severe market crashes.")
+            ]
         }
 
         if liquidity == .high {
@@ -724,22 +765,15 @@ class InvestmentPlannerEngine {
             recReason = "Your high investment score allows for an aggressive strategy to maximize arbitrage gains."
         }
 
+        let worstSim = runLeveragedSimulation(name: "Worst", loanAmount: loanAmt, loanRate: rate, tenure: years, portfolio: conservativePortfolio, emiFrequency: emiFrequency, phases: lumpsumPhases, emiFromPocket: emiFromPocket, isSIPMode: investmentMode == "SIP", overridenReturn: 4.0)
+        
+        let bullSim = runLeveragedSimulation(name: "Bull", loanAmount: loanAmt, loanRate: rate, tenure: years, portfolio: aggressivePortfolio, emiFrequency: emiFrequency, phases: lumpsumPhases, emiFromPocket: emiFromPocket, isSIPMode: investmentMode == "SIP", overridenReturn: 19.0)
+
         let scenarios = [
-            PlanScenario(name: "Worst Case (Bear)", cagr: 6.0,
-                         gainLoss: runLeveragedSimulation(name: "Bear", loanAmount: loanAmt, loanRate: rate, tenure: years, portfolio: conservativePortfolio, emiFrequency: emiFrequency, phases: lumpsumPhases, emiFromPocket: emiFromPocket, isSIPMode: investmentMode == "SIP", overridenReturn: 6.0).netProfit,
-                         finalValue: runLeveragedSimulation(name: "Bear", loanAmount: loanAmt, loanRate: rate, tenure: years, portfolio: conservativePortfolio, emiFrequency: emiFrequency, phases: lumpsumPhases, emiFromPocket: emiFromPocket, isSIPMode: investmentMode == "SIP", overridenReturn: 6.0).finalValue),
-            PlanScenario(name: "Conservative", cagr: 9.0,
-                         gainLoss: cons.netProfit,
-                         finalValue: cons.finalValue),
-            PlanScenario(name: "Moderate", cagr: 12.0,
-                         gainLoss: mod.netProfit,
-                         finalValue: mod.finalValue),
-            PlanScenario(name: "Aggressive", cagr: 15.0,
-                         gainLoss: agg.netProfit,
-                         finalValue: agg.finalValue),
-            PlanScenario(name: "Bull Market", cagr: 19.0,
-                         gainLoss: runLeveragedSimulation(name: "Bull", loanAmount: loanAmt, loanRate: rate, tenure: years, portfolio: aggressivePortfolio, emiFrequency: emiFrequency, phases: lumpsumPhases, emiFromPocket: emiFromPocket, isSIPMode: investmentMode == "SIP", overridenReturn: 19.0).netProfit,
-                         finalValue: runLeveragedSimulation(name: "Bull", loanAmount: loanAmt, loanRate: rate, tenure: years, portfolio: aggressivePortfolio, emiFrequency: emiFrequency, phases: lumpsumPhases, emiFromPocket: emiFromPocket, isSIPMode: investmentMode == "SIP", overridenReturn: 19.0).finalValue)
+            PlanScenario(name: "Worst Case", cagr: 4.0, gainLoss: worstSim.netProfit, finalValue: worstSim.finalValue),
+            PlanScenario(name: "Conservative", cagr: 8.0, gainLoss: cons.netProfit, finalValue: cons.finalValue),
+            PlanScenario(name: "Moderate", cagr: 12.0, gainLoss: mod.netProfit, finalValue: mod.finalValue),
+            PlanScenario(name: "Bull Market", cagr: 19.0, gainLoss: bullSim.netProfit, finalValue: bullSim.finalValue)
         ]
 
         return Plan3Result(
@@ -754,23 +788,59 @@ class InvestmentPlannerEngine {
         let allocations: [AssetAllocation]
         
         switch risk {
-        case .high: // Aggressive: 65% Stocks, 30% MF, 5% FD
+        case .high: // Aggressive: Balanced with a safe anchor
             allocations = [
-                AssetAllocation(name: "Direct Equity / Stocks", percentage: 65, expectedCAGR: 16.5, riskLevel: .high),
-                AssetAllocation(name: "High Growth Mutual Funds", percentage: 30, expectedCAGR: 13.5, riskLevel: .high),
-                AssetAllocation(name: "FD / Fixed Income (Safety)", percentage: 5, expectedCAGR: 7.0, riskLevel: .low)
+                AssetAllocation(name: "Small & Mid Cap Alpha Stocks", percentage: 40, expectedCAGR: 18.5, riskLevel: .high, 
+                                description: "Focused stock picks for maximum capital appreciation.", 
+                                fundExamples: ["Direct Stock Portfolio", "Small Cap Focus"]),
+                AssetAllocation(name: "Momentum Growth Mutual Funds", percentage: 30, expectedCAGR: 16.5, riskLevel: .high, 
+                                description: "Invests in stocks showing strong upward price trends.", 
+                                fundExamples: ["UTI Momentum 30 Index", "Motilal Oswal Momentum"]),
+                AssetAllocation(name: "Small-Cap Alpha Mutual Funds", percentage: 15, expectedCAGR: 18.0, riskLevel: .high, 
+                                description: "High-conviction small-cap picks through institutional funds.", 
+                                fundExamples: ["Quant Small Cap", "Nippon India Small Cap"]),
+                AssetAllocation(name: "Large Cap Index (Safety Anchor)", percentage: 10, expectedCAGR: 13.0, riskLevel: .mid, 
+                                description: "Provides stability during market downturns.", 
+                                fundExamples: ["HDFC Nifty 50 Index"]),
+                AssetAllocation(name: "Liquid Fund (Emergency Reserve)", percentage: 5, expectedCAGR: 7.0, riskLevel: .low, 
+                                description: "Keeps 5% in cash for tactical arbitrage or safety.", 
+                                fundExamples: ["ICICI Pru Liquid Fund"])
             ]
-        case .mid: // Moderate: 65% MF, 30% Stocks, 5% FD
+        case .mid: // Moderate: Diversified exposure
             allocations = [
-                AssetAllocation(name: "Growth Mutual Funds", percentage: 65, expectedCAGR: 13.5, riskLevel: .mid),
-                AssetAllocation(name: "Equity Stocks", percentage: 30, expectedCAGR: 16.5, riskLevel: .high),
-                AssetAllocation(name: "FD / Fixed Income", percentage: 5, expectedCAGR: 7.0, riskLevel: .low)
+                AssetAllocation(name: "Multi-Cap Growth Mutual Funds", percentage: 35, expectedCAGR: 14.5, riskLevel: .mid, 
+                                description: "Flexible allocation across all market capitalizations.", 
+                                fundExamples: ["Parag Parikh Flexi Cap", "Canara Robeco Multi Cap"]),
+                AssetAllocation(name: "Bluechip & Mid-Cap Stocks", percentage: 25, expectedCAGR: 16.0, riskLevel: .high, 
+                                description: "A mix of stable industry leaders and emerging winners.", 
+                                fundExamples: ["HDFC Bank", "Reliance", "Trent", "Varun Beverages"]),
+                AssetAllocation(name: "Large & Mid Cap Mutual Funds", percentage: 20, expectedCAGR: 13.5, riskLevel: .mid, 
+                                description: "Institutional exposure to top 250 companies.", 
+                                fundExamples: ["Mirae Asset Emerging Bluechip"]),
+                AssetAllocation(name: "Corporate Bond Fund (Stable)", percentage: 15, expectedCAGR: 7.5, riskLevel: .low, 
+                                description: "Safe fixed-income component for regular returns.", 
+                                fundExamples: ["SBI Corporate Bond Fund"]),
+                AssetAllocation(name: "Small Cap Alpha (Kicker)", percentage: 5, expectedCAGR: 18.0, riskLevel: .high, 
+                                description: "Small tactical exposure to small-caps for higher gains.", 
+                                fundExamples: ["Tata Small Cap Fund"])
             ]
-        case .low: // Conservative: 55% MF, 35% Small Cap, 10% FD
+        case .low: // Conservative: Safety with a growth kicker
             allocations = [
-                AssetAllocation(name: "Conservative Mutual Funds", percentage: 55, expectedCAGR: 11.5, riskLevel: .low),
-                AssetAllocation(name: "Small Cap Opportunities", percentage: 35, expectedCAGR: 18.0, riskLevel: .high),
-                AssetAllocation(name: "FD / Savings (Safety)", percentage: 10, expectedCAGR: 7.2, riskLevel: .low)
+                AssetAllocation(name: "Large Cap (Bluechip) Index MFs", percentage: 40, expectedCAGR: 12.5, riskLevel: .low, 
+                                description: "Core portfolio in top 100 stable companies.", 
+                                fundExamples: ["UTI Nifty 50 Index"]),
+                AssetAllocation(name: "Short Term Debt (Safety)", percentage: 30, expectedCAGR: 7.2, riskLevel: .low, 
+                                description: "Safe bonds with low interest rate risk.", 
+                                fundExamples: ["Axis Short Term Fund"]),
+                AssetAllocation(name: "Mid-Cap Quality Focus Funds", percentage: 15, expectedCAGR: 13.5, riskLevel: .mid, 
+                                description: "Quality mid-sized companies with strong balance sheets.", 
+                                fundExamples: ["Kotak Emerging Equity"]),
+                AssetAllocation(name: "Small Cap Alpha (Growth Kicker)", percentage: 10, expectedCAGR: 18.0, riskLevel: .high, 
+                                description: "A small portion allocated to small-caps to beat inflation significantly.", 
+                                fundExamples: ["Quant Small Cap"]),
+                AssetAllocation(name: "Gold & Silver SGBs", percentage: 5, expectedCAGR: 9.5, riskLevel: .low, 
+                                description: "Protects against currency devaluation.", 
+                                fundExamples: ["Sovereign Gold Bonds"])
             ]
         }
         
@@ -804,19 +874,18 @@ class InvestmentPlannerEngine {
         var survivalDuration: Int? = nil
         var monthlySteps: [Plan3MonthlyStep] = []
 
+        let monthSymbols = Calendar.current.shortMonthSymbols
         for m in 1...months {
             _ = investedPool + cashPool
             var monthlyInvestment = 0.0
 
             if isSIPMode {
-
                 if m > 12 {
                     monthlyInvestment = emi
                     investedPool += monthlyInvestment
                     totalInvestedOrPaid += monthlyInvestment
                 }
             } else {
-
                 if (m - 1) % interval == 0 && phasesInvested < phases {
                     let toMove = min(cashPool, phaseAmount)
                     cashPool -= toMove
@@ -843,7 +912,7 @@ class InvestmentPlannerEngine {
                 }
             }
 
-            let monthName = Calendar.current.shortMonthSymbols[(m - 1) % 12]
+            let monthName = monthSymbols[(m - 1) % 12]
 
             monthlySteps.append(Plan3MonthlyStep(
                 month: monthName,
@@ -936,7 +1005,12 @@ class InvestmentPlannerEngine {
     private static func sipRetVal(monthly: Double, cagr: Double, years: Int) -> Double { return sipFutureValue(monthly: monthly, rateCAGR: cagr, years: years) }
 
     private static func generateScenarios(totalInvested: Double, sip: Double, lumpsum: Double, years: Int) -> [PlanScenario] {
-        let rates: [(String, Double)] = [("Conservative", 7.0), ("Balanced", 10.0), ("Aggressive", 13.0)]
+        let rates: [(String, Double)] = [
+            ("Worst Case", 2.0),
+            ("Conservative", 8.0),
+            ("Moderate", 12.0),
+            ("Bull Market", 18.0)
+        ]
 
         return rates.map { name, cagr in
             let fvSIP = sipFutureValue(monthly: sip, rateCAGR: cagr, years: years)

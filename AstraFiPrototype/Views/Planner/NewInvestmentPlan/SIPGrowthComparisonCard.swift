@@ -6,23 +6,23 @@ struct SIPGrowthComparisonCard: View {
     // Inputs (Bindings)
     @Binding var monthlySIP: Double
     @Binding var investmentYears: Int
-    @Binding var selectedRisk: String
+    @Binding var selectedRisk: AstraRiskLevel
     @State private var showingInfo = false
     
     // Returns Mapping
     private var singleFundReturn: Double {
-        switch selectedRisk.lowercased() {
-        case "low": return 7.0
-        case "high": return 15.0
-        default: return 12.0 // Mid/Moderate
+        switch selectedRisk {
+        case .low: return 7.0
+        case .high: return 15.0
+        case .mid: return 12.0 // Mid/Moderate
         }
     }
     
     private var diversifiedReturn: Double {
-        switch selectedRisk.lowercased() {
-        case "low": return 9.0
-        case "high": return 18.0
-        default: return 14.0 // Mid/Moderate
+        switch selectedRisk {
+        case .low: return 9.0
+        case .high: return 18.0
+        case .mid: return 14.0 // Mid/Moderate
         }
     }
     
@@ -418,10 +418,10 @@ struct BulletPoint: View {
     }
 }
 
-#Preview {
-    ZStack {
-        Color.gray.opacity(0.1).ignoresSafeArea()
-        SIPGrowthComparisonCard(monthlySIP: .constant(5000), investmentYears: .constant(10), selectedRisk: .constant("Mid"))
-            .padding()
-    }
-}
+//#Preview {
+//    ZStack {
+//        Color.gray.opacity(0.1).ignoresSafeArea()
+//        SIPGrowthComparisonCard(monthlySIP: .constant(5000), investmentYears: .constant(10), selectedRisk: .constant(.mid))
+//            .padding()
+//    }
+//}

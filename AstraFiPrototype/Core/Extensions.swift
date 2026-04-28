@@ -21,20 +21,25 @@ extension Double {
         let absValue = abs(self)
         let sign = self < 0 ? "-" : ""
         
+        if compact {
+            if absValue >= 10000000 {
+                return String(format: "%@%.1fCr", sign, absValue / 10000000)
+            } else if absValue >= 100000 {
+                return String(format: "%@%.1fL", sign, absValue / 100000)
+            } else if absValue >= 1000 {
+                return String(format: "%@%.1fK", sign, absValue / 1000)
+            } else {
+                return String(format: "%@%.0f", sign, absValue)
+            }
+        }
+        
         if absValue >= 10000000 {
             let crores = absValue / 10000000
             return String(format: "%@₹%.2f Cr", sign, crores)
         } else if absValue >= 100000 {
             let lakhs = absValue / 100000
-            if compact {
-                return String(format: "%@₹%.1f L", sign, lakhs) // space before L for aesthetic
-            }
             return String(format: "%@₹%.2f L", sign, lakhs)
         } else if absValue >= 1000 {
-            if compact {
-                let thousands = absValue / 1000
-                return String(format: "%@₹%.1f K", sign, thousands)
-            }
             let formatter = NumberFormatter()
             formatter.numberStyle = .currency
             formatter.currencySymbol = "₹"
