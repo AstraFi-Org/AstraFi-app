@@ -55,7 +55,7 @@ struct SignInView: View {
                 .padding(.bottom, 32)
 
                 // Login
-                AuthPrimaryButton(title: "Log In") {
+                AuthPrimaryButton(title: "Sign In") {
                     Task {
                         await appState.signIn(email: email, password: password)
                     }

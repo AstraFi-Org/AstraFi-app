@@ -13,7 +13,7 @@ let onboardingPages: [OnboardingPage] = [
 
     .init(imageName: "onboarding_investment_plan",
           title: "Plan your Investment\nAround Goals",
-          subtitle: "Goal based Planning to Achieve Faster"),
+          subtitle: "Goal based Planning to \n Achieve Faster"),
 
     .init(imageName: "onboarding_track_assets",
           title: "Track Investment\nAnd Assets",
@@ -96,25 +96,24 @@ struct PageView: View {
     var body: some View {
         VStack {
             Spacer()
+            
+            
 
             Image(page.imageName)
                 .resizable()
                 .scaledToFit()
                 .frame(height: 250)
-
-            Text(page.title)
-                .font(.title)
+            Text(page.subtitle)
+                .font(.title2)
                 .fontWeight(.bold)
                 .multilineTextAlignment(.center)
                 .padding(.top, 20)
+            
+//            Text(page.title)
+//                .font(.footnote)
+//                .multilineTextAlignment(.leading)
 
-            Text(page.subtitle)
-                .font(.subheadline)
-                .foregroundColor(.gray)
-                .multilineTextAlignment(.center)
-                .padding(.horizontal, 30)
-                .padding(.top, 8)
-
+            
             Spacer()
         }
     }
