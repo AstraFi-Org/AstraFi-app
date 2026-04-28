@@ -200,7 +200,7 @@ class MFService {
 
     /// Simulates SIP installments from startDate to now.
     /// Returns total units accumulated, total amount invested, and the list of installments.
-    func calculateHistoricalSIPUnits(schemeCode: String, monthlyAmount: Double, startDate: Date) async -> (totalUnits: Double, totalInvested: Double, installments: [AstraInvestmentTransaction]) {
+    func calculateHistoricalSIPUnits(schemeCode: String, monthlyAmount: Double, startDate: Date, frequency: AssessmentInvestmentEntry.AssessmentSIPFrequency = .monthly) async -> (totalUnits: Double, totalInvested: Double, installments: [AstraInvestmentTransaction]) {
         var totalUnits: Double = 0
         var totalInvested: Double = 0
         var installments: [AstraInvestmentTransaction] = []
@@ -212,9 +212,28 @@ class MFService {
         var currentDate = startDate
         var dates: [Date] = []
         
+        
+        let component: Calendar.Component
+        let value: Int
+        
+        switch frequency {
+        case .weekly:
+            component = .weekOfYear
+            value = 1
+        case .monthly:
+            component = .month
+            value = 1
+        case .quarterly:
+            component = .month
+            value = 3
+        case .yearly:
+            component = .year
+            value = 1
+        }
+        
         while currentDate <= today {
             dates.append(currentDate)
-            guard let next = calendar.date(byAdding: .month, value: 1, to: currentDate) else { break }
+            guard let next = calendar.date(byAdding: component, value: value, to: currentDate) else { break }
             currentDate = next
         }
         

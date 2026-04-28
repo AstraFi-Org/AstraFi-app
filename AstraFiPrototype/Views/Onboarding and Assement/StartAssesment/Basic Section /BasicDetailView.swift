@@ -196,7 +196,9 @@ struct BasicDetailView: View {
         .navigationBarBackButtonHidden(true)
         .toolbar {
             ToolbarItem(placement: .navigationBarLeading) {
-                Button { dismiss() } label: {
+                Button {
+                    appState.showPostAuthOnboarding = true
+                } label: {
                     Image(systemName: "chevron.left")
                         .fontWeight(.semibold)
                         .foregroundColor(.primary)
@@ -312,8 +314,6 @@ private struct EFChoiceButton: View {
         .buttonStyle(.plain)
     }
 }
-
-// MARK: - EF Share Prompt Card
 // MARK: - Reusable Choice Button
 struct EFChoiceButton2: View {
     let label: String
@@ -490,7 +490,7 @@ struct EFNecessityCard: View {
                 Image(systemName: "info.circle")
                     .font(.system(size: 11))
                     .foregroundStyle(AppTheme.auraIndigo)
-                Text("Park it in a liquid fund — not equities. You'll enter your current amount on the next screen.")
+                Text("Park it in a liquid fund not equity. You'll enter your current amount on the next screen.")
                     .font(.system(size: 11, design: .rounded))
                     .foregroundStyle(.secondary)
                     .fixedSize(horizontal: false, vertical: true)

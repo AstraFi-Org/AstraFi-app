@@ -8,7 +8,6 @@
 import SwiftUI
 
 struct VitalsDetailSheet: View {
-    @Environment(\.dismiss) private var dismiss
     let income: Double
     let expenses: Double
     let savings: Double
@@ -20,7 +19,7 @@ struct VitalsDetailSheet: View {
     }
 
     var body: some View {
-            List {
+        List {
 
                 // Key metrics — each in its own grouped row
                 Section(header: Text("Monthly Snapshot").font(.footnote).textCase(.uppercase)) {

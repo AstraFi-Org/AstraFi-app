@@ -63,12 +63,10 @@ struct SplashScreenView: View {
 
                     // Star icon
                     Image(.splashScreen)
+                        .resizable()
                         .scaledToFit()
-                        .frame(width: 570, height: 570)
-                        .clipShape(Ellipse())
-                        .font(.system(size: 34, weight: .bold))
+                        .frame(width: 48, height: 48)
                         .foregroundStyle(.white)
-                        .symbolEffect(.pulse)
                 }
                 .scaleEffect(logoScale)
                 .opacity(logoOpacity)
@@ -96,9 +94,9 @@ struct SplashScreenView: View {
             withAnimation(.easeOut(duration: 0.5).delay(0.4)) {
                 taglineOpacity = 1.0
             }
-            DispatchQueue.main.asyncAfter(deadline: .now() + 2.2) {
-                appState.isLoading = false
-            }
+//            DispatchQueue.main.asyncAfter(deadline: .now() + 2.2) {
+//                appState.isLoading = false
+//            }
         }
     }
 }

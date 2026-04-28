@@ -9,23 +9,15 @@ struct FinancialHealthReportView: View {
     var data: CompleteAssessmentData?
 
     private var profile: AstraUserProfile? { appState.currentProfile }
-    private var userName: String {
-        let name = profile?.basicDetails.name ?? ""
-        if name.isEmpty || name.contains("@") {
-            return profile?.signUp.signUpName ?? data?.name ?? "User"
-        }
-        return name
-    }
+    private var userName: String { profile?.basicDetails.name ?? data?.name ?? "User" }
 
-    @State private var spendingSheet   = false
-    @State private var riskSheet       = false
-    @State private var insuranceSheet  = false
-    @State private var vitalsDetail    = false
-    @State private var liabilityDetail = false
-    @State private var emergencyDetail = false
-    @State private var navigateToLiability  = false
-    @State private var navigateToInsurance  = false
-    @State private var showingAddGoal  = false
+    @State private var spendingSheet      = false
+    @State private var navigateToInsurance = false
+    @State private var navigateToLiability = false
+    @State private var showingAddGoal     = false
+    @State private var navigateToVitals   = false
+    @State private var navigateToRisk     = false
+    @State private var navigateToEmergency = false
     @State private var animatedScore: Double = 0
     @State private var vitalsPeriod: VitalsPeriod = .monthly
 
@@ -77,11 +69,11 @@ struct FinancialHealthReportView: View {
 
             ParameterSection(summaries: insights.parameterSummaries) { param in
                 switch param {
-                case .vitals:        vitalsDetail    = true
-                case .investment:    riskSheet       = true
+                case .vitals:        navigateToVitals    = true
+                case .investment:    navigateToRisk      = true
                 case .liabilities:   navigateToLiability = true
                 case .insurance:     navigateToInsurance = true
-                case .emergencyFund: emergencyDetail = true
+                case .emergencyFund: navigateToEmergency = true
                 }
             }
         }
@@ -107,8 +99,8 @@ struct FinancialHealthReportView: View {
                                 atRisk: insights.investmentBreakdown.highRiskCount)
             .padding(.horizontal, 20).padding(.bottom, 10)
 
-//            DisclosureLink("How can I reduce investment risk?") { riskSheet = true }
-//                .padding(.horizontal, 20).padding(.bottom, 24)
+            DisclosureLink("How can I reduce investment risk?") { navigateToRisk = true }
+                .padding(.horizontal, 20).padding(.bottom, 24)
         }
     }
 
@@ -121,8 +113,8 @@ struct FinancialHealthReportView: View {
                               statusMessage: insights.emergencyStatusMessage)
             .padding(.horizontal, 20).padding(.bottom, 6)
             .contentShape(Rectangle())
-//            DisclosureLink("How to improve emergency-fund liquidity?") { emergencyDetail = true }
-//                .padding(.horizontal, 20).padding(.bottom, 24)
+            DisclosureLink("How to improve emergency-fund liquidity?") { navigateToEmergency = true }
+                .padding(.horizontal, 20).padding(.bottom, 24)
         }
     }
 
@@ -139,8 +131,8 @@ struct FinancialHealthReportView: View {
             .padding(.horizontal, 20).padding(.bottom, 6)
             .contentShape(Rectangle())
 
-//            DisclosureLink("Help me choose the right insurance") { insuranceSheet = true }
-//                .padding(.horizontal, 20).padding(.bottom, 28)
+            DisclosureLink("Help me choose the right insurance") { navigateToInsurance = true }
+                .padding(.horizontal, 20).padding(.bottom, 28)
         }
     }
 
@@ -166,22 +158,25 @@ struct FinancialHealthReportView: View {
         .navigationTitle("Financial Health Report")
         .navigationBarTitleDisplayMode(.inline)
         .onAppear { withAnimation(.easeOut(duration: 1.4)) { animatedScore = score } }
-        .navigationDestination(isPresented: $vitalsDetail) {
+        .navigationDestination(isPresented: $navigateToVitals) {
             VitalsDetailSheet(income: insights.monthlyIncome,
                               expenses: insights.monthlyExpenses,
                               savings: insights.monthlySavings,
                               ratio: savingRatio,
                               concerns: insights.activeConcerns.filter { $0.parameter == .vitals })
         }
+        .navigationDestination(isPresented: $navigateToRisk) {
+            RiskSheet(insights: insights,
+                      concerns: insights.activeConcerns.filter { $0.parameter == .investment })
+        }
+        .navigationDestination(isPresented: $navigateToEmergency) {
+            EmergencyFundInsightSheet(insights: insights)
+        }
         .sheet(isPresented: $spendingSheet) {
             CashflowInputSheet(cashflow: Binding(
                 get: { profile?.cashflowData ?? CashflowEntry() },
                 set: { appState.updateCashflow($0) }
             ))
-        }
-        .navigationDestination(isPresented: $riskSheet) {
-            RiskSheet(insights: insights,
-                      concerns: insights.activeConcerns.filter { $0.parameter == .investment })
         }
         .navigationDestination(isPresented: $navigateToInsurance) {
             InsuranceAdviceSheet(
@@ -193,24 +188,21 @@ struct FinancialHealthReportView: View {
             LiabilityDetailSheet(insights: insights,
                                  concerns: insights.activeConcerns.filter { $0.parameter == .liabilities })
         }
-        .navigationDestination(isPresented: $emergencyDetail) {
-            EmergencyFundInsightSheet(insights: insights)
-        }
         .sheet(isPresented: $showingAddGoal) { AddGoalView() }
     }
 }
 
 // MARK: - Preview
-#Preview {
-    NavigationStack {
-        let dummyData: CompleteAssessmentData = {
-            let d = CompleteAssessmentData()
-            d.name = "Akash"; d.income = "134890"
-            d.expenditure = "51000"; d.numberOfDependents = "4"
-            d.insuranceEntries.append(AssessmentInsuranceEntry(details: .life(AssessmentInsuranceEntry.LifeDetails())))
-            return d
-        }()
-        FinancialHealthReportView(data: dummyData)
-    }
-    .environment(AppStateManager.withSampleData())
-}
+//#Preview {
+//    NavigationStack {
+//        let dummyData: CompleteAssessmentData = {
+//            let d = CompleteAssessmentData()
+//            d.name = "Akash"; d.income = "134890"
+//            d.expenditure = "51000"; d.numberOfDependents = "4"
+//            d.insuranceEntries.append(AssessmentInsuranceEntry(details: .life(AssessmentInsuranceEntry.LifeDetails())))
+//            return d
+//        }()
+//        FinancialHealthReportView(data: dummyData)
+//    }
+//    .environment(AppStateManager.withSampleData())
+//}

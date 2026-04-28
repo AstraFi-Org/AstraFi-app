@@ -8,7 +8,6 @@
 import SwiftUI
 
 struct EmergencyFundInsightSheet: View {
-    @Environment(\.dismiss) private var dismiss
     let insights: FinancialAssessmentInsights
 
     // Step 1: Ask where funds are
@@ -231,7 +230,7 @@ struct EmergencyFundInsightSheet: View {
     }
 
     var body: some View {
-            List {
+        List {
 
                 if step == 0 {
                     currentStatusSection
@@ -250,5 +249,3 @@ struct EmergencyFundInsightSheet: View {
             .navigationBarTitleDisplayMode(.inline)
     }
 }
-
-

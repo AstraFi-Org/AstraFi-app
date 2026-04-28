@@ -165,14 +165,19 @@ final class AppStateManager {
             isSetuConnected: false
         )
     }
-    
-    var hasCompletedOnboarding: Bool = false
+
+    var hasCompletedOnboarding: Bool = UserDefaults.standard.bool(forKey: "hasCompletedOnboarding") {
+        didSet {
+            UserDefaults.standard.set(hasCompletedOnboarding, forKey: "hasCompletedOnboarding")
+        }
+    }
     
     var isAuthenticated: Bool = false
     var authError: String? = nil
     var isAuthLoading: Bool = false
     
     var showDashboard: Bool = false
+    var showPostAuthOnboarding: Bool = false
     
     var tempName: String = ""
     var tempEmail: String = ""
@@ -186,6 +191,32 @@ final class AppStateManager {
         Task {
             if let session = try? await supabase.auth.session {
                 try? await SupabaseRepository.shared.savePlan(plan, userId: session.user.id)
+            }
+        }
+    }
+    
+    func followPlan(_ plan: InvestmentPlanModel) {
+        if let index = savedPlans.firstIndex(where: { $0.id == plan.id }) {
+            savedPlans[index].isFollowed = true
+            Task {
+                if let session = try? await supabase.auth.session {
+                    try? await SupabaseRepository.shared.updatePlanFollowStatus(
+                        planId: plan.id, isFollowed: true
+                    )
+                }
+            }
+        }
+    }
+
+    func unfollowPlan(_ plan: InvestmentPlanModel) {
+        if let index = savedPlans.firstIndex(where: { $0.id == plan.id }) {
+            savedPlans[index].isFollowed = false
+            Task {
+                if let session = try? await supabase.auth.session {
+                    try? await SupabaseRepository.shared.updatePlanFollowStatus(
+                        planId: plan.id, isFollowed: false
+                    )
+                }
             }
         }
     }
@@ -220,26 +251,45 @@ final class AppStateManager {
     init() {
         Task {
             await restoreSession()
+        }
+        Task {
+            try? await Task.sleep(nanoseconds: 2_000_000_000) // wait 2 seconds
             await syncMutualFundNAVs()
         }
     }
 
     func restoreSession() async {
-        isLoading = true
+        await MainActor.run { isLoading = true }
+        async let minimumDelay: () = Task.sleep(nanoseconds: 1_500_000_000)
         do {
             let session = try await supabase.auth.session
-            isAuthenticated = true
-            setupEmptyProfile(name: session.user.email ?? "User")
-            if let profile = try? await SupabaseRepository.shared.fetchFullProfile(userId: session.user.id) {
-                        self.currentProfile = profile
-                        recalculateFinancials()
-                    }
-        } catch {
-            // No active session — stay on onboarding/auth
-        }
-        isLoading = false
-    }
 
+            if let profile = try? await SupabaseRepository.shared.fetchFullProfile(userId: session.user.id) {
+                if let plans = try? await SupabaseRepository.shared.fetchSavedPlans(userId: session.user.id) {
+                    await MainActor.run {
+                        self.savedPlans = plans
+                    }
+                }
+                try? await minimumDelay
+                await MainActor.run {
+                    self.currentProfile = profile
+                    self.isAuthenticated = true
+                    self.hasCompletedOnboarding = true
+                    self.showDashboard = true
+                    self.isLoading = false
+                }
+                recalculateFinancials()
+            } else {
+                try? await supabase.auth.signOut()
+                try? await minimumDelay
+                await MainActor.run { isLoading = false }
+            }
+
+        } catch {
+            try? await minimumDelay
+            await MainActor.run { isLoading = false }
+        }
+    }
     func signUp(name: String, email: String, password: String) async {
         isAuthLoading = true
         authError = nil
@@ -249,21 +299,24 @@ final class AppStateManager {
                 password: password
             )
             try? await supabase.from("users").insert([
-                        "id": session.user.id.uuidString,
-                        "email": email
-                    ]).execute()
+                "id": session.user.id.uuidString,
+                "email": email
+            ]).execute()
             
             tempName = name
             tempEmail = email
             tempPassword = password
             setupEmptyProfile(name: name)
             isAuthenticated = true
-            // After successful sign in — load existing data
-            if let userId = try? await supabase.auth.session.user.id,
-               let profile = try? await SupabaseRepository.shared.fetchFullProfile(userId: userId) {
+            showPostAuthOnboarding = true
+            hasCompletedOnboarding = true  // ← ADD THIS
+            
+            // After successful sign up — load existing data if any
+            if let profile = try? await SupabaseRepository.shared.fetchFullProfile(userId: session.user.id) {
                 self.currentProfile = profile
                 recalculateFinancials()
             }
+            
         } catch {
             authError = error.localizedDescription
         }
@@ -278,24 +331,38 @@ final class AppStateManager {
                 email: email,
                 password: password
             )
-            setupEmptyProfile(name: "")
-            isAuthenticated = true
-            if let userId = try? await supabase.auth.session.user.id,
-               let profile = try? await SupabaseRepository.shared.fetchFullProfile(userId: userId) {
+            
+            if let profile = try? await SupabaseRepository.shared.fetchFullProfile(userId: session.user.id) {
+                
                 self.currentProfile = profile
                 recalculateFinancials()
+                isAuthenticated = true
+                showPostAuthOnboarding = true
+                hasCompletedOnboarding = true
+                showDashboard = true
+            } else {
+               
+                setupEmptyProfile(name: session.user.email ?? "User")
+                isAuthenticated = true
+                showPostAuthOnboarding = true
+                hasCompletedOnboarding = true
             }
+            
+            if let plans = try? await SupabaseRepository.shared.fetchSavedPlans(userId: session.user.id) {
+                self.savedPlans = plans
+            }
+            
         } catch {
             authError = error.localizedDescription
         }
         isAuthLoading = false
     }
-
     func signOut() async {
         do {
             try await supabase.auth.signOut()
             isAuthenticated = false
-            hasCompletedOnboarding = false
+            
+            hasCompletedOnboarding = true
             showDashboard = false
             currentProfile = nil
         } catch {
@@ -324,7 +391,7 @@ final class AppStateManager {
         
         let basic = AstraBasicDetails(
             name: assessmentData.name,
-            age: Int(assessmentData.age) ?? 0,
+            age: Int(assessmentData.age.trimmingCharacters(in: .whitespaces)) ?? 0,
             gender: assessmentData.gender == .male ? .male : .female,
             maritalStatus: .single,
             adultDependents: self.currentProfile?.basicDetails.adultDependents ?? Int(assessmentData.numberOfDependents) ?? 1,
@@ -340,7 +407,7 @@ final class AppStateManager {
                 investmentCount: assessmentData.investmentEntries.count
             ),
             investmentHorizon: Self.deriveInvestmentHorizon(
-                age: Int(assessmentData.age) ?? 30,
+                age: Int(assessmentData.age.trimmingCharacters(in: .whitespaces)) ?? 30,
                 dependents: Int(assessmentData.numberOfDependents) ?? 0
             )
         )
@@ -520,6 +587,8 @@ final class AppStateManager {
         
         if var existingProfile = self.currentProfile {
             // MERGE LOGIC
+            existingProfile.signUp.email = assessmentData.email.isEmpty
+                    ? existingProfile.signUp.email : assessmentData.email
             
             // Merge Investments
             for newInv in newInvestments {
@@ -562,6 +631,15 @@ final class AppStateManager {
             if !assessmentData.emergencyFundAmount.isEmpty {
                 existingProfile.basicDetails.emergencyFundAmount = emergencyValue
             }
+            if !assessmentData.name.trimmingCharacters(in: .whitespaces).isEmpty {
+                existingProfile.basicDetails.name = assessmentData.name
+            }
+            let parsedAge = Int(assessmentData.age.trimmingCharacters(in: .whitespaces)) ?? 0
+            if parsedAge > 0 {
+                existingProfile.basicDetails.age = parsedAge
+            }
+            existingProfile.basicDetails.gender = assessmentData.gender == .male ? .male : .female
+            existingProfile.basicDetails.incomeType = assessmentData.incomeType == .fixed ? .fixed : .variable
             
             self.currentProfile = existingProfile
         } else {
@@ -721,34 +799,6 @@ final class AppStateManager {
         self.currentProfile = profile
     }
     
-    func followPlan(_ plan: InvestmentPlanModel) {
-        if let index = savedPlans.firstIndex(where: { $0.id == plan.id }) {
-            savedPlans[index].isFollowed = true
-            Task {
-                if let session = try? await supabase.auth.session {
-                    try? await SupabaseRepository.shared.updatePlanFollowStatus(
-                        planId: plan.id,
-                        isFollowed: true
-                    )
-                }
-            }
-        }
-    }
-
-    func unfollowPlan(_ plan: InvestmentPlanModel) {
-        if let index = savedPlans.firstIndex(where: { $0.id == plan.id }) {
-            savedPlans[index].isFollowed = false
-            Task {
-                if let session = try? await supabase.auth.session {
-                    try? await SupabaseRepository.shared.updatePlanFollowStatus(
-                        planId: plan.id,
-                        isFollowed: false
-                    )
-                }
-            }
-        }
-    }
-    
     func updateCashflow(_ cashflow: CashflowEntry) {
         if var profile = currentProfile {
             profile.cashflowData = cashflow
@@ -775,9 +825,9 @@ final class AppStateManager {
                             monthKey: monthKey,
                             userId: session.user.id
                         )
-                        print("✅ Cashflow saved to Supabase")
+                        print("Cashflow saved to Supabase")
                     } catch {
-                        print("❌ Cashflow save failed: \(error)")
+                        print("Cashflow save failed: \(error)")
                     }
                 }
             }
@@ -1098,7 +1148,6 @@ final class AppStateManager {
             } else if inv.investmentType == .stocks {
                 guard let symbol = inv.symbol else { continue }
                 
-                // Live price is already updated in the batch call above
                 
                 // Populate Missing Installments for Stocks
                 if profile.investments[i].installments.isEmpty {
@@ -1127,7 +1176,6 @@ final class AppStateManager {
                         profile.investments[i].installments = simulatedInstallments
                         profile.investments[i].quantity = units
 
-                        // Bug 1 Fix: set purchaseNAV for lumpsum from the transaction NAV
                         if let tx = simulatedInstallments.first {
                             profile.investments[i].purchaseNAV = tx.nav
                         }

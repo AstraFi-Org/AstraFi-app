@@ -160,7 +160,7 @@ struct PlannerView: View {
                     }
                     EmergencyFundSectionView()
                 }
-                
+                //New Investment plan and Company Analysis
                 actionButtonsSection
                 
                 // MARK: - Value Forecast
@@ -358,8 +358,8 @@ struct PlannerView: View {
                     }
                 }
 
-                
-                InvestmentForecast(appState: appState)
+                //investment Forecast
+                //InvestmentForecast(appState: appState)
             }
             .padding(.horizontal, 16)
             .padding(.top, 8)
@@ -381,13 +381,13 @@ struct PlannerView: View {
                 gradientColors: [Color(hex: "#007AFF"), Color(hex: "#5E5CE6")],
                 action: { showNewInvestmentPlan = true }
             )
-            ActionButton(
-                title: "Company Analysis",
-                subtitle: "Analyse any listed company",
-                icon: "building.2.fill",
-                gradientColors: [Color(hex: "#30D158"), Color(hex: "#00C7BE")],
-                action: { showCompanyAnalyzer = true }
-            )
+//            ActionButton(
+//                title: "Company Analysis",
+//                subtitle: "Analyse any listed company",
+//                icon: "building.2.fill",
+//                gradientColors: [Color(hex: "#30D158"), Color(hex: "#00C7BE")],
+//                action: { showCompanyAnalyzer = true }
+//            )
         }
     }
 

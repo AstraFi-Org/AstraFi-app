@@ -8,7 +8,6 @@
 import SwiftUI
 
 struct RiskSheet: View {
-    @Environment(\.dismiss) private var dismiss
     let insights: FinancialAssessmentInsights
     let concerns: [AssessmentConcern]
 
@@ -24,7 +23,7 @@ struct RiskSheet: View {
     }
 
     var body: some View {
-            List {
+        List {
 
                 // Risk Breakdown
                 Section(header: Text("Portfolio Breakdown").font(.footnote).textCase(.uppercase)) {
@@ -53,47 +52,46 @@ struct RiskSheet: View {
                 }
 
                 // Diversification status
-//                Section {
-//                    let score = insights.investmentBalanceScore
-//                    HStack {
-//                        VStack(alignment: .leading, spacing: 4) {
-//                            Text("Diversification Score").font(.subheadline).foregroundStyle(.secondary)
-//                            Text(score >= 0.7 ? "Well Diversified" : score >= 0.5 ? "Moderate" : "Concentrated")
-//                                .font(.headline)
-//                                .foregroundStyle(score >= 0.7 ? Color(hex: "#30D158") : score >= 0.5 ? Color(hex: "#FF9F0A") : Color(hex: "#FF453A"))
-//                        }
-//                        Spacer()
-//                        Text("\(Int(score * 100))").font(.largeTitle).bold()
-//                            .foregroundStyle(score >= 0.7 ? Color(hex: "#30D158") : Color(hex: "#FF9F0A"))
-//                        Text("/100").font(.callout).foregroundStyle(.secondary).padding(.top, 10)
-//                    }
-//                    .padding(.vertical, 4)
-//
-//                    HStack(alignment: .top, spacing: 10) {
-//                        Image(systemName: "lightbulb.fill").font(.subheadline).foregroundStyle(Color(hex: "#FF9F0A"))
-//                        Text(insights.investmentCount < 2
-//                             ? "You have limited diversification. Start with a low-risk debt or gold fund alongside equity."
-//                             : "Regularly rebalance between equity and debt based on market conditions and your goals.")
-//                            .font(.subheadline).foregroundStyle(.secondary).lineSpacing(3)
-//                    }
-//                    .padding(14).background(Color(hex: "#FF9F0A").opacity(0.08))
-//                    .clipShape(RoundedRectangle(cornerRadius: 12, style: .continuous))
-//                    .listRowInsets(EdgeInsets(top: 8, leading: 16, bottom: 8, trailing: 16))
-//                }
+                Section {
+                    let score = insights.investmentBalanceScore
+                    HStack {
+                        VStack(alignment: .leading, spacing: 4) {
+                            Text("Diversification Score").font(.subheadline).foregroundStyle(.secondary)
+                            Text(score >= 0.7 ? "Well Diversified" : score >= 0.5 ? "Moderate" : "Concentrated")
+                                .font(.headline)
+                                .foregroundStyle(score >= 0.7 ? Color(hex: "#30D158") : score >= 0.5 ? Color(hex: "#FF9F0A") : Color(hex: "#FF453A"))
+                        }
+                        Spacer()
+                        Text("\(Int(score * 100))").font(.largeTitle).bold()
+                            .foregroundStyle(score >= 0.7 ? Color(hex: "#30D158") : Color(hex: "#FF9F0A"))
+                        Text("/100").font(.callout).foregroundStyle(.secondary).padding(.top, 10)
+                    }
+                    .padding(.vertical, 4)
 
-//                if !concerns.isEmpty {
-//                    Section(header: Text("Action Items").font(.footnote).textCase(.uppercase)) {
-//                        ForEach(concerns) { concern in
-//                            ConcernCard(concern: concern)
-//                                .listRowInsets(EdgeInsets(top: 6, leading: 16, bottom: 6, trailing: 16))
-//                                .listRowBackground(Color.clear).listRowSeparator(.hidden)
-//                        }
-//                    }
-//                }
+                    HStack(alignment: .top, spacing: 10) {
+                        Image(systemName: "lightbulb.fill").font(.subheadline).foregroundStyle(Color(hex: "#FF9F0A"))
+                        Text(insights.investmentCount < 2
+                             ? "You have limited diversification. Start with a low-risk debt or gold fund alongside equity."
+                             : "Regularly rebalance between equity and debt based on market conditions and your goals.")
+                            .font(.subheadline).foregroundStyle(.secondary).lineSpacing(3)
+                    }
+                    .padding(14).background(Color(hex: "#FF9F0A").opacity(0.08))
+                    .clipShape(RoundedRectangle(cornerRadius: 12, style: .continuous))
+                    .listRowInsets(EdgeInsets(top: 8, leading: 16, bottom: 8, trailing: 16))
+                }
+
+                if !concerns.isEmpty {
+                    Section(header: Text("Action Items").font(.footnote).textCase(.uppercase)) {
+                        ForEach(concerns) { concern in
+                            ConcernCard(concern: concern)
+                                .listRowInsets(EdgeInsets(top: 6, leading: 16, bottom: 6, trailing: 16))
+                                .listRowBackground(Color.clear).listRowSeparator(.hidden)
+                        }
+                    }
+                }
             }
             .listStyle(.insetGrouped)
             .navigationTitle("Investment Risk")
             .navigationBarTitleDisplayMode(.inline)
     }
 }
-
