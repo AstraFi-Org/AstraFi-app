@@ -218,6 +218,9 @@ struct Plan3DetailView: View {
                 }
             }
         }
+        .padding(20)                          // ← add this
+            .background(AppTheme.cardBackground)  // ← add this
+            .cornerRadius(20)
     }
 
     private var totalInvestmentCard: some View {
@@ -326,6 +329,9 @@ struct Plan3DetailView: View {
                 .shadow(color: AppTheme.adaptiveShadow.opacity(0.1), radius: 10)
             }
         }
+        .padding(20)                          // ← add this
+        .background(AppTheme.cardBackground)  // ← add this
+        .cornerRadius(20)
     }
 
     private var repaymentStrategyCard: some View {

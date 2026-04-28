@@ -145,9 +145,10 @@ struct SIPGrowthComparisonCard: View {
                 .cornerRadius(12)
             }
         }
-        .padding(20)
+        .padding(.vertical, 20)          // ← only vertical, no horizontal
         .background(AppTheme.cardBackground)
         .cornerRadius(24)
+        .clipped()
         .shadow(color: AppTheme.adaptiveShadow.opacity(0.3), radius: 12, x: 0, y: 6)
         .sheet(isPresented: $showingInfo) {
             InfoBottomSheet(isDiversifiedBetter: isDiversifiedBetter)

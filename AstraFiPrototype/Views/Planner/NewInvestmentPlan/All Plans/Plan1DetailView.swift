@@ -29,6 +29,7 @@ struct Plan1DetailView: View {
                     targetVsEstimatedCard
                     assumptionsWarningSection
                     SIPGrowthComparisonCard(monthlySIP: $sipOverride, investmentYears: $tenureOverride, selectedRisk: $selectedRisk)
+                        .frame(maxWidth: .infinity)  
                     //interactiveAdjusters
                     riskTypeSection
                     totalInvestmentCard
@@ -36,7 +37,8 @@ struct Plan1DetailView: View {
                     smartTipSection
                     //investmentRecommendations
                 }
-                .padding(.horizontal, 20)
+                .padding(.horizontal, 16)
+
                 .padding(.bottom, 120) 
             }
             .background(AppTheme.appBackground(for: colorScheme))
