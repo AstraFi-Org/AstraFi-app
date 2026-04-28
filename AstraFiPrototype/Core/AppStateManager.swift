@@ -337,7 +337,7 @@ final class AppStateManager {
                 self.currentProfile = profile
                 recalculateFinancials()
                 isAuthenticated = true
-                showPostAuthOnboarding = true
+                showPostAuthOnboarding = false
                 hasCompletedOnboarding = true
                 showDashboard = true
             } else {
