@@ -100,6 +100,7 @@ struct InvestmentTableRow: View {
 struct AllAssetsInfoSheet: View {
     let assets: [PortfolioAsset]
     @Environment(\.dismiss) var dismiss
+    @Environment(\.colorScheme) var colorScheme
 
     var body: some View {
         NavigationStack {
@@ -166,7 +167,7 @@ struct AllAssetsInfoSheet: View {
                                                 .foregroundColor(.primary)
                                                 .padding(14)
                                                 .frame(maxWidth: .infinity, alignment: .leading)
-                                                .background(AppTheme.appBackground(for: .light).opacity(0.5))
+                                                .background(AppTheme.appBackground(for: colorScheme).opacity(0.5))
                                                 .cornerRadius(12)
                                                 .overlay(
                                                     RoundedRectangle(cornerRadius: 12)
@@ -189,7 +190,7 @@ struct AllAssetsInfoSheet: View {
                 }
                 .padding(.vertical, 24)
             }
-            .background(AppTheme.appBackground(for: .light))
+            .background(AppTheme.appBackground(for: colorScheme))
             .navigationTitle("Investment Details")
             .navigationBarTitleDisplayMode(.inline)
             .toolbar {
