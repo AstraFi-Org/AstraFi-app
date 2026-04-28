@@ -11,7 +11,7 @@ struct TrackerMoneyFlowSection: View {
         VStack(alignment: .leading, spacing: 14) {
 
             // Header
-            HStack {
+            HStack(alignment:.firstTextBaseline) {
                 Text("Cash Flow")
                     .font(.system(size: 22, weight: .bold))
                 Spacer()
