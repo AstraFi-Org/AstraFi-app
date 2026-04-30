@@ -22,7 +22,7 @@ struct InvestmentPlanResultView: View {
         ScrollView(showsIndicators: false) {
             VStack(spacing: 32) {
                 // Header Message
-                VStack(spacing: 16) {
+                VStack(alignment:.leading,spacing: 16) {
                     //                    let profile = appState.currentProfile
                     //                    let isPortfolioHighRisk = profile.riskProfile == .high
                     //                    let goalCategory = input.goalCategory
@@ -168,48 +168,48 @@ struct InvestmentPlanResultView: View {
                 }
                 
                 // Compare All Plans Button
-                NavigationLink(destination: PlanComparisonView(input: input, results: results)) {
-                    HStack(spacing: 16) {
-                        ZStack {
-                            Circle()
-                                .fill(.white.opacity(0.2))
-                                .frame(width: 44, height: 44)
-                            Image(systemName: "arrow.left.arrow.right")
-                                .font(.system(size: 18, weight: .bold))
-                                .foregroundStyle(.white)
-                        }
-                        
-                        VStack(alignment: .leading, spacing: 2) {
-                            Text("Compare All Plans")
-                                .font(.system(size: 17, weight: .bold, design: .rounded))
-                            Text("View a side-by-side strategy breakdown")
-                                .font(.system(size: 13, design: .rounded))
-                                .opacity(0.8)
-                        }
-                        
-                        Spacer()
-                        
-                        Image(systemName: "chevron.right")
-                            .font(.system(size: 14, weight: .bold))
-                            .opacity(0.6)
-                    }
-                    .foregroundColor(.white)
-                    .padding(16)
-                    .background(
-                        LinearGradient(
-                            gradient: Gradient(colors: [
-                                .purple,
-                                Color(hex: "#5E5CE6")
-                            ]),
-                            startPoint: .leading,
-                            endPoint: .trailing
-                        )
-                    )
-                    .cornerRadius(20)
-                    .shadow(color: Color.purple.opacity(0.3), radius: 15, x: 0, y: 8)
-                }
-                .buttonStyle(PlainButtonStyle())
-                .padding(.top, 8)
+//                NavigationLink(destination: PlanComparisonView(input: input, results: results)) {
+//                    HStack(spacing: 16) {
+//                        ZStack {
+//                            Circle()
+//                                .fill(.white.opacity(0.2))
+//                                .frame(width: 44, height: 44)
+//                            Image(systemName: "arrow.left.arrow.right")
+//                                .font(.system(size: 18, weight: .bold))
+//                                .foregroundStyle(.white)
+//                        }
+//                        
+//                        VStack(alignment: .leading, spacing: 2) {
+//                            Text("Compare All Plans")
+//                                .font(.system(size: 17, weight: .bold, design: .rounded))
+//                            Text("View a side-by-side strategy breakdown")
+//                                .font(.system(size: 13, design: .rounded))
+//                                .opacity(0.8)
+//                        }
+//                        
+//                        Spacer()
+//                        
+//                        Image(systemName: "chevron.right")
+//                            .font(.system(size: 14, weight: .bold))
+//                            .opacity(0.6)
+//                    }
+//                    .foregroundColor(.white)
+//                    .padding(16)
+//                    .background(
+//                        LinearGradient(
+//                            gradient: Gradient(colors: [
+//                                .purple,
+//                                Color(hex: "#5E5CE6")
+//                            ]),
+//                            startPoint: .leading,
+//                            endPoint: .trailing
+//                        )
+//                    )
+//                    .cornerRadius(20)
+//                    .shadow(color: Color.purple.opacity(0.3), radius: 15, x: 0, y: 8)
+//                }
+                //.buttonStyle(PlainButtonStyle())
+                //.padding(.top, 8)
                 
                 Spacer().frame(height: 40)
             }

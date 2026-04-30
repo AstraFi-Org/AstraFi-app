@@ -26,6 +26,7 @@ struct Plan3DetailView: View {
     @State private var emiFrequency: EMIFrequency = .monthly
     @State private var interestType: InterestType = .compounded
     @State private var selectedYearIndex: Int = 0
+    @State private var showingAllAssetsInfo = false
 
     private var activeResult: Plan3Result { currentResult ?? result }
 
@@ -58,7 +59,8 @@ struct Plan3DetailView: View {
                 name: allocation.name,
                 monthlyInvestment: invested,
                 expectedValue: expectedVal,
-                riskLevel: allocation.riskLevel
+                riskLevel: allocation.riskLevel,
+                role: allocation.role
             )
         }
     }
@@ -66,7 +68,7 @@ struct Plan3DetailView: View {
     var body: some View {
         ZStack(alignment: .bottom) {
             ScrollView {
-                VStack(spacing: 24) {
+                VStack(spacing: 16) {
                     targetVsEstimatedCard
                     assumptionsWarningSection
                     leveragedGraphCard
@@ -80,11 +82,13 @@ struct Plan3DetailView: View {
                     bankDetailsCard
                     
                     strategyBuilderCard
-                    amortizationSummaryCard
+                    yearlyBreakdownCard
+                    monthlyPerformanceTable
                     
                     recommendationCard
                 }
-                .padding(.horizontal, 20)
+                .padding(.horizontal, 16)
+                .padding(.top, 16)
                 .padding(.bottom, 120)
             }
             .background(AppTheme.appBackground(for: colorScheme))
@@ -126,7 +130,6 @@ struct Plan3DetailView: View {
             appState.showDashboard = true
         }) {
             HStack(spacing: 12) {
-                Image(systemName: "star.fill")
                 Text("Save & Follow Plan")
                     .font(.headline).fontWeight(.bold)
             }
@@ -181,7 +184,7 @@ struct Plan3DetailView: View {
                 Text("₹\(formatL(netWealth))")
                     .font(.title3)
                     .fontWeight(.bold)
-                    .foregroundColor(.blue)
+                    .foregroundColor(netWealth >= 0 ? .blue : .red)
                 
                 Text("Overall: ₹\(formatL(grossValue))")
                     .font(.system(size: 10))
@@ -215,6 +218,9 @@ struct Plan3DetailView: View {
                 }
             }
         }
+        .padding(20)                          // ← add this
+            .background(AppTheme.cardBackground)  // ← add this
+            .cornerRadius(20)
     }
 
     private var totalInvestmentCard: some View {
@@ -241,25 +247,14 @@ struct Plan3DetailView: View {
             Divider()
 
             VStack(spacing: 8) {
-                HStack {
-                    Text("Scenario").font(.caption).foregroundColor(.secondary).frame(maxWidth: .infinity, alignment: .leading)
-                    Text("Gain/Loss").font(.caption).foregroundColor(.secondary).frame(maxWidth: .infinity, alignment: .trailing)
-                    Text("Final Value").font(.caption).foregroundColor(.secondary).frame(maxWidth: .infinity, alignment: .trailing)
-                }
-                
+                ScenarioHeaderRow()
                 ForEach(activeResult.scenarios) { scenario in
-                    HStack {
-                        Text(scenario.name).font(.system(size: 11, weight: .medium)).frame(maxWidth: .infinity, alignment: .leading)
-                        Text("\(scenario.gainLoss >= 0 ? "+" : "")\(formatL(scenario.gainLoss))")
-                            .font(.system(size: 11, weight: .bold))
-                            .foregroundColor(scenario.gainLoss >= 0 ? .green : .red)
-                            .frame(maxWidth: .infinity, alignment: .trailing)
-                        Text("₹\(formatL(scenario.finalValue))")
-                            .font(.system(size: 11, weight: .bold))
-                            .foregroundColor(.primary)
-                            .frame(maxWidth: .infinity, alignment: .trailing)
-                    }
-                    .padding(.vertical, 4)
+                    ScenarioDataRow(
+                        scenario: scenario.name,
+                        gainLoss: "\(scenario.gainLoss >= 0 ? "+" : "")₹\(formatL(scenario.gainLoss))",
+                        finalValue: "₹\(formatL(scenario.finalValue))",
+                        isNegative: scenario.gainLoss < 0
+                    )
                 }
             }
         }
@@ -270,48 +265,73 @@ struct Plan3DetailView: View {
     }
 
     private var scenarioTable: some View {
-        VStack(spacing: 16) {
-            VStack(spacing: 0) {
-                HStack(spacing: 0) {
-                    TableHeaderCell(text: "Investment Type", alignment: .leading,  flex: 2.5)
-                    TableHeaderCell(text: "Invested",        alignment: .trailing, flex: 1.5)
-                    TableHeaderCell(text: "Expected",        alignment: .trailing, flex: 1.5)
-                    TableHeaderCell(text: "Risk",            alignment: .trailing, flex: 1.2)
-                }
-                .padding(.vertical, 12)
-                .padding(.horizontal, 8)
-                .background(Color(UIColor.secondarySystemBackground))
-
-                Group {
-                    ForEach(planAssets) { asset in
-                        HStack(spacing: 0) {
-                            Text(asset.name).font(.caption).foregroundColor(.primary).frame(maxWidth: .infinity * 2.5, alignment: .leading)
-                            Text("₹\(Int(asset.monthlyInvestment))").font(.caption).foregroundColor(.primary).frame(maxWidth: .infinity * 1.5, alignment: .trailing)
-                            Text("₹\(formatL(asset.expectedValue))").font(.caption).foregroundColor(.secondary).frame(maxWidth: .infinity * 1.5, alignment: .trailing)
-                            Text(asset.riskLevel.rawValue.capitalized).font(.system(size: 10, weight: .bold))
-                                .foregroundColor(asset.riskLevel == .high ? .red : (asset.riskLevel == .low ? .green : .orange))
-                                .frame(maxWidth: .infinity * 1.2, alignment: .trailing)
-                        }
-                        .padding(.vertical, 8)
-                        .padding(.horizontal, 8)
-                        
-                        if asset.id != planAssets.last?.id {
-                            Divider()
-                        }
-                    }
+        VStack(alignment: .leading, spacing: 16) {
+            // Section Title
+            HStack(spacing: 8) {
+                Image(systemName: "safari.fill")
+                    .foregroundColor(.blue)
+                    .font(.title3)
+                Text("Your Investment Plan")
+                    .font(.title3)
+                    .fontWeight(.black)
+                Spacer()
+                Button(action: { showingAllAssetsInfo = true }) {
+                    Image(systemName: "info.circle.fill")
+                        .font(.system(size: 18))
+                        .foregroundColor(.blue.opacity(0.8))
                 }
             }
-            .background(Color(UIColor.tertiarySystemBackground))
-            .cornerRadius(12)
-            .overlay(
-                RoundedRectangle(cornerRadius: 12)
-                    .stroke(Color.gray.opacity(0.2), lineWidth: 1)
-            )
+            .padding(.horizontal, 4)
+
+            VStack(spacing: 0) {
+                // Table Headers
+                HStack(spacing: 4) {
+                    Text("Asset Category").font(.system(size: 10, weight: .bold)).foregroundColor(.secondary).frame(maxWidth: .infinity, alignment: .leading)
+                    Text("Allocation").font(.system(size: 10, weight: .bold)).foregroundColor(.secondary).frame(width: 70, alignment: .trailing)
+                    Text("Role").font(.system(size: 10, weight: .bold)).foregroundColor(.secondary).frame(width: 80, alignment: .trailing)
+                    Text("Risk").font(.system(size: 10, weight: .bold)).foregroundColor(.secondary).frame(width: 50, alignment: .trailing)
+                }
+                .padding(.horizontal, 16)
+                .padding(.vertical, 12)
+                .background(Color.secondary.opacity(0.03))
+
+                // Table Content
+                VStack(spacing: 0) {
+                    ForEach(planAssets) { asset in
+                        InvestmentTableRow(asset: asset,
+                                           invested: "₹\(formatL(asset.monthlyInvestment))",
+                                           expected: "₹\(formatL(asset.expectedValue))")
+                            .padding(.horizontal, 12)
+                        
+                        if asset.id != planAssets.last?.id {
+                            Divider().padding(.horizontal, 16)
+                        }
+                    }
+                    Divider()
+                    
+                    // Strategy Insight Card (Footer)
+                    HStack(spacing: 12) {
+                        Image(systemName: "lightbulb.fill")
+                            .foregroundColor(.orange)
+                            .font(.system(size: 14))
+                        
+                        let riskLevel = AstraRiskLevel(rawValue: selectedScenario.lowercased()) ?? .mid
+                        Text(riskLevel.insightText)
+                            .font(.system(size: 11, weight: .medium))
+                            .foregroundColor(.secondary)
+                    }
+                    .padding(16)
+                    .frame(maxWidth: .infinity, alignment: .leading)
+                    .background(Color.orange.opacity(0.05))
+                }
+                .background(AppTheme.cardBackground)
+                .cornerRadius(20)
+                .shadow(color: AppTheme.adaptiveShadow.opacity(0.1), radius: 10)
+            }
         }
-        .padding(20)
-        .background(AppTheme.cardBackground)
+        .padding(20)                          // ← add this
+        .background(AppTheme.cardBackground)  // ← add this
         .cornerRadius(20)
-        .shadow(color: AppTheme.adaptiveShadow.opacity(0.3), radius: 8)
     }
 
     private var repaymentStrategyCard: some View {
@@ -501,6 +521,21 @@ struct Plan3DetailView: View {
             }
             .frame(height: 180)
             .chartXScale(domain: 1...Swift.max(2, activeResult.tenure))
+            .chartYAxis {
+                AxisMarks(position: .trailing, values: .automatic) { value in
+                    AxisGridLine()
+                    AxisTick()
+                    AxisValueLabel {
+                        if let doubleValue = value.as(Double.self) {
+                            Text(doubleValue.toCurrency(compact: true))
+                                .font(.system(size: 10))
+                        } else if let intValue = value.as(Int.self) {
+                            Text(Double(intValue).toCurrency(compact: true))
+                                .font(.system(size: 10))
+                        }
+                    }
+                }
+            }
 
             HStack {
                 HStack(spacing: 4) {
@@ -598,10 +633,10 @@ struct Plan3DetailView: View {
                 }
             }
         }
-        .padding(20)
+        .padding(16)
         .background(AppTheme.cardBackground)
-        .cornerRadius(20)
-        .shadow(color: AppTheme.adaptiveShadow.opacity(0.2), radius: 10)
+        .cornerRadius(16)
+        .shadow(color: AppTheme.adaptiveShadow.opacity(0.15), radius: 8)
     }
 
     private var emiBreakdownCard: some View {
@@ -654,57 +689,126 @@ struct Plan3DetailView: View {
                 Spacer()
             }
         }
-        .padding(20)
+        .padding(16)
         .background(AppTheme.cardBackground)
-        .cornerRadius(20)
-        .shadow(color: AppTheme.adaptiveShadow.opacity(0.2), radius: 10)
+        .cornerRadius(16)
+        .shadow(color: AppTheme.adaptiveShadow.opacity(0.15), radius: 8)
     }
 
-    private var amortizationSummaryCard: some View {
+    private var yearlyBreakdownCard: some View {
         VStack(alignment: .leading, spacing: 16) {
-            HStack {
-                Image(systemName: "chart.bar.doc.horizontal.fill")
-                    .foregroundColor(.orange)
-                Text("Repayment Timeline")
-                    .font(.headline)
-                Spacer()
-                Text("\(tenureOverride) Years").font(.caption).foregroundColor(.secondary)
-            }
+            Text("Yearly Breakdown")
+                .font(.title3)
+                .fontWeight(.bold)
             
-            VStack(spacing: 12) {
-                HStack {
-                    Text("Year").font(.caption).foregroundColor(.secondary).frame(width: 40, alignment: .leading)
-                    Text("Principal").font(.caption).foregroundColor(.secondary).frame(maxWidth: .infinity, alignment: .trailing)
-                    Text("Interest").font(.caption).foregroundColor(.secondary).frame(maxWidth: .infinity, alignment: .trailing)
-                    Text("Balance").font(.caption).foregroundColor(.secondary).frame(maxWidth: .infinity, alignment: .trailing)
+            ScrollView(.horizontal, showsIndicators: false) {
+                HStack(alignment: .bottom, spacing: 16) {
+                    let yearlyData = currentStrategy.yearlyBreakdown
+                    ForEach(yearlyData.indices, id: \.self) { index in
+                        let year = yearlyData[index]
+                        let isSelected = selectedYearIndex == index
+                        
+                        VStack(spacing: 8) {
+                            let corpusValue = year.monthlySteps.last?.endValue ?? 0
+                            Text(formatL(corpusValue))
+                                .font(.system(size: 10, weight: .bold))
+                                .foregroundColor(.green)
+                            
+                            let maxVal = max(1, activeResult.moderate.finalValue)
+                            let barHeight = min(140, (corpusValue / maxVal) * 140)
+                            
+                            RoundedRectangle(cornerRadius: 6)
+                                .fill(isSelected ? Color.blue : Color.blue.opacity(0.15))
+                                .frame(width: 45, height: max(10, CGFloat(barHeight)))
+                                .onTapGesture {
+                                    selectedYearIndex = index
+                                }
+                            
+                            Text("\(Calendar.current.component(.year, from: Date()) + index)")
+                                .font(.system(size: 11, weight: .bold))
+                                .foregroundColor(isSelected ? .primary : .secondary)
+                            
+                            Text(formatL(year.monthlySteps.last?.loanOutstanding ?? 0))
+                                .font(.system(size: 10))
+                                .foregroundColor(.secondary)
+                        }
+                    }
                 }
+                .padding(.vertical, 8)
+                .padding(.horizontal, 4)
+            }
+        }
+        .padding(16)
+        .background(AppTheme.cardBackground)
+        .cornerRadius(16)
+        .shadow(color: AppTheme.adaptiveShadow.opacity(0.15), radius: 8)
+    }
+
+    private var monthlyPerformanceTable: some View {
+        VStack(alignment: .leading, spacing: 16) {
+            Text("Monthly Performance")
+                .font(.title2)
+                .fontWeight(.bold)
+            
+            VStack(spacing: 0) {
+                // Header
+                HStack(spacing: 0) {
+                    Text("Month").font(.caption).fontWeight(.bold).foregroundColor(.secondary).frame(width: 50, alignment: .leading)
+                    Text("Start").font(.caption).fontWeight(.bold).foregroundColor(.secondary).frame(maxWidth: .infinity, alignment: .trailing)
+                    if isEMIDeductionOn {
+                        Text("EMI").font(.caption).fontWeight(.bold).foregroundColor(.secondary).frame(maxWidth: .infinity, alignment: .trailing)
+                    }
+                    Text("Growth").font(.caption).fontWeight(.bold).foregroundColor(.secondary).frame(maxWidth: .infinity, alignment: .trailing)
+                    Text("End").font(.caption).fontWeight(.bold).foregroundColor(.secondary).frame(maxWidth: .infinity, alignment: .trailing)
+                }
+                .padding(.vertical, 12)
                 
                 Divider()
                 
-                let yearlyData = currentStrategy.yearlyBreakdown
-                ForEach(yearlyData.prefix(5)) { year in
-                    HStack {
-                        Text("\(year.year)").font(.system(size: 11, weight: .bold)).frame(width: 40, alignment: .leading)
-                        Text("₹\(formatL(activeResult.loanAmount / Double(tenureOverride)))").font(.system(size: 11)).frame(maxWidth: .infinity, alignment: .trailing)
-                        Text("₹\(formatL((currentStrategy.totalEMIPaid - activeResult.loanAmount) / Double(tenureOverride)))").font(.system(size: 11)).foregroundColor(.red).frame(maxWidth: .infinity, alignment: .trailing)
-                        let remaining = activeResult.loanAmount - (Double(year.year) * (activeResult.loanAmount / Double(tenureOverride)))
-                        Text("₹\(formatL(max(0, remaining)))").font(.system(size: 11, weight: .semibold)).frame(maxWidth: .infinity, alignment: .trailing)
-                    }
-                }
+                let selectedYear = currentStrategy.yearlyBreakdown.indices.contains(selectedYearIndex) ? currentStrategy.yearlyBreakdown[selectedYearIndex] : nil
                 
-                if tenureOverride > 5 {
-                    Text("+ \(tenureOverride - 5) more years")
-                        .font(.caption2)
-                        .foregroundColor(.secondary)
-                        .frame(maxWidth: .infinity, alignment: .center)
-                        .padding(.top, 4)
+                if let year = selectedYear {
+                    ForEach(year.monthlySteps) { step in
+                        HStack(spacing: 0) {
+                            Text(step.month).font(.system(size: 12, weight: .medium)).frame(width: 50, alignment: .leading)
+                            
+                            HStack(spacing: 2) {
+                                Text(formatL(step.startValue))
+                                if step.investment > 0 {
+                                    Text("+\(formatL(step.investment))").foregroundColor(.blue).font(.system(size: 9, weight: .bold))
+                                }
+                            }
+                            .font(.system(size: 12))
+                            .frame(maxWidth: .infinity, alignment: .trailing)
+                            
+                            if isEMIDeductionOn {
+                                Text(formatL(step.emiFromPocket > 0 ? step.emiFromPocket : (isEMIDeductionOn ? activeResult.monthlyEMI : 0)))
+                                    .font(.system(size: 12))
+                                    .foregroundColor(.orange)
+                                    .frame(maxWidth: .infinity, alignment: .trailing)
+                            }
+                            
+                            Text("+\(formatL(step.growth))")
+                                .font(.system(size: 12, weight: .bold))
+                                .foregroundColor(.green)
+                                .frame(maxWidth: .infinity, alignment: .trailing)
+                            
+                            Text(formatL(step.endValue))
+                                .font(.system(size: 12, weight: .bold))
+                                .foregroundColor(step.endValue >= 0 ? .primary : .red)
+                                .frame(maxWidth: .infinity, alignment: .trailing)
+                        }
+                        .padding(.vertical, 8)
+                        
+                        Divider()
+                    }
                 }
             }
         }
-        .padding(20)
+        .padding(16)
         .background(AppTheme.cardBackground)
-        .cornerRadius(20)
-        .shadow(color: AppTheme.adaptiveShadow.opacity(0.2), radius: 10)
+        .cornerRadius(16)
+        .shadow(color: AppTheme.adaptiveShadow.opacity(0.15), radius: 8)
     }
 
     private var recommendationCard: some View {
@@ -753,10 +857,10 @@ struct Plan3DetailView: View {
                     .italic()
             }
         }
-        .padding(24)
+        .padding(16)
         .background(AppTheme.cardBackground)
-        .cornerRadius(24)
-        .shadow(color: AppTheme.adaptiveShadow.opacity(0.2), radius: 10)
+        .cornerRadius(16)
+        .shadow(color: AppTheme.adaptiveShadow.opacity(0.15), radius: 8)
     }
 
     private func formatL(_ v: Double) -> String {

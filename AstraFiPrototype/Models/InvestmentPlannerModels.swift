@@ -20,6 +20,11 @@ struct PortfolioAsset: Identifiable, Codable, Equatable {
     var monthlyInvestment: Double
     var expectedValue: Double
     var riskLevel: AstraRiskLevel
+    var role: String = ""
+    var description: String = ""
+    var fundExamples: [String] = []
+    var howItWorks: String = ""
+    var whyIncluded: String = ""
 }
 
 struct AssetAllocation: Identifiable, Codable, Equatable {
@@ -28,17 +33,47 @@ struct AssetAllocation: Identifiable, Codable, Equatable {
     var percentage: Double
     var expectedCAGR: Double
     var riskLevel: AstraRiskLevel
+    var role: String = ""
+    var description: String = ""
+    var fundExamples: [String] = []
+    var howItWorks: String = ""
+    var whyIncluded: String = ""
 
-    init(id: UUID = UUID(), name: String, percentage: Double, expectedCAGR: Double, riskLevel: AstraRiskLevel) {
+    init(id: UUID = UUID(), name: String, percentage: Double, expectedCAGR: Double, riskLevel: AstraRiskLevel, role: String = "", description: String = "", fundExamples: [String] = [], howItWorks: String = "", whyIncluded: String = "") {
         self.id = id
         self.name = name
         self.percentage = percentage
         self.expectedCAGR = expectedCAGR
         self.riskLevel = riskLevel
+        self.role = role
+        self.description = description
+        self.fundExamples = fundExamples
+        self.howItWorks = howItWorks
+        self.whyIncluded = whyIncluded
     }
 }
 
-enum AstraRiskLevel: String, Codable, CaseIterable { case low, mid, high }
+enum AstraRiskLevel: String, Codable, CaseIterable {
+    case low = "low"
+    case mid = "mid"
+    case high = "high"
+    
+    var strategyDescription: String {
+        switch self {
+        case .low: return "Capital protection with steady debt-focused growth."
+        case .mid: return "Balanced approach mixing equity safety and growth."
+        case .high: return "Aggressive growth with high equity market exposure."
+        }
+    }
+    
+    var insightText: String {
+        switch self {
+        case .low: return "Focused on capital protection with limited exposure to market volatility."
+        case .mid: return "Balances growth and stability for consistent long-term wealth creation."
+        case .high: return "Maximizes growth potential with higher exposure to market fluctuations."
+        }
+    }
+}
 enum AstraLiquidityLevel: String, Codable, CaseIterable { case high, mid, low }
 
 enum EMIFrequency: String, Codable, CaseIterable {
@@ -114,7 +149,12 @@ struct Plan1Result: Codable, Equatable {
                 name: allocation.name,
                 monthlyInvestment: monthly,
                 expectedValue: fv,
-                riskLevel: allocation.riskLevel
+                riskLevel: allocation.riskLevel,
+                role: allocation.role,
+                description: allocation.description,
+                fundExamples: allocation.fundExamples,
+                howItWorks: allocation.howItWorks,
+                whyIncluded: allocation.whyIncluded
             )
         }
     }

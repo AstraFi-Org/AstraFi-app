@@ -158,7 +158,7 @@ struct AuraMoneyFlowChart: View {
                         .foregroundStyle(Color.secondary.opacity(0.12))
                     AxisValueLabel {
                         if let v = val.as(Double.self), v != 0 {
-                            Text(shortAmount(abs(v)))
+                            Text(v.toCurrency(compact: true))
                                 .font(.system(size: 10))
                                 .foregroundStyle(Color.secondary)
                         }

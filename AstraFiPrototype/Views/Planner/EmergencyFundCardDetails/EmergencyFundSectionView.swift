@@ -269,13 +269,13 @@ struct EmergencyFundSectionView: View {
     // MARK: Header
     private var headerView: some View {
         HStack(spacing: 10) {
-            ZStack {
-                Circle().fill(AppTheme.vibrantCyan.opacity(0.14)).frame(width: 38, height: 38)
-                Image(systemName: "shield.lefthalf.filled").font(.system(size: 16, weight: .bold)).foregroundStyle(AppTheme.vibrantCyan)
-            }
+//            ZStack {
+//                Circle().fill(AppTheme.vibrantCyan.opacity(0.14)).frame(width: 38, height: 38)
+//                Image(systemName: "shield.lefthalf.filled").font(.system(size: 16, weight: .bold)).foregroundStyle(AppTheme.vibrantCyan)
+//            }
             VStack(alignment: .leading, spacing: 2) {
-                Text("Emergency Fund").font(.system(size: 17, weight: .bold, design: .rounded))
-                Text(statusSubtitle).font(.system(size: 12, design: .rounded)).foregroundStyle(.secondary).contentTransition(.numericText())
+//                Text("Emergency Fund").font(.system(size: 17, weight: .bold, design: .rounded))
+                Text(statusSubtitle).font(.system(size: 12, design: .rounded)).contentTransition(.numericText())
             }
             Spacer()
         }
@@ -546,7 +546,7 @@ struct ManageAllocationSheet: View {
             }
             .navigationTitle("Manage Allocation").navigationBarTitleDisplayMode(.inline)
             .toolbar {
-                ToolbarItem(placement: .cancellationAction) { Button("Cancel") { dismiss() } }
+//                ToolbarItem(placement: .cancellationAction) { Button("Cancel") { dismiss() } }
                 ToolbarItem(placement: .confirmationAction) { Button("Save") { onSave(); dismiss() }.fontWeight(.semibold) }
             }
         }
@@ -665,7 +665,6 @@ struct AllocationRecommendationScreen: View {
             instrRow(name: "Saving Account", icon: "banknote.fill",         color: Color(hex: "#007AFF"), pct: rec.s, rate: EFInstrumentRate.savingsAccount, liq: "Instant access", info: .savingsAccount, guide: .savingsAccount)
             instrRow(name: "Sweep-in FD",    icon: "arrow.2.squarepath",    color: Color(hex: "#FF9F0A"), pct: rec.f, rate: EFInstrumentRate.sweepInFD,      liq: "Next-day",       info: .sweepInFD, guide: .sweepInFD)
         }
-        // activeInfo and showInfo are wired via instrRow's info button
     }
 
     private func instrRow(name: String, icon: String, color: Color, pct: Double, rate: Double, liq: String, info: InstrumentInfoContent, guide: HowToInvestGuide) -> some View {

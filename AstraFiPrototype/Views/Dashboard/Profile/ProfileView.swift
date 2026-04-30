@@ -74,10 +74,8 @@ struct ProfileView: View {
                 }
 
                 Button(action: {
-                    withAnimation {
-                        appState.currentProfile = nil
-                        appState.isAuthenticated = false
-                        appState.showDashboard = false
+                    Task {
+                        await appState.signOut()
                     }
                 }) {
                     HStack {

@@ -51,22 +51,26 @@ struct SplashScreenView: View {
                         .frame(width: 96, height: 96)
 
                     // Inner fill
-                    Circle()
-                        .fill(
-                            LinearGradient(
-                                colors: [Color(hex: "#007AFF"), Color(hex: "#5E5CE6")],
-                                startPoint: .topLeading,
-                                endPoint: .bottomTrailing
-                            )
-                        )
-                        .frame(width: 82, height: 82)
+                    //Circle()
+                        
 
                     // Star icon
-                    Image(.splashScreen)
-                        .resizable()
-                        .scaledToFit()
-                        .frame(width: 48, height: 48)
-                        .foregroundStyle(.white)
+                    ZStack {
+                        Circle()
+                            .fill(
+                                LinearGradient(
+                                    colors: [Color(hex: "#007AFF"), Color(hex: "#5E5CE6")],
+                                    startPoint: .topLeading,
+                                    endPoint: .bottomTrailing
+                                )
+                            )
+                            .frame(width: 82, height: 82)
+                        Image(.splashScreen)
+                            .resizable()
+                            .scaledToFit()
+                            .frame(width: 48, height: 48)
+                            .foregroundStyle(.white)
+                    }
                 }
                 .scaleEffect(logoScale)
                 .opacity(logoOpacity)
@@ -76,10 +80,10 @@ struct SplashScreenView: View {
                         .font(.system(size: 38, weight: .bold))
                         .foregroundStyle(.white)
 
-                    Text("A Finance Guiding Star")
-                        .font(.system(size: 15, weight: .medium))
-                        .foregroundStyle(Color.white.opacity(0.5))
-                        .tracking(0.5)
+//                    Text("A Finance Guiding Star")
+//                        .font(.system(size: 15, weight: .medium))
+//                        .foregroundStyle(Color.white.opacity(0.5))
+//                        .tracking(0.5)
                 }
                 .opacity(taglineOpacity)
             }

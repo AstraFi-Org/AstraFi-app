@@ -99,8 +99,8 @@ struct FinancialHealthReportView: View {
                                 atRisk: insights.investmentBreakdown.highRiskCount)
             .padding(.horizontal, 20).padding(.bottom, 10)
 
-            DisclosureLink("How can I reduce investment risk?") { navigateToRisk = true }
-                .padding(.horizontal, 20).padding(.bottom, 24)
+//            DisclosureLink("How can I reduce investment risk?") { navigateToRisk = true }
+//                .padding(.horizontal, 20).padding(.bottom, 24)
         }
     }
 
@@ -113,8 +113,8 @@ struct FinancialHealthReportView: View {
                               statusMessage: insights.emergencyStatusMessage)
             .padding(.horizontal, 20).padding(.bottom, 6)
             .contentShape(Rectangle())
-            DisclosureLink("How to improve emergency-fund liquidity?") { navigateToEmergency = true }
-                .padding(.horizontal, 20).padding(.bottom, 24)
+//            DisclosureLink("How to improve emergency-fund liquidity?") { navigateToEmergency = true }
+//                .padding(.horizontal, 20).padding(.bottom, 24)
         }
     }
 
@@ -131,8 +131,8 @@ struct FinancialHealthReportView: View {
             .padding(.horizontal, 20).padding(.bottom, 6)
             .contentShape(Rectangle())
 
-            DisclosureLink("Help me choose the right insurance") { navigateToInsurance = true }
-                .padding(.horizontal, 20).padding(.bottom, 28)
+//            DisclosureLink("Help me choose the right insurance") { navigateToInsurance = true }
+//                .padding(.horizontal, 20).padding(.bottom, 28)
         }
     }
 

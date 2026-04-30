@@ -280,14 +280,21 @@ final class AppStateManager {
                 }
                 recalculateFinancials()
             } else {
-                try? await supabase.auth.signOut()
+                try? await supabase.auth.signOut(scope: .local)
                 try? await minimumDelay
-                await MainActor.run { isLoading = false }
+                await MainActor.run {
+                    self.hasCompletedOnboarding = false
+                    self.isLoading = false
+                    
+                }
             }
 
         } catch {
             try? await minimumDelay
-            await MainActor.run { isLoading = false }
+            await MainActor.run {
+                self.hasCompletedOnboarding = false
+                isLoading = false
+            }
         }
     }
     func signUp(name: String, email: String, password: String) async {
@@ -337,7 +344,7 @@ final class AppStateManager {
                 self.currentProfile = profile
                 recalculateFinancials()
                 isAuthenticated = true
-                showPostAuthOnboarding = true
+                showPostAuthOnboarding = false
                 hasCompletedOnboarding = true
                 showDashboard = true
             } else {
@@ -359,12 +366,14 @@ final class AppStateManager {
     }
     func signOut() async {
         do {
-            try await supabase.auth.signOut()
+            try await supabase.auth.signOut(scope: .local)
             isAuthenticated = false
             
-            hasCompletedOnboarding = true
+            hasCompletedOnboarding = false
             showDashboard = false
+            showPostAuthOnboarding = false
             currentProfile = nil
+            savedPlans = []
         } catch {
             authError = error.localizedDescription
         }
