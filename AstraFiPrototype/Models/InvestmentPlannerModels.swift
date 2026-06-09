@@ -10,7 +10,7 @@ struct UserInvestment: Identifiable {
 
 struct PortfolioBlueprint: Codable, Equatable {
     var allocations: [AssetAllocation]
-    var blendedCAGR: Double           
+    var blendedCAGR: Double
     var riskLabel: String
 }
 
@@ -20,6 +20,11 @@ struct PortfolioAsset: Identifiable, Codable, Equatable {
     var monthlyInvestment: Double
     var expectedValue: Double
     var riskLevel: AstraRiskLevel
+    var role: String = ""
+    var description: String = ""
+    var fundExamples: [String] = []
+    var howItWorks: String = ""
+    var whyIncluded: String = ""
 }
 
 struct AssetAllocation: Identifiable, Codable, Equatable {
@@ -28,17 +33,47 @@ struct AssetAllocation: Identifiable, Codable, Equatable {
     var percentage: Double
     var expectedCAGR: Double
     var riskLevel: AstraRiskLevel
+    var role: String = ""
+    var description: String = ""
+    var fundExamples: [String] = []
+    var howItWorks: String = ""
+    var whyIncluded: String = ""
 
-    init(id: UUID = UUID(), name: String, percentage: Double, expectedCAGR: Double, riskLevel: AstraRiskLevel) {
+    init(id: UUID = UUID(), name: String, percentage: Double, expectedCAGR: Double, riskLevel: AstraRiskLevel, role: String = "", description: String = "", fundExamples: [String] = [], howItWorks: String = "", whyIncluded: String = "") {
         self.id = id
         self.name = name
         self.percentage = percentage
         self.expectedCAGR = expectedCAGR
         self.riskLevel = riskLevel
+        self.role = role
+        self.description = description
+        self.fundExamples = fundExamples
+        self.howItWorks = howItWorks
+        self.whyIncluded = whyIncluded
     }
 }
 
-enum AstraRiskLevel: String, Codable, CaseIterable { case low, mid, high }
+enum AstraRiskLevel: String, Codable, CaseIterable {
+    case low = "low"
+    case mid = "mid"
+    case high = "high"
+    
+    var strategyDescription: String {
+        switch self {
+        case .low: return "Capital protection with steady debt-focused growth."
+        case .mid: return "Balanced approach mixing equity safety and growth."
+        case .high: return "Aggressive growth with high equity market exposure."
+        }
+    }
+    
+    var insightText: String {
+        switch self {
+        case .low: return "Focused on capital protection with limited exposure to market volatility."
+        case .mid: return "Balances growth and stability for consistent long-term wealth creation."
+        case .high: return "Maximizes growth potential with higher exposure to market fluctuations."
+        }
+    }
+}
 enum AstraLiquidityLevel: String, Codable, CaseIterable { case high, mid, low }
 
 enum EMIFrequency: String, Codable, CaseIterable {
@@ -114,7 +149,12 @@ struct Plan1Result: Codable, Equatable {
                 name: allocation.name,
                 monthlyInvestment: monthly,
                 expectedValue: fv,
-                riskLevel: allocation.riskLevel
+                riskLevel: allocation.riskLevel,
+                role: allocation.role,
+                description: allocation.description,
+                fundExamples: allocation.fundExamples,
+                howItWorks: allocation.howItWorks,
+                whyIncluded: allocation.whyIncluded
             )
         }
     }
@@ -170,7 +210,7 @@ struct LeveragedStrategyResult: Codable, Equatable, Identifiable {
     var breakEvenReturn: Double
     var riskLevel: String
     var riskFlags: [String]
-    var survivalDuration: Int? 
+    var survivalDuration: Int?
     var yearlyBreakdown: [Plan3YearlyDetail]
     var milestones: [Plan3Milestone] = []
 }
@@ -180,7 +220,7 @@ struct Plan3Milestone: Identifiable, Codable, Equatable {
     let label: String
     let startValue: Double
     let growth: Double
-    let emiPaid: Double 
+    let emiPaid: Double
     let endValue: Double
 }
 
@@ -206,16 +246,16 @@ struct Plan3Result: Codable, Equatable {
 
     var recommendedStrategy: String
     var recommendationReason: String
-    var scenarios: LeveragedScenarioAnalysis
-    var portfolio: PortfolioBlueprint? 
+    var scenarios: [PlanScenario]
+    var portfolio: PortfolioBlueprint?
 
     static func empty() -> Plan3Result {
         let emptyStrategy = LeveragedStrategyResult(name: "", description: "", finalValue: 0, totalEMIPaid: 0, netProfit: 0, breakEvenReturn: 0, riskLevel: "", riskFlags: [], survivalDuration: nil, yearlyBreakdown: [])
         return Plan3Result(loanAmount: 0, loanRate: 0, tenure: 1, monthlyEMI: 0,
-                           conservative: emptyStrategy, moderate: emptyStrategy, aggressive: emptyStrategy,
-                           recommendedStrategy: "", recommendationReason: "",
-                           scenarios: LeveragedScenarioAnalysis(bestCaseReturn: 0, worstCaseReturn: 0, realisticCaseReturn: 0),
-                           portfolio: nil)
+                            conservative: emptyStrategy, moderate: emptyStrategy, aggressive: emptyStrategy,
+                            recommendedStrategy: "", recommendationReason: "",
+                            scenarios: [],
+                            portfolio: nil)
     }
 }
 
@@ -282,7 +322,7 @@ struct RecommendationTip: Identifiable, Codable, Equatable {
 struct FullPlanResult: Codable, Equatable {
     var plan1: Plan1Result
     var plan2: Plan2Result?
-    var plan3: Plan3Result? 
+    var plan3: Plan3Result?
     var feasibility: FeasibilityResult
     var recommendations: PlanRecommendations
     var comparisonScore: PlanComparisonScore?
@@ -321,11 +361,11 @@ enum InvestmentGoalCategory: String, Codable, CaseIterable {
 }
 
 struct PlanComparisonScore: Codable, Equatable {
-    var plan1Score: Double     
-    var plan2Score: Double     
-    var plan3Score: Double?    
-    var winner: String         
-    var confidence: String     
+    var plan1Score: Double
+    var plan2Score: Double
+    var plan3Score: Double?
+    var winner: String
+    var confidence: String
     var dimensions: [ScoreDimension]
     var detailedReasoning: String
     var keyValidations: [ValidationPoint]
@@ -333,15 +373,15 @@ struct PlanComparisonScore: Codable, Equatable {
 
 struct ScoreDimension: Codable, Equatable, Identifiable {
     var id: UUID = UUID()
-    let axis: String           
+    let axis: String
     let plan1Value: String
     let plan2Value: String
     let plan3Value: String?
-    let plan1Points: Double    
-    let plan2Points: Double    
-    let plan3Points: Double?   
-    let weight: Double         
-    let winner: String         
+    let plan1Points: Double
+    let plan2Points: Double
+    let plan3Points: Double?
+    let weight: Double
+    let winner: String
 }
 
 struct ValidationPoint: Codable, Equatable, Identifiable {
@@ -358,14 +398,14 @@ enum ValidationSeverity: String, Codable {
 
 struct FinancialHealthContext: Codable, Equatable {
     var netWorth: Double
-    var monthlyIncome: Double         
+    var monthlyIncome: Double
     var monthlyExpenses: Double
-    var existingEMIBurden: Double     
-    var emergencyFundCoverage: Double 
+    var existingEMIBurden: Double
+    var emergencyFundCoverage: Double
     var investmentScore: Int
     var debtToIncomeRatio: Double
-    var investableMonthly: Double     
-    var healthGrade: String           
+    var investableMonthly: Double
+    var healthGrade: String
     var healthSummary: String
 }
 

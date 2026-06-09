@@ -90,16 +90,40 @@ struct FinancialAssessmentInsights: Hashable, Codable {
     }
 
     static func build(profile: AstraUserProfile?, data: CompleteAssessmentData?) -> FinancialAssessmentInsights {
-        let grossIncomeRaw = profile?.basicDetails.monthlyIncome ?? parseNumber(data?.income)
+        // Core metrics: prioritize assessment data if provided and non-empty
+        
+        let grossIncomeRaw: Double
+        if let data = data, !data.income.isEmpty {
+            grossIncomeRaw = parseNumber(data.income)
+        } else {
+            grossIncomeRaw = profile?.basicDetails.monthlyIncome ?? 0
+        }
         let grossIncome = max(0, grossIncomeRaw)
 
-        let takeHomeIncomeRaw = profile?.basicDetails.monthlyIncomeAfterTax ?? (grossIncome * (1.0 - AppStateManager.defaultTaxRate))
+        let takeHomeIncomeRaw: Double
+        if let data = data, !data.income.isEmpty {
+            // If we have new income, use it. For now assuming same as gross or we could apply tax.
+            // AppStateManager uses the same value for both during update.
+            takeHomeIncomeRaw = parseNumber(data.income)
+        } else {
+            takeHomeIncomeRaw = profile?.basicDetails.monthlyIncomeAfterTax ?? (grossIncome * (1.0 - AppStateManager.defaultTaxRate))
+        }
         let takeHomeIncome = max(0, takeHomeIncomeRaw)
 
-        let expensesRaw = profile?.basicDetails.monthlyExpenses ?? parseNumber(data?.expenditure)
+        let expensesRaw: Double
+        if let data = data, !data.expenditure.isEmpty {
+            expensesRaw = parseNumber(data.expenditure)
+        } else {
+            expensesRaw = profile?.basicDetails.monthlyExpenses ?? 0
+        }
         let expenses = max(0, expensesRaw)
 
-        let emergencyFundRaw = profile?.basicDetails.emergencyFundAmount ?? parseNumber(data?.emergencyFundAmount)
+        let emergencyFundRaw: Double
+        if let data = data, !data.emergencyFundAmount.isEmpty {
+            emergencyFundRaw = parseNumber(data.emergencyFundAmount)
+        } else {
+            emergencyFundRaw = profile?.basicDetails.emergencyFundAmount ?? 0
+        }
         let emergencyFund = max(0, emergencyFundRaw)
 
         let savings = max(0, takeHomeIncome - expenses)
@@ -107,18 +131,37 @@ struct FinancialAssessmentInsights: Hashable, Codable {
         let emergencyTarget = grossIncome * Threshold.emergencyFundMonths
         let emergencyCoverage = emergencyTarget > 0 ? emergencyFund / emergencyTarget : 0
 
+        // For investments, we prioritize assessment data if it has entries,
+        // but if it's empty and a profile exists, we assume we want to see the profile's investments.
+        // If we are in the middle of an assessment and the user hasn't reached investments yet,
+        // data?.investmentEntries might be empty.
+        
         let profileSnapshots = profile?.investments.map { InvestmentSnapshot(from: $0) } ?? []
         let assessmentSnapshots = data?.investmentEntries.map { InvestmentSnapshot(from: $0) } ?? []
-        let sourceSnapshots = profile != nil ? profileSnapshots : assessmentSnapshots
+        
+        // If assessment has data, use it. Otherwise fallback to profile.
+        let sourceSnapshots = (data != nil && !assessmentSnapshots.isEmpty) ? assessmentSnapshots : profileSnapshots
 
         let investmentCount = sourceSnapshots.count
         let investmentBreakdown = buildInvestmentBreakdown(from: sourceSnapshots)
 
-        let loanCount = profile?.loans.count ?? data?.loanEntries.count ?? 0
-        let insuranceCount = profile?.insurances.count ?? data?.insuranceEntries.count ?? 0
+        // Loans and Insurance: Similar logic - prioritize assessment entries if they exist
+        let loanCount: Int
+        if let data = data, !data.loanEntries.isEmpty {
+            loanCount = data.loanEntries.count
+        } else {
+            loanCount = profile?.loans.count ?? 0
+        }
+        
+        let insuranceCount: Int
+        if let data = data, !data.insuranceEntries.isEmpty {
+            insuranceCount = data.insuranceEntries.count
+        } else {
+            insuranceCount = profile?.insurances.count ?? 0
+        }
 
         let debtRatio = computeDebtToIncomeRatio(profile: profile, data: data, grossIncome: grossIncome)
-        let fixedIncome = profile?.basicDetails.incomeType == .fixed || data?.incomeType == .fixed
+        let fixedIncome = (data != nil) ? (data?.incomeType == .fixed) : (profile?.basicDetails.incomeType == .fixed)
 
         let concerns = buildConcerns(
             savingsRate: savingsRate,
@@ -221,10 +264,10 @@ struct FinancialAssessmentInsights: Hashable, Codable {
         }
         if emergencyFundAmount < emergencyFundTarget {
             let shortBy = emergencyFundTarget - emergencyFundAmount
-            return "Emergency fund is partial; increase by \(shortBy.toCurrency(compact: true)) to reach 6× monthly income."
+            return "Emergency fund is partial, increase by \(shortBy.toCurrency(compact: true)) to reach 6× monthly income."
         }
         if investmentBreakdown.lowRiskLiquidAmount <= 0 {
-            return "Emergency fund is adequate, but allocate part of it to high-liquidity low-risk options."
+            return "Emergency fund is adequate, but allocate part of it to high liquidity low risk options."
         }
         return "Emergency fund coverage looks strong and has liquidity support."
     }
@@ -266,7 +309,7 @@ struct FinancialAssessmentInsights: Hashable, Codable {
                     status: .concern,
                     title: "Savings below 30% benchmark",
                     summary: "Current savings rate is \(Int((savingsRate * 100).rounded()))%, below the 30% target.",
-                    recommendation: "Trim discretionary expenses and auto-transfer savings to reach at least 30% each month."
+                    recommendation: "Trim discretionary expenses and auto transfer savings to reach at least 30% each month."
                 )
             )
         }
@@ -278,7 +321,7 @@ struct FinancialAssessmentInsights: Hashable, Codable {
                     status: .concern,
                     title: "No investment allocation found",
                     summary: "You currently have no active investments in your assessment data.",
-                    recommendation: "Start with a basic allocation and include a low-risk bucket before increasing high-risk exposure."
+                    recommendation: "Start with a basic allocation and include a low risk bucket before increasing high risk exposure."
                 )
             )
         } else {
@@ -287,9 +330,9 @@ struct FinancialAssessmentInsights: Hashable, Codable {
                     AssessmentConcern(
                         parameter: .investment,
                         status: .concern,
-                        title: "Portfolio is concentrated in high-risk assets",
-                        summary: "\(Int((investmentBreakdown.highRiskRatio * 100).rounded()))% of your investments are high-risk.",
-                        recommendation: "Reduce concentration risk by diversifying into debt, deposits, or other lower-volatility assets."
+                        title: "Portfolio is concentrated in high risk assets",
+                        summary: "\(Int((investmentBreakdown.highRiskRatio * 100).rounded()))% of your investments are high risk.",
+                        recommendation: "Reduce concentration risk by diversifying into debt, deposits, or other lower volatility assets."
                     )
                 )
             }
@@ -301,8 +344,8 @@ struct FinancialAssessmentInsights: Hashable, Codable {
                         parameter: .investment,
                         status: .watch,
                         title: "Savings are healthy but investments are still low",
-                        summary: "Your savings trend is good, but deployed investments are lower than a 6-month savings buffer.",
-                        recommendation: "Channel part of monthly savings into goal-linked investments to build long-term wealth."
+                        summary: "Your savings trend is good, but deployed investments are lower than a 6 month savings buffer.",
+                        recommendation: "Channel part of monthly savings into goal linked investments to build long-term wealth."
                     )
                 )
             }
@@ -327,7 +370,7 @@ struct FinancialAssessmentInsights: Hashable, Codable {
                         status: .watch,
                         title: "Emergency fund is under target",
                         summary: "Emergency corpus is short by \(shortBy.toCurrency(compact: true)) versus the 6× income target.",
-                        recommendation: "Top up gradually each month until you reach the full emergency-fund target."
+                        recommendation: "Top up gradually each month until you reach the full emergency fund target."
                     )
                 )
             } else if investmentBreakdown.lowRiskLiquidAmount <= 0 {
@@ -335,7 +378,7 @@ struct FinancialAssessmentInsights: Hashable, Codable {
                     AssessmentConcern(
                         parameter: .emergencyFund,
                         status: .watch,
-                        title: "Improve emergency-fund liquidity",
+                        title: "Improve emergency fund liquidity",
                         summary: "Emergency corpus is adequate but not allocated to low-risk, high-liquidity instruments.",
                         recommendation: "Park a portion in Treasury Bills, Commercial Papers, or Sweep-in FDs for faster access with lower risk."
                     )
@@ -365,7 +408,7 @@ struct FinancialAssessmentInsights: Hashable, Codable {
                         status: .concern,
                         title: "Urgent: Loan structures are unachievable",
                         summary: "Your required EMIs (\(totalEMI.toCurrency(compact: true))) exceed your disposable monthly savings.",
-                        recommendation: "Use the Pre-payment simulator to find a debt-consolidation strategy or proactively increase your monthly savings margin."
+                        recommendation: "Use the Prepayment simulator to find a debt consolidation strategy or proactively increase your monthly savings margin."
                     )
                 )
             } else if debtToIncomeRatio >= Threshold.stressedDebtToIncome {
@@ -375,7 +418,7 @@ struct FinancialAssessmentInsights: Hashable, Codable {
                         status: .concern,
                         title: "Debt pressure is high",
                         summary: "Debt-to-income ratio is \(Int((debtToIncomeRatio * 100).rounded()))%, which is elevated.",
-                        recommendation: "Increase prepayments on high-interest loans to bring debt-to-income under control."
+                        recommendation: "Increase prepayments on high interest loans to bring debt-to-income under control."
                     )
                 )
             } else if debtToIncomeRatio >= Threshold.healthyDebtToIncome {
@@ -384,7 +427,7 @@ struct FinancialAssessmentInsights: Hashable, Codable {
                         parameter: .liabilities,
                         status: .watch,
                         title: "Debt obligations need monitoring",
-                        summary: "Debt-to-income ratio is \(Int((debtToIncomeRatio * 100).rounded()))%.",
+                        summary: "Debt to income ratio is \(Int((debtToIncomeRatio * 100).rounded()))%.",
                         recommendation: "Keep EMIs within 30% of income where possible and avoid adding unsecured debt."
                     )
                 )
@@ -403,11 +446,12 @@ struct FinancialAssessmentInsights: Hashable, Codable {
         guard grossIncome > 0 else { return 0 }
 
         let totalEMI: Double
-        if let profile {
+        if let data = data, !data.loanEntries.isEmpty {
+            totalEMI = data.loanEntries.reduce(0) { $0 + estimateEMI(for: $1) }
+        } else if let profile = profile {
             totalEMI = profile.loans.reduce(0) { $0 + max(0, $1.calculatedEMI) }
         } else {
-            let entries = data?.loanEntries ?? []
-            totalEMI = entries.reduce(0) { $0 + estimateEMI(for: $1) }
+            totalEMI = 0
         }
 
         return max(0, min(1, totalEMI / grossIncome))

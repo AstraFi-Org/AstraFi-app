@@ -11,7 +11,7 @@ struct TrackerMoneyFlowSection: View {
         VStack(alignment: .leading, spacing: 14) {
 
             // Header
-            HStack {
+            HStack(alignment:.firstTextBaseline) {
                 Text("Cash Flow")
                     .font(.system(size: 22, weight: .bold))
                 Spacer()
@@ -23,13 +23,17 @@ struct TrackerMoneyFlowSection: View {
                         .symbolRenderingMode(.hierarchical)
                         .foregroundStyle(AppTheme.auraIndigo)
                 }
+                                
             }
+
 
             // Card
             if let profile = appState.currentProfile {
                 AuraMoneyFlowChart(profile: profile)
                     .auraCardStyle(radius: 24)
                     .onTapGesture { showingDetailSheet = true }
+
+                
             } else {
                 TrackerEmptyState(icon: "chart.bar.fill", message: "No data available yet.")
                     .auraCardStyle(radius: 24)

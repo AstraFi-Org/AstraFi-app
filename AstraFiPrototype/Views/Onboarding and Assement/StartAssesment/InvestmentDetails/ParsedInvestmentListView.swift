@@ -85,16 +85,28 @@ struct ParsedInvestmentListView: View {
             .navigationBarTitleDisplayMode(.inline)
             .toolbar {
                 ToolbarItem(placement: .cancellationAction) {
-                    Button("Cancel") {
+                    Button(action: {
                         onCancel()
                         dismiss()
-                    }
+                    }, label: {
+                        Image(systemName: "xmark")
+                            .foregroundStyle(.red)
+                            
+                    })
+
                 }
                 ToolbarItem(placement: .confirmationAction) {
-                    Button("Import Selected") {
+                    Button(action: {
                         onConfirm()
                         dismiss()
-                    }
+                    }, label: {
+                        Image(systemName: "checkmark")
+                            .foregroundStyle(Color.white)
+                            .padding(6.5)
+                            .background(Color.blue)
+                            .clipShape(Circle())
+                            
+                    })
                     .fontWeight(.bold)
                 }
             }

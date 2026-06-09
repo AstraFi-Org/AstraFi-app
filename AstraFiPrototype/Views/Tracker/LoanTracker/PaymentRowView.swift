@@ -41,7 +41,7 @@ struct EnhancedPaymentRow: View {
             isDueSoon: true
         )
         EnhancedPaymentRow(
-            title: "SIP - Axis Bluechip",
+            title: "SIP Axis Bluechip",
             subtitle: "Due in 12 days",
             amount: "10,000",
             iconColor: .green,

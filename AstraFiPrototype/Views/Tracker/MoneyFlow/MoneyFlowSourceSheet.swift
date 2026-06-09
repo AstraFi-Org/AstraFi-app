@@ -170,11 +170,11 @@ struct MoneyFlowSourceSheet: View {
         cf.expenseSources = expenseSources.filter { $0.amount > 0 }
         appState.updateCashflow(cf)
 
-        if var profile = appState.currentProfile {
-            let df = DateFormatter(); df.dateFormat = "yyyy-MM"
-            profile.monthlyCashflowSnapshots[df.string(from: Date())] = cf
-            appState.currentProfile = profile
-        }
+//        if var profile = appState.currentProfile {
+//            let df = DateFormatter(); df.dateFormat = "yyyy-MM"
+//            profile.monthlyCashflowSnapshots[df.string(from: Date())] = cf
+//            appState.currentProfile = profile
+//        }
     }
 }
 

@@ -5,25 +5,46 @@ struct PlanComparisonView: View {
     var input: InvestmentPlanInputModel
     var results: FullPlanResult
     @State private var animateCharts = false
+    @State private var selectedComparisonRisk: AstraRiskLevel = .mid
+
+    init(input: InvestmentPlanInputModel, results: FullPlanResult) {
+        self.input = input
+        self.results = results
+        let initialRisk = AstraRiskLevel(rawValue: input.riskType.lowercased()) ?? .mid
+        _selectedComparisonRisk = State(initialValue: initialRisk)
+    }
+
+    private var isLoanEligibleGoal: Bool {
+        results.goalCategory != .retirement && results.goalCategory != .wealthCreation
+    }
 
     var body: some View {
         ScrollView {
-            VStack(spacing: 24) {
+            VStack(spacing: 32) {
                 headerSection
+                
+                // Risk Selection
+                riskTypeSection
+                
+                // Pillar 1: Crucial Role & Intent
+                planRoleSection
+                
+                // Pillar 2: Financial Battle (The Numbers)
                 quickComparisonCard
-                timelineComparison
-                financialBreakdown
-                prosConsSection
-                recommendationSection
+                
+                // Pillar 3: Stability & Commitment
+                stabilityCommitmentSection
+                
+                // Pillar 4: Growth Battle (Dynamic Chart)
+                growthBattleSection
+                
+                battleSummarySection
             }
             .padding(.horizontal, 20)
-            .padding(.bottom, 40)
+            .padding(.vertical, 24)
         }
-        .navigationTitle("Compare Plans")
-        .navigationBarTitleDisplayMode(.large)
-        .toolbar {
-            ToolbarItem(placement: .navigationBarLeading) { }
-        }
+        .navigationTitle("Battle of Strategies")
+        .navigationBarTitleDisplayMode(.inline)
         .background(AppTheme.appBackground(for: colorScheme))
         .onAppear {
             withAnimation(.spring(response: 0.8, dampingFraction: 0.7)) {
@@ -33,82 +54,125 @@ struct PlanComparisonView: View {
     }
 
     private var headerSection: some View {
-        HStack(spacing: 12) {
+        VStack(spacing: 16) {
+            HStack(spacing: 12) {
+                ZStack {
+                    Circle()
+                        .fill(AppTheme.accentGradient)
+                        .frame(width: 48, height: 48)
+                    Image(systemName: "swords")
+                        .foregroundColor(.white)
+                        .font(.title3)
+                }
+                VStack(alignment: .leading, spacing: 2) {
+                    Text("Side-by-Side Analysis")
+                        .font(.system(size: 14, weight: .bold))
+                        .foregroundColor(.secondary)
+                    Text("Find Your Perfect Match")
+                        .font(.system(size: 20, weight: .black))
+                        .foregroundColor(.primary)
+                }
+                Spacer()
+            }
+            
+            Text("We've evaluated 3 distinct strategies for your \(input.purposeOfInvestment) goal. Compare the risk, cost, and efficiency below.")
+                .font(.system(size: 12))
+                .foregroundColor(.secondary)
+                .lineSpacing(4)
+        }
+    }
+
+    private var planRoleSection: some View {
+        VStack(alignment: .leading, spacing: 16) {
+            Text("Crucial Role of Each Plan")
+                .font(.headline)
+            
+            VStack(spacing: 12) {
+                roleCard(title: "Plan 1: Pure SIP", role: "Steady Wealth Builder", intent: "Builds assets purely from savings. No debt, but slower results.", color: .blue, icon: "hourglass")
+                
+                if isLoanEligibleGoal {
+                    roleCard(title: "Plan 2: Debt Optimization", role: "Time Saver", intent: "Buy today, pay later. Best for immediate needs but adds interest cost.", color: .purple, icon: "bolt.fill")
+                }
+                
+                roleCard(title: "Plan 3: Leveraged Arbitrage", role: "The Multiplier", intent: "Uses debt to grow capital. High efficiency, requires risk appetite.", color: .pink, icon: "chart.line.uptrend.xyaxis")
+            }
+        }
+    }
+
+    private func roleCard(title: String, role: String, intent: String, color: Color, icon: String) -> some View {
+        HStack(spacing: 16) {
             ZStack {
-                RoundedRectangle(cornerRadius: 14)
-                    .fill(
-                        LinearGradient(
-                            gradient: Gradient(colors: [
-                                .purple,
-                                .purple.opacity(0.8)
-                            ]),
-                            startPoint: .topLeading,
-                            endPoint: .bottomTrailing
-                        )
-                    )
-                    .frame(width: 56, height: 56)
-                Image(systemName: "chart.bar.doc.horizontal")
-                    .foregroundColor(.white).font(.title2)
+                RoundedRectangle(cornerRadius: 12)
+                    .fill(color.opacity(0.1))
+                    .frame(width: 44, height: 44)
+                Image(systemName: icon)
+                    .foregroundColor(color)
+                    .font(.subheadline)
             }
+            
             VStack(alignment: .leading, spacing: 4) {
-                Text("Plan Comparison").font(.headline).fontWeight(.bold)
-                Text("Detailed side-by-side analysis").font(.caption).foregroundColor(.secondary)
+                Text(title)
+                    .font(.system(size: 10, weight: .bold))
+                    .foregroundColor(color)
+                Text(role)
+                    .font(.system(size: 14, weight: .bold))
+                Text(intent)
+                    .font(.system(size: 11))
+                    .foregroundColor(.secondary)
+                    .lineLimit(2)
             }
-            Spacer()
         }
         .padding(16)
+        .frame(maxWidth: .infinity, alignment: .leading)
         .background(AppTheme.cardBackground)
         .cornerRadius(16)
-        .shadow(color: AppTheme.adaptiveShadow, radius: 8, x: 0, y: 2)
+        .shadow(color: AppTheme.adaptiveShadow.opacity(0.1), radius: 4)
     }
 
     private var quickComparisonCard: some View {
         let p1 = results.plan1
-        let p2 = results.plan2
+        let p2 = isLoanEligibleGoal ? results.plan2 : nil
         let p3 = results.plan3
         let score = results.comparisonScore
 
         return VStack(spacing: 0) {
             HStack {
-                Text("").frame(maxWidth: .infinity, alignment: .leading)
+                Text("Metrics").font(.system(size: 10, weight: .bold)).foregroundColor(.secondary).frame(width: 80, alignment: .leading)
                 planHeader(label: "Plan 1", points: score?.plan1Score, color: .blue, icon: "star.fill")
-                planHeader(label: "Plan 2", points: score?.plan2Score, color: .purple, icon: "star.circle.fill")
+                if p2 != nil {
+                    planHeader(label: "Plan 2", points: score?.plan2Score, color: .purple, icon: "creditcard.fill")
+                }
                 if p3 != nil {
                     planHeader(label: "Plan 3", points: score?.plan3Score, color: .pink, icon: "bolt.fill")
                 }
             }
-            .padding(.vertical, 12)
+            .padding(.vertical, 16)
             .padding(.horizontal, 16)
-            .background(AppTheme.cardBackground)
+            .background(Color.secondary.opacity(0.05))
 
-            Divider()
-            ComparisonRow3(label: "Strategy", 
-                          v1: "Pure Invest", 
-                          v2: p2?.name ?? "N/A", 
-                          v3: p3?.name ?? "N/A", 
-                          c1: .blue, c2: .purple, c3: .pink)
-            Divider()
-            ComparisonRow3(label: "Outflow", 
-                          v1: "₹\(formatL_Comp(p1.totalInvested))", 
-                          v2: p2 != nil ? "₹\(formatL_Comp((p2?.totalAmountPaid ?? 0) + (parse(input.amount)*len*12)))" : "N/A", 
-                          v3: p3 != nil ? "₹\(formatL_Comp(p3!.moderate.totalEMIPaid))" : "N/A", 
-                          c1: .primary, c2: .red, c3: .red)
-            Divider()
-            ComparisonRow3(label: "Net Wealth Gain", 
-                          v1: "₹\(formatL_Comp(p1.projectedValue - p1.totalInvested))", 
-                          v2: p2 != nil ? "₹\(formatL_Comp(p2!.netWealthGain))" : "N/A", 
-                          v3: p3 != nil ? "₹\(formatL_Comp(p3!.moderate.netProfit))" : "N/A", 
-                          c1: .green, c2: .green, c3: .green, isHighlight: true)
-            Divider()
-            ComparisonRow3(label: "Commitment", 
-                          v1: "₹\(input.amount)", 
-                          v2: p2 != nil ? "₹\(formatL_Comp(p2!.totalMonthlyCommitment))" : "N/A", 
-                          v3: p3 != nil ? "₹\(formatL_Comp(p3!.monthlyEMI))" : "N/A", 
-                          c1: .primary, c2: .orange, c3: .orange)
+            VStack(spacing: 0) {
+                ComparisonRow3(label: "Total Outflow",
+                              v1: "₹\(formatL_Comp(p1.totalInvested))",
+                              v2: p2 != nil ? "₹\(formatL_Comp((p2?.totalAmountPaid ?? 0)))" : "N/A",
+                              v3: p3 != nil ? "₹\(formatL_Comp(p3!.moderate.totalEMIPaid))" : "N/A",
+                              c1: .primary, c2: .red, c3: .red)
+                Divider()
+                ComparisonRow3(label: "Net Profit",
+                              v1: "₹\(formatL_Comp(p1.projectedValue - p1.totalInvested))",
+                              v2: p2 != nil ? "₹\(formatL_Comp(p2!.netWealthGain))" : "N/A",
+                              v3: p3 != nil ? "₹\(formatL_Comp(p3!.moderate.netProfit))" : "N/A",
+                              c1: .green, c2: .green, c3: .green, isHighlight: true)
+                Divider()
+                ComparisonRow3(label: "Asset Ownership",
+                              v1: "End of \(input.timePeriod)Y",
+                              v2: p2 != nil ? "Immediate" : "N/A",
+                              v3: p3 != nil ? "Immediate" : "N/A",
+                              c1: .secondary, c2: .blue, c3: .blue)
+            }
         }
         .background(AppTheme.cardBackground)
-        .cornerRadius(16)
-        .shadow(color: AppTheme.adaptiveShadow, radius: 10, x: 0, y: 4)
+        .cornerRadius(20)
+        .shadow(color: AppTheme.adaptiveShadow.opacity(0.3), radius: 10, x: 0, y: 4)
     }
 
     private func planHeader(label: String, points: Double?, color: Color, icon: String) -> some View {
@@ -121,193 +185,213 @@ struct PlanComparisonView: View {
         }.frame(maxWidth: .infinity)
     }
 
-    private func parse(_ s: String) -> Double { Double(s.replacingOccurrences(of: ",", with: "")) ?? 0 }
-    private var len: Double { Double(input.timePeriod) ?? 0 }
-
-    private var timelineComparison: some View {
-        VStack(alignment: .leading, spacing: 16) {
-            HStack(spacing: 6) {
-                Image(systemName: "clock.arrow.2.circlepath")
-                    .foregroundColor(.cyan).font(.title3)
-                Text("Wealth Growth Timeline").font(.headline).fontWeight(.bold)
+    private var riskTypeSection: some View {
+        VStack(alignment: .leading, spacing: 12) {
+            Text("Simulate Risk Scenario")
+                .font(.system(size: 14, weight: .bold))
+                .foregroundColor(.secondary)
+            
+            HStack(spacing: 12) {
+                RiskOptionCard(title: "Low", icon: "shield.fill", color: .green, isSelected: selectedComparisonRisk == .low) {
+                    withAnimation { selectedComparisonRisk = .low }
+                }
+                RiskOptionCard(title: "Mid", icon: "chart.bar.fill", color: .orange, isSelected: selectedComparisonRisk == .mid) {
+                    withAnimation { selectedComparisonRisk = .mid }
+                }
+                RiskOptionCard(title: "High", icon: "flame.fill", color: .red, isSelected: selectedComparisonRisk == .high) {
+                    withAnimation { selectedComparisonRisk = .high }
+                }
             }
-            let p1 = results.plan1
-            let p2 = results.plan2
-            let p3 = results.plan3
-            let maxV = Swift.max(p1.projectedValue, Swift.max(p2?.sipReturns ?? 0.1, p3?.moderate.finalValue ?? 0.1))
-            VStack(spacing: 20) {
-                TimelineBar3(year: "Goal Value", v1: p1.projectedValue, v2: p2?.sipReturns ?? 0, v3: p3?.moderate.finalValue ?? 0, maxValue: maxV, animate: animateCharts)
-            }
-            HStack(spacing: 20) {
-                ComparisonLegendItem(label: "P1", color: .blue)
-                ComparisonLegendItem(label: "P2", color: .purple)
-                if p3 != nil { ComparisonLegendItem(label: "P3", color: .pink) }
-            }
-            .padding(.top, 8)
         }
-        .padding(20)
-        .background(AppTheme.cardBackground)
-        .cornerRadius(16)
-        .shadow(color: AppTheme.adaptiveShadow, radius: 10, x: 0, y: 4)
     }
 
-    private var financialBreakdown: some View {
-        let p1 = results.plan1
-        let p2 = results.plan2
-
-        return HStack(spacing: 12) {
-            VStack(alignment: .leading, spacing: 12) {
-                HStack(spacing: 6) {
-                    Image(systemName: "star.circle.fill").foregroundColor(.cyan)
-                    Text("Plan 1").font(.subheadline).fontWeight(.bold)
-                }
-                VStack(alignment: .leading, spacing: 8) {
-                    BreakdownItem(label: "Monthly SIP",    value: "₹\(input.amount)",      color: .blue)
-                    BreakdownItem(label: "Duration",       value: "\(input.timePeriod) years",      color: .secondary)
-                    BreakdownItem(label: "Total Invested", value: "₹\(formatL_Comp(p1.totalInvested))", color: .primary)
-                    BreakdownItem(label: "Projected Value", value: "₹\(formatL_Comp(p1.projectedValue))",  color: .green)
-                    BreakdownItem(label: "Net Gain",        value: "₹\(formatL_Comp(p1.projectedValue - p1.totalInvested))", color: .green)
-                }
-            }
-            .padding(16)
-            .frame(maxWidth: .infinity, alignment: .leading)
-            .background(AppTheme.cardBackground)
-            .cornerRadius(12)
-
-            if let p2 = p2 {
+    private var stabilityCommitmentSection: some View {
+        VStack(alignment: .leading, spacing: 16) {
+            Text("Stability & Monthly Commitment")
+                .font(.system(size: 18, weight: .bold, design: .rounded))
+            
+            HStack(spacing: 12) {
+                // Monthly Load Card
                 VStack(alignment: .leading, spacing: 12) {
-                    HStack(spacing: 6) {
-                        Image(systemName: "car.circle.fill").foregroundColor(.gray)
-                        Text("Plan 2").font(.subheadline).fontWeight(.bold)
-                    }
+                    Label("Monthly Load", systemImage: "creditcard.fill")
+                        .font(.caption).fontWeight(.bold).foregroundColor(.orange)
+                    
                     VStack(alignment: .leading, spacing: 8) {
-                        BreakdownItem(label: "Monthly SIP",    value: "₹\(input.amount)",      color: .blue)
-                        BreakdownItem(label: "Duration",       value: "\(input.timePeriod) years",  color: .secondary)
-                        BreakdownItem(label: "Loan Cost",      value: "₹\(formatL_Comp(p2.totalInterestPaid))",     color: .red)
-                        BreakdownItem(label: "Projected Value", value: "₹\(formatL_Comp(p2.sipReturns))",   color: .green)
-                        BreakdownItem(label: "Net Gain",       value: "₹\(formatL_Comp(p2.netWealthGain))",   color: .green)
+                        commitmentRow(plan: "Plan 1", val: "₹\(InvestmentPlannerEngine.parseAmount(input.amount).toCurrency(compact: true))", color: .blue)
+                        if results.plan2 != nil {
+                            commitmentRow(plan: "Plan 2", val: "₹\(results.plan2!.totalMonthlyCommitment.toCurrency(compact: true))", color: .purple)
+                        }
+                        if results.plan3 != nil {
+                            commitmentRow(plan: "Plan 3", val: "₹\(results.plan3!.monthlyEMI.toCurrency(compact: true))", color: .pink)
+                        }
                     }
                 }
                 .padding(16)
                 .frame(maxWidth: .infinity, alignment: .leading)
-                .background(AppTheme.cardBackground)
-                .cornerRadius(12)
+                .background(Color.orange.opacity(0.05))
+                .cornerRadius(16)
+                
+                // Stability Card
+                VStack(alignment: .leading, spacing: 12) {
+                    Label("Stability", systemImage: "shield.checkered")
+                        .font(.caption).fontWeight(.bold).foregroundColor(.green)
+                    
+                    VStack(alignment: .leading, spacing: 8) {
+                        commitmentRow(plan: "Plan 1", val: "Highest", color: .green)
+                        if results.plan2 != nil {
+                            commitmentRow(plan: "Plan 2", val: p2Stability, color: .orange)
+                        }
+                        if results.plan3 != nil {
+                            commitmentRow(plan: "Plan 3", val: p3Stability, color: .red)
+                        }
+                    }
+                }
+                .padding(16)
+                .frame(maxWidth: .infinity, alignment: .leading)
+                .background(Color.green.opacity(0.05))
+                .cornerRadius(16)
             }
         }
     }
 
-    private var prosConsSection: some View {
-        VStack(spacing: 20) {
-            if let score = results.comparisonScore {
-                scoreDimensionsCard(score: score)
-            }
+    private var p2Stability: String {
+        switch selectedComparisonRisk {
+        case .low: return "High"
+        case .mid: return "Medium"
+        case .high: return "Moderate"
+        }
+    }
 
+    private var p3Stability: String {
+        switch selectedComparisonRisk {
+        case .low: return "Medium"
+        case .mid: return "Low"
+        case .high: return "Aggressive"
+        }
+    }
+
+    private func commitmentRow(plan: String, val: String, color: Color) -> some View {
+        HStack {
+            Text(plan).font(.system(size: 9)).foregroundColor(.secondary)
+            Spacer()
+            Text(val).font(.system(size: 11, weight: .bold)).foregroundColor(color)
+        }
+    }
+
+    private var growthBattleSection: some View {
+        VStack(alignment: .leading, spacing: 20) {
+            VStack(alignment: .leading, spacing: 4) {
+                Text("Growth Potential")
+                    .font(.system(size: 18, weight: .bold, design: .rounded))
+                Text("Comparison under \(selectedComparisonRisk.rawValue.capitalized) Risk scenario")
+                    .font(.caption)
+                    .foregroundColor(.secondary)
+            }
+            
+            let val1 = getDynamicValue(for: 1)
+            let val2 = getDynamicValue(for: 2)
+            let val3 = getDynamicValue(for: 3)
+            let maxV = Swift.max(val1, Swift.max(val2, val3))
+            
+            VStack(spacing: 20) {
+                TimelineBarItem(label: "Plan 1: Pure SIP", value: val1, maxValue: maxV, color: .blue, animate: animateCharts)
+                if results.plan2 != nil {
+                    TimelineBarItem(label: "Plan 2: Debt Optimization", value: val2, maxValue: maxV, color: .purple, animate: animateCharts)
+                }
+                if results.plan3 != nil {
+                    TimelineBarItem(label: "Plan 3: Leveraged Arbitrage", value: val3, maxValue: maxV, color: .pink, animate: animateCharts)
+                }
+            }
+        }
+        .padding(24)
+        .background(AppTheme.cardBackground)
+        .cornerRadius(24)
+        .shadow(color: AppTheme.adaptiveShadow.opacity(0.3), radius: 10, x: 0, y: 4)
+    }
+
+    private func getDynamicValue(for planIndex: Int) -> Double {
+        switch planIndex {
+        case 1:
+            let labelMap: [AstraRiskLevel: String] = [.low: "Conservative", .mid: "Moderate", .high: "Bull Market"]
+            let targetLabel = labelMap[selectedComparisonRisk] ?? "Moderate"
+            let matchingScenario = results.plan1.scenarios.first { $0.name.contains(targetLabel) }
+            return matchingScenario?.finalValue ?? results.plan1.projectedValue
+        case 2:
+            guard let p2 = results.plan2 else { return 0 }
+            let riskFactor: Double = {
+                switch selectedComparisonRisk {
+                case .low: return 0.85
+                case .mid: return 1.0
+                case .high: return 1.25
+                }
+            }()
+            return p2.loanAmount + (p2.sipReturns * riskFactor)
+        case 3:
+            guard let p3 = results.plan3 else { return 0 }
+            switch selectedComparisonRisk {
+            case .low: return p3.conservative.finalValue
+            case .mid: return p3.moderate.finalValue
+            case .high: return p3.aggressive.finalValue
+            }
+        default: return 0
+        }
+    }
+
+    private var battleSummarySection: some View {
+        VStack(alignment: .leading, spacing: 20) {
             HStack(spacing: 12) {
-                VStack(alignment: .leading, spacing: 12) {
-                    Text("Plan 1").font(.subheadline).fontWeight(.bold)
-                    VStack(alignment: .leading, spacing: 8) {
-                        ProConItem(icon: "checkmark.circle.fill", text: "No debt/loan",      isPositive: true)
-                        ProConItem(icon: "checkmark.circle.fill", text: "Lower risk",        isPositive: true)
-                        ProConItem(icon: "xmark.circle.fill",     text: "Delayed Asset",      isPositive: false)
-                        ProConItem(icon: "xmark.circle.fill",     text: "Opportunity Cost",   isPositive: false)
-                    }
+                ZStack {
+                    Circle().fill(Color.blue.gradient).frame(width: 44, height: 44)
+                    Image(systemName: "crown.fill").foregroundColor(.white).font(.system(size: 20))
                 }
-                .padding(16)
-                .frame(maxWidth: .infinity, alignment: .topLeading)
-                .background(AppTheme.cardBackground)
-                .cornerRadius(12)
-
-                VStack(alignment: .leading, spacing: 12) {
-                    Text("Plan 2").font(.subheadline).fontWeight(.bold)
-                    VStack(alignment: .leading, spacing: 8) {
-                        ProConItem(icon: "checkmark.circle.fill", text: "Immediate Asset",  isPositive: true)
-                        ProConItem(icon: "checkmark.circle.fill", text: "Higher Net Gains",  isPositive: true)
-                        ProConItem(icon: "xmark.circle.fill",     text: "EMI Commitment",    isPositive: false)
-                        ProConItem(icon: "xmark.circle.fill",     text: "Interest Paid",     isPositive: false)
-                    }
+                VStack(alignment: .leading, spacing: 2) {
+                    Text("Battle Summary").font(.headline).fontWeight(.bold)
+                    Text("The best fit for your profile").font(.caption).foregroundColor(.secondary)
                 }
-                .padding(16)
-                .frame(maxWidth: .infinity, alignment: .topLeading)
-                .background(AppTheme.cardBackground)
-                .cornerRadius(12)
+                Spacer()
             }
-        }
-    }
-
-    private func scoreDimensionsCard(score: PlanComparisonScore) -> some View {
-        VStack(alignment: .leading, spacing: 16) {
-            HStack(spacing: 6) {
-                Image(systemName: "scalemass.fill").foregroundColor(.cyan)
-                Text("AI Scoring Dimensions").font(.subheadline).fontWeight(.bold)
-            }
-
-            VStack(spacing: 12) {
-                let dimensions: [ScoreDimension] = score.dimensions
-                ForEach(dimensions) { dim in
-                    VStack(alignment: .leading, spacing: 8) {
-                        HStack {
-                            Text(dim.axis).font(.caption).foregroundColor(.secondary)
-                            Spacer()
-                            Text("\(Int(dim.weight * 100))% weight").font(.system(size: 9)).foregroundColor(.secondary)
-                        }
-                        HStack(spacing: 12) {
-                            scoreMiniBar(value: dim.plan1Points, color: .blue)
-                            scoreMiniBar(value: dim.plan2Points, color: .purple)
-                        }
-                    }
+            
+            VStack(alignment: .leading, spacing: 20) {
+                let winner = results.comparisonScore?.winner ?? "Plan 1"
+                HStack {
+                    Text("Primary Recommendation:")
+                        .font(.subheadline).foregroundColor(.secondary)
+                    Text(winner)
+                        .font(.headline).fontWeight(.black).foregroundColor(.blue)
                 }
-            }
-        }
-        .padding(16)
-        .background(AppTheme.cardBackground)
-        .cornerRadius(12)
-        .shadow(color: AppTheme.adaptiveShadow, radius: 4, x: 0, y: 2)
-    }
-
-    private func scoreMiniBar(value: Double, color: Color) -> some View {
-        ZStack(alignment: .leading) {
-            RoundedRectangle(cornerRadius: 2).fill(color.opacity(0.1)).frame(height: 4)
-            RoundedRectangle(cornerRadius: 2).fill(color).frame(width: 80 * (value / 10), height: 4)
-        }
-    }
-
-    private var recommendationSection: some View {
-        VStack(alignment: .leading, spacing: 16) {
-            HStack(spacing: 8) {
-                Image(systemName: "lightbulb.fill")
-                    .foregroundColor(.yellow).font(.title3)
-                Text("Our Recommendation").font(.headline).fontWeight(.bold)
-            }
-            VStack(alignment: .leading, spacing: 12) {
-                HStack(alignment: .top, spacing: 12) {
-                    Image(systemName: "star.fill")
-                        .foregroundColor(.gray).font(.title2)
-                    VStack(alignment: .leading, spacing: 6) {
-                        Text(results.recommendations.primaryRecommendation)
-                            .font(.headline).fontWeight(.bold)
-                            .foregroundColor(results.comparisonScore?.winner == "Plan 3" ? .pink : (results.comparisonScore?.winner == "Plan 2" ? .purple : .blue))
-                        Text(results.recommendations.reason)
-                            .font(.caption).foregroundColor(.secondary)
-                            .fixedSize(horizontal: false, vertical: true)
-                    }
-                }
+                
+                Text(results.recommendations.reason)
+                    .font(.system(size: 13))
+                    .foregroundColor(.primary.opacity(0.8))
+                    .lineSpacing(4)
+                
                 Divider()
-                VStack(alignment: .leading, spacing: 8) {
-                    Text("Highlights:").font(.caption).fontWeight(.semibold)
+                
+                VStack(alignment: .leading, spacing: 12) {
+                    Text("Strategic Insights").font(.caption).fontWeight(.bold).foregroundColor(.primary)
                     ForEach(results.recommendations.tips) { tip in
-                        InsightBullet(text: "\(tip.title): \(tip.description)")
+                        HStack(alignment: .top, spacing: 10) {
+                            Image(systemName: "sparkles").foregroundColor(.blue).font(.caption)
+                            Text(tip.description).font(.caption).foregroundColor(.secondary).lineSpacing(3)
+                        }
                     }
                 }
             }
+            .padding(24)
+            .background(
+                ZStack {
+                    AppTheme.cardBackground
+                    LinearGradient(colors: [Color.blue.opacity(0.07), .clear], startPoint: .topLeading, endPoint: .bottomTrailing)
+                }
+            )
+            .cornerRadius(24)
+            .shadow(color: AppTheme.adaptiveShadow.opacity(0.2), radius: 12)
         }
-        .padding(20)
-        .background(AppTheme.cardBackground)
-        .cornerRadius(16)
-        .shadow(color: AppTheme.adaptiveShadow, radius: 10, x: 0, y: 4)
     }
 
     private func formatL_Comp(_ value: Double) -> String {
         let v = abs(value)
+        if v >= 10000000 { return String(format: "%.1fCr", value / 10000000) }
         if v >= 100000 { return String(format: "%.1fL", value / 100000) }
         if v >= 1000 { return String(format: "%.1fK", value / 1000) }
         return String(format: "%.0f", value)
@@ -392,7 +476,9 @@ struct TimelineBar3: View {
         }
     }
     private func formatL_Bare(_ value: Double) -> String {
-        if value >= 100000 { return String(format: "%.1fL", value / 100000) }
+        let v = abs(value)
+        if v >= 10000000 { return String(format: "%.1fCr", value / 10000000) }
+        if v >= 100000 { return String(format: "%.1fL", value / 100000) }
         return String(format: "%.0f", value)
     }
 }
@@ -453,7 +539,9 @@ struct TimelineBar: View {
     }
 
     private func formatL_Bare(_ value: Double) -> String {
-        if value >= 100000 { return String(format: "%.1fL", value / 100000) }
+        let v = abs(value)
+        if v >= 10000000 { return String(format: "%.1fCr", value / 10000000) }
+        if v >= 100000 { return String(format: "%.1fL", value / 100000) }
         return String(format: "%.0f", value)
     }
 }
@@ -507,5 +595,39 @@ struct InsightBullet: View {
 
     return NavigationStack {
         PlanComparisonView(input: sampleInput, results: sampleResult)
+    }
+}
+
+struct TimelineBarItem: View {
+    let label: String
+    let value: Double
+    let maxValue: Double
+    let color: Color
+    let animate: Bool
+    
+    var body: some View {
+        VStack(alignment: .leading, spacing: 8) {
+            HStack {
+                Text(label).font(.system(size: 12, weight: .bold))
+                Spacer()
+                Text(value.toCurrency(compact: true)).font(.system(size: 12, weight: .black)).foregroundColor(color)
+            }
+            GeometryReader { geo in
+                ZStack(alignment: .leading) {
+                    Capsule().fill(color.opacity(0.1)).frame(height: 10)
+                    Capsule()
+                        .fill(LinearGradient(colors: [color, color.opacity(0.7)], startPoint: .leading, endPoint: .trailing))
+                        .frame(width: animate ? geo.size.width * CGFloat(value / Swift.max(1, maxValue)) : 0, height: 10)
+                }
+            }
+            .frame(height: 10)
+        }
+    }
+    
+    private func formatL_Bare(_ value: Double) -> String {
+        let v = abs(value)
+        if v >= 10000000 { return String(format: "%.1fCr", value / 10000000) }
+        if v >= 100000 { return String(format: "%.1fL", value / 100000) }
+        return String(format: "%.0f", value)
     }
 }

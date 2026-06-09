@@ -1,5 +1,5 @@
 import SwiftUI
-
+import Supabase
 
 @Observable @MainActor
 final class AppStateManager {
@@ -67,7 +67,7 @@ final class AppStateManager {
                 AstraInvestment(investmentType: .mutualFund, subtype: .debtFund,
                                 investmentName: "ICICI Prudential MF", investmentAmount: 480000,
                                 startDate: monthsAgo(12), associatedGoalID: goalCar.id, mode: .sip,
-                                schemeCode: "105703", units: 4500.0, purchaseNAV: 100.0),
+                                schemeCode: "105703", units: 4500.0, purchaseNAV: 10.0),
                 AstraInvestment(investmentType: .stocks, subtype: .largeCap,
                                 investmentName: "Reliance Industries", investmentAmount: 180000,
                                 startDate: monthsAgo(24), mode: .lumpsum),
@@ -165,12 +165,19 @@ final class AppStateManager {
             isSetuConnected: false
         )
     }
-    
-    var hasCompletedOnboarding: Bool = false
+
+    var hasCompletedOnboarding: Bool = UserDefaults.standard.bool(forKey: "hasCompletedOnboarding") {
+        didSet {
+            UserDefaults.standard.set(hasCompletedOnboarding, forKey: "hasCompletedOnboarding")
+        }
+    }
     
     var isAuthenticated: Bool = false
+    var authError: String? = nil
+    var isAuthLoading: Bool = false
     
     var showDashboard: Bool = false
+    var showPostAuthOnboarding: Bool = false
     
     var tempName: String = ""
     var tempEmail: String = ""
@@ -181,6 +188,37 @@ final class AppStateManager {
     
     func savePlan(_ plan: InvestmentPlanModel) {
         savedPlans.append(plan)
+        Task {
+            if let session = try? await supabase.auth.session {
+                try? await SupabaseRepository.shared.savePlan(plan, userId: session.user.id)
+            }
+        }
+    }
+    
+    func followPlan(_ plan: InvestmentPlanModel) {
+        if let index = savedPlans.firstIndex(where: { $0.id == plan.id }) {
+            savedPlans[index].isFollowed = true
+            Task {
+                if let session = try? await supabase.auth.session {
+                    try? await SupabaseRepository.shared.updatePlanFollowStatus(
+                        planId: plan.id, isFollowed: true
+                    )
+                }
+            }
+        }
+    }
+
+    func unfollowPlan(_ plan: InvestmentPlanModel) {
+        if let index = savedPlans.firstIndex(where: { $0.id == plan.id }) {
+            savedPlans[index].isFollowed = false
+            Task {
+                if let session = try? await supabase.auth.session {
+                    try? await SupabaseRepository.shared.updatePlanFollowStatus(
+                        planId: plan.id, isFollowed: false
+                    )
+                }
+            }
+        }
     }
     
     func saveAssessmentToHistory(score: Int, status: String, insights: [String], assessmentInsights: FinancialAssessmentInsights? = nil) {
@@ -192,8 +230,6 @@ final class AppStateManager {
                 keyInsights: insights,
                 insights: assessmentInsights
             )
-            
-            // Check if we already have an assessment for this month/year and update it
             let cal = Calendar.current
             if let index = profile.monthlyHealthAssessments.firstIndex(where: {
                 cal.isDate($0.date, equalTo: Date(), toGranularity: .month) &&
@@ -203,14 +239,143 @@ final class AppStateManager {
             } else {
                 profile.monthlyHealthAssessments.append(newAssessment)
             }
-            
             currentProfile = profile
+            Task {
+                if let session = try? await supabase.auth.session {
+                    try? await SupabaseRepository.shared.saveHealthAssessment(newAssessment, userId: session.user.id)
+                }
+            }
         }
     }
     
     init() {
         Task {
+            await restoreSession()
+        }
+        Task {
+            try? await Task.sleep(nanoseconds: 2_000_000_000) // wait 2 seconds
             await syncMutualFundNAVs()
+        }
+    }
+
+    func restoreSession() async {
+        await MainActor.run { isLoading = true }
+        async let minimumDelay: () = Task.sleep(nanoseconds: 1_500_000_000)
+        do {
+            let session = try await supabase.auth.session
+
+            if let profile = try? await SupabaseRepository.shared.fetchFullProfile(userId: session.user.id) {
+                if let plans = try? await SupabaseRepository.shared.fetchSavedPlans(userId: session.user.id) {
+                    await MainActor.run {
+                        self.savedPlans = plans
+                    }
+                }
+                try? await minimumDelay
+                await MainActor.run {
+                    self.currentProfile = profile
+                    self.isAuthenticated = true
+                    self.hasCompletedOnboarding = true
+                    self.showDashboard = true
+                    self.isLoading = false
+                }
+                recalculateFinancials()
+            } else {
+                try? await supabase.auth.signOut(scope: .local)
+                try? await minimumDelay
+                await MainActor.run {
+                    self.hasCompletedOnboarding = false
+                    self.isLoading = false
+                    
+                }
+            }
+
+        } catch {
+            try? await minimumDelay
+            await MainActor.run {
+                self.hasCompletedOnboarding = false
+                isLoading = false
+            }
+        }
+    }
+    func signUp(name: String, email: String, password: String) async {
+        isAuthLoading = true
+        authError = nil
+        do {
+            let session = try await supabase.auth.signUp(
+                email: email,
+                password: password
+            )
+            try? await supabase.from("users").insert([
+                "id": session.user.id.uuidString,
+                "email": email
+            ]).execute()
+            
+            tempName = name
+            tempEmail = email
+            tempPassword = password
+            setupEmptyProfile(name: name)
+            isAuthenticated = true
+            showPostAuthOnboarding = true
+            hasCompletedOnboarding = true  // ← ADD THIS
+            
+            // After successful sign up — load existing data if any
+            if let profile = try? await SupabaseRepository.shared.fetchFullProfile(userId: session.user.id) {
+                self.currentProfile = profile
+                recalculateFinancials()
+            }
+            
+        } catch {
+            authError = error.localizedDescription
+        }
+        isAuthLoading = false
+    }
+
+    func signIn(email: String, password: String) async {
+        isAuthLoading = true
+        authError = nil
+        do {
+            let session = try await supabase.auth.signIn(
+                email: email,
+                password: password
+            )
+            
+            if let profile = try? await SupabaseRepository.shared.fetchFullProfile(userId: session.user.id) {
+                
+                self.currentProfile = profile
+                recalculateFinancials()
+                isAuthenticated = true
+                showPostAuthOnboarding = false
+                hasCompletedOnboarding = true
+                showDashboard = true
+            } else {
+               
+                setupEmptyProfile(name: session.user.email ?? "User")
+                isAuthenticated = true
+                showPostAuthOnboarding = true
+                hasCompletedOnboarding = true
+            }
+            
+            if let plans = try? await SupabaseRepository.shared.fetchSavedPlans(userId: session.user.id) {
+                self.savedPlans = plans
+            }
+            
+        } catch {
+            authError = error.localizedDescription
+        }
+        isAuthLoading = false
+    }
+    func signOut() async {
+        do {
+            try await supabase.auth.signOut(scope: .local)
+            isAuthenticated = false
+            
+            hasCompletedOnboarding = false
+            showDashboard = false
+            showPostAuthOnboarding = false
+            currentProfile = nil
+            savedPlans = []
+        } catch {
+            authError = error.localizedDescription
         }
     }
     
@@ -235,7 +400,7 @@ final class AppStateManager {
         
         let basic = AstraBasicDetails(
             name: assessmentData.name,
-            age: Int(assessmentData.age) ?? 0,
+            age: Int(assessmentData.age.trimmingCharacters(in: .whitespaces)) ?? 0,
             gender: assessmentData.gender == .male ? .male : .female,
             maritalStatus: .single,
             adultDependents: self.currentProfile?.basicDetails.adultDependents ?? Int(assessmentData.numberOfDependents) ?? 1,
@@ -251,7 +416,7 @@ final class AppStateManager {
                 investmentCount: assessmentData.investmentEntries.count
             ),
             investmentHorizon: Self.deriveInvestmentHorizon(
-                age: Int(assessmentData.age) ?? 30,
+                age: Int(assessmentData.age.trimmingCharacters(in: .whitespaces)) ?? 30,
                 dependents: Int(assessmentData.numberOfDependents) ?? 0
             )
         )
@@ -431,12 +596,14 @@ final class AppStateManager {
         
         if var existingProfile = self.currentProfile {
             // MERGE LOGIC
+            existingProfile.signUp.email = assessmentData.email.isEmpty
+                    ? existingProfile.signUp.email : assessmentData.email
             
             // Merge Investments
             for newInv in newInvestments {
-                if !existingProfile.investments.contains(where: { 
-                    $0.investmentName.lowercased() == newInv.investmentName.lowercased() && 
-                    abs($0.investmentAmount - newInv.investmentAmount) < 1.0 
+                if !existingProfile.investments.contains(where: {
+                    $0.investmentName.lowercased() == newInv.investmentName.lowercased() &&
+                    abs($0.investmentAmount - newInv.investmentAmount) < 1.0
                 }) {
                     existingProfile.investments.append(newInv)
                 }
@@ -444,8 +611,8 @@ final class AppStateManager {
             
             // Merge Loans
             for newLoan in newLoans {
-                if !existingProfile.loans.contains(where: { 
-                    abs($0.loanAmount - newLoan.loanAmount) < 1.0 && 
+                if !existingProfile.loans.contains(where: {
+                    abs($0.loanAmount - newLoan.loanAmount) < 1.0 &&
                     $0.loanType == newLoan.loanType
                 }) {
                     existingProfile.loans.append(newLoan)
@@ -454,19 +621,34 @@ final class AppStateManager {
             
             // Merge Insurances
             for newIns in newInsurances {
-                if !existingProfile.insurances.contains(where: { 
-                    $0.policyNumber == newIns.policyNumber || 
+                if !existingProfile.insurances.contains(where: {
+                    $0.policyNumber == newIns.policyNumber ||
                     ($0.insuranceType == newIns.insuranceType && abs($0.sumAssured - newIns.sumAssured) < 1.0)
                 }) {
                     existingProfile.insurances.append(newIns)
                 }
             }
             
-            // Update basic details but preserve existing fields if they were more detailed
-            existingProfile.basicDetails.monthlyIncome = incomeValue
-            existingProfile.basicDetails.monthlyIncomeAfterTax = incomeValue
-            existingProfile.basicDetails.monthlyExpenses = expensesValue
-            existingProfile.basicDetails.emergencyFundAmount = emergencyValue
+            // Update basic details only if assessment data is non-empty
+            if !assessmentData.income.isEmpty {
+                existingProfile.basicDetails.monthlyIncome = incomeValue
+                existingProfile.basicDetails.monthlyIncomeAfterTax = incomeValue
+            }
+            if !assessmentData.expenditure.isEmpty {
+                existingProfile.basicDetails.monthlyExpenses = expensesValue
+            }
+            if !assessmentData.emergencyFundAmount.isEmpty {
+                existingProfile.basicDetails.emergencyFundAmount = emergencyValue
+            }
+            if !assessmentData.name.trimmingCharacters(in: .whitespaces).isEmpty {
+                existingProfile.basicDetails.name = assessmentData.name
+            }
+            let parsedAge = Int(assessmentData.age.trimmingCharacters(in: .whitespaces)) ?? 0
+            if parsedAge > 0 {
+                existingProfile.basicDetails.age = parsedAge
+            }
+            existingProfile.basicDetails.gender = assessmentData.gender == .male ? .male : .female
+            existingProfile.basicDetails.incomeType = assessmentData.incomeType == .fixed ? .fixed : .variable
             
             self.currentProfile = existingProfile
         } else {
@@ -490,6 +672,17 @@ final class AppStateManager {
         
         Task {
             await syncMutualFundNAVs()
+        }
+        Task {
+            if let session = try? await supabase.auth.session,
+               let profile = currentProfile {
+                do {
+                    try await SupabaseRepository.shared.syncFullProfile(profile, userId: session.user.id)
+                    print("Supabase sync successful for user: \(session.user.id)")
+                } catch {
+                    print("Supabase sync failed: \(error)")
+                }
+            }
         }
     }
     
@@ -630,6 +823,23 @@ final class AppStateManager {
             
             currentProfile = profile
             recalculateFinancials()
+            let df = DateFormatter()
+            df.dateFormat = "yyyy-MM"
+            let monthKey = df.string(from: Date())
+            Task {
+                if let session = try? await supabase.auth.session {
+                    do {
+                        try await SupabaseRepository.shared.saveCashflowSnapshot(
+                            cashflow,
+                            monthKey: monthKey,
+                            userId: session.user.id
+                        )
+                        print("Cashflow saved to Supabase")
+                    } catch {
+                        print("Cashflow save failed: \(error)")
+                    }
+                }
+            }
         }
     }
     
@@ -638,6 +848,11 @@ final class AppStateManager {
             profile.goals.append(goal)
             currentProfile = profile
             recalculateFinancials()
+            Task {
+                if let session = try? await supabase.auth.session {
+                    try? await SupabaseRepository.shared.saveGoal(goal, userId: session.user.id)
+                }
+            }
         }
     }
     
@@ -647,14 +862,25 @@ final class AppStateManager {
             profile.goals[index] = goal
             currentProfile = profile
             recalculateFinancials()
+            Task {
+                if let session = try? await supabase.auth.session {
+                    try? await SupabaseRepository.shared.saveGoal(goal, userId: session.user.id)
+                }
+            }
         }
     }
     
     func deleteGoal(at indexSet: IndexSet) {
         if var profile = currentProfile {
+            let toDelete = indexSet.map { profile.goals[$0] }
             profile.goals.remove(atOffsets: indexSet)
             currentProfile = profile
             recalculateFinancials()
+            Task {
+                for goal in toDelete {
+                    try? await SupabaseRepository.shared.deleteGoal(goal.id)
+                }
+            }
         }
     }
     
@@ -664,6 +890,9 @@ final class AppStateManager {
             profile.goals.remove(at: index)
             currentProfile = profile
             recalculateFinancials()
+            Task {
+                try? await SupabaseRepository.shared.deleteGoal(goal.id)
+            }
         }
     }
     
@@ -674,6 +903,9 @@ final class AppStateManager {
             recalculateFinancials()
             Task {
                 await syncMutualFundNAVs()
+                if let session = try? await supabase.auth.session {
+                    try? await SupabaseRepository.shared.saveInvestment(investment, userId: session.user.id)
+                }
             }
         }
     }
@@ -686,15 +918,24 @@ final class AppStateManager {
             recalculateFinancials()
             Task {
                 await syncMutualFundNAVs(force: true)
+                if let session = try? await supabase.auth.session {
+                    try? await SupabaseRepository.shared.saveInvestment(investment, userId: session.user.id)
+                }
             }
         }
     }
     
     func deleteInvestment(at indexSet: IndexSet) {
         if var profile = currentProfile {
+            let toDelete = indexSet.map { profile.investments[$0] }
             profile.investments.remove(atOffsets: indexSet)
             currentProfile = profile
             recalculateFinancials()
+            Task {
+                for inv in toDelete {
+                    try? await SupabaseRepository.shared.deleteInvestment(inv.id)
+                }
+            }
         }
     }
     
@@ -704,6 +945,9 @@ final class AppStateManager {
             profile.investments.remove(at: index)
             currentProfile = profile
             recalculateFinancials()
+            Task {
+                try? await SupabaseRepository.shared.deleteInvestment(investment.id)
+            }
         }
     }
     
@@ -711,14 +955,23 @@ final class AppStateManager {
         if var profile = currentProfile {
             profile.emergencyFundAllocation = allocation
             currentProfile = profile
+            Task {
+                if let session = try? await supabase.auth.session {
+                    try? await SupabaseRepository.shared.saveEmergencyFundAllocation(allocation, userId: session.user.id)
+                }
+            }
         }
     }
-    
     func addLoan(_ loan: AstraLoan) {
         if var profile = currentProfile {
             profile.loans.append(loan)
             currentProfile = profile
             recalculateFinancials()
+            Task {
+                if let session = try? await supabase.auth.session {
+                    try? await SupabaseRepository.shared.saveLoan(loan, userId: session.user.id)
+                }
+            }
         }
     }
     
@@ -728,14 +981,25 @@ final class AppStateManager {
             profile.loans[index] = loan
             currentProfile = profile
             recalculateFinancials()
+            Task {
+                if let session = try? await supabase.auth.session {
+                    try? await SupabaseRepository.shared.saveLoan(loan, userId: session.user.id)
+                }
+            }
         }
     }
     
     func deleteLoan(at indexSet: IndexSet) {
         if var profile = currentProfile {
+            let toDelete = indexSet.map { profile.loans[$0] }
             profile.loans.remove(atOffsets: indexSet)
             currentProfile = profile
             recalculateFinancials()
+            Task {
+                for loan in toDelete {
+                    try? await SupabaseRepository.shared.deleteLoan(loan.id)
+                }
+            }
         }
     }
     
@@ -745,14 +1009,23 @@ final class AppStateManager {
             profile.loans.remove(at: index)
             currentProfile = profile
             recalculateFinancials()
+            Task {
+                try? await SupabaseRepository.shared.deleteLoan(loan.id)
+            }
         }
     }
+    
     
     func addInsurance(_ insurance: AstraInsurance) {
         if var profile = currentProfile {
             profile.insurances.append(insurance)
             currentProfile = profile
             recalculateFinancials()
+            Task {
+                if let session = try? await supabase.auth.session {
+                    try? await SupabaseRepository.shared.saveInsurance(insurance, userId: session.user.id)
+                }
+            }
         }
     }
     
@@ -762,17 +1035,27 @@ final class AppStateManager {
             profile.insurances[index] = insurance
             currentProfile = profile
             recalculateFinancials()
+            Task {
+                if let session = try? await supabase.auth.session {
+                    try? await SupabaseRepository.shared.saveInsurance(insurance, userId: session.user.id)
+                }
+            }
         }
     }
     
     func deleteInsurance(at indexSet: IndexSet) {
         if var profile = currentProfile {
+            let toDelete = indexSet.map { profile.insurances[$0] }
             profile.insurances.remove(atOffsets: indexSet)
             currentProfile = profile
             recalculateFinancials()
+            Task {
+                for ins in toDelete {
+                    try? await SupabaseRepository.shared.deleteInsurance(ins.id)
+                }
+            }
         }
     }
-    
     func investments(for goalID: UUID) -> [AstraInvestment] {
         currentProfile?.investments.filter { $0.associatedGoalID == goalID } ?? []
     }
@@ -827,11 +1110,6 @@ final class AppStateManager {
                     updated = true
                 }
                 
-                // 2. Populate Missing Installments / Recalculate Units
-                // ✅ Bug Fix: Previously this only ran when installments were EMPTY.
-                // That meant if you had 1 installment from March, April's SIP was
-                // never added (guard was false). Now we check if a new installment
-                // is due: the expected count (months since startDate) vs actual count.
                 let expectedCount: Int = {
                     let cal = Calendar.current
                     var count = 0
@@ -879,7 +1157,6 @@ final class AppStateManager {
             } else if inv.investmentType == .stocks {
                 guard let symbol = inv.symbol else { continue }
                 
-                // Live price is already updated in the batch call above
                 
                 // Populate Missing Installments for Stocks
                 if profile.investments[i].installments.isEmpty {
@@ -892,7 +1169,6 @@ final class AppStateManager {
                         profile.investments[i].installments = simulatedInstallments
                         profile.investments[i].quantity = sipUnits
 
-                        // Bug 1 Fix: compute weighted-average entry price for SIP
                         let totalPaid = simulatedInstallments.reduce(0.0) { $0 + $1.amount }
                         let totalUnits = simulatedInstallments.reduce(0.0) { $0 + $1.units }
                         if totalUnits > 0 {
@@ -909,7 +1185,6 @@ final class AppStateManager {
                         profile.investments[i].installments = simulatedInstallments
                         profile.investments[i].quantity = units
 
-                        // Bug 1 Fix: set purchaseNAV for lumpsum from the transaction NAV
                         if let tx = simulatedInstallments.first {
                             profile.investments[i].purchaseNAV = tx.nav
                         }
