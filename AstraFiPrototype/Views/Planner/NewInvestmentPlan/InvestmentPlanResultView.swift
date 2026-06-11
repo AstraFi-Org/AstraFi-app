@@ -112,7 +112,7 @@ struct InvestmentPlanResultView: View {
                                 icon: "arrow.up.right.circle.fill",
                                 color: .purple,
                                 bestFor: "Efficiency",
-                                metric: "Astra Optimized",
+                                metric: "Implement on Your own Risk",
                                 isRecommended: true
                             )
                         }
@@ -215,7 +215,7 @@ struct InvestmentPlanResultView: View {
             }
             .padding(.horizontal, 20)
         }
-        .navigationTitle("\(results.goalCategory.rawValue) Strategy")
+        .navigationTitle("\(results.goalCategory.rawValue) Illustration")
         .navigationBarTitleDisplayMode(.inline)
         .background(AppTheme.appBackground(for: colorScheme))
     }
@@ -254,7 +254,7 @@ struct InvestmentPlanResultView: View {
 //                        Text("ASTRA CHOICE")
 //                            .font(.system(size: 10, weight: .black, design: .rounded))
                         Spacer()
-                        Text("RECOMMENDED")
+                        Text("HIGH RISK")
                             .font(.system(size: 9, weight: .bold))
                             .opacity(0.8)
                     }
