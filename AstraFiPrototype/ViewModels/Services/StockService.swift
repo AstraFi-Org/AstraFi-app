@@ -44,6 +44,13 @@ class StockService {
     
     func searchStocks(query: String) async -> [AstraStock] {
         if query.isEmpty { return [] }
+        if apiKey.isEmpty {
+            let q = query.lowercased()
+            return mockStocks.map { (stock: $0, score: SearchUtility.fuzzyMatchScore(query: q, target: $0.name) + SearchUtility.fuzzyMatchScore(query: q, target: $0.symbol)) }
+                .filter { $0.score > 0.5 }
+                .sorted { $0.score > $1.score }
+                .map { $0.stock }
+        }
         
         let encodedQuery = query.addingPercentEncoding(withAllowedCharacters: .urlQueryAllowed) ?? query
         let urlString = "\(baseURL)/search?q=\(encodedQuery)&token=\(apiKey)"
@@ -74,6 +81,10 @@ class StockService {
     }
     
     func fetchPrice(symbol: String) async -> AstraStock? {
+        if apiKey.isEmpty {
+            return await fetchPriceFromYahoo(symbol: symbol)
+        }
+
         let finnhubSymbol = toFinnhubSymbol(symbol)
         let urlString = "\(baseURL)/quote?symbol=\(finnhubSymbol)&token=\(apiKey)"
         guard let url = URL(string: urlString) else { return nil }

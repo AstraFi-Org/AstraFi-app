@@ -67,9 +67,9 @@ struct SplashScreenView: View {
                             .frame(width: 82, height: 82)
                         Image(.splashScreen)
                             .resizable()
-                            .scaledToFit()
-                            .frame(width: 48, height: 48)
-                            .foregroundStyle(.white)
+                            .scaledToFill()
+                            .frame(width: 82, height: 82)
+                            .clipShape(Circle())
                     }
                 }
                 .scaleEffect(logoScale)

@@ -55,7 +55,7 @@ struct Plan2DetailView: View {
         } message: {
              Text(alertMessage)
         }
-        .navigationTitle("Debt Optimization Plan")
+        .navigationTitle("Debt Scenario")
         .navigationBarTitleDisplayMode(.inline)
         .onAppear {
             if loanOverride == 0 {
@@ -104,7 +104,7 @@ struct Plan2DetailView: View {
                         .foregroundColor(.blue)
                 }
                 
-                Text("Complete this goal today, repay amount in installments.")
+                Text("Illustrative loan path only. Check affordability, rates, fees, and repayment risk before acting.")
                     .font(.system(size: 13, weight: .medium))
                     .foregroundColor(.secondary)
             }
@@ -153,7 +153,7 @@ struct Plan2DetailView: View {
                     let goalName = input.purposeOfInvestment.isEmpty ? result.name : input.purposeOfInvestment
                     appState.addGoal(AstraGoal(goalName: goalName, targetAmount: activeResult.netWealthGain, currentAmount: 0, targetDate: targetDate))
 
-                    alertMessage = "Plan active! Debt optimization goal added."
+                    alertMessage = "Scenario active! Debt goal added."
                 }
                 showingSaveAlert = true
             }) {
@@ -250,7 +250,7 @@ struct Plan2DetailView: View {
         let newResult = InvestmentPlannerEngine.recalculatePlan2(
             input: input,
             overridenLoan: loanOverride, 
-            overridenSIP: 0,
+            overridenSIP: InvestmentPlannerEngine.parseAmount(input.amount),
             overridenTenure: tenureOverride,
             emiFrequency: emiFrequency,
             interestType: interestType
@@ -360,7 +360,7 @@ struct Plan2DetailView: View {
                 LoanMetricRow(label: "Loan Amount", value: activeResult.loanAmount.toCurrency(), color: .blue)
                 LoanMetricRow(label: "Interest Cost", value: activeResult.totalInterestPaid.toCurrency(), color: .red)
                 LoanMetricRow(label: "Tenure", value: "\(tenureOverride) years", color: .secondary)
-                LoanMetricRow(label: "ROI", value: "\(String(format: "%.1f", activeResult.loanRate))%", color: .orange)
+                LoanMetricRow(label: "Loan Rate", value: "\(String(format: "%.1f", activeResult.loanRate))%", color: .orange)
             }
         }
         .padding(24)

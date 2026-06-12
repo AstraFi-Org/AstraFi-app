@@ -225,7 +225,7 @@ class InvestmentPlannerEngine {
             points.append(ValidationPoint(
                 icon: "exclamationmark.circle.fill",
                 title: "Aggressive Allocation",
-                detail: "SIP exceeds recommended safe surplus. Ensure expenses are tightly managed.",
+                detail: "SIP exceeds the suggested safe surplus. Ensure expenses are tightly managed.",
                 severity: .warning
             ))
         } else {
@@ -257,7 +257,7 @@ class InvestmentPlannerEngine {
             points.append(ValidationPoint(
                 icon: "creditcard.fill",
                 title: "High Debt Load",
-                detail: "Your DTI is >50%. We recommend lowering debt before new investments.",
+                detail: "Your DTI is >50%. Consider lowering debt before new investments.",
                 severity: .warning
             ))
         }
@@ -371,7 +371,7 @@ class InvestmentPlannerEngine {
                                 description: "Maximum exposure to emerging small-sized companies with multi-bagger potential.", 
                                 fundExamples: ["Example: Small Cap Focused Growth Funds"],
                                 howItWorks: "Highly volatile market-linked investment. Can have sharp drops and huge gains.",
-                                whyIncluded: "Designed for users with long horizons who want to maximize their final wealth."),
+                                whyIncluded: "Designed for long-horizon scenarios seeking higher growth potential."),
                 AssetAllocation(name: "Mid Cap Fund", percentage: 25, expectedCAGR: 17.5, riskLevel: .high, 
                                 role: "Growth Acceleration",
                                 description: "Invests in medium-sized companies that are rapidly expanding their business.", 
@@ -444,7 +444,11 @@ class InvestmentPlannerEngine {
         var hl: [String] = []
         hl.append("Blended CAGR: \(String(format: "%.1f", portfolio.blendedCAGR))%")
         hl.append("Lumpsum boost: ₹\(formatL_Internal(fvLump))")
-        if reachesGoal { hl.append("✅ Goal Achievable") } else { hl.append("⚠️ Shortfall: ₹\(formatL_Internal(shortfall))") }
+        if reachesGoal {
+            hl.append("May reach goal under assumptions")
+        } else {
+            hl.append("Illustrative shortfall: ₹\(formatL_Internal(shortfall))")
+        }
 
         return Plan1Result(
             totalInvested: totalInvested,
@@ -470,7 +474,7 @@ class InvestmentPlannerEngine {
                                       interestType: InterestType = .compounded) -> Plan2Result? {
         let saved  = parseAmount(input.savedAmount)
         let target = parseAmount(input.targetAmount)
-        let amt    = 0.0
+        let amt    = parseAmount(input.amount)
         let tenure = Swift.max(1, Int(input.timePeriod) ?? 1)
         let months = tenure * 12
 
@@ -755,14 +759,14 @@ class InvestmentPlannerEngine {
         )
 
         var recStrategy = "Moderate"
-        var recReason = "A balanced approach is best for long-term growth with managed risk."
+        var recReason = "This balanced scenario is shown for education. Review the downside cases before acting."
 
         if healthCtx.healthGrade == "C" || healthCtx.healthGrade == "D" {
             recStrategy = "Conservative"
-            recReason = "Lower stability detected. We recommend a conservative strategy to protect your principal."
+            recReason = "Lower stability detected. This conservative scenario reduces exposure, but it is not a recommendation."
         } else if healthCtx.investmentScore > 80 {
             recStrategy = "Aggressive"
-            recReason = "Your high investment score allows for an aggressive strategy to maximize arbitrage gains."
+            recReason = "Your profile can be stress-tested against an aggressive scenario, including higher loss potential."
         }
 
         let worstSim = runLeveragedSimulation(name: "Worst", loanAmount: loanAmt, loanRate: rate, tenure: years, portfolio: conservativePortfolio, emiFrequency: emiFrequency, phases: lumpsumPhases, emiFromPocket: emiFromPocket, isSIPMode: investmentMode == "SIP", overridenReturn: 4.0)
@@ -971,8 +975,8 @@ class InvestmentPlannerEngine {
 
     private static func generateRecommendations(input: InvestmentPlanInputModel, plan1: Plan1Result, plan2: Plan2Result?,
                                                feasibility: FeasibilityResult, healthCtx: FinancialHealthContext) -> PlanRecommendations {
-        let reason = plan1.reachesGoal ? "Plan 1 is fully on track." : "Plan 2 may bridge your goal shortfall."
-        return PlanRecommendations(primaryRecommendation: plan1.reachesGoal ? "Plan 1" : (plan2 != nil ? "Plan 2" : "Plan 1"),
+        let reason = plan1.reachesGoal ? "Plan 1 may be on track under the selected assumptions." : "Compare alternate scenarios to understand the possible shortfall."
+        return PlanRecommendations(primaryRecommendation: plan1.reachesGoal ? "Plan 1 scenario" : (plan2 != nil ? "Plan 2 scenario" : "Plan 1 scenario"),
                                    reason: reason, tips: [])
     }
 

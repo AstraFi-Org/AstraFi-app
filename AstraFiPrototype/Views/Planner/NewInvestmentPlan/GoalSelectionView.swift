@@ -143,6 +143,7 @@ struct GoalGridItem: View {
     let goal: GoalOption
     let isSelected: Bool
     let action: () -> Void
+    @Environment(\.colorScheme) private var colorScheme
 
     var body: some View {
         Button(action: action) {
@@ -168,11 +169,15 @@ struct GoalGridItem: View {
             .background(
                 RoundedRectangle(cornerRadius: 16)
                     .stroke(isSelected ? Color.orange : Color.clear, lineWidth: 2)
-                    .background(isSelected ? Color.black.opacity(0.3) : AppTheme.cardBackground)
+                    .background(isSelected ? selectedBackground : AppTheme.cardBackground)
             )
             .cornerRadius(16)
         }
         .buttonStyle(PlainButtonStyle())
+    }
+
+    private var selectedBackground: Color {
+        colorScheme == .dark ? AppTheme.elevatedCardBackground : Color.orange.opacity(0.10)
     }
 }
 
