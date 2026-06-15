@@ -44,11 +44,12 @@ struct SIPGrowthComparisonCard: View {
     }
     
     var body: some View {
-        VStack(spacing: 20) {
+        VStack(spacing: 22) {
             // Header
-            HStack {
+            HStack(alignment: .center, spacing: 12) {
                 Text("SIP Growth Comparison")
                     .font(.system(size: 18, weight: .bold, design: .rounded))
+                    .lineLimit(2)
                 Spacer()
                 Button {
                     showingInfo = true
@@ -60,9 +61,9 @@ struct SIPGrowthComparisonCard: View {
             }
             
             // Inputs
-            VStack(spacing: 16) {
+            VStack(spacing: 20) {
                 // Monthly SIP Input
-                VStack(alignment: .leading, spacing: 8) {
+                VStack(alignment: .leading, spacing: 10) {
                     HStack {
                         Text("Monthly Investment")
                             .font(.subheadline)
@@ -77,7 +78,7 @@ struct SIPGrowthComparisonCard: View {
                 }
                 
                 // Duration Input
-                VStack(alignment: .leading, spacing: 8) {
+                VStack(alignment: .leading, spacing: 10) {
                     HStack {
                         Text("Investment Duration")
                             .font(.subheadline)
@@ -91,12 +92,13 @@ struct SIPGrowthComparisonCard: View {
                         .accentColor(.blue)
                 }
             }
-            .padding(16)
+            .padding(.horizontal, 18)
+            .padding(.vertical, 20)
             .background(Color.blue.opacity(0.04))
             .cornerRadius(16)
             
             // 2-Column Comparison
-            HStack(spacing: 12) {
+            HStack(alignment: .top, spacing: 14) {
                 comparisonColumn(
                     title: "Single Fund",
                     result: singleFundResult,
@@ -140,12 +142,13 @@ struct SIPGrowthComparisonCard: View {
                         bar(height: (diversifiedResult.futureValue / maxFV) * 40, color: .green)
                     }
                 }
-                .padding(14)
+                .padding(16)
                 .background(Color.green.opacity(0.08))
                 .cornerRadius(12)
             }
         }
-        .padding(.vertical, 20)          // ← only vertical, no horizontal
+        .padding(.horizontal, 20)
+        .padding(.vertical, 22)
         .background(AppTheme.cardBackground)
         .cornerRadius(24)
         .clipped()
@@ -157,30 +160,36 @@ struct SIPGrowthComparisonCard: View {
     }
     
     private func comparisonColumn(title: String, result: SIPResult, isHighlighted: Bool, caption: String) -> some View {
-        VStack(alignment: .leading, spacing: 12) {
+        VStack(alignment: .leading, spacing: 14) {
             Text(title)
                 .font(.caption)
                 .fontWeight(.bold)
                 .foregroundColor(isHighlighted ? .blue : .secondary)
+                .lineLimit(2)
+                .minimumScaleFactor(0.86)
+                .fixedSize(horizontal: false, vertical: true)
+                .frame(maxWidth: .infinity, alignment: .leading)
                 .padding(.horizontal, 8)
                 .padding(.vertical, 4)
                 .background(isHighlighted ? Color.blue.opacity(0.1) : Color.clear)
                 .cornerRadius(6)
             
-            VStack(alignment: .leading, spacing: 8) {
+            VStack(alignment: .leading, spacing: 10) {
                 metricRow(label: "Invested", value: "₹\(fmtLarge(result.invested))")
                 metricRow(label: "Est. Value", value: "₹\(fmtLarge(result.futureValue))", color: .primary)
                 metricRow(label: "Returns", value: "\(String(format: "%.1f", result.rate))%", color: .green)
             }
             
             Text(caption)
-                .font(.system(size: 9))
+                .font(.system(size: 10))
                 .foregroundColor(.secondary)
                 .italic()
                 .padding(.top, 4)
         }
-        .padding(14)
+        .padding(.horizontal, 16)
+        .padding(.vertical, 18)
         .frame(maxWidth: .infinity, alignment: .leading)
+        .frame(minHeight: 172, alignment: .topLeading)
         .background(isHighlighted ? Color.blue.opacity(0.03) : Color.clear)
         .cornerRadius(16)
         .overlay(
@@ -267,13 +276,16 @@ struct InfoBottomSheet: View {
                         .foregroundColor(.blue)
                         .fixedSize(horizontal: false, vertical: true)
                 }
+                .frame(maxWidth: .infinity, alignment: .leading)
 
                 // Scenario 1: ONE Fund
                 VStack(alignment: .leading, spacing: 12) {
-                    HStack {
+                    HStack(alignment: .firstTextBaseline, spacing: 10) {
                         Image(systemName: "chart.bar.fill")
                         Text("Scenario 1: ₹5000 in ONE fund")
                             .font(.headline)
+                            .lineLimit(2)
+                            .fixedSize(horizontal: false, vertical: true)
                     }
                     .foregroundColor(.primary)
                     
@@ -294,21 +306,25 @@ struct InfoBottomSheet: View {
                         BulletText(text: "Invested amount = ₹6,00,000")
                         BulletText(text: "Final value ≈ **₹11.6 – 11.8 lakh**")
                     }
+                    .frame(maxWidth: .infinity, alignment: .leading)
                     .padding(12)
                     .background(Color.primary.opacity(0.03))
                     .cornerRadius(12)
                 }
                 .padding(16)
+                .frame(maxWidth: .infinity, alignment: .leading)
                 .background(Color.primary.opacity(0.02))
                 .cornerRadius(16)
                 .overlay(RoundedRectangle(cornerRadius: 16).stroke(Color.primary.opacity(0.05), lineWidth: 1))
                 
                 // Scenario 2: Diversified
                 VStack(alignment: .leading, spacing: 12) {
-                    HStack {
+                    HStack(alignment: .firstTextBaseline, spacing: 10) {
                         Image(systemName: "chart.pie.fill")
                         Text("Scenario 2: Diversified (AstraFi Idea)")
                             .font(.headline)
+                            .lineLimit(2)
+                            .fixedSize(horizontal: false, vertical: true)
                     }
                     .foregroundColor(.primary)
                     
@@ -325,6 +341,8 @@ struct InfoBottomSheet: View {
                             .font(.footnote).bold()
                         Text("(2000 × 10%) + (1500 × 16%) + (1500 × 15%) ≈ **13.3%**")
                             .font(.system(size: 11, design: .monospaced))
+                            .fixedSize(horizontal: false, vertical: true)
+                            .frame(maxWidth: .infinity, alignment: .leading)
                             .padding(10)
                             .background(Color.blue.opacity(0.08))
                             .cornerRadius(8)
@@ -334,6 +352,7 @@ struct InfoBottomSheet: View {
                     }
                 }
                 .padding(16)
+                .frame(maxWidth: .infinity, alignment: .leading)
                 .background(Color.blue.opacity(0.03))
                 .cornerRadius(16)
                 .overlay(RoundedRectangle(cornerRadius: 16).stroke(Color.blue.opacity(0.1), lineWidth: 1))
@@ -347,6 +366,7 @@ struct InfoBottomSheet: View {
                     BulletPoint(text: "Long-term investing benefits most from the consistency of a balanced portfolio.")
                     BulletPoint(text: "If one asset underperforms, others (like Small Cap) can balance the returns.")
                 }
+                .frame(maxWidth: .infinity, alignment: .leading)
                 
                 // Summary Comparison
                 VStack(spacing: 12) {
@@ -373,8 +393,11 @@ struct InfoBottomSheet: View {
                     .background(Color.green.opacity(0.1))
                     .cornerRadius(12)
                 }
+                .frame(maxWidth: .infinity)
             }
-            .padding(24)
+            .frame(maxWidth: .infinity, alignment: .leading)
+            .padding(.horizontal, 24)
+            .padding(.vertical, 24)
         }
     }
 }
@@ -387,7 +410,9 @@ struct BulletText: View {
             Text(LocalizedStringKey(text))
                 .font(.footnote)
                 .foregroundColor(.secondary)
+                .fixedSize(horizontal: false, vertical: true)
         }
+        .frame(maxWidth: .infinity, alignment: .leading)
     }
 }
 
@@ -395,12 +420,17 @@ struct AllocationRow: View {
     let label: String
     let value: String
     var body: some View {
-        HStack {
+        HStack(spacing: 8) {
             Circle().fill(Color.blue).frame(width: 4, height: 4)
-            Text(label).font(.footnote).foregroundColor(.secondary)
+            Text(label)
+                .font(.footnote)
+                .foregroundColor(.secondary)
+                .lineLimit(1)
+                .minimumScaleFactor(0.86)
             Spacer()
             Text(value).font(.footnote).bold()
         }
+        .frame(maxWidth: .infinity)
     }
 }
 

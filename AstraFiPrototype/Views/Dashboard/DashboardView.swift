@@ -3,7 +3,6 @@ import SwiftUI
 struct DashboardView: View {
     @Environment(\.colorScheme) var colorScheme
     @Environment(AppStateManager.self) var appState
-    @State private var bellAnimate = false
     
     private var profile: AstraUserProfile? { appState.currentProfile }
     private var investments: [AstraInvestment] { profile?.investments ?? [] }
@@ -39,12 +38,9 @@ struct DashboardView: View {
         .background(AppTheme.appBackground(for: colorScheme))
         .toolbar {
             ToolbarItem(placement: .navigationBarTrailing) {
-                Button {
-                    withAnimation(.spring(response: 0.3, dampingFraction: 0.5)) { bellAnimate.toggle() }
-                } label: {
+                NavigationLink(destination: NotificationsView()) {
                     Image(systemName: "bell.fill")
                 }
-                .rotationEffect(.degrees(bellAnimate ? -15 : 0))
             }
             ToolbarItem(placement: .navigationBarTrailing) {
                 NavigationLink(destination: ProfileView()) {
@@ -455,4 +451,3 @@ private extension Double {
         return "\(sign)\(symbol)\(reducedString)\(suffix)"
     }
 }
-

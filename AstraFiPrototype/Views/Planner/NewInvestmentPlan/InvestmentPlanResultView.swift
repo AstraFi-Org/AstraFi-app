@@ -77,7 +77,7 @@ struct InvestmentPlanResultView: View {
                     //                )
                     
                     let targetVal = Double(input.targetAmount.replacingOccurrences(of: ",", with: "")) ?? 0
-                    Text("Based on your target of ₹\(targetVal >= 100000 ? String(format: "%.1fL", targetVal / 100000) : input.targetAmount), we've identified the most efficient paths to your goal.")
+                    Text("Based on your target of ₹\(targetVal >= 100000 ? String(format: "%.1fL", targetVal / 100000) : input.targetAmount), here are educational scenarios to compare possible planning paths.")
                         .font(.system(size: 15, design: .rounded))
                         .multilineTextAlignment(.center)
                         .foregroundStyle(.secondary)
@@ -96,38 +96,38 @@ struct InvestmentPlanResultView: View {
                             icon: "chart.line.uptrend.xyaxis.circle.fill",
                             color: .blue,
                             bestFor: "Long-term Wealth",
-                            metric: "8–12% Yield",
+                            metric: "8–12% CAGR assumption",
                             isRecommended: false
                         )
                     }
                     .buttonStyle(PlainButtonStyle())
                     
-                    // Plan 3: Loan + Invest (Arbitrage)
+                    // Plan 3: Loan + Invest stress test
                     if let p3 = results.plan3 {
                         NavigationLink(destination: Plan3DetailView(input: input, result: p3)) {
                             StrategySelectionCard(
                                 id: 3,
-                                title: "Loan & Arbitrage Strategy",
-                                subtitle: "Leverage debt to build assets faster.",
+                                title: "Loan Stress-Test Scenario",
+                                subtitle: "Compare debt-funded investing risks.",
                                 icon: "arrow.up.right.circle.fill",
                                 color: .purple,
                                 bestFor: "Efficiency",
-                                metric: "Astra Optimized",
-                                isRecommended: true
+                                metric: "High risk simulation",
+                                isRecommended: false
                             )
                         }
                         .buttonStyle(PlainButtonStyle())
                     } else {
-                        NavigationLink(destination: noPlanWarning(message: "Arbitrage strategy requires a higher credit surplus.")) {
+                        NavigationLink(destination: noPlanWarning(message: "This stress-test scenario requires higher credit surplus.")) {
                             StrategySelectionCard(
                                 id: 3,
-                                title: "Loan & Arbitrage Strategy",
-                                subtitle: "Leverage debt to build assets faster.",
+                                title: "Loan Stress-Test Scenario",
+                                subtitle: "Compare debt-funded investing risks.",
                                 icon: "arrow.up.right.circle.fill",
                                 color: .purple,
                                 bestFor: "Efficiency",
                                 metric: "Check Surplus",
-                                isRecommended: true
+                                isRecommended: false
                             )
                         }
                         .buttonStyle(PlainButtonStyle())
@@ -150,7 +150,7 @@ struct InvestmentPlanResultView: View {
                             }
                             .buttonStyle(PlainButtonStyle())
                         } else {
-                            NavigationLink(destination: noPlanWarning(message: "Traditional loan not recommended for your current profile.")) {
+                            NavigationLink(destination: noPlanWarning(message: "This loan scenario is not suitable for your current profile inputs.")) {
                                 StrategySelectionCard(
                                     id: 2,
                                     title: "Traditional \(results.goalCategory.rawValue) Loan",
@@ -215,7 +215,7 @@ struct InvestmentPlanResultView: View {
             }
             .padding(.horizontal, 20)
         }
-        .navigationTitle("\(results.goalCategory.rawValue) Strategy")
+        .navigationTitle("\(results.goalCategory.rawValue) Illustration")
         .navigationBarTitleDisplayMode(.inline)
         .background(AppTheme.appBackground(for: colorScheme))
     }
@@ -254,7 +254,7 @@ struct InvestmentPlanResultView: View {
 //                        Text("ASTRA CHOICE")
 //                            .font(.system(size: 10, weight: .black, design: .rounded))
                         Spacer()
-                        Text("RECOMMENDED")
+                        Text("HIGH RISK")
                             .font(.system(size: 9, weight: .bold))
                             .opacity(0.8)
                     }

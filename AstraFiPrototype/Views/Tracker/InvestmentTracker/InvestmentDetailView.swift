@@ -196,9 +196,7 @@ struct InvestmentDetailView: View {
                 }
             }
             .padding()
-            .background(Color(uiColor: .systemBackground))
-            .cornerRadius(12)
-            .shadow(color: Color.black.opacity(colorScheme == .dark ? 0.3 : 0.05), radius: 8, x: 0, y: 2)
+            .investmentDetailCardStyle(colorScheme: colorScheme)
         } else {
             EmptyView()
         }
@@ -283,9 +281,7 @@ struct InvestmentDetailView: View {
             .frame(height: 120).padding(.horizontal)
         }
         .padding(.vertical)
-        .background(Color(uiColor: .systemBackground))
-        .cornerRadius(12)
-        .shadow(color: Color.black.opacity(colorScheme == .dark ? 0.3 : 0.05), radius: 8, x: 0, y: 2)
+        .investmentDetailCardStyle(colorScheme: colorScheme)
     }
 
     @ViewBuilder
@@ -320,9 +316,7 @@ struct InvestmentDetailView: View {
             Divider().padding(.leading)
             detailRow(label: "Investment Mode", value: inv?.mode.rawValue ?? "—")
         }
-        .background(Color(uiColor: .systemBackground))
-        .cornerRadius(12)
-        .shadow(color: Color.black.opacity(colorScheme == .dark ? 0.3 : 0.05), radius: 8, x: 0, y: 2)
+        .investmentDetailCardStyle(colorScheme: colorScheme)
     }
 
     @ViewBuilder
@@ -339,9 +333,7 @@ struct InvestmentDetailView: View {
                     dateRow(label: "Projected Closing", date: nil)
                 }
             }
-            .background(Color(uiColor: .systemBackground))
-            .cornerRadius(12)
-            .shadow(color: Color.black.opacity(colorScheme == .dark ? 0.3 : 0.05), radius: 8, x: 0, y: 2)
+            .investmentDetailCardStyle(colorScheme: colorScheme)
 
             Text("Fund Analysis").font(.title2).fontWeight(.bold).padding(.top, 8)
             fundAnalysisChart
@@ -548,9 +540,7 @@ struct InvestmentDetailView: View {
             }
         }
         .padding()
-        .background(Color(uiColor: .systemBackground))
-        .cornerRadius(12)
-        .shadow(color: Color.black.opacity(colorScheme == .dark ? 0.3 : 0.05), radius: 8, x: 0, y: 2)
+        .investmentDetailCardStyle(colorScheme: colorScheme)
     }
 
     @ViewBuilder
@@ -596,9 +586,7 @@ struct InvestmentDetailView: View {
                     }
                 }
             }
-            .background(Color(uiColor: .systemBackground))
-            .cornerRadius(12)
-            .shadow(color: Color.black.opacity(colorScheme == .dark ? 0.3 : 0.05), radius: 8, x: 0, y: 2)
+            .investmentDetailCardStyle(colorScheme: colorScheme)
         }
     }
 
@@ -671,6 +659,20 @@ struct InvestmentDetailView: View {
 
 }
 
+private extension View {
+    func investmentDetailCardStyle(colorScheme: ColorScheme) -> some View {
+        background(
+            Color(uiColor: .secondarySystemGroupedBackground),
+            in: RoundedRectangle(cornerRadius: 18, style: .continuous)
+        )
+        .overlay {
+            RoundedRectangle(cornerRadius: 18, style: .continuous)
+                .stroke(colorScheme == .dark ? Color.white.opacity(0.10) : Color.black.opacity(0.04), lineWidth: 1)
+        }
+        .shadow(color: Color.black.opacity(colorScheme == .dark ? 0.35 : 0.05), radius: 10, x: 0, y: 3)
+    }
+}
+
 #Preview {
     let sampleState = AppStateManager.withSampleData()
     let sampleID = sampleState.currentProfile?.investments.first?.id ?? UUID()
@@ -679,4 +681,3 @@ struct InvestmentDetailView: View {
             .environment(sampleState)
     }
 }
-

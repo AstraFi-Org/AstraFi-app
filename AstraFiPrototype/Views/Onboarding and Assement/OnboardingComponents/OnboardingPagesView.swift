@@ -13,7 +13,7 @@ let onboardingPages: [OnboardingPage] = [
 
     .init(imageName: "onboarding_investment_plan",
           title: "Plan your Investment\nAround Goals",
-          subtitle: "Goal based Planning to \n Achieve Faster"),
+          subtitle: "Goal based planning with\nclear assumptions"),
 
     .init(imageName: "onboarding_track_assets",
           title: "Track Investment\nAnd Assets",

@@ -367,7 +367,8 @@ struct EmergencyFundSectionView: View {
                     Image(systemName: "info.circle").font(.system(size: 13)).foregroundStyle(.secondary)
                     Text("Complete your financial assessment to unlock personalised projections").font(.system(size: 12, design: .rounded)).foregroundStyle(.secondary)
                 }
-                .padding(12).background(Color.secondary.opacity(0.07)).clipShape(RoundedRectangle(cornerRadius: 10, style: .continuous))
+                .padding(12)
+                .adaptivePlanCard(tint: AppTheme.auraIndigo, colorScheme: colorScheme, cornerRadius: 10, tintOpacity: 0.04)
             }
         }
     }
@@ -393,8 +394,7 @@ struct EmergencyFundSectionView: View {
             Spacer()
         }
         .padding(12)
-        .background((goalMet ? AppTheme.auraGreen : AppTheme.auraIndigo).opacity(0.07))
-        .clipShape(RoundedRectangle(cornerRadius: 12, style: .continuous))
+        .adaptivePlanCard(tint: goalMet ? AppTheme.auraGreen : AppTheme.auraIndigo, colorScheme: colorScheme, cornerRadius: 12, tintOpacity: 0.05)
     }
 
     // MARK: Allocation Row
@@ -403,7 +403,7 @@ struct EmergencyFundSectionView: View {
             Text("Allocation").font(.system(size: 15, weight: .medium))
             Spacer()
             if currentSaved == 0 {
-                Text("No Allocation").font(.system(size: 13, weight: .medium, design: .rounded)).foregroundStyle(.secondary).padding(.horizontal, 14).padding(.vertical, 7).background(Color.secondary.opacity(0.10)).clipShape(Capsule())
+                Text("No Allocation").font(.system(size: 13, weight: .medium, design: .rounded)).foregroundStyle(.secondary).padding(.horizontal, 14).padding(.vertical, 7).background(Color(uiColor: .tertiarySystemGroupedBackground)).clipShape(Capsule())
             } else {
                 HStack(spacing: 8) {
                     if hasAllocation && showManage {
@@ -435,7 +435,7 @@ struct EmergencyFundSectionView: View {
             }
             .font(.system(size: 11, weight: .semibold, design: .rounded)).foregroundStyle(.secondary)
             .padding(.horizontal, 14).padding(.vertical, 10)
-            .background(Color.secondary.opacity(0.06)).clipShape(RoundedRectangle(cornerRadius: 12, style: .continuous))
+            .adaptivePlanCard(tint: AppTheme.auraIndigo, colorScheme: colorScheme, cornerRadius: 12, tintOpacity: 0.025)
 
             if instruments.isEmpty {
                 VStack(spacing: 8) {
@@ -449,7 +449,7 @@ struct EmergencyFundSectionView: View {
                         if row.id != instruments.last?.id { Divider().padding(.leading, 14) }
                     }
                 }
-                .background(Color.secondary.opacity(0.04)).clipShape(RoundedRectangle(cornerRadius: 12, style: .continuous))
+                .adaptivePlanCard(tint: AppTheme.auraIndigo, colorScheme: colorScheme, cornerRadius: 12, tintOpacity: 0.02)
 
                 let tI = instruments.reduce(0) { $0 + $1.invested }
                 let tR = instruments.reduce(0) { $0 + $1.annualReturn }
@@ -598,6 +598,7 @@ private struct InstrumentInfoContent: Identifiable {
 // MARK: - Allocation Recommendation Screen
 struct AllocationRecommendationScreen: View {
     @Environment(AppStateManager.self) var appState
+    @Environment(\.colorScheme) private var colorScheme
 
     let currentHolding: Double
     let riskTolerance: AstraRiskTolerance
@@ -629,6 +630,9 @@ struct AllocationRecommendationScreen: View {
         }
         .navigationTitle("Recommended Plan")
         .navigationBarTitleDisplayMode(.inline)
+        .background(Color(uiColor: .systemGroupedBackground).ignoresSafeArea())
+        .toolbarBackground(Color(uiColor: .systemGroupedBackground), for: .navigationBar)
+        .toolbarBackground(.visible, for: .navigationBar)
         .alert(activeInfo?.name ?? "", isPresented: .init(
             get: { activeInfo != nil },
             set: { if !$0 { activeInfo = nil } }
@@ -648,14 +652,18 @@ struct AllocationRecommendationScreen: View {
             VStack(alignment: .leading, spacing: 3) { Text(riskLabel + " Profile").font(.system(size: 16, weight: .bold, design: .rounded)); Text("Based on your financial assessment").font(.system(size: 12, design: .rounded)).foregroundStyle(.secondary) }
             Spacer()
             Text(riskTolerance.rawValue).font(.system(size: 12, weight: .semibold, design: .rounded)).foregroundStyle(riskColor).padding(.horizontal, 10).padding(.vertical, 5).background(riskColor.opacity(0.12)).clipShape(Capsule())
-        }.padding(16).background(Color.secondary.opacity(0.06)).clipShape(RoundedRectangle(cornerRadius: 16, style: .continuous))
+        }
+        .padding(16)
+        .adaptivePlanCard(tint: riskColor, colorScheme: colorScheme, tintOpacity: 0.04)
     }
 
     private var rationaleView: some View {
         HStack(alignment: .top, spacing: 10) {
             Image(systemName: "lightbulb.fill").font(.system(size: 13)).foregroundStyle(Color(hex: "#FF9F0A")).padding(.top, 1)
             Text(riskRationale).font(.system(size: 13, design: .rounded)).foregroundStyle(.secondary).fixedSize(horizontal: false, vertical: true)
-        }.padding(14).background(Color(hex: "#FF9F0A").opacity(0.08)).clipShape(RoundedRectangle(cornerRadius: 12, style: .continuous))
+        }
+        .padding(14)
+        .adaptivePlanCard(tint: Color(hex: "#FF9F0A"), colorScheme: colorScheme, cornerRadius: 12, tintOpacity: 0.08)
     }
 
     private var instrumentsSection: some View {
@@ -694,11 +702,16 @@ struct AllocationRecommendationScreen: View {
                         HStack(alignment: .top, spacing: 8) { Text("\(i+1)").font(.system(size: 10, weight: .bold, design: .rounded)).foregroundStyle(.white).frame(width: 18, height: 18).background(color.opacity(0.8)).clipShape(Circle()); Text(s).font(.system(size: 12, design: .rounded)).fixedSize(horizontal: false, vertical: true) }
                     }
                     HStack(alignment: .top, spacing: 6) { Image(systemName: "info.circle.fill").font(.system(size: 11)).foregroundStyle(.secondary).padding(.top, 1); Text(guide.taxNote).font(.system(size: 11, design: .rounded)).foregroundStyle(.secondary).fixedSize(horizontal: false, vertical: true) }
-                        .padding(10).background(Color(.systemFill)).clipShape(RoundedRectangle(cornerRadius: 8, style: .continuous))
+                        .padding(10).background(Color(uiColor: .tertiarySystemGroupedBackground)).clipShape(RoundedRectangle(cornerRadius: 8, style: .continuous))
                     Button { activeGuide = guide } label: { HStack(spacing: 4) { Image(systemName: "book.fill").font(.system(size: 11)); Text("View Full Guide").font(.system(size: 12, weight: .semibold, design: .rounded)) }.foregroundStyle(.white).padding(.horizontal, 14).padding(.vertical, 8).background(color).clipShape(Capsule()) }.buttonStyle(PlainButtonStyle())
-                }.padding(12).background(color.opacity(0.05)).clipShape(RoundedRectangle(cornerRadius: 10, style: .continuous)).transition(.opacity.combined(with: .move(edge: .top)))
+                }
+                .padding(12)
+                .adaptivePlanCard(tint: color, colorScheme: colorScheme, cornerRadius: 10, tintOpacity: 0.05)
+                .transition(.opacity.combined(with: .move(edge: .top)))
             }
-        }.padding(14).background(color.opacity(0.05)).clipShape(RoundedRectangle(cornerRadius: 14, style: .continuous))
+        }
+        .padding(14)
+        .adaptivePlanCard(tint: color, colorScheme: colorScheme, cornerRadius: 14, tintOpacity: 0.06)
     }
 
     private var returnSummary: some View {
@@ -706,13 +719,32 @@ struct AllocationRecommendationScreen: View {
             VStack(alignment: .leading, spacing: 4) { Text("Blended Annual Return").font(.system(size: 13, design: .rounded)).foregroundStyle(.secondary); Text(String(format: "~%.2f%% p.a.", blendedReturn*100)).font(.system(size: 20, weight: .bold, design: .rounded)).foregroundStyle(riskColor) }
             Spacer()
             VStack(alignment: .trailing, spacing: 4) { Text("Est. Annual Earnings").font(.system(size: 13, design: .rounded)).foregroundStyle(.secondary); Text("+\(annualReturn.toCurrency(compact: true))").font(.system(size: 20, weight: .bold, design: .rounded)).foregroundStyle(Color(hex: "#30D158")) }
-        }.padding(16).background(Color.secondary.opacity(0.06)).clipShape(RoundedRectangle(cornerRadius: 16, style: .continuous))
+        }
+        .padding(16)
+        .adaptivePlanCard(tint: riskColor, colorScheme: colorScheme, tintOpacity: 0.03)
     }
 
     private var actionButtons: some View {
         VStack(spacing: 12) {
             Button { pTBills = rec.t; pSavings = rec.s; pSweepFD = rec.f; onAccept() } label: { Text("Apply This Plan").font(.system(size: 16, weight: .bold, design: .rounded)).foregroundStyle(.white).frame(maxWidth: .infinity).padding(.vertical, 16).background(riskColor).clipShape(RoundedRectangle(cornerRadius: 14, style: .continuous)) }.buttonStyle(PlainButtonStyle())
             Button { pTBills = rec.t; pSavings = rec.s; pSweepFD = rec.f; onCustomize() } label: { Text("Customize Manually").font(.system(size: 15, weight: .semibold, design: .rounded)).foregroundStyle(riskColor).frame(maxWidth: .infinity).padding(.vertical, 14).background(riskColor.opacity(0.10)).clipShape(RoundedRectangle(cornerRadius: 14, style: .continuous)) }.buttonStyle(PlainButtonStyle())
+        }
+    }
+}
+
+private extension View {
+    func adaptivePlanCard(tint: Color, colorScheme: ColorScheme, cornerRadius: CGFloat = 16, tintOpacity: Double) -> some View {
+        background {
+            RoundedRectangle(cornerRadius: cornerRadius, style: .continuous)
+                .fill(Color(uiColor: .secondarySystemGroupedBackground))
+                .overlay {
+                    RoundedRectangle(cornerRadius: cornerRadius, style: .continuous)
+                        .fill(tint.opacity(colorScheme == .dark ? tintOpacity * 1.6 : tintOpacity))
+                }
+        }
+        .overlay {
+            RoundedRectangle(cornerRadius: cornerRadius, style: .continuous)
+                .stroke(colorScheme == .dark ? Color.white.opacity(0.08) : Color.black.opacity(0.035), lineWidth: 1)
         }
     }
 }

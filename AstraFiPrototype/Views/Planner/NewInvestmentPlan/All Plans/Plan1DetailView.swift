@@ -68,9 +68,9 @@ struct Plan1DetailView: View {
         .alert("Plan Assumptions", isPresented: $showAssumptionsAlert) {
             Button("Got It", role: .cancel) { }
         } message: {
-            Text("This projection assumes steady growth based on historical performance, reinvestment of returns, and no significant market crashes. Actual returns may vary.")
+            Text("Educational illustration only. Not investment advice. Values use fixed CAGR assumptions, reinvestment of returns, and no taxes, fees, or severe market drawdowns unless shown. Actual returns may vary.")
         }
-        .navigationTitle("Investment Recommendation")
+        .navigationTitle("Investment Scenario")
         .navigationBarTitleDisplayMode(.inline)
         .onAppear {
             setupInitialValues()
@@ -287,7 +287,7 @@ struct Plan1DetailView: View {
                 Text("Important Notice")
                     .font(.subheadline)
                     .fontWeight(.bold)
-                Text("This plan is based on certain assumptions. Kindly pursue this plan at your own risk.")
+                Text("Educational illustration only. This is not investment advice; actual returns, taxes, fees, and market conditions may change the outcome.")
                     .font(.caption)
                     .foregroundColor(.secondary)
             }
@@ -406,7 +406,7 @@ struct Plan1DetailView: View {
                     Image(systemName: "safari.fill")
                         .foregroundColor(.blue)
                         .font(.title3)
-                    Text("Your Investment Plan")
+                    Text("Illustrative Allocation")
                         .font(.title3)
                         .fontWeight(.black)
                     Spacer()
@@ -482,7 +482,7 @@ struct Plan1DetailView: View {
                         .foregroundColor(.blue)
                         .frame(width: 20)
                         .padding(.top, 2)
-                    Text("Analyze your investments periodically. Add a lumpsum amount when the market is at an all-time low to maximize future gains.")
+                    Text("Review your investments periodically. Any extra lumpsum should be based on your surplus, emergency fund, and risk comfort.")
                         .font(.subheadline)
                         .foregroundColor(.secondary)
                 }
@@ -492,7 +492,7 @@ struct Plan1DetailView: View {
                         .foregroundColor(.green)
                         .frame(width: 20)
                         .padding(.top, 2)
-                    Text("Consider stepping up your SIP amount every 6 months or whenever your income increases to reach your goal faster.")
+                    Text("Consider testing a SIP step-up when income increases to see how it may affect the goal timeline.")
                         .font(.subheadline)
                         .foregroundColor(.secondary)
                 }
@@ -504,7 +504,7 @@ struct Plan1DetailView: View {
                 Image(systemName: "crown.fill")
                     .foregroundColor(.purple)
                     .font(.title3)
-                Text("\(Text("To unlock advanced insights, market timing alerts, and automated step-up recommendations, upgrade to ").foregroundColor(.secondary))\(Text("AstraPremium.").fontWeight(.bold).foregroundColor(.purple))")
+                Text("\(Text("To unlock advanced scenario insights, assumption controls, and automated step-up reminders, upgrade to ").foregroundColor(.secondary))\(Text("AstraPremium.").fontWeight(.bold).foregroundColor(.purple))")
                     .font(.caption)
             }
             .padding(12)
@@ -647,4 +647,3 @@ struct DonutSegment: View {
     .environment(TrackerViewModel())
     .environment(AppStateManager.withSampleData())
 }
-
