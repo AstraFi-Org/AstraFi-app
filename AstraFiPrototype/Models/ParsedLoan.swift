@@ -29,10 +29,8 @@ struct ParsedLoan: Identifiable {
         entry.type = type
         entry.amount = String(format: "%.0f", amount)
         entry.interestRate = String(format: "%.2f", interestRate)
-        
-        // Convert months to years
-        let years = Double(tenure) / 12.0
-        entry.tenure = String(format: "%.0f", years)
+        entry.tenure = "\(tenure)"
+        entry.startDate = startDate
         
         entry.loanName = loanName ?? ""
         if let m = moratoriumMonths {

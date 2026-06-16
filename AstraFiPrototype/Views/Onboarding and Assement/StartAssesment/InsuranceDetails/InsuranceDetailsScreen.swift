@@ -12,25 +12,26 @@ struct InsuranceDetailsScreen: View {
     private var income: Double { Double(data.income) ?? 0 }
 
     var body: some View {
-        ZStack(alignment: .bottom) {
+        ZStack {
             Color(.systemGroupedBackground).ignoresSafeArea()
 
-            ScrollView(showsIndicators: false) {
-                VStack(spacing: 0) {
+            VStack(spacing: 0) {
+                ScrollView(showsIndicators: false) {
+                    VStack(spacing: 0) {
 
-                    // ── Page header
-                    VStack(alignment: .leading, spacing: 6) {
-                        Text("Insurance & Protection")
-                            .font(.system(size: 28, weight: .bold))
-                        Text("Your coverage keeps your family and finances safe.")
-                            .font(.system(size: 15, design: .rounded))
-                            .foregroundStyle(.secondary)
-                            .fixedSize(horizontal: false, vertical: true)
-                    }
-                    .frame(maxWidth: .infinity, alignment: .leading)
-                    .padding(.horizontal, 20)
-                    .padding(.top, 24)
-                    .padding(.bottom, 24)
+                        // ── Page header
+                        VStack(alignment: .leading, spacing: 6) {
+                            Text("Insurance & Protection")
+                                .font(.system(size: 28, weight: .bold))
+                            Text("Your coverage keeps your family and finances safe.")
+                                .font(.system(size: 15, design: .rounded))
+                                .foregroundStyle(.secondary)
+                                .fixedSize(horizontal: false, vertical: true)
+                        }
+                        .frame(maxWidth: .infinity, alignment: .leading)
+                        .padding(.horizontal, 20)
+                        .padding(.top, 24)
+                        .padding(.bottom, 24)
 
                     // ── Your Insurance Status
                     sectionCard {
@@ -192,33 +193,34 @@ struct InsuranceDetailsScreen: View {
                     .padding(.horizontal, 20)
                     .padding(.top, 20)
 
-                    Spacer().frame(height: 120)
-                }
-            }
-            .animation(.spring(response: 0.45, dampingFraction: 0.8), value: data.isInsured)
-            .animation(.spring(response: 0.45, dampingFraction: 0.8), value: data.areDependentsInsured)
-            .animation(.spring(response: 0.3, dampingFraction: 0.75), value: data.insuranceEntries.first?.coverAmount)
-            .animation(.spring(response: 0.3, dampingFraction: 0.75), value: data.numberOfDependents)
-            .safeAreaInset(edge: .top, spacing: 0) {
-                AssessmentProgressBar(progress: 0.9)
-                    .padding(.horizontal, 20)
-                    .padding(.vertical, 10)
-                    .background(Color(.systemGroupedBackground))
-            }
-
-            AssessmentFooterButton(label: "See My Report", enabled: true, isLast: true) {
-                // Merge dependent insurance policies into the main insuranceEntries
-                // so the report and AppStateManager both see them as one unified list.
-                for depEntry in data.dependentInsuranceEntries {
-                    if !data.insuranceEntries.contains(where: { $0.id == depEntry.id }) {
-                        data.insuranceEntries.append(depEntry)
+                        Spacer().frame(height: 16)
                     }
                 }
-                // Persist insurance (and all other assessment) data to the profile
-                // before navigating to the report so that the report always reads
-                // from an up-to-date profile rather than the raw assessment object.
-                appState.updateProfile(from: data)
-                goNext = true
+                .animation(.spring(response: 0.45, dampingFraction: 0.8), value: data.isInsured)
+                .animation(.spring(response: 0.45, dampingFraction: 0.8), value: data.areDependentsInsured)
+                .animation(.spring(response: 0.3, dampingFraction: 0.75), value: data.insuranceEntries.first?.coverAmount)
+                .animation(.spring(response: 0.3, dampingFraction: 0.75), value: data.numberOfDependents)
+                .safeAreaInset(edge: .top, spacing: 0) {
+                    AssessmentProgressBar(progress: 0.9)
+                        .padding(.horizontal, 20)
+                        .padding(.vertical, 10)
+                        .background(Color(.systemGroupedBackground))
+                }
+
+                AssessmentFooterButton(label: "See My Report", enabled: true, isLast: true) {
+                    // Merge dependent insurance policies into the main insuranceEntries
+                    // so the report and AppStateManager both see them as one unified list.
+                    for depEntry in data.dependentInsuranceEntries {
+                        if !data.insuranceEntries.contains(where: { $0.id == depEntry.id }) {
+                            data.insuranceEntries.append(depEntry)
+                        }
+                    }
+                    // Persist insurance (and all other assessment) data to the profile
+                    // before navigating to the report so that the report always reads
+                    // from an up-to-date profile rather than the raw assessment object.
+                    appState.updateProfile(from: data)
+                    goNext = true
+                }
             }
         }
         .navigationTitle("Financial Assessment")

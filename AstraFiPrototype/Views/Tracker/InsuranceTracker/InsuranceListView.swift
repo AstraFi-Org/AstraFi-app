@@ -46,7 +46,7 @@ struct InsuranceListView: View {
                         .padding(.top, 8)
                     }
                     .frame(maxWidth: .infinity).padding(40)
-                    .background(Color(uiColor: .systemBackground)).cornerRadius(16)
+                    .background(Color(uiColor: .secondarySystemGroupedBackground)).cornerRadius(16)
                 } else {
                     ForEach(insurances) { ins in
                         NavigationLink(destination: InsuranceDetailView(insurance: ins)) {
@@ -127,7 +127,7 @@ struct InsuranceListView: View {
             }
         }
         .padding(20)
-        .background(Color(uiColor: .systemBackground))
+        .background(Color(uiColor: .secondarySystemGroupedBackground))
         .cornerRadius(16)
         .shadow(color: Color(uiColor: .label).opacity(0.06), radius: 8, x: 0, y: 2)
     }

@@ -104,7 +104,7 @@ struct Plan3DetailView: View {
             interestRate = input.interestRate ?? 10.5
             recalculate()
         }
-        .navigationTitle("Leveraged Investing")
+        .navigationTitle("Loan Stress Test")
         .navigationBarTitleDisplayMode(.inline)
         .alert("Action Successful", isPresented: $showingSaveAlert) {
             Button("OK", role: .cancel) { }
@@ -121,7 +121,7 @@ struct Plan3DetailView: View {
     private var savePlanFooter: some View {
         Button(action: {
             let model = InvestmentPlanModel(
-                name: "Leveraged: \(activeResult.recommendedStrategy)",
+                name: "Loan stress test: \(activeResult.recommendedStrategy)",
                 dateSaved: DateFormatter.localizedString(from: Date(), dateStyle: .medium, timeStyle: .none),
                 targetGoal: input.purposeOfInvestment,
                 input: input
@@ -130,7 +130,7 @@ struct Plan3DetailView: View {
             appState.showDashboard = true
         }) {
             HStack(spacing: 12) {
-                Text("Save & Follow Plan")
+                Text("Save Scenario")
                     .font(.headline).fontWeight(.bold)
             }
             .foregroundColor(.white)
@@ -389,7 +389,7 @@ struct Plan3DetailView: View {
                     Spacer()
                     
                     Button(action: {
-                        alertMessage = "Leveraged Investing (Plan 3) involves borrowing capital at a lower interest rate and investing it in assets with higher expected returns. This strategy aims to build wealth by capturing the 'spread' between investment growth and loan interest."
+                        alertMessage = "This is an educational stress test for debt-funded investing. It is not a recommendation to borrow and invest. Compare downside cases, EMI pressure, taxes, fees, and your emergency fund before making any decision."
                         showingSaveAlert = true
                     }) {
                         Image(systemName: "info.circle")
@@ -397,7 +397,7 @@ struct Plan3DetailView: View {
                             .font(.caption)
                     }
                 }
-                Text("Plan Logic Take a loan and invest it as per the descriptive plan shown below to see how you can build significant wealth.")
+                Text("Educational stress test only. Borrowing to invest can amplify losses and EMI pressure; actual results may be materially different.")
                     .font(.caption)
                     .foregroundColor(.secondary)
             }
@@ -814,7 +814,7 @@ struct Plan3DetailView: View {
     private var recommendationCard: some View {
         VStack(alignment: .leading, spacing: 12) {
             HStack {
-                Text("Astra Recommendation").font(.headline)
+                Text("Scenario Note").font(.headline)
             }
             Text(activeResult.recommendationReason)
                 .font(.subheadline)

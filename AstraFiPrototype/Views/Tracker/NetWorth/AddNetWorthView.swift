@@ -244,7 +244,7 @@ struct AddNetWorthView: View {
                     .padding(.vertical, 14)
                 }
             }
-            .background(Color(.systemBackground))
+            .background(Color(.secondarySystemGroupedBackground))
             .cornerRadius(14)
             .shadow(color: .black.opacity(colorScheme == .dark ? 0.2 : 0.04), radius: 6, x: 0, y: 2)
         }
@@ -330,7 +330,7 @@ struct AddNetWorthView: View {
                     .padding(.vertical, 14)
                 }
             }
-            .background(Color(.systemBackground))
+            .background(Color(.secondarySystemGroupedBackground))
             .cornerRadius(14)
             .shadow(color: .black.opacity(colorScheme == .dark ? 0.2 : 0.04), radius: 6, x: 0, y: 2)
         }

@@ -183,10 +183,10 @@ public struct GoalSavingPlanSection<Destination: View>: View {
                                     .font(.system(size: 32))
                                     .foregroundStyle(.green)
                                 VStack(alignment: .leading, spacing: 4) {
-                                    Text("Goal Achievable!")
+                                    Text("Goal May Be Possible")
                                         .font(.system(size: 16, weight: .bold, design: .rounded))
                                         .foregroundStyle(.green)
-                                    Text("By starting a SIP, you are on the right track to achieve this goal comfortably.")
+                                    Text("Under these assumptions, the SIP scenario may support this goal. Actual returns may vary.")
                                         .font(.system(size: 13, design: .rounded))
                                         .foregroundStyle(.secondary)
                                 }

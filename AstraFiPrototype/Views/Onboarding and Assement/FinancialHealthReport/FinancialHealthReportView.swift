@@ -151,6 +151,7 @@ struct FinancialHealthReportView: View {
                 investmentSection
                 emergencyFundSection
                 insuranceSection
+                Spacer()
                 footerSection
             }
         }

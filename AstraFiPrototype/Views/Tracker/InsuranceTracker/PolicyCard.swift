@@ -98,7 +98,7 @@ struct PolicyCard: View {
             }
         }
         .padding(20)
-        .background(Color(uiColor: .systemBackground))
+        .background(Color(uiColor: .secondarySystemGroupedBackground))
         .cornerRadius(16)
         .shadow(color: Color(uiColor: .label).opacity(0.06), radius: 8, x: 0, y: 2)
     }

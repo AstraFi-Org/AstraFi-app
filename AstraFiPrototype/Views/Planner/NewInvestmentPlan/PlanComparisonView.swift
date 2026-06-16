@@ -91,10 +91,10 @@ struct PlanComparisonView: View {
                 roleCard(title: "Plan 1: Pure SIP", role: "Steady Wealth Builder", intent: "Builds assets purely from savings. No debt, but slower results.", color: .blue, icon: "hourglass")
                 
                 if isLoanEligibleGoal {
-                    roleCard(title: "Plan 2: Debt Optimization", role: "Time Saver", intent: "Buy today, pay later. Best for immediate needs but adds interest cost.", color: .purple, icon: "bolt.fill")
+                    roleCard(title: "Plan 2: Debt Scenario", role: "Cash Flow Tradeoff", intent: "Shows immediate purchase with interest cost and repayment pressure.", color: .purple, icon: "bolt.fill")
                 }
                 
-                roleCard(title: "Plan 3: Leveraged Arbitrage", role: "The Multiplier", intent: "Uses debt to grow capital. High efficiency, requires risk appetite.", color: .pink, icon: "chart.line.uptrend.xyaxis")
+                roleCard(title: "Plan 3: Loan Stress Test", role: "High Risk Simulation", intent: "Shows how debt-funded investing can amplify both gains and losses.", color: .pink, icon: "chart.line.uptrend.xyaxis")
             }
         }
     }
@@ -296,10 +296,10 @@ struct PlanComparisonView: View {
             VStack(spacing: 20) {
                 TimelineBarItem(label: "Plan 1: Pure SIP", value: val1, maxValue: maxV, color: .blue, animate: animateCharts)
                 if results.plan2 != nil {
-                    TimelineBarItem(label: "Plan 2: Debt Optimization", value: val2, maxValue: maxV, color: .purple, animate: animateCharts)
+                    TimelineBarItem(label: "Plan 2: Debt Scenario", value: val2, maxValue: maxV, color: .purple, animate: animateCharts)
                 }
                 if results.plan3 != nil {
-                    TimelineBarItem(label: "Plan 3: Leveraged Arbitrage", value: val3, maxValue: maxV, color: .pink, animate: animateCharts)
+                    TimelineBarItem(label: "Plan 3: Loan Stress Test", value: val3, maxValue: maxV, color: .pink, animate: animateCharts)
                 }
             }
         }
@@ -345,8 +345,8 @@ struct PlanComparisonView: View {
                     Image(systemName: "crown.fill").foregroundColor(.white).font(.system(size: 20))
                 }
                 VStack(alignment: .leading, spacing: 2) {
-                    Text("Battle Summary").font(.headline).fontWeight(.bold)
-                    Text("The best fit for your profile").font(.caption).foregroundColor(.secondary)
+                    Text("Scenario Summary").font(.headline).fontWeight(.bold)
+                    Text("Compare fit under assumptions").font(.caption).foregroundColor(.secondary)
                 }
                 Spacer()
             }
@@ -354,7 +354,7 @@ struct PlanComparisonView: View {
             VStack(alignment: .leading, spacing: 20) {
                 let winner = results.comparisonScore?.winner ?? "Plan 1"
                 HStack {
-                    Text("Primary Recommendation:")
+                    Text("Primary Scenario:")
                         .font(.subheadline).foregroundColor(.secondary)
                     Text(winner)
                         .font(.headline).fontWeight(.black).foregroundColor(.blue)

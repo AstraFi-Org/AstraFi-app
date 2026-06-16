@@ -185,7 +185,7 @@ struct Phase1BView: View {
     }
 
     var body: some View {
-        ZStack(alignment: .bottom) {
+        ZStack {
             Color(.systemGroupedBackground).ignoresSafeArea()
 
             ScrollView(showsIndicators: false) {
@@ -251,8 +251,7 @@ struct Phase1BView: View {
                         }
                     }
 
-                    // Extra bottom padding so content isn't hidden behind the sticky button
-                    Spacer().frame(height: showContinueButton ? 160 : 120)
+                    Spacer().frame(height: showContinueButton ? 24 : 120)
                 }
             }
             .animation(.spring(response: 0.45, dampingFraction: 0.8), value: showInvestQuestion)
@@ -264,7 +263,8 @@ struct Phase1BView: View {
                     .padding(.vertical, 10)
                     .background(Color(.systemGroupedBackground))
             }
-
+        }
+        .safeAreaInset(edge: .bottom, spacing: 0) {
             // ── Sticky Continue Button (slides up when "Not yet" is tapped)
             if showContinueButton {
                 ContinueToReportButton {
@@ -337,9 +337,8 @@ private struct ContinueToReportButton: View {
             }
             .buttonStyle(.plain)
             .padding(.horizontal, 20)
-
-            Color(.systemGroupedBackground)
-                .frame(height: 34) // absorbs home indicator / safe area
+            .padding(.top, 12)
+            .padding(.bottom, 8)
         }
         .background(Color(.systemGroupedBackground))
     }

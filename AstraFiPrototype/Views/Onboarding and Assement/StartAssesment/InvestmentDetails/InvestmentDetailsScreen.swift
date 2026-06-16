@@ -19,7 +19,7 @@ struct InvestmentDetailsScreen: View {
     @State private var breakdownEntry: AssessmentInvestmentEntry? = nil
     
     var body: some View {
-        ZStack(alignment: .bottom) {
+        ZStack {
             Color(.systemGroupedBackground).ignoresSafeArea()
             
             VStack(spacing: 0) {
@@ -287,18 +287,12 @@ struct InvestmentDetailsScreen: View {
                         } // closes ForEach
                     } // closes else (entries not empty)
                     
-                    Section {
-                        Color.clear.frame(height: 80)
-                    }
-                    .listRowBackground(Color.clear)
-                    
                 } // closes Form
+
+                AssessmentFooterButton(label: "Continue", enabled: true, isLast: false) {
+                    if let onComplete { onComplete() } else { goNext = true }
+                }
             } // closes VStack
-            
-            // Footer sits inside ZStack, above the Form
-            AssessmentFooterButton(label: "Continue", enabled: true, isLast: false) {
-                if let onComplete { onComplete() } else { goNext = true }
-            }
             
         } // closes ZStack
         .navigationTitle("Financial Assessment")

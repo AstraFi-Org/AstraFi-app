@@ -18,7 +18,7 @@ struct LoanDetailsScreen: View {
     @State private var selectedItem: PhotosPickerItem? = nil
 
     var body: some View {
-        ZStack(alignment: .bottom) {
+        ZStack {
             Color(.systemGroupedBackground).ignoresSafeArea()
 
             VStack(spacing: 0) {
@@ -103,6 +103,8 @@ struct LoanDetailsScreen: View {
                                 if !entry.loanName.isEmpty {
                                     TextField("Scheme Name", text: $entry.loanName)
                                 }
+
+                                DatePicker("Loan Sanction Date", selection: $entry.startDate, displayedComponents: .date)
 //                                AssessmentField(
 //                                    icon: "indianrupeesign",
 //                                    label: "Loan Amount",
@@ -197,17 +199,13 @@ struct LoanDetailsScreen: View {
                         }
                     }
                     
-                    Section {
-                        Color.clear.frame(height: 80)
-                    }
-                    .listRowBackground(Color.clear)
                 }
-            }
 
-            AssessmentFooterButton(label: "Continue", enabled: true, isLast: false) {
-                if let onComplete { onComplete() } else { goNext = true }
+                AssessmentFooterButton(label: "Continue", enabled: true, isLast: false) {
+                    if let onComplete { onComplete() } else { goNext = true }
+                }
+                .allowsHitTesting(true)
             }
-            .allowsHitTesting(true)
         }
         .navigationTitle("Financial Assessment")
         .navigationBarBackButtonHidden(true)

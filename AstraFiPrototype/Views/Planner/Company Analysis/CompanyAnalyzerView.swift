@@ -106,7 +106,7 @@ struct CompanyAnalyzerView: View {
                     .font(.body)
                     .padding(.horizontal, 16)
                     .padding(.vertical, 16)
-                    .background(Color(uiColor: .systemBackground))
+                    .background(Color(uiColor: .secondarySystemGroupedBackground))
                     .cornerRadius(12)
                     .overlay(
                         RoundedRectangle(cornerRadius: 12)
@@ -158,7 +158,7 @@ struct CompanyAnalyzerView: View {
                     }
                     .padding(.horizontal, 16)
                     .padding(.vertical, 16)
-                    .background(Color(uiColor: .systemBackground))
+                    .background(Color(uiColor: .secondarySystemGroupedBackground))
                     .cornerRadius(12)
                     .overlay(
                         RoundedRectangle(cornerRadius: 12)
@@ -204,7 +204,7 @@ struct CompanyAnalyzerView: View {
                     }
                     .padding(.horizontal, 16)
                     .padding(.vertical, 16)
-                    .background(Color(uiColor: .systemBackground))
+                    .background(Color(uiColor: .secondarySystemGroupedBackground))
                     .cornerRadius(12)
                     .overlay(
                         RoundedRectangle(cornerRadius: 12)

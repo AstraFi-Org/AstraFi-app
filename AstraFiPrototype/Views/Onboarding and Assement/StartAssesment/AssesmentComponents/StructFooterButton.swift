@@ -28,7 +28,8 @@ struct AssessmentFooterButton: View {
         }
         .disabled(!enabled)
         .padding(.horizontal, 20)
-        .padding(.vertical, 16)
+        .padding(.top, 12)
+        .padding(.bottom, 8)
         .background(Color(.systemGroupedBackground).allowsHitTesting(false))
         .animation(.easeInOut(duration: 0.2), value: enabled)
     }
