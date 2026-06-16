@@ -113,6 +113,7 @@ struct SignUpView: View {
     @State private var confirmPassword: String = ""
     @State private var showConfirmPassword: Bool = false
     @State private var agreedToTerms: Bool = true
+    @State private var showSuccessPrompt: Bool = false
 
     var body: some View {
         NavigationStack{
@@ -196,7 +197,10 @@ struct SignUpView: View {
 
                     AuthPrimaryButton(title: "Create Account") {
                         Task {
-                            await appState.signUp(name: name, email: email, password: password)
+                            let success = await appState.signUp(name: name, email: email, password: password)
+                            if success {
+                                showSuccessPrompt = true
+                            }
                         }
                     }
 
@@ -237,5 +241,12 @@ struct SignUpView: View {
         
         .navigationBarBackButtonHidden(true)
         .background(Color(uiColor: .systemBackground).ignoresSafeArea())
+        .alert("Account created successfully", isPresented: $showSuccessPrompt) {
+            Button("OK", role: .cancel) {
+                appState.completeSignUp()
+            }
+        } message: {
+            Text("You are successfully signed up!")
+        }
     }
 }
