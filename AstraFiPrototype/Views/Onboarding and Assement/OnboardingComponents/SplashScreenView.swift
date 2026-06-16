@@ -65,7 +65,7 @@ struct SplashScreenView: View {
                                 )
                             )
                             .frame(width: 82, height: 82)
-                        Image(.splashScreen)
+                        Image(.splash)
                             .resizable()
                             .scaledToFill()
                             .frame(width: 82, height: 82)

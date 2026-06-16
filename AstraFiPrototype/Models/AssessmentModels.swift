@@ -58,6 +58,7 @@ struct AssessmentLoanEntry: Identifiable {
     var tenure: String = ""
     var moratorium: String = ""
     var insurancePremium: String = ""
+    var startDate: Date = Date()
     var loanName: String = ""
     var interestType: AstraInterestType = .compound
     var frequency: AstraCompoundingFrequency = .monthly

@@ -464,12 +464,14 @@ final class AppStateManager {
                 interestRate: rawRate.isFinite ? rawRate : 0,
                 interestType: entry.interestType,
                 compoundingFrequency: entry.frequency,
-                loanStartDate: Date(),
+                loanStartDate: entry.startDate,
                 loanTenureMonths: tenureMonths
             )
             // Preserve the custom name the user typed (e.g. "My Car Loan").
             // Falls back to loanType.rawValue in the UI via displayName.
             loan.loanName = entry.loanName.trimmingCharacters(in: .whitespacesAndNewlines)
+            loan.insurancePremium = Double(entry.insurancePremium) ?? 0
+            loan.moratoriumMonths = Int(entry.moratorium) ?? 0
             return loan
         }
         

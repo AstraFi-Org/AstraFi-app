@@ -3,48 +3,38 @@ import Foundation
 struct SanctionLetterParser: LoanStatementParser {
     
     func parse(text: String) -> [ParsedLoan] {
-        let normalizedText = text.lowercased()
+        let normalizedText = normalizeForParsing(text)
         var loanData = LoanData()
         
         // --- 1. Structured Data Extraction ---
         
         // Insurance (Extract first to avoid confusion with Principal)
-        if let match = extractRegex(#"insurance premium amount\.?\s?:?\s?rs\.?\s?([0-9,]+)"#, in: normalizedText) {
+        if let match = extractRegex(#"insurance\s+premium\s+amount\s*[:\-]?\s*(?:rs[\.,:]?|inr|₹)?\s*([0-9][0-9,]*(?:\.\d{1,2})?)"#, in: normalizedText) {
             loanData.insurance = cleanNumeric(match) ?? 0
         }
         
-        // Loan Amount: Multiple patterns - Prioritize RE: line and structured terms
-        let amountPatterns = [
-               // Specific for RE: line in Baroda letters
-            #"baroda\s?gyan\s?loan\s?of\s?rs\.?\s?([0-9,]+(?:\.\d{2})?)"#,
-            #"loan\s?of\s?rs\.?\s?([0-9,]+(?:\.\d{2})?)"#,
-            // General Amount patterns - Exclude insurance/premium lines explicitly
-            #"(?<!insurance |premium )amount.{0,10}rs\.?\s?([0-9,]+)"#,
-            #"sanctioned.{0,10}?rs\.?\s?([0-9,]+)"#,
-            #"principal\s?sum.{0,10}?rs\.?\s?([0-9,]+)"#
-        ]
-        
-        for pattern in amountPatterns {
-            if let match = extractRegex(pattern, in: normalizedText) {
-                let cleaned = cleanNumeric(match) ?? 0
-                // Final check: Principal should not be exactly the insurance amount
-                if cleaned > 0 && cleaned != loanData.insurance {
-                   loanData.principal = cleaned
-                   break
-                }
-            }
-        }
+        loanData.principal = extractPrincipalAmount(from: normalizedText, insuranceAmount: loanData.insurance)
         
         // Total Cost: Pattern "total cost"
-        if let match = extractRegex(#"total cost.{0,15}?rs\.?\s?([0-9,]+)"#, in: normalizedText) {
+        if let match = extractRegex(#"total\s+cost\s*[:\-]?\s*(?:rs[\.,:]?|inr|₹)?\s*([0-9][0-9,]*(?:\.\d{1,2})?)"#, in: normalizedText) {
             loanData.totalCost = cleanNumeric(match) ?? 0
+        }
+        
+        if loanData.principal == 0 {
+            loanData.principal = extractRepeatedLoanAmountFallback(
+                from: normalizedText,
+                insuranceAmount: loanData.insurance,
+                totalCost: loanData.totalCost
+            )
         }
         
         // Interest Rate: ONLY from "applicable rate of interest is X%" or similar
         let ratePatterns = [
-            #"applicable rate of interest.{0,15}?(?:is|@)\s?(\d{1,2}(?:\.\d{1,2})?)\s?%"#,
-            #"rate\sof\sinterest.{0,15}?(?:is|@)\s?(\d{1,2}(?:\.\d{1,2})?)\s?%"#,
-            #"roi\s?@\s?(\d{1,2}(?:\.\d{1,2})?)\s?%"#
+            #"applicable\s+rate\s+of\s+interest.{0,80}?(?:is|@|:)\s*(\d{1,2}(?:\.\d{1,2})?)\s*%"#,
+            #"rate\s+of\s+interest.{0,80}?(?:is|@|:)\s*(\d{1,2}(?:\.\d{1,2})?)\s*%"#,
+            #"interest\s+rate.{0,60}?(?:is|@|:)\s*(\d{1,2}(?:\.\d{1,2})?)\s*%"#,
+            #"\broi\b.{0,30}?(\d{1,2}(?:\.\d{1,2})?)\s*%"#,
+            #"roi\s*@\s*(\d{1,2}(?:\.\d{1,2})?)\s*%"#
         ]
         for pattern in ratePatterns {
             if let match = extractRegex(pattern, in: normalizedText) {
@@ -53,11 +43,12 @@ struct SanctionLetterParser: LoanStatementParser {
             }
         }
         
-        // Tenure (months): Multiple patterns for ":96months", "96 months", "total period :96months"
+        // Tenure (months): total period is the full loan term; repayable months are EMI months.
         let tenurePatterns = [
-            #"(?:total period|tenure)\s*[:\-]?\s*(\d+)\s*months?"#,
-            #"(?:total period|tenure).{0,20}?:?\s*(\d+)\s*months?"#,
-            #"repayable in.{0,10}?(\d+)\s*months?"#
+            #"(?:total\s+period|loan\s+tenure|tenure)\s*[:\-]?\s*(\d{1,3})\s*months?"#,
+            #"(?:total\s+period|loan\s+tenure|tenure).{0,30}?(\d{1,3})\s*months?"#,
+            #"(?:total\s+period|loan\s+tenure|tenure)\s*[:\-]?\s*(\d{1,3})(?=\D)"#,
+            #"period\s*[:\-]?\s*(\d{1,3})\s*months?"#
         ]
         for pattern in tenurePatterns {
             if let match = extractRegex(pattern, in: normalizedText) {
@@ -66,9 +57,26 @@ struct SanctionLetterParser: LoanStatementParser {
             }
         }
         
-        // Moratorium (months): Support ":55" or "55 months"
-        if let match = extractRegex(#"(?:moratorium|holiday).{0,10}?:?\s?(\d+)"#, in: normalizedText) {
-            loanData.moratorium = Int(match) ?? 0
+        if let emiMonths = extractRepayableMonths(from: normalizedText) {
+            loanData.emiMonths = emiMonths
+        }
+        
+        // Moratorium (months): Support "MORATORIUM :55", "moratorium 55 months", and similar OCR output.
+        let moratoriumPatterns = [
+            #"morator\w*\s*[:\-]?\s*(\d{1,3})(?=\D)"#,
+            #"(?:moratorium|holiday\s+period)\s*[:\-]?\s*(\d{1,3})(?=\D)"#,
+            #"(?:moratorium|holiday\s+period)\s*[:\-]?\s*(\d{1,3})\s*(?:months?|$)"#,
+            #"(?:moratorium|holiday\s+period).{0,20}?(\d{1,3})\s*months?"#,
+            #"(\d{1,3})\s*months?.{0,20}(?:moratorium|holiday\s+period)"#
+        ]
+        for pattern in moratoriumPatterns {
+            if let match = extractRegex(pattern, in: normalizedText) {
+                let val = Int(match) ?? 0
+                if val > 0 {
+                    loanData.moratorium = val
+                    break
+                }
+            }
         }
         
         // Loan Type & Scheme
@@ -81,8 +89,17 @@ struct SanctionLetterParser: LoanStatementParser {
             loanData.principal = loanData.totalCost
         }
         
-        // EMI Months = Tenure - Moratorium
-        loanData.emiMonths = max(0, loanData.tenure - loanData.moratorium)
+        if loanData.tenure == 0 && loanData.moratorium > 0 && loanData.emiMonths > 0 {
+            loanData.tenure = loanData.moratorium + loanData.emiMonths
+        }
+        
+        if loanData.tenure == 0 {
+            loanData.tenure = extractLikelyTotalPeriod(from: normalizedText, moratorium: loanData.moratorium, emiMonths: loanData.emiMonths)
+        }
+        
+        if loanData.emiMonths == 0 {
+            loanData.emiMonths = max(0, loanData.tenure - loanData.moratorium)
+        }
         
         // Core Calculations using CalculationEngine
         if loanData.principal > 0 && loanData.interestRate > 0 && loanData.emiMonths > 0 {
@@ -114,7 +131,7 @@ struct SanctionLetterParser: LoanStatementParser {
             interestRate: loanData.interestRate,
             emi: loanData.emi,
             tenure: loanData.tenure,
-            startDate: Date(),
+            startDate: extractSanctionDate(from: normalizedText) ?? Date(),
             outstanding: loanData.principal,
             lender: extractLender(text: text),
             loanName: loanData.scheme,
@@ -127,6 +144,100 @@ struct SanctionLetterParser: LoanStatementParser {
         return [result]
     }
     
+    private func normalizeForParsing(_ text: String) -> String {
+        var normalized = text.lowercased()
+        normalized = normalized.replacingOccurrences(of: "₹", with: "rs.")
+        normalized = normalized.replacingOccurrences(of: "rs ,", with: "rs,")
+        normalized = normalized.replacingOccurrences(of: "rs .", with: "rs.")
+        normalized = normalized.replacingOccurrences(of: "r s .", with: "rs.")
+        normalized = normalized.replacingOccurrences(of: "r s", with: "rs")
+        normalized = normalized.replacingOccurrences(of: "\u{00a0}", with: " ")
+        normalized = normalized.replacingOccurrences(of: "\n", with: " ")
+        normalized = normalized.replacingOccurrences(of: "\t", with: " ")
+        normalized = normalized.replacingOccurrences(of: #"\s+"#, with: " ", options: .regularExpression)
+        return normalized.trimmingCharacters(in: .whitespacesAndNewlines)
+    }
+    
+    private func extractPrincipalAmount(from text: String, insuranceAmount: Double) -> Double {
+        let prioritizedPatterns = [
+            #"baroda\s+gyan\s+loan\s+of\s+(?:rs[\.,:]?|inr)\s*([0-9][0-9,]*(?:\.\d{1,2})?)"#,
+            #"(?:education|home|housing|vehicle|car|personal)\s+loan.{0,80}?\b(?:of|for)\s+(?:rs[\.,:]?|inr)\s*([0-9][0-9,]*(?:\.\d{1,2})?)"#,
+            #"(?:permissible\s+limit|sanctioned\s+(?:loan\s+)?(?:amount|limit)|loan\s+amount|credit\s+facility|principal\s+sum)\s*[:\-]?\s*(?:rs[\.,:]?|inr)?\s*([0-9][0-9,]*(?:\.\d{1,2})?)"#,
+            #"(?:we\s+have\s+sanctioned|sanctioned\s+you|sanctioned\s+credit\s+facility).{0,80}?(?:rs[\.,:]?|inr)\s*([0-9][0-9,]*(?:\.\d{1,2})?)"#,
+            #"\bloan\s+of\s+(?:rs[\.,:]?|inr)\s*([0-9][0-9,]*(?:\.\d{1,2})?)"#
+        ]
+        
+        for pattern in prioritizedPatterns {
+            let matches = extractRegexMatches(pattern, in: text)
+            for match in matches {
+                let value = cleanNumeric(match) ?? 0
+                if isLikelyLoanAmount(value, insuranceAmount: insuranceAmount) {
+                    return value
+                }
+            }
+        }
+        
+        return 0
+    }
+    
+    private func extractRepeatedLoanAmountFallback(from text: String, insuranceAmount: Double, totalCost: Double) -> Double {
+        let amounts = extractRegexMatches(#"(?:rs[\.,:]?|inr|₹)\s*([0-9][0-9,]*(?:\.\d{1,2})?)"#, in: text)
+            .compactMap { cleanNumeric($0) }
+            .filter { isLikelyLoanAmount($0, insuranceAmount: insuranceAmount) }
+            .filter { totalCost == 0 || $0 != totalCost }
+        
+        guard !amounts.isEmpty else { return 0 }
+        
+        let counts = Dictionary(grouping: amounts.map { round($0) }, by: { $0 })
+        if let repeated = counts.max(by: { lhs, rhs in
+            if lhs.value.count == rhs.value.count {
+                return lhs.key < rhs.key
+            }
+            return lhs.value.count < rhs.value.count
+        }) {
+            return repeated.key
+        }
+        
+        return amounts.max() ?? 0
+    }
+    
+    private func extractRepayableMonths(from text: String) -> Int? {
+        let patterns = [
+            #"repayable\s+in\s*[:\-]?\s*(\d{1,3})\s*months?"#,
+            #"repayable\s+in.{0,30}?(\d{1,3})\s*months?"#,
+            #"(\d{1,3})\s*months?\s+by\s+equated\s+monthly\s+instal?l?ments?"#,
+            #"(\d{1,3})\s*months?.{0,40}?equated\s+monthly\s+instal?l?ments?"#,
+            #"emi\s+(?:period|tenure)\s*[:\-]?\s*(\d{1,3})\s*months?"#
+        ]
+        
+        for pattern in patterns {
+            if let match = extractRegex(pattern, in: text), let value = Int(match), value > 0 {
+                return value
+            }
+        }
+        return nil
+    }
+    
+    private func extractLikelyTotalPeriod(from text: String, moratorium: Int, emiMonths: Int) -> Int {
+        if moratorium > 0 && emiMonths > 0 {
+            return moratorium + emiMonths
+        }
+        
+        let monthValues = extractRegexMatches(#"(\d{1,3})\s*months?"#, in: text)
+            .compactMap { Int($0) }
+            .filter { $0 > 0 && $0 <= 360 }
+        
+        if let largest = monthValues.max(), largest >= max(moratorium, emiMonths) {
+            return largest
+        }
+        
+        return 0
+    }
+    
+    private func isLikelyLoanAmount(_ value: Double, insuranceAmount: Double) -> Bool {
+        value >= 1_000 && value != insuranceAmount
+    }
+    
     private func extractRegex(_ pattern: String, in text: String) -> String? {
         guard let regex = try? NSRegularExpression(pattern: pattern, options: [.caseInsensitive]) else { return nil }
         let nsString = text as NSString
@@ -136,6 +247,16 @@ struct SanctionLetterParser: LoanStatementParser {
             }
         }
         return nil
+    }
+    
+    private func extractRegexMatches(_ pattern: String, in text: String) -> [String] {
+        guard let regex = try? NSRegularExpression(pattern: pattern, options: [.caseInsensitive]) else { return [] }
+        let nsString = text as NSString
+        let matches = regex.matches(in: text, options: [], range: NSRange(location: 0, length: nsString.length))
+        return matches.compactMap { result in
+            guard result.numberOfRanges > 1 else { return nil }
+            return nsString.substring(with: result.range(at: 1))
+        }
     }
     
     private func cleanNumeric(_ text: String) -> Double? {
@@ -166,6 +287,27 @@ struct SanctionLetterParser: LoanStatementParser {
                 }
             }
         }
+    }
+    
+    private func extractSanctionDate(from text: String) -> Date? {
+        let patterns = [
+            #"\bdate\s*[:\-]?\s*(\d{1,2}[-/]\d{1,2}[-/]\d{2,4})"#,
+            #"\bdated\s+(\d{1,2}[-/]\d{1,2}[-/]\d{2,4})"#,
+            #"\b(\d{1,2}[-/]\d{1,2}[-/]\d{4})\b"#
+        ]
+        
+        let formatter = DateFormatter()
+        formatter.locale = Locale(identifier: "en_US_POSIX")
+        for pattern in patterns {
+            guard let match = extractRegex(pattern, in: text) else { continue }
+            for format in ["dd-MM-yyyy", "dd/MM/yyyy", "dd-MM-yy", "dd/MM/yy"] {
+                formatter.dateFormat = format
+                if let date = formatter.date(from: match) {
+                    return date
+                }
+            }
+        }
+        return nil
     }
     
     private func detectLoanType(loanData: LoanData, text: String) -> AssessmentLoanEntry.LoanType {

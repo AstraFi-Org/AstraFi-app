@@ -27,7 +27,7 @@ struct InvestmentQuestionView: View {
     @State private var goReport             = false   // → ChoiceToReport (skip investments)
 
     var body: some View {
-        ZStack(alignment: .bottom) {
+        ZStack {
             Color(.systemGroupedBackground).ignoresSafeArea()
 
             ScrollView(showsIndicators: false) {
@@ -76,11 +76,12 @@ struct InvestmentQuestionView: View {
                         }
                     }
 
-                    Spacer().frame(height: 120)
+                    Spacer().frame(height: doesInvest == false ? 24 : 120)
                 }
             }
             .animation(.spring(response: 0.4, dampingFraction: 0.8), value: doesInvest)
-
+        }
+        .safeAreaInset(edge: .bottom, spacing: 0) {
             // ── Footer: only show for "No" path → leads to report
             if doesInvest == false {
                 AssessmentFooterButton(
