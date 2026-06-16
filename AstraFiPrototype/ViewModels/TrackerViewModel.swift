@@ -2,7 +2,7 @@ import Foundation
 import SwiftUI
 //import Combine
 
-import Observation
+//import Observation
 
 @Observable
 class TrackerViewModel {
