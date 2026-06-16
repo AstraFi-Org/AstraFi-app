@@ -297,7 +297,7 @@ final class AppStateManager {
             }
         }
     }
-    func signUp(name: String, email: String, password: String) async {
+    func signUp(name: String, email: String, password: String) async -> Bool {
         isAuthLoading = true
         authError = nil
         do {
@@ -314,9 +314,6 @@ final class AppStateManager {
             tempEmail = email
             tempPassword = password
             setupEmptyProfile(name: name)
-            isAuthenticated = true
-            showPostAuthOnboarding = true
-            hasCompletedOnboarding = true  // ← ADD THIS
             
             // After successful sign up — load existing data if any
             if let profile = try? await SupabaseRepository.shared.fetchFullProfile(userId: session.user.id) {
@@ -324,10 +321,20 @@ final class AppStateManager {
                 recalculateFinancials()
             }
             
+            isAuthLoading = false
+            return true
+            
         } catch {
             authError = error.localizedDescription
+            isAuthLoading = false
+            return false
         }
-        isAuthLoading = false
+    }
+    
+    func completeSignUp() {
+        isAuthenticated = true
+        showPostAuthOnboarding = true
+        hasCompletedOnboarding = true
     }
 
     func signIn(email: String, password: String) async {
