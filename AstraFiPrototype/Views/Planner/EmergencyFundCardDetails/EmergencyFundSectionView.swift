@@ -1,4 +1,5 @@
 import SwiftUI
+import Charts
 
 // RBI benchmark rates for short-duration liquid instruments (updated periodically)
 // T-Bills: ~6.9-7.1% (91-day, as of 2024 auctions)
@@ -28,95 +29,85 @@ struct EFLineGraphView: View {
     private var maxX: Int    { max(points.last?.month ?? 1, 1) }
 
     var body: some View {
-        GeometryReader { geo in
-            let w = geo.size.width
-            let h = geo.size.height - 16   // leave 16pt at bottom for x labels
-            let pad: CGFloat = 4
-
-            ZStack(alignment: .topLeading) {
-                // Target dashed line (green)
-                if target > 0 {
-                    let ty = yPos(amount: target, height: h)
-                    Path { p in p.move(to: .init(x: pad, y: ty)); p.addLine(to: .init(x: w - pad, y: ty)) }
-                        .stroke(Color(hex: "#30D158"), style: StrokeStyle(lineWidth: 1.2, dash: [5, 4]))
-                    Text(target.toCurrency(compact: true))
-                        .font(.system(size: 9, weight: .semibold, design: .rounded))
-                        .foregroundStyle(Color(hex: "#30D158"))
-                        .position(x: w - 30, y: ty - 9)
-                }
-
-                // Current saved dotted line (orange)
-                if currentSaved > 0 && currentSaved < target {
-                    let cy = yPos(amount: currentSaved, height: h)
-                    Path { p in p.move(to: .init(x: pad, y: cy)); p.addLine(to: .init(x: w - pad, y: cy)) }
-                        .stroke(Color(hex: "#FF9F0A"), style: StrokeStyle(lineWidth: 1, dash: [3, 4]))
-                    Text(currentSaved.toCurrency(compact: true))
-                        .font(.system(size: 9, weight: .medium, design: .rounded))
-                        .foregroundStyle(Color(hex: "#FF9F0A"))
-                        .position(x: 34, y: cy - 9)
-                }
-
-                // Area fill
-                if points.count > 1 {
-                    areaPath(w: w, h: h, pad: pad)
-                        .fill(LinearGradient(colors: [accentColor.opacity(0.22), accentColor.opacity(0.03)], startPoint: .top, endPoint: .bottom))
-                    linePath(w: w, h: h, pad: pad)
-                        .stroke(accentColor, style: StrokeStyle(lineWidth: 2.2, lineJoin: .round))
-
-                    // End dot
-                    if let last = points.last {
-                        let lx = xPos(month: last.month, w: w, pad: pad)
-                        let ly = yPos(amount: last.amount, height: h)
-                        Circle().fill(accentColor.opacity(0.22)).frame(width: 16, height: 16).position(x: lx, y: ly)
-                        Circle().fill(accentColor).frame(width: 8, height: 8).position(x: lx, y: ly)
+        Chart {
+            if target > 0 {
+                RuleMark(y: .value("Target", target))
+                    .foregroundStyle(Color(hex: "#30D158"))
+                    .lineStyle(StrokeStyle(lineWidth: 1.2, dash: [5, 4]))
+                    .annotation(position: .top, alignment: .trailing) {
+                        Text(target.toCurrency(compact: true))
+                            .font(.system(size: 9, weight: .semibold, design: .rounded))
+                            .foregroundStyle(Color(hex: "#30D158"))
                     }
+            }
+
+            if currentSaved > 0 && currentSaved < target {
+                RuleMark(y: .value("Current", currentSaved))
+                    .foregroundStyle(Color(hex: "#FF9F0A"))
+                    .lineStyle(StrokeStyle(lineWidth: 1, dash: [3, 4]))
+                    .annotation(position: .top, alignment: .leading) {
+                        Text(currentSaved.toCurrency(compact: true))
+                            .font(.system(size: 9, weight: .medium, design: .rounded))
+                            .foregroundStyle(Color(hex: "#FF9F0A"))
+                    }
+            }
+
+            if points.count > 1 {
+                ForEach(points) { point in
+                    AreaMark(
+                        x: .value("Month", point.month),
+                        yStart: .value("Baseline", 0),
+                        yEnd: .value("Amount", point.amount)
+                    )
+                    .foregroundStyle(LinearGradient(
+                        colors: [accentColor.opacity(0.22), accentColor.opacity(0.03)],
+                        startPoint: .top,
+                        endPoint: .bottom
+                    ))
+
+                    LineMark(
+                        x: .value("Month", point.month),
+                        y: .value("Amount", point.amount)
+                    )
+                    .foregroundStyle(accentColor)
+                    .lineStyle(StrokeStyle(lineWidth: 2.2, lineJoin: .round))
                 }
 
-                // Start dot
-                if let first = points.first {
-                    Circle()
-                        .fill(currentSaved > 0 ? Color(hex: "#FF9F0A") : accentColor.opacity(0.5))
-                        .frame(width: 7, height: 7)
-                        .position(x: xPos(month: first.month, w: w, pad: pad),
-                                  y: yPos(amount: first.amount, height: h))
+                if let last = points.last {
+                    PointMark(x: .value("Month", last.month), y: .value("Amount", last.amount))
+                        .foregroundStyle(accentColor)
+                        .symbol {
+                            ZStack {
+                                Circle().fill(accentColor.opacity(0.22)).frame(width: 16, height: 16)
+                                Circle().fill(accentColor).frame(width: 8, height: 8)
+                            }
+                        }
                 }
+            }
 
-                // X-axis labels
-                ForEach(xTicks, id: \.self) { m in
-                    Text(m == 0 ? "Now" : "\(m)m")
-                        .font(.system(size: 9, weight: .medium, design: .rounded))
-                        .foregroundStyle(.secondary)
-                        .position(x: xPos(month: m, w: w, pad: pad), y: h + 10)
+            if let first = points.first {
+                PointMark(x: .value("Month", first.month), y: .value("Amount", first.amount))
+                    .foregroundStyle(currentSaved > 0 ? Color(hex: "#FF9F0A") : accentColor.opacity(0.5))
+                    .symbolSize(49)
+            }
+        }
+        .chartXScale(domain: 0...maxX)
+        .chartYScale(domain: 0...maxY)
+        .chartYAxis(.hidden)
+        .chartXAxis {
+            AxisMarks(values: xTicks) { value in
+                AxisValueLabel {
+                    if let month = value.as(Int.self) {
+                        Text(month == 0 ? "Now" : "\(month)m")
+                            .font(.system(size: 9, weight: .medium, design: .rounded))
+                            .foregroundStyle(.secondary)
+                    }
                 }
             }
         }
         .animation(.spring(response: 0.42, dampingFraction: 0.75), value: points.count)
     }
 
-    private func xPos(month: Int, w: CGFloat, pad: CGFloat) -> CGFloat {
-        pad + CGFloat(month) / CGFloat(maxX) * (w - 2 * pad)
-    }
-    private func yPos(amount: Double, height: CGFloat) -> CGFloat {
-        height - CGFloat(amount / maxY) * height
-    }
-    private func linePath(w: CGFloat, h: CGFloat, pad: CGFloat) -> Path {
-        Path { path in
-            guard let first = points.first else { return }
-            path.move(to: .init(x: xPos(month: first.month, w: w, pad: pad), y: yPos(amount: first.amount, height: h)))
-            for pt in points.dropFirst() { path.addLine(to: .init(x: xPos(month: pt.month, w: w, pad: pad), y: yPos(amount: pt.amount, height: h))) }
-        }
-    }
-    private func areaPath(w: CGFloat, h: CGFloat, pad: CGFloat) -> Path {
-        Path { path in
-            guard let first = points.first else { return }
-            let sx = xPos(month: first.month, w: w, pad: pad)
-            path.move(to: .init(x: sx, y: h))
-            path.addLine(to: .init(x: sx, y: yPos(amount: first.amount, height: h)))
-            for pt in points.dropFirst() { path.addLine(to: .init(x: xPos(month: pt.month, w: w, pad: pad), y: yPos(amount: pt.amount, height: h))) }
-            if let last = points.last { path.addLine(to: .init(x: xPos(month: last.month, w: w, pad: pad), y: h)) }
-            path.closeSubpath()
-        }
-    }
     private var xTicks: [Int] {
         guard maxX > 0 else { return [0] }
         if maxX <= 6  { return Array(stride(from: 0, through: maxX, by: 1)) }

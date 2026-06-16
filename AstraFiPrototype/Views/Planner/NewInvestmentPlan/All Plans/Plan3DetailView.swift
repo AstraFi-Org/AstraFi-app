@@ -883,20 +883,23 @@ struct StrategyCircularChart: View {
 
     var body: some View {
         ZStack {
-            Circle()
-                .stroke(Color.secondary.opacity(0.1), lineWidth: 20)
-                .frame(width: 170, height: 170)
+            Chart {
+                ForEach(0..<12, id: \.self) { i in
+                    let interval = max(1, 12 / max(1, phases))
+                    let isHighlighted = mode == "Lumpsum" && (i % interval == 0) && (i / interval < phases)
 
-            ForEach(0..<12) { i in
-                let interval = max(1, 12 / max(1, phases))
-                let isHighlighted = mode == "Lumpsum" && (i % interval == 0) && (i / interval < phases)
-
-                Circle()
-                    .trim(from: CGFloat(i) * 1/12 + 0.005, to: CGFloat(i+1) * 1/12 - 0.005)
-                    .stroke(isHighlighted ? Color.blue.gradient : Color.secondary.opacity(0.15).gradient, style: StrokeStyle(lineWidth: 20, lineCap: .round))
-                    .frame(width: 170, height: 170)
-                    .rotationEffect(.degrees(-90))
+                    SectorMark(
+                        angle: .value("Phase", 1),
+                        innerRadius: .ratio(0.78),
+                        angularInset: 2
+                    )
+                    .foregroundStyle(isHighlighted ? Color.blue : Color.secondary.opacity(0.15))
+                    .cornerRadius(8)
+                }
             }
+            .chartLegend(.hidden)
+            .frame(width: 170, height: 170)
+            .rotationEffect(.degrees(-90))
 
             VStack(spacing: 4) {
                 Text("₹\(InvestmentPlannerEngine.formatL_Internal(total))")

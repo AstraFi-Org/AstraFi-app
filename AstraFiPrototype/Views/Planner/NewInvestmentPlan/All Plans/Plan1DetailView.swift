@@ -1,4 +1,5 @@
 import SwiftUI
+import Charts
 
 struct Plan1DetailView: View {
     @Environment(\.colorScheme) var colorScheme
@@ -573,14 +574,20 @@ struct DonutChartView: View {
     var body: some View {
         VStack(spacing: 20) {
             ZStack {
-                ForEach(Array(segments.enumerated()), id: \.offset) { index, segment in
-                    DonutSegment(
-                        startAngle: startAngle(for: index),
-                        endAngle: endAngle(for: index),
-                        color: segment.2,
-                        animate: animate
-                    )
+                Chart {
+                    ForEach(Array(segments.enumerated()), id: \.offset) { _, segment in
+                        SectorMark(
+                            angle: .value("Allocation", animate ? segment.1 : 0),
+                            innerRadius: .ratio(0.62),
+                            angularInset: 1.5
+                        )
+                        .foregroundStyle(segment.2)
+                        .cornerRadius(6)
+                    }
                 }
+                .chartLegend(.hidden)
+                .frame(width: 180, height: 180)
+                .animation(.spring(response: 0.8, dampingFraction: 0.7), value: animate)
 
                 Circle()
                     .fill(AppTheme.cardBackground)
@@ -611,32 +618,8 @@ struct DonutChartView: View {
         }
     }
 
-    private func startAngle(for index: Int) -> Angle {
-        let total = segments.reduce(0.0) { $0 + $1.1 }
-        let previous = segments[0..<index].reduce(0.0) { $0 + $1.1 }
-        return .degrees(previous / total * 360 - 90)
-    }
-
-    private func endAngle(for index: Int) -> Angle {
-        let total = segments.reduce(0.0) { $0 + $1.1 }
-        let current = segments[0...index].reduce(0.0) { $0 + $1.1 }
-        return .degrees(current / total * 360 - 90)
-    }
-}
-
-struct DonutSegment: View {
-    let startAngle: Angle
-    let endAngle: Angle
-    let color: Color
-    var animate: Bool
-
-    var body: some View {
-        Circle()
-            .trim(from: 0, to: animate ? CGFloat((endAngle.degrees - startAngle.degrees) / 360) : 0)
-            .stroke(color, style: StrokeStyle(lineWidth: 35, lineCap: .round))
-            .frame(width: 180, height: 180)
-            .rotationEffect(startAngle)
-            .animation(.spring(response: 0.8, dampingFraction: 0.7), value: animate)
+    private var totalAllocation: Double {
+        segments.reduce(0) { $0 + $1.1 }
     }
 }
 

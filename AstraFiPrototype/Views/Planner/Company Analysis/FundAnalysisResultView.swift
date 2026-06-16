@@ -1,4 +1,21 @@
 import SwiftUI
+import Charts
+
+private struct FundAnalysisChartPoint: Identifiable {
+    let index: Int
+    let value: Double
+    let series: String
+
+    var id: String { "\(series)-\(index)" }
+}
+
+private struct FundAllocationSlice: Identifiable {
+    let name: String
+    let value: Double
+    let color: Color
+
+    var id: String { name }
+}
 
 struct FundAnalysisResultView: View {
     @Environment(\.colorScheme) var colorScheme
@@ -133,32 +150,38 @@ struct FundAnalysisResultView: View {
                 }
                 .frame(width: 26, height: 130)
 
-                GeometryReader { geo in
-                    let w = geo.size.width
-                    let h = geo.size.height
+                Chart {
+                    ForEach([0.0, 0.33, 0.66, 1.0], id: \.self) { value in
+                        RuleMark(y: .value("Grid", value))
+                            .foregroundStyle(Color.gray.opacity(0.18))
+                            .lineStyle(StrokeStyle(lineWidth: 0.5))
+                    }
 
-                    ZStack(alignment: .bottomLeading) {
+                    ForEach(navChartPoints) { point in
+                        AreaMark(
+                            x: .value("Point", point.index),
+                            yStart: .value("Baseline", 0),
+                            yEnd: .value("NAV", animateNAV ? point.value : navChartPoints.first?.value ?? 0)
+                        )
+                        .foregroundStyle(LinearGradient(
+                            colors: [.cyan.opacity(0.22), .cyan.opacity(0.04)],
+                            startPoint: .top,
+                            endPoint: .bottom
+                        ))
 
-                        ForEach([0.0, 0.33, 0.66, 1.0], id: \.self) { frac in
-                            Path { p in
-                                let y = h * CGFloat(frac)
-                                p.move(to:    CGPoint(x: 0, y: y))
-                                p.addLine(to: CGPoint(x: w, y: y))
-                            }
-                            .stroke(Color.gray.opacity(0.18), lineWidth: 0.5)
-                        }
-
-                        NAVAreaShape(animate: animateNAV)
-                            .fill(LinearGradient(
-                                colors: [.cyan.opacity(0.22),
-                                         .cyan.opacity(0.04)],
-                                startPoint: .top, endPoint: .bottom))
-
-                        NAVLineShape(animate: animateNAV)
-                            .stroke(.cyan,
-                                    style: StrokeStyle(lineWidth: 2, lineCap: .round, lineJoin: .round))
+                        LineMark(
+                            x: .value("Point", point.index),
+                            y: .value("NAV", animateNAV ? point.value : navChartPoints.first?.value ?? 0)
+                        )
+                        .interpolationMethod(.catmullRom)
+                        .foregroundStyle(.cyan)
+                        .lineStyle(StrokeStyle(lineWidth: 2, lineCap: .round, lineJoin: .round))
                     }
                 }
+                .chartXScale(domain: 0...(max(navChartPoints.count - 1, 1)))
+                .chartYScale(domain: 0...1)
+                .chartXAxis(.hidden)
+                .chartYAxis(.hidden)
                 .frame(height: 130)
             }
         }
@@ -172,23 +195,19 @@ struct FundAnalysisResultView: View {
             HStack(alignment: .center, spacing: 0) {
 
                 ZStack {
-                    Circle()
-                        .trim(from: 0, to: animateDonut ? 0.75 : 0)
-                        .stroke(.green,
-                                style: StrokeStyle(lineWidth: 32, lineCap: .butt))
-                        .rotationEffect(.degrees(-90))
-
-                    Circle()
-                        .trim(from: 0.75, to: animateDonut ? 1.0 : 0.75)
-                        .stroke(.cyan,
-                                style: StrokeStyle(lineWidth: 32, lineCap: .butt))
-                        .rotationEffect(.degrees(-90))
-
-                    Circle()
-                        .fill(AppTheme.cardBackground)
-                        .frame(width: 72, height: 72)
+                    Chart {
+                        ForEach(fundAllocationSlices) { slice in
+                            SectorMark(
+                                angle: .value("Allocation", animateDonut ? slice.value : 0),
+                                innerRadius: .ratio(0.58),
+                                angularInset: 0
+                            )
+                            .foregroundStyle(slice.color)
+                        }
+                    }
+                    .chartLegend(.hidden)
+                    .frame(width: 116, height: 116)
                 }
-
                 .padding(16)
                 .frame(width: 148, height: 148)
                 .animation(.spring(response: 0.9, dampingFraction: 0.7), value: animateDonut)
@@ -215,6 +234,21 @@ struct FundAnalysisResultView: View {
                 Spacer()
             }
         }
+    }
+
+    private var navChartPoints: [FundAnalysisChartPoint] {
+        [
+            0.18, 0.14, 0.16, 0.13, 0.10, 0.14, 0.18, 0.22, 0.25,
+            0.28, 0.32, 0.36, 0.40, 0.45, 0.50, 0.54, 0.58, 0.63,
+            0.67, 0.70, 0.74, 0.78, 0.82, 0.87, 0.90, 0.94, 0.97, 1.0
+        ].enumerated().map { FundAnalysisChartPoint(index: $0.offset, value: $0.element, series: "NAV") }
+    }
+
+    private var fundAllocationSlices: [FundAllocationSlice] {
+        [
+            FundAllocationSlice(name: "Equity", value: 75, color: .green),
+            FundAllocationSlice(name: "Debt", value: 25, color: .cyan)
+        ]
     }
 }
 
@@ -258,91 +292,6 @@ private struct FADetailRow: View {
         }
         .padding(.horizontal, 20)
         .padding(.vertical, 14)
-    }
-}
-
-struct NAVLineShape: Shape {
-    var animate: Bool
-    var animatableData: Double {
-        get { animate ? 1 : 0 }
-        set { }
-    }
-
-    private let pts: [CGFloat] = [
-        0.18, 0.14, 0.16, 0.13, 0.10, 0.14, 0.18, 0.22, 0.25,
-        0.28, 0.32, 0.36, 0.40, 0.45, 0.50, 0.54, 0.58, 0.63,
-        0.67, 0.70, 0.74, 0.78, 0.82, 0.87, 0.90, 0.94, 0.97, 1.0
-    ]
-
-    func path(in rect: CGRect) -> Path {
-        var path = Path()
-        guard pts.count > 1 else { return path }
-
-        let stepX = rect.width / CGFloat(pts.count - 1)
-        var points: [CGPoint] = []
-
-        for i in 0..<pts.count {
-            points.append(CGPoint(x: stepX * CGFloat(i), y: rect.height * (1 - pts[i])))
-        }
-
-        let visibleCount = Int(Double(points.count) * (animate ? 1.0 : 0.05))
-        guard visibleCount > 1 else { return path }
-
-        path.move(to: points[0])
-
-        for i in 1..<visibleCount {
-            let p1 = points[i-1]
-            let p2 = points[i]
-            let midPoint = CGPoint(x: (p1.x + p2.x)/2, y: (p1.y + p2.y)/2)
-            path.addQuadCurve(to: midPoint, control: p1)
-            if i == visibleCount - 1 {
-                path.addLine(to: p2)
-            }
-        }
-        return path
-    }
-}
-
-struct NAVAreaShape: Shape {
-    var animate: Bool
-    var animatableData: Double {
-        get { animate ? 1 : 0 }
-        set { }
-    }
-
-    private let pts: [CGFloat] = [
-        0.18, 0.14, 0.16, 0.13, 0.10, 0.14, 0.18, 0.22, 0.25,
-        0.28, 0.32, 0.36, 0.40, 0.45, 0.50, 0.54, 0.58, 0.63,
-        0.67, 0.70, 0.74, 0.78, 0.82, 0.87, 0.90, 0.94, 0.97, 1.0
-    ]
-
-    func path(in rect: CGRect) -> Path {
-        var path = Path()
-        guard pts.count > 1 else { return path }
-
-        let stepX = rect.width / CGFloat(pts.count - 1)
-        var points: [CGPoint] = []
-
-        for i in 0..<pts.count {
-            points.append(CGPoint(x: stepX * CGFloat(i), y: rect.height * (1 - pts[i])))
-        }
-
-        let visibleCount = Int(Double(points.count) * (animate ? 1.0 : 0.05))
-        guard visibleCount > 1 else { return path }
-
-        path.move(to: points[0])
-
-        for i in 1..<visibleCount {
-            let p1 = points[i-1]
-            let p2 = points[i]
-            let midPoint = CGPoint(x: (p1.x + p2.x)/2, y: (p1.y + p2.y)/2)
-            path.addQuadCurve(to: midPoint, control: p1)
-        }
-
-        path.addLine(to: CGPoint(x: points[visibleCount-1].x, y: rect.height))
-        path.addLine(to: CGPoint(x: 0, y: rect.height))
-        path.closeSubpath()
-        return path
     }
 }
 
@@ -390,80 +339,63 @@ struct SimilarFundCard: View {
                 }
             }
 
-            GeometryReader { geo in
-                let totalW  = geo.size.width
-                let totalH  = geo.size.height
-                let yAxisW: CGFloat = 54
-                let chartW  = totalW - yAxisW
+            Chart {
+                RuleMark(y: .value("Upper", 0.72))
+                    .foregroundStyle(Color.gray.opacity(0.40))
+                    .lineStyle(StrokeStyle(lineWidth: 1, dash: [5, 4]))
+                RuleMark(y: .value("Lower", 0.30))
+                    .foregroundStyle(Color.gray.opacity(0.40))
+                    .lineStyle(StrokeStyle(lineWidth: 1, dash: [5, 4]))
 
-                ZStack(alignment: .topLeading) {
+                ForEach(similarFundChartPoints) { point in
+                    LineMark(
+                        x: .value("Point", point.index),
+                        y: .value("Value", point.value),
+                        series: .value("Series", point.series)
+                    )
+                    .foregroundStyle(point.series == "Nifty50" ? Color.red : Color.green)
+                    .lineStyle(StrokeStyle(lineWidth: 2, lineCap: .round, lineJoin: .round))
+                }
 
-                    Path { p in
-                        p.move(to:    CGPoint(x: 0, y: 0))
-                        p.addLine(to: CGPoint(x: 0, y: totalH))
+                ForEach(similarFundEndPoints) { point in
+                    PointMark(
+                        x: .value("Point", point.index),
+                        y: .value("Value", point.value)
+                    )
+                    .foregroundStyle(point.series == "Nifty50" ? Color.red : Color.green)
+                    .symbolSize(64)
+                }
+
+                PointMark(x: .value("Point", redPts.count - 1), y: .value("Value", 0.30))
+                    .foregroundStyle(.cyan)
+                    .symbolSize(49)
+                    .annotation(position: .top, alignment: .trailing) {
+                        Text("Nifty50")
+                            .font(.system(size: 11, weight: .semibold))
+                            .foregroundColor(.red)
                     }
-                    .stroke(Color.primary.opacity(0.7), lineWidth: 1.5)
-
-                    Path { p in
-                        let y = totalH * 0.28
-                        p.move(to:    CGPoint(x: 0,      y: y))
-                        p.addLine(to: CGPoint(x: chartW, y: y))
-                    }
-                    .stroke(Color.gray.opacity(0.40),
-                            style: StrokeStyle(lineWidth: 1, dash: [5, 4]))
-
-                    Path { p in
-                        let y = totalH * 0.70
-                        p.move(to:    CGPoint(x: 0,      y: y))
-                        p.addLine(to: CGPoint(x: chartW, y: y))
-                    }
-                    .stroke(Color.gray.opacity(0.40),
-                            style: StrokeStyle(lineWidth: 1, dash: [5, 4]))
-
-                    polylinePath(pts: redPts, w: chartW, h: totalH)
-                        .stroke(
-                            LinearGradient(colors: [Color.red, Color.red.opacity(0.7)], startPoint: .top, endPoint: .bottom),
-                            style: StrokeStyle(lineWidth: 2, lineCap: .round, lineJoin: .round)
-                        )
-                        .shadow(color: .red.opacity(0.3), radius: 4)
-
-                    polylinePath(pts: greenPts, w: chartW, h: totalH)
-                        .stroke(
-                            LinearGradient(colors: [Color.green, Color.green.opacity(0.7)], startPoint: .top, endPoint: .bottom),
-                            style: StrokeStyle(lineWidth: 2, lineCap: .round, lineJoin: .round)
-                        )
-                        .shadow(color: .green.opacity(0.3), radius: 4)
-
-                    endDot(pts: redPts,   w: chartW, h: totalH,
-                           color: .red)
-
-                    endDot(pts: greenPts, w: chartW, h: totalH,
-                           color: .green)
-
-                    Circle()
-                        .fill(.cyan)
-                        .frame(width: 7, height: 7)
-                        .position(x: chartW - 1, y: totalH * 0.70)
-
-                    Text("Nifty50")
-                        .font(.system(size: 11, weight: .semibold))
-                        .foregroundColor(.red)
-                        .position(x: chartW - 22, y: 10)
-
-                    let step = totalH / CGFloat(yLabels.count - 1)
-                    ForEach(Array(yLabels.enumerated()), id: \.offset) { i, lbl in
-                        Text(lbl)
-                            .font(.system(size: 8.5))
-                            .foregroundColor(.secondary)
-                            .frame(width: yAxisW - 2, alignment: .trailing)
-                            .position(x: chartW + (yAxisW / 2) + 1,
-                                      y: CGFloat(i) * step)
+            }
+            .chartXScale(domain: 0...(max(redPts.count - 1, 1)))
+            .chartYScale(domain: 0...1)
+            .chartXAxis(.hidden)
+            .chartYAxis {
+                AxisMarks(position: .trailing, values: yAxisValues) { value in
+                    AxisValueLabel {
+                        if let axisValue = value.as(Double.self),
+                           let index = yAxisValues.firstIndex(where: { abs($0 - axisValue) < 0.0001 }),
+                           yLabels.indices.contains(index) {
+                            Text(yLabels[index])
+                                .font(.system(size: 8.5))
+                                .foregroundColor(.secondary)
+                        }
                     }
                 }
-                .background(
-                    RoundedRectangle(cornerRadius: 12)
-                        .fill(Color.primary.opacity(0.03))
-                )
+            }
+            .chartLegend(.hidden)
+            .chartPlotStyle { plotArea in
+                plotArea
+                    .background(Color.primary.opacity(0.03))
+                    .border(Color.primary.opacity(0.7), width: 1.5)
             }
             .frame(height: 220)
 
@@ -493,26 +425,21 @@ struct SimilarFundCard: View {
         .shadow(color: AppTheme.adaptiveShadow, radius: 12, x: 0, y: 4)
     }
 
-    private func polylinePath(pts: [CGFloat], w: CGFloat, h: CGFloat) -> Path {
-        var path = Path()
-        guard pts.count > 1 else { return path }
-        let stepX = w / CGFloat(pts.count - 1)
-        path.move(to: CGPoint(x: 0, y: h * (1 - pts[0])))
-        for i in 1..<pts.count {
-            path.addLine(to: CGPoint(x: stepX * CGFloat(i),
-                                     y: h * (1 - pts[i])))
-        }
-        return path
+    private var similarFundChartPoints: [FundAnalysisChartPoint] {
+        redPts.enumerated().map { FundAnalysisChartPoint(index: $0.offset, value: $0.element, series: "Nifty50") }
+        + greenPts.enumerated().map { FundAnalysisChartPoint(index: $0.offset, value: $0.element, series: "Fund") }
     }
 
-    private func endDot(pts: [CGFloat], w: CGFloat, h: CGFloat, color: Color) -> some View {
-        let stepX = w / CGFloat(pts.count - 1)
-        let lastX = stepX * CGFloat(pts.count - 1)
-        let lastY = h * (1 - pts[pts.count - 1])
-        return Circle()
-            .fill(color)
-            .frame(width: 8, height: 8)
-            .position(x: lastX, y: lastY)
+    private var similarFundEndPoints: [FundAnalysisChartPoint] {
+        [
+            FundAnalysisChartPoint(index: redPts.count - 1, value: redPts.last ?? 0, series: "Nifty50"),
+            FundAnalysisChartPoint(index: greenPts.count - 1, value: greenPts.last ?? 0, series: "Fund")
+        ]
+    }
+
+    private var yAxisValues: [Double] {
+        guard yLabels.count > 1 else { return [0] }
+        return yLabels.indices.map { 1 - (Double($0) / Double(yLabels.count - 1)) }
     }
 }
 

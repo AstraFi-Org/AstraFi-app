@@ -1,4 +1,5 @@
 import SwiftUI
+import Charts
 
 struct PlanComparisonView: View {
     @Environment(\.colorScheme) var colorScheme
@@ -612,14 +613,25 @@ struct TimelineBarItem: View {
                 Spacer()
                 Text(value.toCurrency(compact: true)).font(.system(size: 12, weight: .black)).foregroundColor(color)
             }
-            GeometryReader { geo in
-                ZStack(alignment: .leading) {
-                    Capsule().fill(color.opacity(0.1)).frame(height: 10)
-                    Capsule()
-                        .fill(LinearGradient(colors: [color, color.opacity(0.7)], startPoint: .leading, endPoint: .trailing))
-                        .frame(width: animate ? geo.size.width * CGFloat(value / Swift.max(1, maxValue)) : 0, height: 10)
-                }
+            Chart {
+                BarMark(
+                    x: .value("Maximum", maxValue),
+                    y: .value("Plan", label)
+                )
+                .foregroundStyle(color.opacity(0.1))
+                .cornerRadius(5)
+
+                BarMark(
+                    x: .value("Value", animate ? value : 0),
+                    y: .value("Plan", label)
+                )
+                .foregroundStyle(LinearGradient(colors: [color, color.opacity(0.7)], startPoint: .leading, endPoint: .trailing))
+                .cornerRadius(5)
             }
+            .chartXScale(domain: 0...Swift.max(1, maxValue))
+            .chartXAxis(.hidden)
+            .chartYAxis(.hidden)
+            .chartLegend(.hidden)
             .frame(height: 10)
         }
     }

@@ -1,4 +1,19 @@
 import SwiftUI
+import Charts
+
+private struct InvestmentHistoryChartPoint: Identifiable {
+    let index: Int
+    let date: String
+    let value: Double
+
+    var id: Int { index }
+}
+
+private struct InvestmentTransactionChartPoint: Identifiable {
+    let id: UUID
+    let index: Int
+    let value: Double
+}
 
 struct InvestmentDetailView: View {
     @Environment(AppStateManager.self) var appState
@@ -205,80 +220,62 @@ struct InvestmentDetailView: View {
     @ViewBuilder
     private var valueChart: some View {
         VStack(alignment: .leading, spacing: 0) {
-            GeometryReader { geo in
-                Group {
-                    if isLoadingHistory {
-                        HStack {
-                            Spacer()
-                            ProgressView().controlSize(.small)
-                            Spacer()
+            Group {
+                if isLoadingHistory {
+                    HStack {
+                        Spacer()
+                        ProgressView().controlSize(.small)
+                        Spacer()
+                    }
+                    .frame(height: 120)
+                } else {
+                    let chartData = historyChartPoints.isEmpty ? valueChartPlaceholderPoints : historyChartPoints
+                    let domain = valueChartDomain(for: chartData)
+                    let lineColor: Color = profitPct >= 0 ? .green : .red
+
+                    Chart {
+                        ForEach(chartData) { point in
+                            AreaMark(
+                                x: .value("Point", point.index),
+                                yStart: .value("Baseline", domain.lowerBound),
+                                yEnd: .value("NAV", point.value)
+                            )
+                            .foregroundStyle(
+                                LinearGradient(
+                                    colors: [lineColor.opacity(0.3), lineColor.opacity(0.05)],
+                                    startPoint: .top,
+                                    endPoint: .bottom
+                                )
+                            )
+
+                            LineMark(
+                                x: .value("Point", point.index),
+                                y: .value("NAV", point.value)
+                            )
+                            .foregroundStyle(lineColor)
+                            .lineStyle(StrokeStyle(lineWidth: 2.5))
                         }
-                        .frame(height: 120)
-                    } else if !history.isEmpty {
-                        let w = geo.size.width
-                        let h: CGFloat = 120
-                        let vals = history.compactMap { Double($0.nav) }
-                        let minVal = vals.min() ?? 0
-                        let maxVal = vals.max() ?? 1
-                        let range = (maxVal - minVal) > 0 ? (maxVal - minVal) : 1
 
-                        ZStack(alignment: .bottomLeading) {
-                            Path { p in
-                                p.move(to: CGPoint(x: 0, y: h))
-                                for (i, val) in vals.enumerated() {
-                                    let x = (w * CGFloat(i) / CGFloat(vals.count - 1))
-                                    let normalizedVal = (val - minVal) / range
-                                    let y = h * (1.0 - (normalizedVal * 0.7 + 0.15))
-                                    p.addLine(to: CGPoint(x: x, y: y))
-                                }
-                                p.addLine(to: CGPoint(x: w, y: h)); p.closeSubpath()
-                            }
-                            .fill(LinearGradient(colors: [(profitPct >= 0 ? Color.green : Color.red).opacity(0.3), (profitPct >= 0 ? Color.green : Color.red).opacity(0.05)], startPoint: .top, endPoint: .bottom))
-
-                            Path { p in
-                                for (i, val) in vals.enumerated() {
-                                    let x = (w * CGFloat(i) / CGFloat(vals.count - 1))
-                                    let normalizedVal = (val - minVal) / range
-                                    let y = h * (1.0 - (normalizedVal * 0.7 + 0.15))
-                                    if i == 0 { p.move(to: CGPoint(x: x, y: y)) }
-                                    else { p.addLine(to: CGPoint(x: x, y: y)) }
-                                }
-                            }
-                            .stroke(profitPct >= 0 ? Color.green : Color.red, lineWidth: 2.5)
-
-                            if let lastVal = vals.last {
-                                 let x = w
-                                 let normalizedVal = (lastVal - minVal) / range
-                                 let y = h * (1.0 - (normalizedVal * 0.7 + 0.15))
-                                 Circle().fill(profitPct >= 0 ? Color.green : Color.red).frame(width: 8, height: 8).position(x: x, y: y)
-                            }
-                        }
-                    } else {
-                        let w = geo.size.width
-                        let h: CGFloat = 120
-                        ZStack(alignment: .bottomLeading) {
-                            Path { p in
-                                let pts: [(CGFloat, CGFloat)] = [(0, 0.65),(w*0.25,0.55),(w*0.5,0.40),(w*0.75,0.25),(w,0.10)]
-                                p.move(to: CGPoint(x: 0, y: h))
-                                p.addLine(to: CGPoint(x: 0, y: h * pts[0].1))
-                                for i in 1..<pts.count { p.addLine(to: CGPoint(x: pts[i].0, y: h * pts[i].1)) }
-                                p.addLine(to: CGPoint(x: w, y: h)); p.closeSubpath()
-                            }
-                            .fill(LinearGradient(colors: [(profitPct >= 0 ? Color.green : Color.red).opacity(0.3), (profitPct >= 0 ? Color.green : Color.red).opacity(0.05)], startPoint: .top, endPoint: .bottom))
-
-                            Path { p in
-                                let pts: [(CGFloat, CGFloat)] = [(0, 0.65),(w*0.25,0.55),(w*0.5,0.40),(w*0.75,0.25),(w,0.10)]
-                                p.move(to: CGPoint(x: pts[0].0, y: h * pts[0].1))
-                                for i in 1..<pts.count { p.addLine(to: CGPoint(x: pts[i].0, y: h * pts[i].1)) }
-                            }
-                            .stroke(profitPct >= 0 ? Color.green : Color.red, lineWidth: 2.5)
-
-                            Circle().fill(profitPct >= 0 ? Color.green : Color.red).frame(width: 8, height: 8).position(x: w, y: h * 0.10)
+                        if let lastPoint = chartData.last {
+                            PointMark(
+                                x: .value("Point", lastPoint.index),
+                                y: .value("NAV", lastPoint.value)
+                            )
+                            .foregroundStyle(lineColor)
+                            .symbolSize(64)
                         }
                     }
+                    .chartXScale(domain: 0...(max(chartData.count - 1, 1)))
+                    .chartYScale(domain: domain)
+                    .chartXAxis(.hidden)
+                    .chartYAxis(.hidden)
+                    .chartPlotStyle { plotArea in
+                        plotArea.background(Color.clear)
+                    }
+                    .frame(height: 120)
                 }
             }
-            .frame(height: 120).padding(.horizontal)
+            .padding(.horizontal)
         }
         .padding(.vertical)
         .investmentDetailCardStyle(colorScheme: colorScheme)
@@ -357,7 +354,8 @@ struct InvestmentDetailView: View {
                 }
                 .frame(maxWidth: .infinity, minHeight: 180)
             } else {
-                let vals     = history.compactMap { Double($0.nav) }
+                let chartData = historyChartPoints
+                let vals     = chartData.map(\.value)
                 let minVal   = (vals.min() ?? 0) * 0.995
                 let maxVal   = (vals.max() ?? 1) * 1.005
                 let range    = (maxVal - minVal) > 0 ? (maxVal - minVal) : 1
@@ -387,133 +385,112 @@ struct InvestmentDetailView: View {
                     return result
                 }()
 
-                GeometryReader { geo in
-                    let leftPad:  CGFloat = 54
-                    let rightPad: CGFloat = 12
-                    let topPad:   CGFloat = 16
-                    let botPad:   CGFloat = 28   // space for month labels
-                    let w = geo.size.width - leftPad - rightPad
-                    let h = geo.size.height - topPad - botPad
+                let yTicks: [Double] = [minVal, minVal + range*0.33, minVal + range*0.66, maxVal]
+                let transactionPoints = sipPurchaseChartPoints
 
-                    let xPos: (Int) -> CGFloat = { i in
-                        guard vals.count > 1 else { return leftPad }
-                        return leftPad + w * CGFloat(i) / CGFloat(vals.count - 1)
+                Chart {
+                    ForEach(chartData) { point in
+                        AreaMark(
+                            x: .value("Point", point.index),
+                            yStart: .value("Baseline", minVal),
+                            yEnd: .value("NAV", point.value)
+                        )
+                        .foregroundStyle(
+                            LinearGradient(
+                                colors: [lineColor.opacity(0.25), lineColor.opacity(0.03)],
+                                startPoint: .top,
+                                endPoint: .bottom
+                            )
+                        )
+
+                        LineMark(
+                            x: .value("Point", point.index),
+                            y: .value("NAV", point.value)
+                        )
+                        .foregroundStyle(lineColor)
+                        .lineStyle(StrokeStyle(lineWidth: 2))
                     }
-                    let yPos: (Double) -> CGFloat = { val in
-                        let ratio = (val - minVal) / range
-                        return topPad + h * CGFloat(1.0 - ratio)
-                    }
 
-                    ZStack(alignment: .topLeading) {
-
-                        // ── Grid lines + Y-axis labels ───────────────────────
-                        let yTicks: [Double] = [minVal, minVal + range*0.33, minVal + range*0.66, maxVal]
-                        ForEach(yTicks.indices, id: \.self) { i in
-                            let y = yPos(yTicks[i])
-                            Path { p in
-                                p.move(to:    CGPoint(x: leftPad, y: y))
-                                p.addLine(to: CGPoint(x: leftPad + w, y: y))
-                            }
-                            .stroke(Color.gray.opacity(0.15), style: StrokeStyle(lineWidth: 0.7, dash: [4, 4]))
-
-                            Text("₹\(String(format: "%.0f", yTicks[i]))")
-                                .font(.system(size: 8))
-                                .foregroundColor(.secondary)
-                                .frame(width: leftPad - 4, alignment: .trailing)
-                                .position(x: (leftPad - 4) / 2, y: y)
-                        }
-
-                        // ── Area fill ────────────────────────────────────────
-                        Path { p in
-                            guard vals.count > 1 else { return }
-                            p.move(to: CGPoint(x: xPos(0), y: topPad + h))
-                            for (i, val) in vals.enumerated() {
-                                p.addLine(to: CGPoint(x: xPos(i), y: yPos(val)))
-                            }
-                            p.addLine(to: CGPoint(x: xPos(vals.count - 1), y: topPad + h))
-                            p.closeSubpath()
-                        }
-                        .fill(LinearGradient(
-                            colors: [lineColor.opacity(0.25), lineColor.opacity(0.03)],
-                            startPoint: .top, endPoint: .bottom))
-
-                        // ── Line stroke ──────────────────────────────────────
-                        Path { p in
-                            guard vals.count > 1 else { return }
-                            for (i, val) in vals.enumerated() {
-                                let pt = CGPoint(x: xPos(i), y: yPos(val))
-                                if i == 0 { p.move(to: pt) } else { p.addLine(to: pt) }
-                            }
-                        }
-                        .stroke(lineColor, lineWidth: 2)
-
-                        // ── Entry dot (first point) ──────────────────────────
-                        if let first = vals.first {
+                    if let first = chartData.first {
+                        PointMark(
+                            x: .value("Point", first.index),
+                            y: .value("NAV", first.value)
+                        )
+                        .foregroundStyle(Color.blue)
+                        .symbol {
                             Circle()
                                 .fill(Color.blue)
                                 .frame(width: 8, height: 8)
                                 .overlay(Circle().stroke(Color.white, lineWidth: 1.5))
-                                .position(x: xPos(0), y: yPos(first))
-
-                            // Entry label
+                        }
+                        .annotation(position: .top, alignment: .leading) {
                             VStack(spacing: 1) {
                                 Text("Entry").font(.system(size: 8, weight: .bold)).foregroundColor(.blue)
-                                Text("₹\(String(format: "%.2f", first))").font(.system(size: 8)).foregroundColor(.secondary)
+                                Text("₹\(String(format: "%.2f", first.value))").font(.system(size: 8)).foregroundColor(.secondary)
                             }
-                            .position(x: xPos(0) + 28, y: yPos(first) - 14)
                         }
+                    }
 
-                        // ── Latest dot (last point) ──────────────────────────
-                        if let last = vals.last {
+                    if let last = chartData.last {
+                        PointMark(
+                            x: .value("Point", last.index),
+                            y: .value("NAV", last.value)
+                        )
+                        .foregroundStyle(lineColor)
+                        .symbol {
                             Circle()
                                 .fill(lineColor)
                                 .frame(width: 8, height: 8)
                                 .overlay(Circle().stroke(Color.white, lineWidth: 1.5))
-                                .position(x: xPos(vals.count - 1), y: yPos(last))
-
-                            // Latest label
+                        }
+                        .annotation(position: .top, alignment: .trailing) {
                             VStack(spacing: 1) {
                                 Text("Latest").font(.system(size: 8, weight: .bold)).foregroundColor(lineColor)
-                                Text("₹\(String(format: "%.2f", last))").font(.system(size: 8)).foregroundColor(.secondary)
-                            }
-                            .position(x: xPos(vals.count - 1) - 30, y: yPos(last) - 14)
-                        }
-
-                        // ── SIP / purchase dots (purple) ─────────────────────
-                        if !sipInstallments.isEmpty || inv?.mode == .lumpsum {
-                            let txList = inv?.mode == .sip
-                                ? (inv?.installments ?? [])
-                                : (inv?.installments ?? [])   // lumpsum has 1 tx
-                            ForEach(txList) { tx in
-                                if let pos = sipDotPosition(for: tx, chartWidth: w, chartHeight: h,
-                                                            xOffset: leftPad, yOffset: topPad) {
-                                    // Purple filled circle with white border
-                                    Circle()
-                                        .fill(Color.purple)
-                                        .frame(width: 7, height: 7)
-                                        .overlay(Circle().stroke(Color.white, lineWidth: 1.2))
-                                        .shadow(color: .purple.opacity(0.4), radius: 2)
-                                        .position(x: pos.x, y: pos.y)
-                                }
+                                Text("₹\(String(format: "%.2f", last.value))").font(.system(size: 8)).foregroundColor(.secondary)
                             }
                         }
+                    }
 
-                        // ── Month labels on X-axis ───────────────────────────
-                        ForEach(monthLabels.indices, id: \.self) { mi in
-                            let item = monthLabels[mi]
-                            Text(item.label)
-                                .font(.system(size: 7.5))
-                                .foregroundColor(.secondary)
-                                .position(x: xPos(item.index),
-                                          y: topPad + h + botPad - 8)
+                    ForEach(transactionPoints) { point in
+                        PointMark(
+                            x: .value("Point", point.index),
+                            y: .value("NAV", point.value)
+                        )
+                        .foregroundStyle(Color.purple)
+                        .symbol {
+                            Circle()
+                                .fill(Color.purple)
+                                .frame(width: 7, height: 7)
+                                .overlay(Circle().stroke(Color.white, lineWidth: 1.2))
+                                .shadow(color: .purple.opacity(0.4), radius: 2)
                         }
-
-                        // ── Vertical axis line ───────────────────────────────
-                        Path { p in
-                            p.move(to:    CGPoint(x: leftPad, y: topPad))
-                            p.addLine(to: CGPoint(x: leftPad, y: topPad + h))
+                    }
+                }
+                .chartXScale(domain: 0...(max(chartData.count - 1, 1)))
+                .chartYScale(domain: minVal...maxVal)
+                .chartYAxis {
+                    AxisMarks(position: .leading, values: yTicks) { value in
+                        AxisGridLine(stroke: StrokeStyle(lineWidth: 0.7, dash: [4, 4]))
+                            .foregroundStyle(Color.gray.opacity(0.15))
+                        AxisValueLabel {
+                            if let tick = value.as(Double.self) {
+                                Text("₹\(String(format: "%.0f", tick))")
+                                    .font(.system(size: 8))
+                                    .foregroundColor(.secondary)
+                            }
                         }
-                        .stroke(Color.gray.opacity(0.25), lineWidth: 1)
+                    }
+                }
+                .chartXAxis {
+                    AxisMarks(values: monthLabels.map(\.index)) { value in
+                        AxisValueLabel {
+                            if let index = value.as(Int.self),
+                               let label = monthLabels.first(where: { $0.index == index })?.label {
+                                Text(label)
+                                    .font(.system(size: 7.5))
+                                    .foregroundColor(.secondary)
+                            }
+                        }
                     }
                 }
                 .frame(height: 240)
@@ -630,31 +607,52 @@ struct InvestmentDetailView: View {
         }
     }
 
-    private func sipDotPosition(for tx: AstraInvestmentTransaction, chartWidth: CGFloat, chartHeight: CGFloat,
-                                xOffset: CGFloat = 40, yOffset: CGFloat = 0) -> (x: CGFloat, y: CGFloat)? {
-        let vals = history.compactMap { Double($0.nav) }
-        guard vals.count > 1 else { return nil }
-        let minV = (vals.min() ?? 0) * 0.995
-        let maxV = (vals.max() ?? 1) * 1.005
-        let rng = (maxV - minV) > 0 ? (maxV - minV) : 1
+    private var historyChartPoints: [InvestmentHistoryChartPoint] {
+        history.enumerated().compactMap { index, point in
+            guard let value = Double(point.nav) else { return nil }
+            return InvestmentHistoryChartPoint(index: index, date: point.date, value: value)
+        }
+    }
+
+    private var valueChartPlaceholderPoints: [InvestmentHistoryChartPoint] {
+        [
+            InvestmentHistoryChartPoint(index: 0, date: "", value: 0.35),
+            InvestmentHistoryChartPoint(index: 1, date: "", value: 0.45),
+            InvestmentHistoryChartPoint(index: 2, date: "", value: 0.60),
+            InvestmentHistoryChartPoint(index: 3, date: "", value: 0.75),
+            InvestmentHistoryChartPoint(index: 4, date: "", value: 0.90)
+        ]
+    }
+
+    private func valueChartDomain(for points: [InvestmentHistoryChartPoint]) -> ClosedRange<Double> {
+        let vals = points.map(\.value)
+        let minVal = vals.min() ?? 0
+        let maxVal = vals.max() ?? 1
+        let range = (maxVal - minVal) > 0 ? (maxVal - minVal) : 1
+        let padding = range * 0.2142857143
+        return (minVal - padding)...(maxVal + padding)
+    }
+
+    private var sipPurchaseChartPoints: [InvestmentTransactionChartPoint] {
+        let txList = inv?.installments ?? []
+        guard historyChartPoints.count > 1, !txList.isEmpty else { return [] }
 
         let df = DateFormatter()
         df.dateFormat = "dd-MM-yyyy"
-        let txDateStr = df.string(from: tx.date)
 
-        let exactIndex = history.firstIndex { $0.date == txDateStr }
-        let fallbackIndex: Int? = exactIndex == nil ? history.firstIndex { point in
-            guard let hDate = df.date(from: point.date) else { return false }
-            return hDate >= tx.date
-        } : nil
-        guard let hIndex = exactIndex ?? fallbackIndex,
-              history.indices.contains(hIndex),
-              let nav = Double(history[hIndex].nav) else { return nil }
+        return txList.compactMap { tx in
+            let txDateStr = df.string(from: tx.date)
+            let exactIndex = history.firstIndex { $0.date == txDateStr }
+            let fallbackIndex: Int? = exactIndex == nil ? history.firstIndex { point in
+                guard let hDate = df.date(from: point.date) else { return false }
+                return hDate >= tx.date
+            } : nil
+            guard let hIndex = exactIndex ?? fallbackIndex,
+                  history.indices.contains(hIndex),
+                  let nav = Double(history[hIndex].nav) else { return nil }
 
-        let x = xOffset + (chartWidth * CGFloat(hIndex) / CGFloat(history.count - 1))
-        let ratio = (nav - minV) / rng
-        let y = yOffset + chartHeight * CGFloat(1.0 - ratio)
-        return (x, y)
+            return InvestmentTransactionChartPoint(id: tx.id, index: hIndex, value: nav)
+        }
     }
 
 }
