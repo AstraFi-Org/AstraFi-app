@@ -5,13 +5,6 @@
 //  Created by Akash Kashyap on 24/04/26.
 //
 
-//
-//  InvestmentQuestionView.swift
-//  AstraFiPrototype
-//
-//  Created by Akash Kashyap on 24/04/26.
-//
-
 import SwiftUI
 
 // MARK: - Investment Question Screen
@@ -24,7 +17,7 @@ struct InvestmentQuestionView: View {
 
     @State private var doesInvest: Bool?    = nil
     @State private var goInvestments        = false   // → InvestmentDetailsScreen
-    @State private var goReport             = false   // → ChoiceToReport (skip investments)
+    @State private var goReport             = false
 
     var body: some View {
         ZStack {

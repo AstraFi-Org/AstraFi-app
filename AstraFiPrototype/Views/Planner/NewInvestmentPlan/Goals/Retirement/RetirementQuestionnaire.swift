@@ -118,44 +118,8 @@ struct RetirementQuestionnaire: View {
                     }
                 }
                 // ── 2. Lifestyle Selection Card
-//                SectionCard {
-//                    VStack(alignment: .leading, spacing: 16) {
-//                        SectionHeader(
-//                            icon: "hand.tap.fill",
-//                            iconColor: .purple,
-//                            title: "Retirement Lifestyle",
-//                            subtitle: "What type of life do you want after retirement?"
-//                        )
-//
-//                        Divider()
-//
-//                        VStack(spacing: 10) {
-//                            LifestyleChoiceCard(
-//                                title: "Lavish",
-//                                description: "Dining in best hotels, trips, pubs & luxury lifestyle",
-//                                isSelected: input.lifestylePreference == "Lavish",
-//                                color: .purple
-//                            ) { input.lifestylePreference = "Lavish" }
-//
-//                            LifestyleChoiceCard(
-//                                title: "Normal",
-//                                description: "Comfortable trips, good food & occasional luxury",
-//                                isSelected: input.lifestylePreference == "Normal",
-//                                color: .blue
-//                            ) { input.lifestylePreference = "Normal" }
-//
-//                            LifestyleChoiceCard(
-//                                title: "Average",
-//                                description: "Essential comforts with budget-friendly trips",
-//                                isSelected: input.lifestylePreference == "Average",
-//                                color: .green
-//                            ) { input.lifestylePreference = "Average" }
-//                        }
-//                    }
-//                }
-                // ── 2. Lifestyle Selection Card
                 SectionCard {
-                    VStack(alignment: .leading, spacing: 0) {  // ✅ spacing: 0, dividers handle gaps
+                    VStack(alignment: .leading, spacing: 0) {
                         SectionHeader2(
                             icon: "hand.tap.fill",
                             iconColor: .purple,
@@ -173,7 +137,7 @@ struct RetirementQuestionnaire: View {
                             color: .purple
                         ) { input.lifestylePreference = "Lavish" }
 
-                        Divider().padding(.leading, 54)  // ✅ inset divider aligns with text
+                        Divider().padding(.leading, 54)
 
                         LifestyleChoiceCard(
                             title: "Normal",
@@ -291,7 +255,7 @@ struct RetirementQuestionnaire: View {
     }
 }
 
-// MARK: - Lifestyle Choice Card (redesigned)
+// MARK: - Lifestyle Choice Card
 struct LifestyleChoiceCard: View {
     let title: String
     let description: String
