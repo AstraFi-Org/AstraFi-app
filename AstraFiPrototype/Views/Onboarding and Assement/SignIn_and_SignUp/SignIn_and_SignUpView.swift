@@ -21,8 +21,9 @@ struct SignInView: View {
 
                 // Header
                 VStack(alignment: .leading, spacing: 6) {
+
                     Text("Sign In")
-                        .font(.system(size: 32, weight: .bold))
+                        .font(.largeTitle.bold())
                 }
                 .padding(.top, 24)
                 .padding(.bottom, 36)
@@ -55,25 +56,13 @@ struct SignInView: View {
                 .padding(.bottom, 32)
 
                 // Login
-                AuthPrimaryButton(title: "Sign In") {
+                AuthPrimaryButton(title: "Sign In", isLoading: appState.isAuthLoading) {
                     Task {
                         await appState.signIn(email: email, password: password)
                     }
                 }
 
-                if let error = appState.authError {
-                    Text(error)
-                        .font(.system(size: 13))
-                        .foregroundColor(.red)
-                        .padding(.top, 8)
-                }
-
-                if appState.isAuthLoading {
-                    ProgressView()
-                        .padding(.top, 8)
-                }
-
-                AuthOrDivider().padding(.bottom, 24)
+                AuthOrDivider().padding(.vertical, 24)
                 AuthAppleButton().padding(.bottom, 32)
 
                 // Sign up
@@ -99,7 +88,15 @@ struct SignInView: View {
                 }
             }
         }
-        .background(Color(uiColor: .systemBackground).ignoresSafeArea())
+        .background(Color(uiColor: .systemGroupedBackground).ignoresSafeArea())
+        .alert("Authentication Error", isPresented: Binding(
+            get: { appState.authError != nil },
+            set: { if !$0 { appState.authError = nil } }
+        )) {
+            Button("OK", role: .cancel) { }
+        } message: {
+            Text(appState.authError ?? "")
+        }
     }
 }
 
@@ -114,6 +111,7 @@ struct SignUpView: View {
     @State private var showConfirmPassword: Bool = false
     @State private var agreedToTerms: Bool = true
     @State private var showSuccessPrompt: Bool = false
+    @State private var showTermsSheet: Bool = false
 
     var body: some View {
         NavigationStack{
@@ -131,8 +129,9 @@ struct SignUpView: View {
     //                .padding(.top, 8)
 
                     VStack(alignment: .leading, spacing: 6) {
+
                         Text("Sign Up")
-                            .font(.system(size: 32, weight: .bold))
+                            .font(.largeTitle.bold())
                             .foregroundColor(.primary)
                     }
                     .padding(.top, 24)
@@ -181,7 +180,9 @@ struct SignUpView: View {
                             HStack(spacing: 0) {
                                 Text("I agree to all the ")
                                     .font(.system(size: 14)).foregroundColor(.primary)
-                                Button("Terms & Conditions") {}
+                                Button("Terms & Conditions") {
+                                    showTermsSheet = true
+                                }
                                     .font(.system(size: 14))
                                     .foregroundStyle(brandGradient)
                                     .underline()
@@ -195,7 +196,7 @@ struct SignUpView: View {
                     }
                     .padding(.bottom, 28)
 
-                    AuthPrimaryButton(title: "Create Account") {
+                    AuthPrimaryButton(title: "Create Account", isLoading: appState.isAuthLoading, isDisabled: !agreedToTerms) {
                         Task {
                             let success = await appState.signUp(name: name, email: email, password: password)
                             if success {
@@ -204,25 +205,16 @@ struct SignUpView: View {
                         }
                     }
 
-                    if let error = appState.authError {
-                        Text(error)
-                            .font(.system(size: 13))
-                            .foregroundColor(.red)
-                            .padding(.top, 8)
-                    }
-
-                    if appState.isAuthLoading {
-                        ProgressView()
-                            .padding(.top, 8)
-                    }
-
                     HStack(spacing: 4) {
                         Spacer()
-                        Button("Already have an account? Sign in") { showSignUp = false }
+                        Text("Already have an account?")
+                            .font(.system(size: 15))
+                        Button("Sign in") { showSignUp = false }
                             .font(.system(size: 15))
                             .foregroundStyle(brandGradient)
                         Spacer()
                     }
+                    .padding(.top, 16)
                 }
                 .padding(.horizontal, 28)
                 .padding(.bottom, 40)
@@ -240,13 +232,24 @@ struct SignUpView: View {
         }
         
         .navigationBarBackButtonHidden(true)
-        .background(Color(uiColor: .systemBackground).ignoresSafeArea())
+        .background(Color(uiColor: .systemGroupedBackground).ignoresSafeArea())
         .alert("Account created successfully", isPresented: $showSuccessPrompt) {
             Button("OK", role: .cancel) {
                 appState.completeSignUp()
             }
         } message: {
             Text("You are successfully signed up!")
+        }
+        .alert("Authentication Error", isPresented: Binding(
+            get: { appState.authError != nil },
+            set: { if !$0 { appState.authError = nil } }
+        )) {
+            Button("OK", role: .cancel) { }
+        } message: {
+            Text(appState.authError ?? "")
+        }
+        .sheet(isPresented: $showTermsSheet) {
+            TermsAndConditionsView(agreedToTerms: $agreedToTerms)
         }
     }
 }
