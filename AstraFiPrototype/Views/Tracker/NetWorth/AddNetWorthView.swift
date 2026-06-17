@@ -367,15 +367,15 @@ struct AddNetWorthView: View {
 
     private func loadFromProfile() {
         guard let profile = appState.currentProfile else { return }
-        savingsAccount = String(Int(profile.assets.savingsAccountAmount))
-        currentAccount = String(Int(profile.assets.currentAccountAmount))
-        stocks = String(Int(profile.assets.stocksHoldingAmount))
-        mutualFunds = String(Int(profile.assets.mutualFundHoldingAmount))
-        propertyRealEstate = String(Int(profile.assets.propertyAmount))
-        homeLoan = String(Int(profile.liabilities.homeLoanAmount))
-        carLoan = String(Int(profile.liabilities.vehicleLoanAmount))
-        creditCardDues = String(Int(profile.liabilities.creditCardBills))
-        educationLoan = String(Int(profile.liabilities.educationLoanAmount))
+        savingsAccount = String(profile.assets.savingsAccountAmount.safeInt)
+        currentAccount = String(profile.assets.currentAccountAmount.safeInt)
+        stocks = String(profile.assets.stocksHoldingAmount.safeInt)
+        mutualFunds = String(profile.assets.mutualFundHoldingAmount.safeInt)
+        propertyRealEstate = String(profile.assets.propertyAmount.safeInt)
+        homeLoan = String(profile.liabilities.homeLoanAmount.safeInt)
+        carLoan = String(profile.liabilities.vehicleLoanAmount.safeInt)
+        creditCardDues = String(profile.liabilities.creditCardBills.safeInt)
+        educationLoan = String(profile.liabilities.educationLoanAmount.safeInt)
     }
 }
 

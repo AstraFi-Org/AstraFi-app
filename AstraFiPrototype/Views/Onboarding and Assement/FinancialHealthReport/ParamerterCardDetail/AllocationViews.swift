@@ -38,7 +38,7 @@ struct AllocationBarRow: View {
                     Text(label).font(.subheadline)
                 }
                 Spacer()
-                Text("\(Int(ratio * 100))% · \(amount.toCurrency(compact: true))")
+                Text("\((ratio * 100).safeInt)% · \(amount.toCurrency(compact: true))")
                     .font(.caption).bold().foregroundStyle(color)
             }
             GeometryReader { geo in

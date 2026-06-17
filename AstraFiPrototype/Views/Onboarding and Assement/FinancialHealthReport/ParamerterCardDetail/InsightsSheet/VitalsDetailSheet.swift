@@ -54,7 +54,7 @@ struct VitalsDetailSheet: View {
                     HStack {
                         VStack(alignment: .leading, spacing: 4) {
                             Text("Savings Rate").font(.subheadline).foregroundStyle(.secondary)
-                            Text("\(Int(ratio * 100))% of income").font(.title3).bold().foregroundStyle(savingsColor)
+                            Text("\((ratio * 100).safeInt)% of income").font(.title3).bold().foregroundStyle(savingsColor)
                         }
                         Spacer()
                         ZStack {
@@ -62,7 +62,7 @@ struct VitalsDetailSheet: View {
                                 .stroke(savingsColor, style: StrokeStyle(lineWidth: 5, lineCap: .round))
                                 .rotationEffect(.degrees(-90))
                             Circle().stroke(savingsColor.opacity(0.15), lineWidth: 5)
-                            Text("\(Int(ratio * 100))%").font(.caption).bold().foregroundStyle(savingsColor)
+                            Text("\((ratio * 100).safeInt)%").font(.caption).bold().foregroundStyle(savingsColor)
                         }
                         .frame(width: 56, height: 56)
                     }

@@ -94,10 +94,10 @@ struct TrackerLoanCard: View {
                 HStack {
                     Text("\(loan.installmentsPaid)/\(loan.loanTenureMonths) EMIs").font(.auraCaption(size: 11)).foregroundColor(.secondary)
                     Spacer()
-                    Text("\(Int(progress * 100))%").font(.auraCaption(size: 11, weight: .bold)).foregroundColor(AppTheme.auraIndigo)
+                    Text("\((progress * 100).safeInt)%").font(.auraCaption(size: 11, weight: .bold)).foregroundColor(AppTheme.auraIndigo)
                 }
                 
-                ProgressView(value: min(max(0, progress), 1))
+                ProgressView(value: min(max(progress.safeFinite, 0), 1))
                     .progressViewStyle(.linear)
                     .tint(color)
             }

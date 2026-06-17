@@ -19,7 +19,7 @@ struct PlannerView: View {
     private var monthlyExpenses: Double { profile?.basicDetails.monthlyExpenses ?? 0 }
     private var savingRate:      Int    {
         guard monthlyIncome > 0 else { return 0 }
-        return Int(((monthlyIncome - monthlyExpenses) / monthlyIncome) * 100)
+        return (((monthlyIncome - monthlyExpenses) / monthlyIncome) * 100).safeInt
     }
 
     private var totalInvested: Double { investments.reduce(0) { $0 + $1.investmentAmount } }
@@ -334,7 +334,7 @@ struct PlannerView: View {
                                                 Text("Forecast:")
                                                     .font(.system(size: 10))
                                                     .foregroundStyle(.secondary)
-                                                Text("+\(Int(inv.expectedAnnualRate * 100))% p.a.")
+                                                Text("+\((inv.expectedAnnualRate * 100).safeInt)% p.a.")
                                                     .font(.system(size: 11, weight: .bold))
                                                     .foregroundStyle(AppTheme.auraGreen)
                                             }

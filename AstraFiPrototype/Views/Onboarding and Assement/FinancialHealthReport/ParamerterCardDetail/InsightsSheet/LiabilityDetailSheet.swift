@@ -144,7 +144,7 @@ struct LiabilityDetailSheet: View {
                         HStack {
                             Text("Debt-to-Income Ratio").font(.subheadline)
                             Spacer()
-                            Text("\(Int(insights.debtToIncomeRatio * 100))%").font(.subheadline).bold().foregroundStyle(dtiColor)
+                            Text("\((insights.debtToIncomeRatio * 100).safeInt)%").font(.subheadline).bold().foregroundStyle(dtiColor)
                             Text(dtiLabel).font(.caption).bold().foregroundStyle(dtiColor)
                                 .padding(.horizontal, 8).padding(.vertical, 3)
                                 .background(dtiColor.opacity(0.1)).clipShape(Capsule())

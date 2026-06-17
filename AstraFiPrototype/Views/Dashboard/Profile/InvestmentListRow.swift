@@ -19,7 +19,7 @@ struct InvestmentListRow: View {
                     Label(investment.mode == .sip ? "SIP" : "Lumpsum", systemImage: investment.mode == .sip ? "repeat.circle" : "arrow.down.circle")
                         .font(.caption).foregroundColor(.secondary)
                     Spacer()
-                    Text(investment.mode == .sip ? "₹\(Int(investment.investmentAmount))/mo" : investment.investmentAmount.toCurrency())
+                    Text(investment.mode == .sip ? "₹\(investment.investmentAmount.safeInt)/mo" : investment.investmentAmount.toCurrency())
                         .font(.subheadline).fontWeight(.bold)
                 }
                 if let goalID = investment.associatedGoalID,

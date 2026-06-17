@@ -621,22 +621,23 @@ final class AppStateManager {
         let totalLi = liabilities.totalLiabilities
         let netWorth = totalAs - totalLi
         
-        let savingsRate = incomeAfterTaxValue > 0 ? ((incomeAfterTaxValue - expensesValue) / incomeAfterTaxValue) * 100 : 0
+        let savingsRate = incomeAfterTaxValue > 0 ? (((incomeAfterTaxValue - expensesValue) / incomeAfterTaxValue) * 100).safeFinite : 0
         
         let totalEMIs = profileLoans.reduce(0.0) { $0 + $1.calculatedEMI }
-        let dti = incomeValue > 0 ? (totalEMIs / incomeValue) : 0
+        let dti = incomeValue > 0 ? (totalEMIs / incomeValue).safeFinite : 0
         
-        let efMonths = expensesValue > 0 ? (emergencyValue / expensesValue) : 0
+        let efMonths = expensesValue > 0 ? (emergencyValue / expensesValue).safeFinite : 0
+        let investmentScore = min(100, max(0, (savingsRate * 0.5) + (efMonths * 10))).safeInt
         
         let report = AstraFinancialHealthReport(
             netWorth: netWorth,
             savingsRate: savingsRate,
             debtToIncomeRatio: dti,
-            investmentScore: Int(min(100, (savingsRate * 0.5) + (efMonths * 10))),
+            investmentScore: investmentScore,
             emergencyFundMonths: efMonths
         )
         
-        let initialScore = 400 + Int(report.investmentScore * 4)
+        let initialScore = 400 + report.investmentScore * 4
         let status = initialScore >= 750 ? "Excellent" : initialScore >= 650 ? "Good" : "Needs Work"
         let firstAssessment = AstraHealthAssessment(
             date: Date(),
@@ -644,7 +645,7 @@ final class AppStateManager {
             status: status,
             keyInsights: ["First assessment generated from initial data",
                           "Emergency fund covers \(String(format: "%.1f", efMonths)) months",
-                          "Savings rate stands at \(Int(savingsRate))%"]
+                          "Savings rate stands at \(savingsRate.safeInt)%"]
         )
         
         let newInvestments = profileInvestments
@@ -817,12 +818,12 @@ final class AppStateManager {
         guard var profile = currentProfile else { return }
         
         var newAssets = profile.assets
-        newAssets.stocksHoldingAmount = profile.investments.filter { $0.investmentType == .stocks }.map { $0.currentValue }.reduce(0, +)
-        newAssets.mutualFundHoldingAmount = profile.investments.filter { $0.investmentType == .mutualFund }.map { $0.currentValue }.reduce(0, +)
-        newAssets.depositsAmount = profile.investments.filter { $0.investmentType == .deposits }.map { $0.currentValue }.reduce(0, +)
-        newAssets.propertyAmount = profile.investments.filter { $0.investmentType == .realEstate }.map { $0.currentValue }.reduce(0, +)
-        newAssets.jewelleryAmount = profile.investments.filter { $0.investmentType == .physicalGold }.map { $0.currentValue }.reduce(0, +)
-        newAssets.otherInvestmentAmount = profile.investments.filter { [.cryptocurrency, .other, .nps, .ppf, .bonds].contains($0.investmentType) }.map { $0.currentValue }.reduce(0, +)
+        newAssets.stocksHoldingAmount = profile.investments.filter { $0.investmentType == .stocks }.map { $0.currentValue.safeFinite }.reduce(0, +)
+        newAssets.mutualFundHoldingAmount = profile.investments.filter { $0.investmentType == .mutualFund }.map { $0.currentValue.safeFinite }.reduce(0, +)
+        newAssets.depositsAmount = profile.investments.filter { $0.investmentType == .deposits }.map { $0.currentValue.safeFinite }.reduce(0, +)
+        newAssets.propertyAmount = profile.investments.filter { $0.investmentType == .realEstate }.map { $0.currentValue.safeFinite }.reduce(0, +)
+        newAssets.jewelleryAmount = profile.investments.filter { $0.investmentType == .physicalGold }.map { $0.currentValue.safeFinite }.reduce(0, +)
+        newAssets.otherInvestmentAmount = profile.investments.filter { [.cryptocurrency, .other, .nps, .ppf, .bonds].contains($0.investmentType) }.map { $0.currentValue.safeFinite }.reduce(0, +)
         profile.assets = newAssets
         
         var newLiabilities = profile.liabilities
@@ -838,19 +839,20 @@ final class AppStateManager {
         
         let incomeAfterTax = profile.basicDetails.monthlyIncomeAfterTax
         let expenses = profile.basicDetails.monthlyExpenses
-        let savingsRate = incomeAfterTax > 0 ? ((incomeAfterTax - expenses) / incomeAfterTax) * 100 : 0
+        let savingsRate = incomeAfterTax > 0 ? (((incomeAfterTax - expenses) / incomeAfterTax) * 100).safeFinite : 0
         
         let totalEMIs = profile.loans.reduce(0.0) { $0 + $1.calculatedEMI }
-        let dti = profile.basicDetails.monthlyIncome > 0 ? (totalEMIs / profile.basicDetails.monthlyIncome) : 0
+        let dti = profile.basicDetails.monthlyIncome > 0 ? (totalEMIs / profile.basicDetails.monthlyIncome).safeFinite : 0
         
         let efTarget = profile.basicDetails.monthlyIncome * 6.0
-        let efMonths = efTarget > 0 ? (profile.basicDetails.emergencyFundAmount / efTarget) * 6.0 : 0
+        let efMonths = efTarget > 0 ? ((profile.basicDetails.emergencyFundAmount / efTarget) * 6.0).safeFinite : 0
+        let investmentScore = min(100, max(0, (savingsRate * 0.5) + (efMonths * 10))).safeInt
         
         profile.financialHealthReport = AstraFinancialHealthReport(
             netWorth: netWorth,
             savingsRate: savingsRate,
             debtToIncomeRatio: dti,
-            investmentScore: Int(min(100, (savingsRate * 0.5) + (efMonths * 10))),
+            investmentScore: investmentScore,
             emergencyFundMonths: efMonths
         )
         
@@ -980,6 +982,64 @@ final class AppStateManager {
                 }
             }
         }
+    }
+
+    func syncUpstoxHoldings(_ holdings: [UpstoxHolding], mutualFunds: [UpstoxMutualFundHolding] = []) {
+        guard var profile = currentProfile else { return }
+
+        let manualInvestments = profile.investments.filter { $0.brokerSource != "Upstox" }
+        let connectedStockInvestments = holdings
+            .filter { $0.quantity > 0 }
+            .map { holding in
+                AstraInvestment(
+                    investmentType: .stocks,
+                    subtype: .largeCap,
+                    investmentName: holding.displayName,
+                    investmentAmount: holding.investedAmount.safeFinite,
+                    startDate: Date(),
+                    mode: .lumpsum,
+                    isin: holding.isin,
+                    symbol: holding.tradingSymbol,
+                    quantity: holding.quantity.safeFinite,
+                    livePrice: holding.currentPrice.safeFinite,
+                    priceChange: holding.dayChange.safeFinite,
+                    priceChangePercentage: holding.dayChangePercentage.safeFinite,
+                    brokerSource: "Upstox",
+                    brokerInstrumentID: holding.id
+                )
+            }
+        let connectedMutualFundInvestments = mutualFunds
+            .filter { $0.quantity > 0 }
+            .map { holding in
+                AstraInvestment(
+                    investmentType: .mutualFund,
+                    subtype: .equityFund,
+                    investmentName: holding.displayName,
+                    investmentAmount: holding.investedAmount.safeFinite,
+                    startDate: Date(),
+                    mode: .lumpsum,
+                    isin: holding.instrumentKey,
+                    lastNAV: holding.lastPrice.safeFinite,
+                    lastUpdated: Date(),
+                    units: holding.quantity.safeFinite,
+                    purchaseNAV: holding.averagePrice.safeFinite,
+                    livePrice: holding.lastPrice.safeFinite,
+                    priceChange: holding.pnl.safeFinite,
+                    brokerSource: "Upstox",
+                    brokerInstrumentID: holding.id
+                )
+            }
+
+        profile.investments = manualInvestments + connectedStockInvestments + connectedMutualFundInvestments
+        currentProfile = profile
+        recalculateFinancials()
+    }
+
+    func removeUpstoxHoldings() {
+        guard var profile = currentProfile else { return }
+        profile.investments.removeAll { $0.brokerSource == "Upstox" }
+        currentProfile = profile
+        recalculateFinancials()
     }
     
     func deleteInvestment(at indexSet: IndexSet) {

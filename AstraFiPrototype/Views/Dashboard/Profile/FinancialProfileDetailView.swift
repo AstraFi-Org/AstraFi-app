@@ -99,7 +99,7 @@ private struct FinancialProfileGoalRow: View {
             VStack(alignment: .leading) {
                 Text(goal.goalName)
                     .font(.headline)
-                Text("Target: ₹\(Int(goal.targetAmount))")
+                Text("Target: ₹\(goal.targetAmount.safeInt)")
                     .font(.caption)
                     .foregroundColor(.secondary)
             }

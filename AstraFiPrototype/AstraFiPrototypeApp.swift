@@ -8,6 +8,11 @@ struct AstraFiPrototypeApp: App {
         WindowGroup {
             AppRootView()
                 .environment(appState)
+                .onOpenURL { url in
+                    Task {
+                        await UpstoxViewModel.shared.handleRedirect(url)
+                    }
+                }
         }
     }
 }

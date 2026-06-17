@@ -32,7 +32,7 @@ struct RiskDonutView: View {
                 }
                 .chartLegend(.hidden)
                 VStack(spacing: 2) {
-                    Text("\(Int(high * 100))%").font(.title3).bold().foregroundStyle(Color(hex: "#FF453A"))
+                    Text("\((high * 100).safeInt)%").font(.title3).bold().foregroundStyle(Color(hex: "#FF453A"))
                     Text("High Risk").font(.caption2).foregroundStyle(.secondary)
                 }
             }
@@ -40,9 +40,9 @@ struct RiskDonutView: View {
 
             VStack(alignment: .leading, spacing: 10) {
                 ForEach([
-                    ("High Risk",   Int(high * 100),   Color(hex: "#FF453A")),
-                    ("Medium Risk", Int(medium * 100), Color(hex: "#FF9F0A")),
-                    ("Low Risk",    Int(low * 100),    Color(hex: "#30D158")),
+                    ("High Risk",   (high * 100).safeInt,   Color(hex: "#FF453A")),
+                    ("Medium Risk", (medium * 100).safeInt, Color(hex: "#FF9F0A")),
+                    ("Low Risk",    (low * 100).safeInt,    Color(hex: "#30D158")),
                 ], id: \.0) { name, pct, color in
                     HStack(spacing: 8) {
                         RoundedRectangle(cornerRadius: 2).fill(color).frame(width: 12, height: 12)
@@ -58,9 +58,9 @@ struct RiskDonutView: View {
 
     private var riskSlices: [RiskDonutSlice] {
         [
-            RiskDonutSlice(name: "Low Risk", value: max(0, low), color: Color(hex: "#30D158")),
-            RiskDonutSlice(name: "Medium Risk", value: max(0, medium), color: Color(hex: "#FF9F0A")),
-            RiskDonutSlice(name: "High Risk", value: max(0, high), color: Color(hex: "#FF453A"))
+            RiskDonutSlice(name: "Low Risk", value: max(0, low.safeFinite), color: Color(hex: "#30D158")),
+            RiskDonutSlice(name: "Medium Risk", value: max(0, medium.safeFinite), color: Color(hex: "#FF9F0A")),
+            RiskDonutSlice(name: "High Risk", value: max(0, high.safeFinite), color: Color(hex: "#FF453A"))
         ]
     }
 }

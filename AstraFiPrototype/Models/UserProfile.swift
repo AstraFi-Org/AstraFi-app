@@ -115,6 +115,8 @@ struct AstraInvestment: Codable, Identifiable, Equatable {
     var priceChange: Double?
     var priceChangePercentage: Double?
     var createdAt: Date = Date()
+    var brokerSource: String?
+    var brokerInstrumentID: String?
     
     var installments: [AstraInvestmentTransaction] = []
 }
@@ -179,9 +181,9 @@ extension AstraInvestment {
                 guard let next = calendar.date(byAdding: .month, value: 1, to: checkDate) else { break }
                 checkDate = next
             }
-            return investmentAmount * Double(count)
+            return (investmentAmount * Double(count)).safeFinite
         }
-        return investmentAmount
+        return investmentAmount.safeFinite
     }
 
     var currentValue: Double {
@@ -199,11 +201,11 @@ extension AstraInvestment {
         }
         
         let price = livePrice ?? lastNAV ?? 0
-        return currentUnits * price
+        return (currentUnits.safeFinite * price.safeFinite).safeFinite
     }
 
     var currentGain: Double {
-        currentValue - totalInvestedAmount
+        (currentValue - totalInvestedAmount).safeFinite
     }
 
     var tenureInYears: Double {
@@ -213,7 +215,7 @@ extension AstraInvestment {
     
     var absoluteProfitRatio: Double {
         guard totalInvestedAmount > 0 else { return 0 }
-        return currentGain / totalInvestedAmount
+        return (currentGain / totalInvestedAmount).safeFinite
     }
     
     var expectedAnnualRate: Double {

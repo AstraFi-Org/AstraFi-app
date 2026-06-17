@@ -104,7 +104,7 @@ struct TrackerRecommendationSection: View {
         if stocksPct < 0.15 && profile.basicDetails.riskTolerance == .high {
             return (
                 "Boost Your Returns",
-                "Your portfolio has only \(Int(stocksPct * 100))% in stocks. Adding more equity can help beat inflation in the long term.",
+                "Your portfolio has only \((stocksPct * 100).safeInt)% in stocks. Adding more equity can help beat inflation in the long term.",
                 "Explore Stocks"
             )
         }

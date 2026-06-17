@@ -29,7 +29,7 @@ struct LoanRow: View {
                 Text(loan.displayName)
                     .font(.headline)
                 Spacer()
-                Text("₹\(Int(loan.loanAmount))")
+                Text("₹\(loan.loanAmount.safeInt)")
                     .font(.subheadline)
                     .fontWeight(.bold)
                     .foregroundColor(.red)

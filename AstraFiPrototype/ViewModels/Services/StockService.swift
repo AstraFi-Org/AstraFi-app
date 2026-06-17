@@ -17,11 +17,18 @@ class StockService {
     private let baseURL = "https://finnhub.io/api/v1"
     private var apiKey: String { Secrets.finnhubApiKey }
     
-    // Fallback data
+    // Local search seeds keep common NSE symbols discoverable even when a remote
+    // provider's search API does not return Indian equities reliably.
     private var mockStocks: [AstraStock] = [
+        AstraStock(symbol: "RADICO.NS", name: "Radico Khaitan Ltd", exchange: "NSE", currentPrice: 0, priceChange: 0, priceChangePercentage: 0),
         AstraStock(symbol: "RELIANCE.NS", name: "Reliance Industries Ltd", exchange: "NSE", currentPrice: 2450.50, priceChange: 15.20, priceChangePercentage: 0.62),
         AstraStock(symbol: "TCS.NS", name: "Tata Consultancy Services", exchange: "NSE", currentPrice: 3520.00, priceChange: -25.50, priceChangePercentage: -0.72),
         AstraStock(symbol: "HDFCBANK.NS", name: "HDFC Bank Ltd", exchange: "NSE", currentPrice: 1680.75, priceChange: 4.30, priceChangePercentage: 0.26),
+        AstraStock(symbol: "INFY.NS", name: "Infosys Ltd", exchange: "NSE", currentPrice: 0, priceChange: 0, priceChangePercentage: 0),
+        AstraStock(symbol: "ICICIBANK.NS", name: "ICICI Bank Ltd", exchange: "NSE", currentPrice: 0, priceChange: 0, priceChangePercentage: 0),
+        AstraStock(symbol: "BAJFINANCE.NS", name: "Bajaj Finance Ltd", exchange: "NSE", currentPrice: 0, priceChange: 0, priceChangePercentage: 0),
+        AstraStock(symbol: "BHARTIARTL.NS", name: "Bharti Airtel Ltd", exchange: "NSE", currentPrice: 0, priceChange: 0, priceChangePercentage: 0),
+        AstraStock(symbol: "HINDUNILVR.NS", name: "Hindustan Unilever Ltd", exchange: "NSE", currentPrice: 0, priceChange: 0, priceChangePercentage: 0),
         AstraStock(symbol: "AAPL", name: "Apple Inc", exchange: "NASDAQ", currentPrice: 185.20, priceChange: 1.25, priceChangePercentage: 0.68)
     ]
 
@@ -39,19 +46,21 @@ class StockService {
 
     // Yahoo Finance symbol: RELIANCE.NS stays as-is, AAPL stays as-is
     private func toYahooSymbol(_ symbol: String) -> String {
-        return symbol // Yahoo already uses .NS / .BO suffixes
+        return normalizeSearchSymbol(symbol)
     }
     
     func searchStocks(query: String) async -> [AstraStock] {
-        if query.isEmpty { return [] }
-        if apiKey.isEmpty {
-            let q = query.lowercased()
-            return mockStocks.map { (stock: $0, score: SearchUtility.fuzzyMatchScore(query: q, target: $0.name) + SearchUtility.fuzzyMatchScore(query: q, target: $0.symbol)) }
-                .filter { $0.score > 0.5 }
-                .sorted { $0.score > $1.score }
-                .map { $0.stock }
-        }
-        
+        let trimmedQuery = query.trimmingCharacters(in: .whitespacesAndNewlines)
+        guard trimmedQuery.count >= 2 else { return [] }
+
+        let localResults = searchLocalStocks(query: trimmedQuery)
+        let yahooResults = await searchYahooStocks(query: trimmedQuery)
+        let finnhubResults = apiKey.isEmpty ? [] : await searchFinnhubStocks(query: trimmedQuery)
+
+        return mergeSearchResults([localResults, yahooResults, finnhubResults])
+    }
+
+    private func searchFinnhubStocks(query: String) async -> [AstraStock] {
         let encodedQuery = query.addingPercentEncoding(withAllowedCharacters: .urlQueryAllowed) ?? query
         let urlString = "\(baseURL)/search?q=\(encodedQuery)&token=\(apiKey)"
         guard let url = URL(string: urlString) else { return [] }
@@ -60,11 +69,13 @@ class StockService {
             let (data, _) = try await URLSession.shared.data(from: url)
             let response = try JSONDecoder().decode(FinnhubSearchResponse.self, from: data)
             
-            return response.result.map { item in
-                AstraStock(
-                    symbol: item.symbol,
-                    name: item.description,
-                    exchange: item.type,
+            return response.result.compactMap { item in
+                let symbol = normalizeSearchSymbol(item.symbol, exchangeHint: item.type)
+                guard !symbol.isEmpty else { return nil }
+                return AstraStock(
+                    symbol: symbol,
+                    name: item.description.isEmpty ? symbol : item.description,
+                    exchange: exchangeName(for: symbol, fallback: item.type),
                     currentPrice: 0,
                     priceChange: 0,
                     priceChangePercentage: 0
@@ -72,12 +83,115 @@ class StockService {
             }
         } catch {
             print("Finnhub Search Error: \(error)")
-            let q = query.lowercased()
-            return mockStocks.map { (stock: $0, score: SearchUtility.fuzzyMatchScore(query: q, target: $0.name) + SearchUtility.fuzzyMatchScore(query: q, target: $0.symbol)) }
-                .filter { $0.score > 0.5 }
-                .sorted { $0.score > $1.score }
-                .map { $0.stock }
+            return []
         }
+    }
+
+    private func searchYahooStocks(query: String) async -> [AstraStock] {
+        guard let encodedQuery = query.addingPercentEncoding(withAllowedCharacters: .urlQueryAllowed),
+              let url = URL(string: "https://query1.finance.yahoo.com/v1/finance/search?q=\(encodedQuery)&quotesCount=20&newsCount=0&enableFuzzyQuery=true&quotesQueryId=tss_match_phrase_query") else {
+            return []
+        }
+
+        do {
+            let (data, _) = try await URLSession.shared.data(from: url)
+            let response = try JSONDecoder().decode(YahooSearchResponse.self, from: data)
+
+            return response.quotes.compactMap { quote in
+                guard let rawSymbol = quote.symbol, !rawSymbol.isEmpty else { return nil }
+                let symbol = normalizeSearchSymbol(rawSymbol, exchangeHint: quote.exchDisp ?? quote.exchange ?? "")
+                let name = quote.longname ?? quote.shortname ?? symbol
+                guard isSupportedSearchResult(symbol: symbol, name: name, query: query) else { return nil }
+
+                return AstraStock(
+                    symbol: symbol,
+                    name: name,
+                    exchange: exchangeName(for: symbol, fallback: quote.exchDisp ?? quote.exchange ?? "Market"),
+                    currentPrice: 0,
+                    priceChange: 0,
+                    priceChangePercentage: 0
+                )
+            }
+        } catch {
+            print("Yahoo Search Error: \(error)")
+            return []
+        }
+    }
+
+    private func searchLocalStocks(query: String) -> [AstraStock] {
+        let q = query.lowercased()
+        return mockStocks
+            .map { stock in
+                let normalizedSymbol = stock.symbol.replacingOccurrences(of: ".NS", with: "").replacingOccurrences(of: ".BO", with: "")
+                let score =
+                    SearchUtility.fuzzyMatchScore(query: q, target: stock.name) +
+                    SearchUtility.fuzzyMatchScore(query: q, target: stock.symbol) +
+                    SearchUtility.fuzzyMatchScore(query: q, target: normalizedSymbol)
+                return (stock: stock, score: score)
+            }
+            .filter { $0.score > 0.5 }
+            .sorted { $0.score > $1.score }
+            .map { $0.stock }
+    }
+
+    private func mergeSearchResults(_ resultGroups: [[AstraStock]]) -> [AstraStock] {
+        var seenSymbols = Set<String>()
+        var merged: [AstraStock] = []
+
+        for stock in resultGroups.flatMap({ $0 }) {
+            let symbol = normalizeSearchSymbol(stock.symbol)
+            guard !symbol.isEmpty, !seenSymbols.contains(symbol) else { continue }
+            seenSymbols.insert(symbol)
+            merged.append(AstraStock(
+                symbol: symbol,
+                name: stock.name,
+                exchange: exchangeName(for: symbol, fallback: stock.exchange),
+                currentPrice: stock.currentPrice.safeFinite,
+                priceChange: stock.priceChange.safeFinite,
+                priceChangePercentage: stock.priceChangePercentage.safeFinite
+            ))
+        }
+
+        return merged
+    }
+
+    private func normalizeSearchSymbol(_ symbol: String, exchangeHint: String = "") -> String {
+        let trimmed = symbol.trimmingCharacters(in: .whitespacesAndNewlines).uppercased()
+        guard !trimmed.isEmpty else { return "" }
+
+        if trimmed.hasPrefix("NSE:") {
+            return "\(trimmed.dropFirst(4)).NS"
+        }
+        if trimmed.hasPrefix("BSE:") {
+            return "\(trimmed.dropFirst(4)).BO"
+        }
+        if trimmed.hasSuffix(".NS") || trimmed.hasSuffix(".BO") || trimmed.contains(".") {
+            return trimmed
+        }
+
+        let hint = exchangeHint.lowercased()
+        if hint.contains("nse") || hint.contains("national stock exchange") {
+            return "\(trimmed).NS"
+        }
+        if hint.contains("bse") || hint.contains("bombay stock exchange") {
+            return "\(trimmed).BO"
+        }
+
+        return trimmed
+    }
+
+    private func exchangeName(for symbol: String, fallback: String) -> String {
+        if symbol.hasSuffix(".NS") { return "NSE" }
+        if symbol.hasSuffix(".BO") { return "BSE" }
+        return fallback.isEmpty ? "Market" : fallback
+    }
+
+    private func isSupportedSearchResult(symbol: String, name: String, query: String) -> Bool {
+        guard !symbol.isEmpty else { return false }
+        let quoteTypeIsEquity = !symbol.contains("=") && !symbol.contains("^")
+        let q = query.lowercased()
+        let searchable = "\(symbol) \(name)".lowercased()
+        return quoteTypeIsEquity && (searchable.contains(q) || SearchUtility.fuzzyMatchScore(query: q, target: searchable) > 0.4)
     }
     
     func fetchPrice(symbol: String) async -> AstraStock? {
@@ -381,4 +495,17 @@ struct YahooIndicators: Codable {
 
 struct YahooQuote: Codable {
     let close: [Double?]?
+}
+
+struct YahooSearchResponse: Codable {
+    let quotes: [YahooSearchQuote]
+}
+
+struct YahooSearchQuote: Codable {
+    let symbol: String?
+    let shortname: String?
+    let longname: String?
+    let exchange: String?
+    let exchDisp: String?
+    let quoteType: String?
 }

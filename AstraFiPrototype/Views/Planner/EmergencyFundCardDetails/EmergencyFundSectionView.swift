@@ -173,7 +173,7 @@ struct EmergencyFundSectionView: View {
     // MARK: Timeline
     private var monthsToGoal: Int {
         guard monthlyContribution > 0, remainingNeeded > 0 else { return 0 }
-        return Int(ceil(remainingNeeded / monthlyContribution))
+        return ceil(remainingNeeded / monthlyContribution).safeInt
     }
     private var completionDate: String {
         guard monthsToGoal > 0 else { return "" }

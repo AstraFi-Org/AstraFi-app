@@ -39,7 +39,7 @@ struct GoalDetailView: View {
 
     private var completionPercentage: Double {
         if targetAmount > 0 {
-            return min(currentAmount / targetAmount, 1.0)
+            return min(max((currentAmount / targetAmount).safeFinite, 0), 1.0)
         }
         return 0.0
     }
@@ -228,7 +228,7 @@ struct GoalDetailView: View {
                             .frame(width: 70, height: 70)
                             .rotationEffect(.degrees(-90))
                         VStack(spacing: 0) {
-                            Text("\(Int(completionPercentage * 100))%").font(.system(size: 15, weight: .bold)).foregroundColor(.white)
+                            Text("\((completionPercentage * 100).safeInt)%").font(.system(size: 15, weight: .bold)).foregroundColor(.white)
                             Text("done").font(.system(size: 9)).foregroundColor(.white.opacity(0.8))
                         }
                     }

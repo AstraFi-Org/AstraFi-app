@@ -266,7 +266,8 @@
 				CURRENT_PROJECT_VERSION = 1;
 				DEVELOPMENT_TEAM = 73B8W4ZN6V;
 				ENABLE_PREVIEWS = YES;
-				GENERATE_INFOPLIST_FILE = YES;
+				GENERATE_INFOPLIST_FILE = NO;
+				INFOPLIST_FILE = "ProjectSupport/AstraFiPrototype-Info.plist";
 				INFOPLIST_KEY_LSApplicationCategoryType = "public.app-category.finance";
 				INFOPLIST_KEY_NSFaceIDUsageDescription = "AstraFi uses Face ID to protect access to your financial profile and app security settings.";
 				INFOPLIST_KEY_UIApplicationSceneManifest_Generation = YES;
@@ -300,7 +301,8 @@
 				CURRENT_PROJECT_VERSION = 1;
 				DEVELOPMENT_TEAM = 73B8W4ZN6V;
 				ENABLE_PREVIEWS = YES;
-				GENERATE_INFOPLIST_FILE = YES;
+				GENERATE_INFOPLIST_FILE = NO;
+				INFOPLIST_FILE = "ProjectSupport/AstraFiPrototype-Info.plist";
 				INFOPLIST_KEY_LSApplicationCategoryType = "public.app-category.finance";
 				INFOPLIST_KEY_NSFaceIDUsageDescription = "AstraFi uses Face ID to protect access to your financial profile and app security settings.";
 				INFOPLIST_KEY_UIApplicationSceneManifest_Generation = YES;

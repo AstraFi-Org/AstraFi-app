@@ -134,7 +134,7 @@ struct EditInvestmentView: View {
             .onAppear {
                 name = investment.investmentName
                 type = investment.investmentType
-                amount = "\(Int(investment.investmentAmount))"
+                amount = "\(investment.investmentAmount.safeInt)"
                 mode = investment.mode
                 startDate = investment.startDate
                 selectedGoalID = investment.associatedGoalID

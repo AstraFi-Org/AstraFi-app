@@ -177,8 +177,8 @@ private struct ProfileInfoForm {
         maritalStatus = basic.maritalStatus
         adultDependents = basic.adultDependents
         childDependents = basic.childDependents
-        monthlyIncome = basic.monthlyIncome > 0 ? "\(Int(basic.monthlyIncome))" : ""
-        monthlyExpenses = basic.monthlyExpenses > 0 ? "\(Int(basic.monthlyExpenses))" : ""
+        monthlyIncome = basic.monthlyIncome > 0 ? "\(basic.monthlyIncome.safeInt)" : ""
+        monthlyExpenses = basic.monthlyExpenses > 0 ? "\(basic.monthlyExpenses.safeInt)" : ""
     }
 
     func apply(to profile: inout AstraUserProfile) {

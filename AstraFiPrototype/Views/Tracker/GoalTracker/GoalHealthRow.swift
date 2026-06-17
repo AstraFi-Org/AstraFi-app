@@ -31,7 +31,10 @@ struct GoalHealthRow: View {
 
     private var gradient: [Color] { goalGradient(for: goal.goalName) }
     private var icon: String { goalIcon(for: goal.goalName) }
-    private var progress: Double { min(goal.currentAmount / max(goal.targetAmount, 1), 1) }
+    private var progress: Double {
+        let value = goal.currentAmount / max(goal.targetAmount, 1)
+        return min(max(value.safeFinite, 0), 1)
+    }
 
     private var df: DateFormatter {
         let f = DateFormatter()
@@ -82,7 +85,7 @@ struct GoalHealthRow: View {
 
                 Spacer()
 
-                Text("\(Int(progress * 100))%")
+                Text("\((progress * 100).safeInt)%")
                     .foregroundColor(gradient.first)
                     .fontWeight(.semibold)
             }

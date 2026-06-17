@@ -16,6 +16,10 @@ extension Color {
 }
 
 extension Double {
+    var safeFinite: Double {
+        self.isFinite ? self : 0
+    }
+
     func toCurrency(compact: Bool = false) -> String {
         guard self.isFinite else { return "₹0" }
         let absValue = abs(self)
@@ -65,7 +69,10 @@ extension Double {
     }
 
     var safeInt: Int {
-        self.isFinite ? Int(self) : 0
+        guard self.isFinite else { return 0 }
+        if self > Double(Int.max) { return Int.max }
+        if self < Double(Int.min) { return Int.min }
+        return Int(self)
     }
 }
 extension View {

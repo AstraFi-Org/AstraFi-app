@@ -59,6 +59,16 @@ struct InvestmentCard: View {
                         if investment.schemeCode != nil {
                             Text("LIVE").font(.auraCaption(size: 9, weight: .black)).padding(.horizontal, 6).padding(.vertical, 2).background(.green).cornerRadius(4).foregroundColor(.black)
                         }
+
+                        if let source = investment.source {
+                            Text(source.uppercased())
+                                .font(.auraCaption(size: 9, weight: .black))
+                                .padding(.horizontal, 6)
+                                .padding(.vertical, 2)
+                                .background(AppTheme.auraIndigo.opacity(0.14))
+                                .foregroundColor(AppTheme.auraIndigo)
+                                .cornerRadius(4)
+                        }
                     }
                 }
                 Spacer()

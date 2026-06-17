@@ -137,26 +137,26 @@ struct EditInsuranceView: View {
         type = insurance.insuranceType
         provider = insurance.provider
         policyNumber = insurance.policyNumber
-        cover = "\(Int(insurance.sumAssured))"
-        premium = "\(Int(insurance.annualPremium))"
+        cover = "\(insurance.sumAssured.safeInt)"
+        premium = "\(insurance.annualPremium.safeInt)"
         startDate = insurance.startDate
         if let exp = insurance.expiryDate { hasExpiry = true; expiryDate = exp }
 
-        basePremium = "\(Int(insurance.basePremium))"
-        taxesGST = "\(Int(insurance.taxesGST))"
-        addOnCost = "\(Int(insurance.addOnCost))"
+        basePremium = "\(insurance.basePremium.safeInt)"
+        taxesGST = "\(insurance.taxesGST.safeInt)"
+        addOnCost = "\(insurance.addOnCost.safeInt)"
         premiumFreq = insurance.premiumFrequency
 
         if let life = insurance.lifeDetails {
             nomineeName = life.nomineeName ?? ""
             lifeInsuranceTypeStr = life.lifeInsuranceType ?? ""
-            if let db = life.deathBenefit { deathBenefit = "\(Int(db))" }
-            if let mb = life.maturityBenefit { maturityBenefit = "\(Int(mb))" }
+            if let db = life.deathBenefit { deathBenefit = "\(db.safeInt)" }
+            if let mb = life.maturityBenefit { maturityBenefit = "\(mb.safeInt)" }
         }
 
         if let health = insurance.healthDetails {
             planType = health.planType ?? ""
-            if let rrl = health.roomRentLimit { roomRentLimit = "\(Int(rrl))" }
+            if let rrl = health.roomRentLimit { roomRentLimit = "\(rrl.safeInt)" }
             prePostHosp = health.prePostHospitalization ?? ""
             if let nc = health.networkHospitalsCount { networkHosp = "\(nc)" }
             daycareProc = health.daycareProcedures
@@ -165,14 +165,14 @@ struct EditInsuranceView: View {
         if let motor = insurance.motorDetails {
             vehicleModel = motor.vehicleModel ?? ""
             vehicleNumber = motor.vehicleNumber ?? ""
-            if let declared = motor.idv { idv = "\(Int(declared))" }
+            if let declared = motor.idv { idv = "\(declared.safeInt)" }
             zeroDep = motor.zeroDep
             rsa = motor.roadsideAssistance
         }
 
-        if let sv = insurance.surrenderValue { surrenderValue = "\(Int(sv))" }
+        if let sv = insurance.surrenderValue { surrenderValue = "\(sv.safeInt)" }
         if let lip = insurance.lockInPeriodMonths { lockInPeriod = "\(lip)" }
-        if let em = insurance.expectedMaturityAmount { expectedMaturity = "\(Int(em))" }
+        if let em = insurance.expectedMaturityAmount { expectedMaturity = "\(em.safeInt)" }
     }
 
     private func saveChanges() {

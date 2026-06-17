@@ -127,8 +127,8 @@ struct InvestmentForecast: View {
 
                         let remaining = max(targetAmount - totalCollected, 0)
 
-                        let oldMonths = Int(remaining / sipBase)
-                        let newMonths = Int(remaining / totalNewSIP)
+                        let oldMonths = (remaining / sipBase).safeInt
+                        let newMonths = (remaining / totalNewSIP).safeInt
                         let timeSaved = max(0, oldMonths - newMonths)
 
                         let oldYears = Double(oldMonths) / 12.0
@@ -141,7 +141,7 @@ struct InvestmentForecast: View {
                             HStack {
                                 Label("SIP Increment", systemImage: "chart.line.uptrend.xyaxis")
                                 Spacer()
-                                Text("\(Int(sipIncrement))%")
+                                Text("\(sipIncrement.safeInt)%")
                             }
 
                             Slider(value: $sipIncrement, in: 0...100, step: 5)
@@ -164,7 +164,7 @@ struct InvestmentForecast: View {
                             }
 
                             InsightBox(
-                                text: "Increase SIP by \(Int(sipIncrement))% → goal \(timeSaved) months earlier",
+                                text: "Increase SIP by \(sipIncrement.safeInt)% → goal \(timeSaved) months earlier",
                                 color: .orange
                             )
                         }
@@ -206,7 +206,7 @@ struct InvestmentForecast: View {
                             }
 
                             InsightBox(
-                                text: "Adding ₹\(Int(lumpsumAmount)) boosts compounding significantly.",
+                                text: "Adding ₹\(lumpsumAmount.safeInt) boosts compounding significantly.",
                                 color: .blue
                             )
                         }
@@ -226,7 +226,7 @@ struct InvestmentForecast: View {
                             HStack {
                                 Label("Delay Time", systemImage: "hourglass")
                                 Spacer()
-                                Text("\(Int(delayMonths)) Months")
+                                Text("\(delayMonths.safeInt) Months")
                             }
 
                             Slider(value: $delayMonths, in: 1...24, step: 1)
@@ -236,7 +236,7 @@ struct InvestmentForecast: View {
                             VStack(spacing: 16) {
                                 InvestmentForecastDetailRow(icon: "calendar", iconColor: .blue,
                                                             label: "New Target Date",
-                                                            value: "Delayed by \(Int(delayMonths))m", isBoldValue: true)
+                                                            value: "Delayed by \(delayMonths.safeInt)m", isBoldValue: true)
 
                                 InvestmentForecastDetailRow(icon: "indianrupeesign.circle.fill", iconColor: .orange,
                                                             label: "Required SIP Drop",

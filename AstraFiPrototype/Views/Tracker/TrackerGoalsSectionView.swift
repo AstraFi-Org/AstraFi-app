@@ -64,7 +64,7 @@ struct GoalCard: View {
                 }
                 
                 // Apple-native progress bar
-                ProgressView(value: min(max(0, goal.progress), 1))
+                ProgressView(value: min(max(goal.progress.safeFinite, 0), 1))
                     .progressViewStyle(.linear)
                     .tint(AppTheme.auraIndigo)
             }

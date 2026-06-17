@@ -235,7 +235,7 @@ private struct ProfileHeader: View {
                 ProgressView(value: completion)
                     .tint(Color(hex: "#007AFF"))
 
-                Text("\(Int((completion * 100).rounded()))% Profile Setup")
+                Text("\((completion * 100).rounded().safeInt)% Profile Setup")
                     .font(.footnote.weight(.semibold))
                     .foregroundStyle(.secondary)
             }

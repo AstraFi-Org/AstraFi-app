@@ -170,14 +170,14 @@ struct EditLoanView: View {
     private func loadLoan() {
         type = loan.loanType
         lender = loan.lender
-        amount = "\(Int(loan.loanAmount))"
+        amount = "\(loan.loanAmount.safeInt)"
         rate = "\(loan.interestRate)"
         tenure = "\(loan.loanTenureMonths)"
         interestType = loan.interestType
         compFreq = loan.compoundingFrequency
         installmentsPaid = "\(loan.installmentsPaid)"
 
-        if let emi = loan.emiAmount { emiAmount = "\(Int(emi))" }
+        if let emi = loan.emiAmount { emiAmount = "\(emi.safeInt)" }
         emiFreq = loan.emiFrequency
         startDate = loan.loanStartDate
         if let fEMIDate = loan.firstEMIDate { firstEMIDate = fEMIDate }
@@ -185,10 +185,10 @@ struct EditLoanView: View {
         isFloating = loan.isFloatingRate
         penalty = "\(loan.prepaymentPenaltyPercentage)"
 
-        processingFee = "\(Int(loan.processingFee))"
-        insuranceCost = "\(Int(loan.insurancePremium))"
-        latePenalty = "\(Int(loan.latePaymentPenalty))"
-        otherCharges = "\(Int(loan.otherCharges))"
+        processingFee = "\(loan.processingFee.safeInt)"
+        insuranceCost = "\(loan.insurancePremium.safeInt)"
+        latePenalty = "\(loan.latePaymentPenalty.safeInt)"
+        otherCharges = "\(loan.otherCharges.safeInt)"
 
         moratorium = "\(loan.moratoriumMonths)"
         moratoriumAccrual = loan.interestAccrualDuringMoratorium

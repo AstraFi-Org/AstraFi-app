@@ -34,6 +34,7 @@ struct Investment: Identifiable {
 
     var schemeCode: String?
     var lastNAV: Double?
+    var source: String?
 }
 
 struct Goal: Identifiable {

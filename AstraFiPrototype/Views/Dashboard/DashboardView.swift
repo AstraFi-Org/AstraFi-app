@@ -309,9 +309,10 @@ struct DashboardView: View {
                     HStack(spacing: 12) {
                         ForEach(goals) { goal in
                             let grad = dashGoalGradient(for: goal.goalName)
+                            let progress = min(max((goal.currentAmount / max(goal.targetAmount, 1)).safeFinite, 0), 1)
                             EnhancedGoalCard(
                                 title: goal.goalName,
-                                percentage: Int(min(goal.currentAmount / max(goal.targetAmount, 1), 1) * 100),
+                                percentage: (progress * 100).safeInt,
                                 targetAmount: goal.targetAmount.toCurrency(),
                                 gradient: grad
                             )

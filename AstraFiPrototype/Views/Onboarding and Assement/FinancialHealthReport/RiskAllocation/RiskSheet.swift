@@ -62,7 +62,7 @@ struct RiskSheet: View {
                                 .foregroundStyle(score >= 0.7 ? Color(hex: "#30D158") : score >= 0.5 ? Color(hex: "#FF9F0A") : Color(hex: "#FF453A"))
                         }
                         Spacer()
-                        Text("\(Int(score * 100))").font(.largeTitle).bold()
+                        Text("\((score * 100).safeInt)").font(.largeTitle).bold()
                             .foregroundStyle(score >= 0.7 ? Color(hex: "#30D158") : Color(hex: "#FF9F0A"))
                         Text("/100").font(.callout).foregroundStyle(.secondary).padding(.top, 10)
                     }
