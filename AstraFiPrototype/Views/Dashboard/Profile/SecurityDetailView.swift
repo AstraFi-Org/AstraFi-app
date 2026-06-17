@@ -54,6 +54,21 @@ struct SecurityDetailView: View {
             }
 
             Section {
+                NavigationLink(destination: TwoFactorSetupView()) {
+                    HStack(spacing: 12) {
+                        NativeSettingsIcon(systemName: "shield.lefthalf.filled", color: Color(hex: "#007AFF"))
+                        VStack(alignment: .leading, spacing: 4) {
+                            Text("Two-Factor Authentication")
+                                .font(.body)
+                                .foregroundStyle(.primary)
+                            Text("Manage Authenticator App")
+                                .font(.footnote)
+                                .foregroundStyle(.secondary)
+                        }
+                    }
+                    .padding(.vertical, 5)
+                }
+
                 NativeSettingsActionRow(
                     title: "Trusted Devices",
                     subtitle: "This iPhone • Active now",

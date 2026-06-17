@@ -6,8 +6,12 @@
 //
 import Foundation
 import Supabase
+import Auth
 
 let supabase = SupabaseClient(
     supabaseURL: URL(string: "https://vldnxejhmiovdhjxxgdz.supabase.co")!,
-    supabaseKey: "sb_publishable_PXbdp55T-1W50F6_18twdg_laCNJKqR"
+    supabaseKey: "sb_publishable_PXbdp55T-1W50F6_18twdg_laCNJKqR",
+    options: .init(
+        auth: .init(flowType: .implicit)
+    )
 )

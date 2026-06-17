@@ -292,49 +292,6 @@ struct ProfileBanner: View {
     }
 }
 
-//struct LifestyleChoiceCard: View {
-//    let title: String
-//    let description: String
-//    let isSelected: Bool
-//    let color: Color
-//    let action: () -> Void
-//
-//    var body: some View {
-//        Button(action: action) {
-//            HStack(spacing: 16) {
-//                VStack(alignment: .leading, spacing: 4) {
-//                    Text(title)
-//                        .font(.headline)
-//                        .foregroundColor(isSelected ? color : .primary)
-//                    Text(description)
-//                        .font(.caption)
-//                        .foregroundColor(.secondary)
-//                        .multilineTextAlignment(.leading)
-//                }
-//                Spacer()
-//                ZStack {
-//                    Circle()
-//                        .stroke(isSelected ? color : Color.gray.opacity(0.3), lineWidth: 2)
-//                        .frame(width: 24, height: 24)
-//                    if isSelected {
-//                        Circle()
-//                            .fill(color)
-//                            .frame(width: 14, height: 14)
-//                    }
-//                }
-//            }
-//            .padding()
-//            .background(isSelected ? color.opacity(0.05) : Color.gray.opacity(0.02))
-//            .cornerRadius(12)
-//            .overlay(
-//                RoundedRectangle(cornerRadius: 12)
-//                    .stroke(isSelected ? color : Color.clear, lineWidth: 1)
-//            )
-//        }
-//        .buttonStyle(PlainButtonStyle())
-//    }
-//}
-
 // MARK: - Flow Layout
 struct PlanFlowLayout: Layout {
     var spacing: CGFloat

@@ -11,8 +11,6 @@ struct LoanDetailsScreen: View {
     @State private var showRBIInfo = false
     @State private var showFilePicker = false
     @State private var showPhotoPicker = false
-    @State private var showCamera = false
-    @State private var capturedImage: UIImage? = nil
     @State private var uploadedFileName: String? = nil
     @State private var importViewModel = LoanImportViewModel()
     @State private var selectedItem: PhotosPickerItem? = nil
@@ -52,11 +50,6 @@ struct LoanDetailsScreen: View {
                                     Label("Select from Gallery", systemImage: "photo.on.rectangle")
                                 }
 
-//                                Button {
-//                                    showCamera = true
-//                                } label: {
-//                                    Label("Take Photo", systemImage: "camera.fill")
-//                                }
                             } label: {
                                 Label(uploadedFileName ?? "Import from Document/Image", systemImage: "plus.viewfinder")
                                     .fontWeight(.medium)
@@ -239,15 +232,9 @@ struct LoanDetailsScreen: View {
             }
         }
         .photosPicker(isPresented: $showPhotoPicker, selection: $selectedItem, matching: .images)
-//        .fullScreenCover(isPresented: $showCamera) {
-//            CameraPicker(image: $capturedImage)
-//        }
         .onChange(of: selectedItem) { _, newItem in
             handleGallerySelection(newItem)
         }
-//        .onChange(of: capturedImage) { _, newImage in
-//            handleCameraCapture(newImage)
-//        }
         .sheet(isPresented: $importViewModel.showReviewList) {
             ParsedLoanListView(
                 loans: $importViewModel.parsedLoans,
@@ -273,14 +260,6 @@ struct LoanDetailsScreen: View {
                 uploadedFileName = "Gallery Image"
                 await importViewModel.processLoanImage(image)
             }
-        }
-    }
-
-    private func handleCameraCapture(_ image: UIImage?) {
-        guard let image = image else { return }
-        uploadedFileName = "Captured Image"
-        Task {
-            await importViewModel.processLoanImage(image)
         }
     }
 }

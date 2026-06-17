@@ -179,9 +179,13 @@ final class AppStateManager {
     var showDashboard: Bool = false
     var showPostAuthOnboarding: Bool = false
     
+    var requiresMFAChallenge: Bool = false
+    var mfaFactorId: String? = nil
+    
     var tempName: String = ""
     var tempEmail: String = ""
     var tempPassword: String = ""
+    var forgotPasswordEmail: String = ""
     
     var currentProfile: AstraUserProfile?
     var savedPlans: [InvestmentPlanModel] = []
@@ -297,7 +301,7 @@ final class AppStateManager {
             }
         }
     }
-    func signUp(name: String, email: String, password: String) async {
+    func signUp(name: String, email: String, password: String) async -> Bool {
         isAuthLoading = true
         authError = nil
         do {
@@ -314,9 +318,6 @@ final class AppStateManager {
             tempEmail = email
             tempPassword = password
             setupEmptyProfile(name: name)
-            isAuthenticated = true
-            showPostAuthOnboarding = true
-            hasCompletedOnboarding = true  // ← ADD THIS
             
             // After successful sign up — load existing data if any
             if let profile = try? await SupabaseRepository.shared.fetchFullProfile(userId: session.user.id) {
@@ -324,10 +325,20 @@ final class AppStateManager {
                 recalculateFinancials()
             }
             
+            isAuthLoading = false
+            return true
+            
         } catch {
             authError = error.localizedDescription
+            isAuthLoading = false
+            return false
         }
-        isAuthLoading = false
+    }
+    
+    func completeSignUp() {
+        isAuthenticated = true
+        showPostAuthOnboarding = true
+        hasCompletedOnboarding = true
     }
 
     func signIn(email: String, password: String) async {
@@ -338,6 +349,18 @@ final class AppStateManager {
                 email: email,
                 password: password
             )
+            
+            let aal = try? await supabase.auth.mfa.getAuthenticatorAssuranceLevel()
+            if aal?.nextLevel == "aal2" && aal?.currentLevel == "aal1" {
+                if let factors = try? await supabase.auth.mfa.listFactors(), let factor = factors.all.first(where: { $0.status == FactorStatus.verified }) {
+                    await MainActor.run {
+                        self.mfaFactorId = factor.id
+                        self.requiresMFAChallenge = true
+                        self.isAuthLoading = false
+                    }
+                    return
+                }
+            }
             
             if let profile = try? await SupabaseRepository.shared.fetchFullProfile(userId: session.user.id) {
                 
@@ -364,6 +387,98 @@ final class AppStateManager {
         }
         isAuthLoading = false
     }
+    
+    func completeMFA(code: String) async -> Bool {
+        guard let factorId = mfaFactorId else { return false }
+        isAuthLoading = true
+        authError = nil
+        do {
+            let challenge = try await supabase.auth.mfa.challenge(params: MFAChallengeParams(factorId: factorId))
+            _ = try await supabase.auth.mfa.verify(params: MFAVerifyParams(factorId: factorId, challengeId: challenge.id, code: code))
+            
+            let session = try await supabase.auth.session
+            if let profile = try? await SupabaseRepository.shared.fetchFullProfile(userId: session.user.id) {
+                self.currentProfile = profile
+                recalculateFinancials()
+                isAuthenticated = true
+                showPostAuthOnboarding = false
+                hasCompletedOnboarding = true
+                showDashboard = true
+            } else {
+                setupEmptyProfile(name: session.user.email ?? "User")
+                isAuthenticated = true
+                showPostAuthOnboarding = true
+                hasCompletedOnboarding = true
+            }
+            requiresMFAChallenge = false
+            mfaFactorId = nil
+            isAuthLoading = false
+            return true
+        } catch {
+            authError = error.localizedDescription
+            isAuthLoading = false
+            return false
+        }
+    }
+    // MARK: - Password Recovery
+    func sendPasswordResetOTP(email: String) async -> Bool {
+        isAuthLoading = true
+        authError = nil
+        do {
+            try await supabase.auth.resetPasswordForEmail(email)
+            forgotPasswordEmail = email
+            isAuthLoading = false
+            return true
+        } catch {
+            authError = error.localizedDescription
+            isAuthLoading = false
+            return false
+        }
+    }
+    
+    func verifyPasswordResetOTP(otp: String) async -> Bool {
+        isAuthLoading = true
+        authError = nil
+        do {
+            _ = try await supabase.auth.verifyOTP(email: forgotPasswordEmail, token: otp, type: .recovery)
+            isAuthLoading = false
+            return true
+        } catch {
+            authError = error.localizedDescription
+            isAuthLoading = false
+            return false
+        }
+    }
+    
+    func updatePassword(newPassword: String) async -> Bool {
+        isAuthLoading = true
+        authError = nil
+        do {
+            _ = try await supabase.auth.update(user: UserAttributes(password: newPassword))
+            
+            let session = try await supabase.auth.session
+            if let profile = try? await SupabaseRepository.shared.fetchFullProfile(userId: session.user.id) {
+                self.currentProfile = profile
+                recalculateFinancials()
+                isAuthenticated = true
+                showPostAuthOnboarding = false
+                hasCompletedOnboarding = true
+                showDashboard = true
+            } else {
+                setupEmptyProfile(name: session.user.email ?? "User")
+                isAuthenticated = true
+                showPostAuthOnboarding = true
+                hasCompletedOnboarding = true
+            }
+            isAuthLoading = false
+            return true
+        } catch {
+            authError = error.localizedDescription
+            isAuthLoading = false
+            return false
+        }
+    }
+
     func signOut() async {
         do {
             try await supabase.auth.signOut(scope: .local)

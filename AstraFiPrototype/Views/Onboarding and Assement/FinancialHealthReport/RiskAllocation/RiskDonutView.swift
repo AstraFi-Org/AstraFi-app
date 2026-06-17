@@ -6,6 +6,15 @@
 //
 
 import SwiftUI
+import Charts
+
+private struct RiskDonutSlice: Identifiable {
+    let name: String
+    let value: Double
+    let color: Color
+
+    var id: String { name }
+}
 
 struct RiskDonutView: View {
     let high: Double; let medium: Double; let low: Double
@@ -13,18 +22,15 @@ struct RiskDonutView: View {
     var body: some View {
         HStack(spacing: 24) {
             ZStack {
-                // Low (base)
-                Circle().trim(from: 0, to: CGFloat(low + medium + high))
-                    .stroke(Color(hex: "#30D158"), style: StrokeStyle(lineWidth: 18, lineCap: .butt))
-                    .rotationEffect(.degrees(-90))
-                // Medium
-                Circle().trim(from: CGFloat(low), to: CGFloat(low + medium))
-                    .stroke(Color(hex: "#FF9F0A"), style: StrokeStyle(lineWidth: 18, lineCap: .butt))
-                    .rotationEffect(.degrees(-90))
-                // High
-                Circle().trim(from: CGFloat(low + medium), to: CGFloat(low + medium + high))
-                    .stroke(Color(hex: "#FF453A"), style: StrokeStyle(lineWidth: 18, lineCap: .butt))
-                    .rotationEffect(.degrees(-90))
+                Chart(riskSlices) { slice in
+                    SectorMark(
+                        angle: .value("Risk", slice.value),
+                        innerRadius: .ratio(0.72),
+                        angularInset: 0
+                    )
+                    .foregroundStyle(slice.color)
+                }
+                .chartLegend(.hidden)
                 VStack(spacing: 2) {
                     Text("\(Int(high * 100))%").font(.title3).bold().foregroundStyle(Color(hex: "#FF453A"))
                     Text("High Risk").font(.caption2).foregroundStyle(.secondary)
@@ -48,5 +54,13 @@ struct RiskDonutView: View {
             }
         }
         .padding(.horizontal, 16)
+    }
+
+    private var riskSlices: [RiskDonutSlice] {
+        [
+            RiskDonutSlice(name: "Low Risk", value: max(0, low), color: Color(hex: "#30D158")),
+            RiskDonutSlice(name: "Medium Risk", value: max(0, medium), color: Color(hex: "#FF9F0A")),
+            RiskDonutSlice(name: "High Risk", value: max(0, high), color: Color(hex: "#FF453A"))
+        ]
     }
 }

@@ -71,4 +71,31 @@ class AuthManager {
             }
         }
     }
+    
+    // MARK: - Multi-Factor Authentication (MFA)
+    
+    func enrollMFA() async throws -> (factorId: String, qrCodeUri: String) {
+        let enrollment = try await supabase.auth.mfa.enroll(params: MFAEnrollParams())
+        return (enrollment.id, enrollment.totp?.qrCode ?? "")
+    }
+    
+    func challengeMFA(factorId: String) async throws -> String {
+        let challenge = try await supabase.auth.mfa.challenge(params: MFAChallengeParams(factorId: factorId))
+        return challenge.id
+    }
+    
+    func verifyMFA(factorId: String, challengeId: String, code: String) async throws -> Bool {
+        _ = try await supabase.auth.mfa.verify(
+            params: MFAVerifyParams(factorId: factorId, challengeId: challengeId, code: code)
+        )
+        return true
+    }
+    
+    func unenrollMFA(factorId: String) async throws {
+        try await supabase.auth.mfa.unenroll(params: MFAUnenrollParams(factorId: factorId))
+    }
+    
+    func getAuthenticatorAssuranceLevel() async throws -> AuthMFAGetAuthenticatorAssuranceLevelResponse {
+        return try await supabase.auth.mfa.getAuthenticatorAssuranceLevel()
+    }
 }

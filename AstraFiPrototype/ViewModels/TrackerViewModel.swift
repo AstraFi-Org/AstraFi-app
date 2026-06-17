@@ -1,8 +1,5 @@
 import Foundation
 import SwiftUI
-import Combine
-
-import Observation
 
 @Observable
 class TrackerViewModel {

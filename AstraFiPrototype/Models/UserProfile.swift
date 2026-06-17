@@ -64,6 +64,7 @@ struct AstraBasicDetails: Codable, Equatable {
     var activeInvestment: Bool
     var riskTolerance: AstraRiskTolerance = .medium
     var investmentHorizon: AstraInvestmentHorizon = .mediumTerm
+    var phoneNumber: String? = nil
 }
 
 enum AstraGender: String, Codable, CaseIterable {

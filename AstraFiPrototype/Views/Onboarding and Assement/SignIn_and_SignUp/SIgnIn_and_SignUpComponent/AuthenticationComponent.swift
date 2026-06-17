@@ -31,20 +31,23 @@ struct AuthInputField: View {
                 .foregroundColor(Color(uiColor: .systemGray2))
                 .frame(width: 22)
             if isSecure {
-                SecureField(placeholder, text: $text).font(.system(size: 16))
+                SecureField(placeholder, text: $text)
+                    .font(.system(size: 16))
+                    .foregroundColor(.primary)
+                    .tint(.blue)
             } else {
                 TextField(placeholder, text: $text)
                     .font(.system(size: 16))
+                    .foregroundColor(.primary)
+                    .tint(.blue)
                     .keyboardType(keyboardType)
-                    .autocapitalization(.none)
-                    .disableAutocorrection(true)
+                    .textInputAutocapitalization(.never)
+                    .autocorrectionDisabled(true)
             }
         }
         .padding(.horizontal, 16).padding(.vertical, 16)
-        .background(Color(uiColor: .systemBackground))
+        .background(Color(uiColor: .secondarySystemGroupedBackground))
         .clipShape(RoundedRectangle(cornerRadius: 12, style: .continuous))
-        .overlay(RoundedRectangle(cornerRadius: 12, style: .continuous)
-            .stroke(Color(uiColor: .systemGray4), lineWidth: 1))
     }
 }
 
@@ -62,12 +65,17 @@ struct AuthPasswordField: View {
             Group {
                 if showPassword {
                     TextField(placeholder, text: $text)
-                        .autocapitalization(.none).disableAutocorrection(true)
+                        .textInputAutocapitalization(.never)
+                        .autocorrectionDisabled(true)
                 } else {
                     SecureField(placeholder, text: $text)
+                        .textInputAutocapitalization(.never)
+                        .autocorrectionDisabled(true)
                 }
             }
             .font(.system(size: 16))
+            .foregroundColor(.primary)
+            .tint(.blue)
             Button { showPassword.toggle() } label: {
                 Image(systemName: showPassword ? "eye.slash" : "eye")
                     .font(.system(size: 17))
@@ -75,27 +83,36 @@ struct AuthPasswordField: View {
             }
         }
         .padding(.horizontal, 16).padding(.vertical, 16)
-        .background(Color(uiColor: .systemBackground))
+        .background(Color(uiColor: .secondarySystemGroupedBackground))
         .clipShape(RoundedRectangle(cornerRadius: 12, style: .continuous))
-        .overlay(RoundedRectangle(cornerRadius: 12, style: .continuous)
-            .stroke(Color(uiColor: .systemGray4), lineWidth: 1))
     }
 }
 
 struct AuthPrimaryButton: View {
     let title: String
+    var isLoading: Bool = false
+    var isDisabled: Bool = false
     let action: () -> Void
     var body: some View {
         Button(action: action) {
-            Text(title)
-                .font(.system(size: 18, weight: .semibold))
-                .foregroundColor(.white)
-                .frame(maxWidth: .infinity)
-                .padding(.vertical, 17)
-                .background(brandGradient)
-                .clipShape(Capsule())
+            Group {
+                if isLoading {
+                    ProgressView()
+                        .tint(.white)
+                } else {
+                    Text(title)
+                }
+            }
+            .font(.system(size: 18, weight: .semibold))
+            .foregroundColor(.white)
+            .frame(maxWidth: .infinity)
+            .padding(.vertical, 17)
+            .background(brandGradient)
+            .clipShape(RoundedRectangle(cornerRadius: 14, style: .continuous))
+            .opacity(isDisabled ? 0.5 : 1.0)
         }
         .buttonStyle(PlainButtonStyle())
+        .disabled(isLoading || isDisabled)
     }
 }
 
@@ -120,15 +137,13 @@ struct AuthAppleButton: View {
         Button(action: {}) {
             HStack(spacing: 10) {
                 Image(systemName: "apple.logo")
-                    .font(.system(size: 18, weight: .medium)).foregroundColor(.primary)
+                    .font(.system(size: 18, weight: .medium)).foregroundColor(Color(uiColor: .systemBackground))
                 Text("Continue with Apple")
-                    .font(.system(size: 17, weight: .medium)).foregroundColor(.primary)
+                    .font(.system(size: 17, weight: .medium)).foregroundColor(Color(uiColor: .systemBackground))
             }
             .frame(maxWidth: .infinity).padding(.vertical, 15)
-            .background(Color(uiColor: .systemBackground))
+            .background(Color.primary)
             .clipShape(RoundedRectangle(cornerRadius: 12, style: .continuous))
-            .overlay(RoundedRectangle(cornerRadius: 12, style: .continuous)
-                .stroke(Color(uiColor: .systemGray4), lineWidth: 1.5))
         }
         .buttonStyle(PlainButtonStyle())
     }

@@ -9,6 +9,9 @@ struct AppRootView: View {
             if appState.isLoading {
                 SplashScreenView()
 
+            } else if appState.requiresMFAChallenge {
+                MFAChallengeView()
+
             } else if appState.showPostAuthOnboarding {
                 PostAuthOnboardingView()
 
