@@ -179,6 +179,9 @@ final class AppStateManager {
     var showDashboard: Bool = false
     var showPostAuthOnboarding: Bool = false
     
+    var requiresMFAChallenge: Bool = false
+    var mfaFactorId: String? = nil
+    
     var tempName: String = ""
     var tempEmail: String = ""
     var tempPassword: String = ""
@@ -346,6 +349,18 @@ final class AppStateManager {
                 password: password
             )
             
+            let aal = try? await supabase.auth.mfa.getAuthenticatorAssuranceLevel()
+            if aal?.nextLevel == "aal2" && aal?.currentLevel == "aal1" {
+                if let factors = try? await supabase.auth.mfa.listFactors(), let factor = factors.all.first(where: { $0.status == FactorStatus.verified }) {
+                    await MainActor.run {
+                        self.mfaFactorId = factor.id
+                        self.requiresMFAChallenge = true
+                        self.isAuthLoading = false
+                    }
+                    return
+                }
+            }
+            
             if let profile = try? await SupabaseRepository.shared.fetchFullProfile(userId: session.user.id) {
                 
                 self.currentProfile = profile
@@ -370,6 +385,39 @@ final class AppStateManager {
             authError = error.localizedDescription
         }
         isAuthLoading = false
+    }
+    
+    func completeMFA(code: String) async -> Bool {
+        guard let factorId = mfaFactorId else { return false }
+        isAuthLoading = true
+        authError = nil
+        do {
+            let challenge = try await supabase.auth.mfa.challenge(params: MFAChallengeParams(factorId: factorId))
+            _ = try await supabase.auth.mfa.verify(params: MFAVerifyParams(factorId: factorId, challengeId: challenge.id, code: code))
+            
+            let session = try await supabase.auth.session
+            if let profile = try? await SupabaseRepository.shared.fetchFullProfile(userId: session.user.id) {
+                self.currentProfile = profile
+                recalculateFinancials()
+                isAuthenticated = true
+                showPostAuthOnboarding = false
+                hasCompletedOnboarding = true
+                showDashboard = true
+            } else {
+                setupEmptyProfile(name: session.user.email ?? "User")
+                isAuthenticated = true
+                showPostAuthOnboarding = true
+                hasCompletedOnboarding = true
+            }
+            requiresMFAChallenge = false
+            mfaFactorId = nil
+            isAuthLoading = false
+            return true
+        } catch {
+            authError = error.localizedDescription
+            isAuthLoading = false
+            return false
+        }
     }
     func signOut() async {
         do {
