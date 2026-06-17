@@ -49,7 +49,7 @@ struct SignInView: View {
                 // Forgot
                 HStack {
                     Spacer()
-                    Button("Forgot Password?") {}
+                    NavigationLink("Forgot Password?", destination: ForgotPasswordView())
                         .font(.system(size: 14))
                 }
                 .padding(.top, 10)

@@ -185,6 +185,7 @@ final class AppStateManager {
     var tempName: String = ""
     var tempEmail: String = ""
     var tempPassword: String = ""
+    var forgotPasswordEmail: String = ""
     
     var currentProfile: AstraUserProfile?
     var savedPlans: [InvestmentPlanModel] = []
@@ -419,6 +420,65 @@ final class AppStateManager {
             return false
         }
     }
+    // MARK: - Password Recovery
+    func sendPasswordResetOTP(email: String) async -> Bool {
+        isAuthLoading = true
+        authError = nil
+        do {
+            try await supabase.auth.resetPasswordForEmail(email)
+            forgotPasswordEmail = email
+            isAuthLoading = false
+            return true
+        } catch {
+            authError = error.localizedDescription
+            isAuthLoading = false
+            return false
+        }
+    }
+    
+    func verifyPasswordResetOTP(otp: String) async -> Bool {
+        isAuthLoading = true
+        authError = nil
+        do {
+            _ = try await supabase.auth.verifyOTP(email: forgotPasswordEmail, token: otp, type: .recovery)
+            isAuthLoading = false
+            return true
+        } catch {
+            authError = error.localizedDescription
+            isAuthLoading = false
+            return false
+        }
+    }
+    
+    func updatePassword(newPassword: String) async -> Bool {
+        isAuthLoading = true
+        authError = nil
+        do {
+            _ = try await supabase.auth.update(user: UserAttributes(password: newPassword))
+            
+            let session = try await supabase.auth.session
+            if let profile = try? await SupabaseRepository.shared.fetchFullProfile(userId: session.user.id) {
+                self.currentProfile = profile
+                recalculateFinancials()
+                isAuthenticated = true
+                showPostAuthOnboarding = false
+                hasCompletedOnboarding = true
+                showDashboard = true
+            } else {
+                setupEmptyProfile(name: session.user.email ?? "User")
+                isAuthenticated = true
+                showPostAuthOnboarding = true
+                hasCompletedOnboarding = true
+            }
+            isAuthLoading = false
+            return true
+        } catch {
+            authError = error.localizedDescription
+            isAuthLoading = false
+            return false
+        }
+    }
+
     func signOut() async {
         do {
             try await supabase.auth.signOut(scope: .local)

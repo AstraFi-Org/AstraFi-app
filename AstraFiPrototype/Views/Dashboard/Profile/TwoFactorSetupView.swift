@@ -80,13 +80,45 @@ struct TwoFactorSetupView: View {
                                 .frame(width: 200, height: 200)
                         }
                         
-                        if let uri = totpUri, let url = URL(string: uri) {
-                            Button("Open in Authenticator App") {
-                                UIApplication.shared.open(url)
+                        if let uri = totpUri, let secret = totpSecret {
+                            Menu {
+                                Button("Apple Passwords") {
+                                    if let url = URL(string: uri) {
+                                        UIApplication.shared.open(url)
+                                    }
+                                }
+                                Button("Google Authenticator") {
+                                    if let url = URL(string: uri.replacingOccurrences(of: "otpauth://", with: "googleauthenticator://")) {
+                                        UIApplication.shared.open(url) { success in
+                                            if !success {
+                                                errorMessage = "Google Authenticator could not be opened. You may need to copy the setup key instead."
+                                            }
+                                        }
+                                    }
+                                }
+                                Button("Microsoft Authenticator") {
+                                    if let url = URL(string: uri.replacingOccurrences(of: "otpauth://", with: "microsoft-authenticator://")) {
+                                        UIApplication.shared.open(url) { success in
+                                            if !success {
+                                                errorMessage = "Microsoft Authenticator could not be opened. Please copy the setup key and enter it manually."
+                                            }
+                                        }
+                                    }
+                                }
+                                Button("Copy Setup Key") {
+                                    UIPasteboard.general.string = secret
+                                    successMessage = "Setup key copied to clipboard!"
+                                }
+                            } label: {
+                                HStack(spacing: 6) {
+                                    Text("Open in Authenticator App")
+                                    Image(systemName: "chevron.down")
+                                        .font(.caption.weight(.bold))
+                                }
+                                .font(.headline)
+                                .foregroundColor(Color(hex: "#007AFF"))
+                                .padding(.top, -8)
                             }
-                            .font(.headline)
-                            .foregroundColor(Color(hex: "#007AFF"))
-                            .padding(.top, -8)
                         }
                         
                         if let secret = totpSecret {
