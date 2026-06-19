@@ -398,7 +398,8 @@ struct InvestmentOverviewView: View {
     // Past months: green solid | Current month: indigo (in-progress)
     private var monthlyChart: some View {
         let data = monthlyBars
-        let maxVal = data.map(\.totalInvested).max() ?? 1
+        let rawMax = data.map { $0.totalInvested.safeFinite }.max() ?? 0
+        let maxVal = max(rawMax, 1)
         // Give each bar a 44pt slot
         let chartWidth = CGFloat(max(data.count, 4)) * 52
 
@@ -470,7 +471,10 @@ struct InvestmentOverviewView: View {
         let data = yearlyBars
 
         // Max value for scale: biggest bar including recommended add
-        let maxVal = data.map { $0.totalInvested + $0.recommendedAdd }.max() ?? 1
+        let rawMax = data
+            .map { ($0.totalInvested.safeFinite + $0.recommendedAdd.safeFinite).safeFinite }
+            .max() ?? 0
+        let maxVal = max(rawMax, 1)
 
         return Chart(data) { bar in
 

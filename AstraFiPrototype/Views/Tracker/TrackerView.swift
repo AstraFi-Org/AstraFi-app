@@ -73,7 +73,12 @@ struct TrackerView: View {
     private func syncUpstoxInvestments() async {
         guard upstoxViewModel.isConnected else { return }
         let investments = await upstoxViewModel.fetchConnectedInvestments()
-        appState.syncUpstoxHoldings(investments.equity, mutualFunds: investments.mutualFunds)
+        appState.syncUpstoxHoldings(
+            investments.equity,
+            mutualFunds: investments.mutualFunds,
+            mutualFundOrders: investments.mutualFundOrders,
+            mutualFundSIPs: investments.mutualFundSIPs
+        )
         viewModel.appState = appState
         viewModel.syncWithProfile(appState.currentProfile)
     }

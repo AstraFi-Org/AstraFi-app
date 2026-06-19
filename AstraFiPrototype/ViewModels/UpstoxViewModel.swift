@@ -2,6 +2,13 @@ import Combine
 import Foundation
 import SwiftUI
 
+struct UpstoxInvestmentSnapshot {
+    var equity: [UpstoxHolding] = []
+    var mutualFunds: [UpstoxMutualFundHolding] = []
+    var mutualFundOrders: [UpstoxMutualFundOrder] = []
+    var mutualFundSIPs: [UpstoxMutualFundSIP] = []
+}
+
 @MainActor
 final class UpstoxViewModel: ObservableObject {
     static let shared = UpstoxViewModel()
@@ -101,12 +108,12 @@ final class UpstoxViewModel: ObservableObject {
         isLoading = false
     }
 
-    func fetchConnectedInvestments() async -> (equity: [UpstoxHolding], mutualFunds: [UpstoxMutualFundHolding]) {
+    func fetchConnectedInvestments() async -> UpstoxInvestmentSnapshot {
         guard service.storedAccessToken != nil else {
             holdings = []
             mutualFundHoldings = []
             holdingsSyncMessage = "Connect Upstox to sync investments."
-            return ([], [])
+            return UpstoxInvestmentSnapshot()
         }
 
         isSyncingHoldings = true
@@ -116,6 +123,8 @@ final class UpstoxViewModel: ObservableObject {
         var syncError: Error?
         var fetchedHoldings: [UpstoxHolding] = []
         var fetchedMutualFunds: [UpstoxMutualFundHolding] = []
+        var fetchedMutualFundOrders: [UpstoxMutualFundOrder] = []
+        var fetchedMutualFundSIPs: [UpstoxMutualFundSIP] = []
 
         do {
             fetchedHoldings = try await service.fetchInvestments()
@@ -128,6 +137,11 @@ final class UpstoxViewModel: ObservableObject {
         } catch {
             syncError = syncError ?? error
         }
+
+        // Order history provides each executed SIP date, amount, units, and NAV.
+        // SIP registrations provide the authoritative investment mode and schedule.
+        fetchedMutualFundOrders = (try? await service.fetchMutualFundOrders()) ?? []
+        fetchedMutualFundSIPs = (try? await service.fetchMutualFundSIPs()) ?? []
 
         holdings = fetchedHoldings
         mutualFundHoldings = fetchedMutualFunds
@@ -142,7 +156,12 @@ final class UpstoxViewModel: ObservableObject {
             holdingsSyncMessage = "Upstox returned no stocks, positions, or mutual funds for this account."
         }
 
-        return (fetchedHoldings, fetchedMutualFunds)
+        return UpstoxInvestmentSnapshot(
+            equity: fetchedHoldings,
+            mutualFunds: fetchedMutualFunds,
+            mutualFundOrders: fetchedMutualFundOrders,
+            mutualFundSIPs: fetchedMutualFundSIPs
+        )
     }
 
     func fetchHoldings() async -> [UpstoxHolding] {

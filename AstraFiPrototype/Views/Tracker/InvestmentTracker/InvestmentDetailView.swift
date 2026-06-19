@@ -320,7 +320,7 @@ struct InvestmentDetailView: View {
     private var fundAnalysisSection: some View {
         VStack(alignment: .leading, spacing: 12) {
             VStack(spacing: 0) {
-                dateRow(label: "Investment Date", date: inv?.startDate)
+                dateRow(label: inv?.mode == .sip ? "SIP Start Date" : "Investment Date", date: inv?.startDate)
                 Divider().padding(.leading)
 
                 if let startDate = inv?.startDate {
@@ -536,7 +536,7 @@ struct InvestmentDetailView: View {
                     ForEach(transactions) { item in
                         HStack {
                             VStack(alignment: .leading, spacing: 2) {
-                                Text(item.type == .sell ? "Sell Transaction" : "Buy Transaction")
+                                Text(item.type == .sell ? "Sell Transaction" : "SIP Installment")
                                     .font(.caption)
                                     .foregroundColor(item.type == .sell ? .red : .secondary)
                                 Text(item.date.formatted(date: .abbreviated, time: .omitted))
@@ -548,7 +548,7 @@ struct InvestmentDetailView: View {
                                 Text("Units: \(String(format: "%.3f", item.units))")
                                     .font(.subheadline)
                                     .fontWeight(.semibold)
-                                Text("At NAV: ₹\(String(format: "%.2f", item.nav))")
+                                Text("NAV / Rate: ₹\(String(format: "%.2f", item.nav))")
                                     .font(.caption2)
                                     .foregroundColor(.secondary)
                                 Text("Amount: ₹\(String(format: "%.0f", item.amount))")

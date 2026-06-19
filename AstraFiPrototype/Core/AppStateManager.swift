@@ -1044,19 +1044,33 @@ final class AppStateManager {
         }
     }
 
-    func syncUpstoxHoldings(_ holdings: [UpstoxHolding], mutualFunds: [UpstoxMutualFundHolding] = []) {
+    func syncUpstoxHoldings(
+        _ holdings: [UpstoxHolding],
+        mutualFunds: [UpstoxMutualFundHolding] = [],
+        mutualFundOrders: [UpstoxMutualFundOrder] = [],
+        mutualFundSIPs: [UpstoxMutualFundSIP] = []
+    ) {
         guard var profile = currentProfile else { return }
 
         let manualInvestments = profile.investments.filter { $0.brokerSource != "Upstox" }
+        let existingUpstoxInvestments = Dictionary(
+            profile.investments
+                .filter { $0.brokerSource == "Upstox" }
+                .compactMap { investment in
+                    investment.brokerInstrumentID.map { ($0, investment) }
+                },
+            uniquingKeysWith: { first, _ in first }
+        )
         let connectedStockInvestments = holdings
             .filter { $0.quantity > 0 }
             .map { holding in
-                AstraInvestment(
+                return AstraInvestment(
+                    id: existingUpstoxInvestments[holding.id]?.id ?? UUID(),
                     investmentType: .stocks,
                     subtype: .largeCap,
                     investmentName: holding.displayName,
                     investmentAmount: holding.investedAmount.safeFinite,
-                    startDate: Date(),
+                    startDate: existingUpstoxInvestments[holding.id]?.startDate ?? Date(),
                     mode: .lumpsum,
                     isin: holding.isin,
                     symbol: holding.tradingSymbol,
@@ -1071,13 +1085,46 @@ final class AppStateManager {
         let connectedMutualFundInvestments = mutualFunds
             .filter { $0.quantity > 0 }
             .map { holding in
-                AstraInvestment(
+                let matchedOrders = mutualFundOrders
+                    .filter { order in
+                        order.isCompleted && mutualFundRecord(
+                            instrumentKey: order.instrumentKey,
+                            folio: order.folio,
+                            matches: holding
+                        )
+                    }
+                    .sorted { ($0.transactionDate ?? .distantPast) < ($1.transactionDate ?? .distantPast) }
+                let matchedSIP = mutualFundSIPs.first { sip in
+                    normalizedUpstoxKey(sip.instrumentKey) == normalizedUpstoxKey(holding.instrumentKey)
+                }
+                let isSIP = matchedSIP != nil || matchedOrders.contains(where: \.isSIP)
+                let installments = matchedOrders.compactMap { order -> AstraInvestmentTransaction? in
+                    guard let date = order.transactionDate else { return nil }
+                    let nav = order.executedNAV.safeFinite
+                    let amount = order.amount > 0 ? order.amount.safeFinite : (order.quantity * nav).safeFinite
+                    return AstraInvestmentTransaction(
+                        date: date,
+                        type: order.transactionType?.uppercased() == "SELL" ? .sell : .buy,
+                        amount: amount,
+                        nav: nav,
+                        units: order.quantity.safeFinite
+                    )
+                }
+                let startDate = matchedSIP?.createdDate
+                    ?? installments.first?.date
+                    ?? existingUpstoxInvestments[holding.id]?.startDate
+                    ?? Date()
+                let recurringAmount = matchedSIP?.instalmentAmount
+                    ?? matchedOrders.last(where: { $0.isSIP && $0.transactionType?.uppercased() == "BUY" })?.amount
+
+                return AstraInvestment(
+                    id: existingUpstoxInvestments[holding.id]?.id ?? UUID(),
                     investmentType: .mutualFund,
                     subtype: .equityFund,
                     investmentName: holding.displayName,
-                    investmentAmount: holding.investedAmount.safeFinite,
-                    startDate: Date(),
-                    mode: .lumpsum,
+                    investmentAmount: (isSIP ? (recurringAmount ?? holding.investedAmount) : holding.investedAmount).safeFinite,
+                    startDate: startDate,
+                    mode: isSIP ? .sip : .lumpsum,
                     isin: holding.instrumentKey,
                     lastNAV: holding.lastPrice.safeFinite,
                     lastUpdated: Date(),
@@ -1086,13 +1133,34 @@ final class AppStateManager {
                     livePrice: holding.lastPrice.safeFinite,
                     priceChange: holding.pnl.safeFinite,
                     brokerSource: "Upstox",
-                    brokerInstrumentID: holding.id
+                    brokerInstrumentID: holding.id,
+                    installments: installments
                 )
             }
 
         profile.investments = manualInvestments + connectedStockInvestments + connectedMutualFundInvestments
         currentProfile = profile
         recalculateFinancials()
+    }
+
+    private func normalizedUpstoxKey(_ value: String?) -> String {
+        value?
+            .trimmingCharacters(in: .whitespacesAndNewlines)
+            .uppercased() ?? ""
+    }
+
+    private func mutualFundRecord(
+        instrumentKey: String?,
+        folio: String?,
+        matches holding: UpstoxMutualFundHolding
+    ) -> Bool {
+        guard normalizedUpstoxKey(instrumentKey) == normalizedUpstoxKey(holding.instrumentKey) else {
+            return false
+        }
+
+        let orderFolio = normalizedUpstoxKey(folio)
+        let holdingFolio = normalizedUpstoxKey(holding.folio)
+        return orderFolio.isEmpty || holdingFolio.isEmpty || orderFolio == holdingFolio
     }
 
     func removeUpstoxHoldings() {

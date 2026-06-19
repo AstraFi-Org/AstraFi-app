@@ -40,6 +40,8 @@ struct UpstoxService {
     private let holdingsURL = URL(string: "https://api.upstox.com/v2/portfolio/long-term-holdings")!
     private let positionsURL = URL(string: "https://api.upstox.com/v2/portfolio/short-term-positions")!
     private let mutualFundHoldingsURL = URL(string: "https://api.upstox.com/v2/mf/holdings")!
+    private let mutualFundOrdersURL = URL(string: "https://api.upstox.com/v2/mf/orders")!
+    private let mutualFundSIPsURL = URL(string: "https://api.upstox.com/v2/mf/sips")!
 
     var storedAccessToken: String? {
         try? KeychainManager.shared.read(service: tokenService, account: accessTokenAccount)
@@ -194,6 +196,18 @@ struct UpstoxService {
         }
     }
 
+    func fetchMutualFundOrders(accessToken: String? = nil) async throws -> [UpstoxMutualFundOrder] {
+        try await fetchAllPages(baseURL: mutualFundOrdersURL, accessToken: accessToken) {
+            try JSONDecoder().decode(UpstoxMutualFundOrderResponse.self, from: $0)
+        }
+    }
+
+    func fetchMutualFundSIPs(accessToken: String? = nil) async throws -> [UpstoxMutualFundSIP] {
+        try await fetchAllPages(baseURL: mutualFundSIPsURL, accessToken: accessToken) {
+            try JSONDecoder().decode(UpstoxMutualFundSIPResponse.self, from: $0)
+        }
+    }
+
     func fetchInvestments(accessToken: String? = nil) async throws -> [UpstoxHolding] {
         var firstError: Error?
         var didReceivePortfolioResponse = false
@@ -251,6 +265,59 @@ struct UpstoxService {
             throw UpstoxServiceError.serverError(httpResponse.statusCode)
         }
     }
+
+    private func fetchAllPages<Item, Response>(
+        baseURL: URL,
+        accessToken: String?,
+        decode: (Data) throws -> Response
+    ) async throws -> [Item] where Response: UpstoxPaginatedResponse, Response.Item == Item {
+        guard let token = accessToken ?? storedAccessToken, !token.isEmpty else {
+            throw UpstoxServiceError.expiredToken
+        }
+
+        var pageNumber = 1
+        var allItems: [Item] = []
+
+        while true {
+            var components = URLComponents(url: baseURL, resolvingAgainstBaseURL: false)
+            components?.queryItems = [
+                URLQueryItem(name: "page_number", value: String(pageNumber)),
+                URLQueryItem(name: "records", value: "30")
+            ]
+            guard let url = components?.url else { throw UpstoxServiceError.invalidResponse }
+
+            var request = URLRequest(url: url)
+            request.httpMethod = "GET"
+            request.setValue("Bearer \(token)", forHTTPHeaderField: "Authorization")
+            request.setValue("application/json", forHTTPHeaderField: "Accept")
+
+            let (data, response) = try await URLSession.shared.data(for: request)
+            try validate(response: response, data: data)
+            let page = try decode(data)
+            allItems.append(contentsOf: page.items)
+
+            guard pageNumber < (page.totalPages ?? pageNumber) else { break }
+            pageNumber += 1
+        }
+
+        return allItems
+    }
+}
+
+private protocol UpstoxPaginatedResponse {
+    associatedtype Item
+    var items: [Item] { get }
+    var totalPages: Int? { get }
+}
+
+extension UpstoxMutualFundOrderResponse: UpstoxPaginatedResponse {
+    var items: [UpstoxMutualFundOrder] { data ?? [] }
+    var totalPages: Int? { metaData?.page?.totalPages }
+}
+
+extension UpstoxMutualFundSIPResponse: UpstoxPaginatedResponse {
+    var items: [UpstoxMutualFundSIP] { data ?? [] }
+    var totalPages: Int? { metaData?.page?.totalPages }
 }
 
 private extension Dictionary where Key == String, Value == String {
