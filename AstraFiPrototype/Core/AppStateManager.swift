@@ -662,7 +662,7 @@ final class AppStateManager {
         let assets = AstraAssets(
             stocksHoldingAmount: profileInvestments.filter { $0.investmentType == .stocks }.map { $0.investmentAmount }.reduce(0, +),
             mutualFundHoldingAmount: profileInvestments.filter { $0.investmentType == .mutualFund }.map { $0.investmentAmount }.reduce(0, +),
-            otherInvestmentAmount: profileInvestments.filter { [.cryptocurrency, .other, .nps, .ppf, .bonds].contains($0.investmentType) }.map { $0.investmentAmount }.reduce(0, +),
+            otherInvestmentAmount: profileInvestments.filter { [.cryptocurrency, .other, .nps, .ppf, .bonds, .cashSavings, .emergencyFund].contains($0.investmentType) }.map { $0.investmentAmount }.reduce(0, +),
             propertyAmount: profileInvestments.filter { $0.investmentType == .realEstate }.map { $0.investmentAmount }.reduce(0, +),
             vehiclesAmount: 0,
             depositsAmount: profileInvestments.filter { $0.investmentType == .deposits }.map { $0.investmentAmount }.reduce(0, +),
@@ -883,7 +883,7 @@ final class AppStateManager {
         newAssets.depositsAmount = profile.investments.filter { $0.investmentType == .deposits }.map { $0.currentValue.safeFinite }.reduce(0, +)
         newAssets.propertyAmount = profile.investments.filter { $0.investmentType == .realEstate }.map { $0.currentValue.safeFinite }.reduce(0, +)
         newAssets.jewelleryAmount = profile.investments.filter { $0.investmentType == .physicalGold }.map { $0.currentValue.safeFinite }.reduce(0, +)
-        newAssets.otherInvestmentAmount = profile.investments.filter { [.cryptocurrency, .other, .nps, .ppf, .bonds].contains($0.investmentType) }.map { $0.currentValue.safeFinite }.reduce(0, +)
+        newAssets.otherInvestmentAmount = profile.investments.filter { [.cryptocurrency, .other, .nps, .ppf, .bonds, .cashSavings, .emergencyFund].contains($0.investmentType) }.map { $0.currentValue.safeFinite }.reduce(0, +)
         profile.assets = newAssets
         
         var newLiabilities = profile.liabilities

@@ -543,7 +543,7 @@ struct FinancialAssessmentInsights: Hashable, Codable {
             switch type {
             case .stocks, .cryptocurrency:
                 return .high
-            case .deposits, .bonds:
+            case .deposits, .bonds, .cashSavings, .emergencyFund:
                 return .low
             case .ppf:
                 return .low
@@ -572,7 +572,7 @@ struct FinancialAssessmentInsights: Hashable, Codable {
         }
 
         private static func isLowRiskLiquid(type: AstraInvestmentType, name: String) -> Bool {
-            if [.deposits, .bonds].contains(type) {
+            if [.deposits, .bonds, .cashSavings, .emergencyFund].contains(type) {
                 return true
             }
             return containsAny(name, in: lowRiskLiquidKeywords)

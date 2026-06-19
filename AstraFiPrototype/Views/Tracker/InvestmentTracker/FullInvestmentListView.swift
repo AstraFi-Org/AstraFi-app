@@ -67,6 +67,8 @@ struct FullInvestmentListView: View {
         case .bonds: return "Low Risk"
         case .ppf: return "Low Risk"
         case .nps: return "Moderate Risk"
+        case .cashSavings: return "Low Risk"
+        case .emergencyFund: return "Low Risk"
         case .other: return "Moderate Risk"
         }
     }

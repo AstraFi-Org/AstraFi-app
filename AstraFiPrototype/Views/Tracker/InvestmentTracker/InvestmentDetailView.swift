@@ -15,6 +15,40 @@ private struct InvestmentTransactionChartPoint: Identifiable {
     let value: Double
 }
 
+private enum InvestmentFundChartRange: String, CaseIterable, Identifiable {
+    case oneMonth = "1M"
+    case sixMonths = "6M"
+    case oneYear = "1Y"
+    case threeYears = "3Y"
+    case fiveYears = "5Y"
+    case max = "Max"
+    case sip = "SIP"
+
+    var id: String { rawValue }
+
+    func startDate(for investment: AstraInvestment?) -> Date? {
+        let calendar = Calendar.current
+        let now = Date()
+
+        switch self {
+        case .oneMonth:
+            return calendar.date(byAdding: .month, value: -1, to: now)
+        case .sixMonths:
+            return calendar.date(byAdding: .month, value: -6, to: now)
+        case .oneYear:
+            return calendar.date(byAdding: .year, value: -1, to: now)
+        case .threeYears:
+            return calendar.date(byAdding: .year, value: -3, to: now)
+        case .fiveYears:
+            return calendar.date(byAdding: .year, value: -5, to: now)
+        case .max:
+            return Date(timeIntervalSince1970: 0)
+        case .sip:
+            return investment?.startDate
+        }
+    }
+}
+
 struct InvestmentDetailView: View {
     @Environment(AppStateManager.self) var appState
     @Environment(\.dismiss) var dismiss
@@ -57,6 +91,7 @@ struct InvestmentDetailView: View {
     @State private var showingDeleteAlert = false
     @State private var history: [MFHistoryPoint] = []
     @State private var isLoadingHistory = false
+    @State private var selectedFundRange: InvestmentFundChartRange = .sip
 
     private var sipInstallments: [AstraInvestmentTransaction] {
         inv?.installments.sorted(by: { $0.date > $1.date }) ?? []
@@ -128,33 +163,38 @@ struct InvestmentDetailView: View {
         }
         .background(Color(uiColor: .systemGroupedBackground))
         .task {
-            if let code = inv?.schemeCode {
-                isLoadingHistory = true
-                history = await MFService.shared.fetchHistoricalGraphData(schemeCode: code, startDate: inv?.startDate)
-                isLoadingHistory = false
-            } else if inv?.investmentType == .stocks, let symbol = inv?.symbol ?? inv?.investmentName {
-                isLoadingHistory = true
-                history = await StockService.shared.fetchStockChartHistory(symbol: symbol, startDate: inv?.startDate ?? Date())
-                isLoadingHistory = false
-            }
+            await loadFundHistory()
         }
         .onChange(of: inv?.schemeCode) { _ in
             Task {
-                if let code = inv?.schemeCode {
-                    isLoadingHistory = true
-                    history = await MFService.shared.fetchHistoricalGraphData(schemeCode: code, startDate: inv?.startDate)
-                    isLoadingHistory = false
-                }
+                await loadFundHistory()
             }
         }
         .onChange(of: inv?.startDate) { _ in
             Task {
-                if let code = inv?.schemeCode {
-                    isLoadingHistory = true
-                    history = await MFService.shared.fetchHistoricalGraphData(schemeCode: code, startDate: inv?.startDate)
-                    isLoadingHistory = false
-                }
+                await loadFundHistory()
             }
+        }
+        .onChange(of: selectedFundRange) { _ in
+            Task {
+                await loadFundHistory()
+            }
+        }
+    }
+
+    @MainActor
+    private func loadFundHistory() async {
+        let currentInv = inv
+        let startDate = selectedFundRange.startDate(for: currentInv)
+
+        if let code = currentInv?.schemeCode {
+            isLoadingHistory = true
+            history = await MFService.shared.fetchHistoricalGraphData(schemeCode: code, startDate: startDate)
+            isLoadingHistory = false
+        } else if currentInv?.investmentType == .stocks, let symbol = currentInv?.symbol ?? currentInv?.investmentName {
+            isLoadingHistory = true
+            history = await StockService.shared.fetchStockChartHistory(symbol: symbol, startDate: startDate ?? currentInv?.startDate ?? Date())
+            isLoadingHistory = false
         }
     }
 
@@ -343,7 +383,7 @@ struct InvestmentDetailView: View {
             if isLoadingHistory {
                 HStack { Spacer(); ProgressView(); Spacer() }
                     .frame(height: 220)
-            } else if history.isEmpty {
+            } else if fundAnalysisChartPoints.isEmpty {
                 // Placeholder when no data
                 VStack(spacing: 8) {
                     Image(systemName: "chart.xyaxis.line")
@@ -354,7 +394,7 @@ struct InvestmentDetailView: View {
                 }
                 .frame(maxWidth: .infinity, minHeight: 180)
             } else {
-                let chartData = historyChartPoints
+                let chartData = fundAnalysisChartPoints
                 let vals     = chartData.map(\.value)
                 let minVal   = (vals.min() ?? 0) * 0.995
                 let maxVal   = (vals.max() ?? 1) * 1.005
@@ -362,17 +402,18 @@ struct InvestmentDetailView: View {
                 let isProfit = (vals.last ?? 0) >= (vals.first ?? 0)
                 let lineColor: Color = isProfit ? .green : .red
 
-                // Month tick labels from history
+                // Month tick labels from live history, or from SIP transaction dates when
+                // the external graph history is unavailable.
                 let monthLabels: [(index: Int, label: String)] = {
                     var result: [(Int, String)] = []
                     let df = DateFormatter(); df.dateFormat = "dd-MM-yyyy"
                     let mf = DateFormatter(); mf.dateFormat = "MMM yy"
                     var lastMonth = -1
-                    for (i, pt) in history.enumerated() {
+                    for pt in chartData {
                         if let d = df.date(from: pt.date) {
                             let m = Calendar.current.component(.month, from: d)
                             if m != lastMonth {
-                                result.append((i, mf.string(from: d)))
+                                result.append((pt.index, mf.string(from: d)))
                                 lastMonth = m
                             }
                         }
@@ -386,7 +427,20 @@ struct InvestmentDetailView: View {
                 }()
 
                 let yTicks: [Double] = [minVal, minVal + range*0.33, minVal + range*0.66, maxVal]
-                let transactionPoints = sipPurchaseChartPoints
+                let transactionPoints = purchaseChartPoints(for: chartData)
+                let highlightedPoint: InvestmentHistoryChartPoint? = {
+                    if let lastSipIndex = transactionPoints.last?.index,
+                       let point = chartData.first(where: { $0.index == lastSipIndex }) {
+                        return point
+                    }
+                    return chartData[safe: max(0, chartData.count / 2)]
+                }()
+
+                fundAnalysisStatsHeader(chartData: chartData)
+                    .padding(.bottom, 14)
+
+                fundRangeSelector
+                    .padding(.bottom, 18)
 
                 Chart {
                     ForEach(chartData) { point in
@@ -411,6 +465,42 @@ struct InvestmentDetailView: View {
                         .lineStyle(StrokeStyle(lineWidth: 2))
                     }
 
+                    if let highlightedPoint {
+                        RuleMark(x: .value("Selected Date", highlightedPoint.index))
+                            .foregroundStyle(Color.secondary.opacity(0.35))
+                            .lineStyle(StrokeStyle(lineWidth: 1, dash: [5, 4]))
+
+                        PointMark(
+                            x: .value("Selected Date", highlightedPoint.index),
+                            y: .value("NAV", highlightedPoint.value)
+                        )
+                        .foregroundStyle(lineColor)
+                        .symbol {
+                            Circle()
+                                .fill(lineColor)
+                                .frame(width: 11, height: 11)
+                                .overlay(Circle().stroke(Color.white, lineWidth: 2))
+                                .shadow(color: lineColor.opacity(0.35), radius: 4)
+                        }
+                        .annotation(position: .top, alignment: .center) {
+                            VStack(alignment: .leading, spacing: 3) {
+                                Text("₹ \(String(format: "%.2f", highlightedPoint.value))")
+                                    .font(.system(size: 14, weight: .bold))
+                                    .foregroundColor(.primary)
+                                Text(displayDateLabel(for: highlightedPoint.date))
+                                    .font(.system(size: 11, weight: .medium))
+                                    .foregroundColor(.secondary)
+                            }
+                            .padding(.horizontal, 10)
+                            .padding(.vertical, 8)
+                            .background(
+                                RoundedRectangle(cornerRadius: 8, style: .continuous)
+                                    .fill(Color(uiColor: .secondarySystemGroupedBackground))
+                                    .shadow(color: .black.opacity(colorScheme == .dark ? 0.4 : 0.12), radius: 6, x: 0, y: 2)
+                            )
+                        }
+                    }
+
                     if let first = chartData.first {
                         PointMark(
                             x: .value("Point", first.index),
@@ -422,12 +512,6 @@ struct InvestmentDetailView: View {
                                 .fill(Color.blue)
                                 .frame(width: 8, height: 8)
                                 .overlay(Circle().stroke(Color.white, lineWidth: 1.5))
-                        }
-                        .annotation(position: .top, alignment: .leading) {
-                            VStack(spacing: 1) {
-                                Text("Entry").font(.system(size: 8, weight: .bold)).foregroundColor(.blue)
-                                Text("₹\(String(format: "%.2f", first.value))").font(.system(size: 8)).foregroundColor(.secondary)
-                            }
                         }
                     }
 
@@ -442,12 +526,6 @@ struct InvestmentDetailView: View {
                                 .fill(lineColor)
                                 .frame(width: 8, height: 8)
                                 .overlay(Circle().stroke(Color.white, lineWidth: 1.5))
-                        }
-                        .annotation(position: .top, alignment: .trailing) {
-                            VStack(spacing: 1) {
-                                Text("Latest").font(.system(size: 8, weight: .bold)).foregroundColor(lineColor)
-                                Text("₹\(String(format: "%.2f", last.value))").font(.system(size: 8)).foregroundColor(.secondary)
-                            }
                         }
                     }
 
@@ -469,31 +547,28 @@ struct InvestmentDetailView: View {
                 .chartXScale(domain: 0...(max(chartData.count - 1, 1)))
                 .chartYScale(domain: minVal...maxVal)
                 .chartYAxis {
-                    AxisMarks(position: .leading, values: yTicks) { value in
-                        AxisGridLine(stroke: StrokeStyle(lineWidth: 0.7, dash: [4, 4]))
-                            .foregroundStyle(Color.gray.opacity(0.15))
-                        AxisValueLabel {
-                            if let tick = value.as(Double.self) {
-                                Text("₹\(String(format: "%.0f", tick))")
-                                    .font(.system(size: 8))
-                                    .foregroundColor(.secondary)
-                            }
-                        }
+                    AxisMarks(position: .leading, values: yTicks) { _ in
+                        AxisGridLine(stroke: StrokeStyle(lineWidth: 0.5, dash: [4, 4]))
+                            .foregroundStyle(Color.secondary.opacity(0.10))
                     }
                 }
                 .chartXAxis {
                     AxisMarks(values: monthLabels.map(\.index)) { value in
+                        AxisTick(stroke: StrokeStyle(lineWidth: 1))
+                            .foregroundStyle(lineColor)
+                        AxisGridLine(stroke: StrokeStyle(lineWidth: 1))
+                            .foregroundStyle(lineColor.opacity(0.65))
                         AxisValueLabel {
                             if let index = value.as(Int.self),
                                let label = monthLabels.first(where: { $0.index == index })?.label {
                                 Text(label)
-                                    .font(.system(size: 7.5))
+                                    .font(.system(size: 10))
                                     .foregroundColor(.secondary)
                             }
                         }
                     }
                 }
-                .frame(height: 240)
+                .frame(height: 300)
 
                 // ── Legend ───────────────────────────────────────────────────
                 HStack(spacing: 16) {
@@ -518,6 +593,69 @@ struct InvestmentDetailView: View {
         }
         .padding()
         .investmentDetailCardStyle(colorScheme: colorScheme)
+    }
+
+    private func fundAnalysisStatsHeader(chartData: [InvestmentHistoryChartPoint]) -> some View {
+        let values = chartData.map(\.value).filter { $0.isFinite && $0 > 0 }
+        let high = values.max() ?? 0
+        let low = values.min() ?? 0
+        let cagr = fundCAGR(for: chartData)
+        let cagrColor: Color = cagr >= 0 ? .green : .red
+
+        return HStack(alignment: .top, spacing: 24) {
+            fundStatBlock(title: "High", value: "₹\(String(format: "%.2f", high))", color: .primary)
+            fundStatBlock(title: "Low", value: "₹\(String(format: "%.2f", low))", color: .primary)
+            fundStatBlock(
+                title: "CAGR",
+                value: "\(cagr >= 0 ? "▲" : "▼") \(String(format: "%.2f", abs(cagr)))%",
+                color: cagrColor
+            )
+            Spacer(minLength: 0)
+        }
+    }
+
+    private func fundStatBlock(title: String, value: String, color: Color) -> some View {
+        VStack(alignment: .leading, spacing: 8) {
+            Text(title)
+                .font(.subheadline)
+                .foregroundColor(.secondary)
+            Text(value)
+                .font(.title3)
+                .fontWeight(.bold)
+                .foregroundColor(color)
+                .lineLimit(1)
+                .minimumScaleFactor(0.8)
+        }
+        .frame(minWidth: 76, alignment: .leading)
+    }
+
+    private var fundRangeSelector: some View {
+        ScrollView(.horizontal, showsIndicators: false) {
+            HStack(spacing: 0) {
+                ForEach(InvestmentFundChartRange.allCases) { range in
+                    Button {
+                        withAnimation(.spring(response: 0.25, dampingFraction: 0.9)) {
+                            selectedFundRange = range
+                        }
+                    } label: {
+                        Text(range.rawValue)
+                            .font(.system(size: 14, weight: .bold))
+                            .foregroundColor(selectedFundRange == range ? .white : .primary)
+                            .frame(minWidth: 54, minHeight: 38)
+                            .background(
+                                Rectangle()
+                                    .fill(selectedFundRange == range ? Color.primary.opacity(0.92) : Color.clear)
+                            )
+                    }
+                    .buttonStyle(.plain)
+                }
+            }
+            .clipShape(RoundedRectangle(cornerRadius: 7, style: .continuous))
+            .overlay {
+                RoundedRectangle(cornerRadius: 7, style: .continuous)
+                    .stroke(Color.secondary.opacity(0.35), lineWidth: 1)
+            }
+        }
     }
 
     @ViewBuilder
@@ -603,6 +741,8 @@ struct InvestmentDetailView: View {
         case .bonds:          return "Bonds  •  Low Risk"
         case .ppf:            return "PPF  •  Low Risk"
         case .nps:            return "NPS  •  Moderate Risk"
+        case .cashSavings:    return "Cash Savings  •  Low Risk"
+        case .emergencyFund:  return "Emergency Fund  •  Low Risk"
         case .other, .none:   return "Investment"
         }
     }
@@ -611,6 +751,44 @@ struct InvestmentDetailView: View {
         history.enumerated().compactMap { index, point in
             guard let value = Double(point.nav) else { return nil }
             return InvestmentHistoryChartPoint(index: index, date: point.date, value: value)
+        }
+    }
+
+    private var fundAnalysisChartPoints: [InvestmentHistoryChartPoint] {
+        let liveHistory = historyChartPoints.filter { $0.value.isFinite && $0.value > 0 }
+        if !liveHistory.isEmpty {
+            return liveHistory
+        }
+
+        return sipHistoryChartPoints
+    }
+
+    private var sipHistoryChartPoints: [InvestmentHistoryChartPoint] {
+        guard let currentInv = inv else { return [] }
+
+        let dateFormatter = DateFormatter()
+        dateFormatter.dateFormat = "dd-MM-yyyy"
+
+        var points = currentInv.installments
+            .filter { $0.nav.isFinite && $0.nav > 0 }
+            .sorted { $0.date < $1.date }
+            .map { transaction in
+                (date: transaction.date, value: transaction.nav)
+            }
+
+        if let currentNAV = currentInv.lastNAV, currentNAV.isFinite, currentNAV > 0 {
+            let latestDate = currentInv.lastUpdated ?? Date()
+            if points.isEmpty || points.last?.date != latestDate || points.last?.value != currentNAV {
+                points.append((date: latestDate, value: currentNAV))
+            }
+        }
+
+        return points.enumerated().map { index, point in
+            InvestmentHistoryChartPoint(
+                index: index,
+                date: dateFormatter.string(from: point.date),
+                value: point.value
+            )
         }
     }
 
@@ -633,9 +811,50 @@ struct InvestmentDetailView: View {
         return (minVal - padding)...(maxVal + padding)
     }
 
-    private var sipPurchaseChartPoints: [InvestmentTransactionChartPoint] {
+    private func parsedDate(from chartDate: String) -> Date? {
+        let formatter = DateFormatter()
+        formatter.dateFormat = "dd-MM-yyyy"
+        return formatter.date(from: chartDate)
+    }
+
+    private func displayDateLabel(for chartDate: String) -> String {
+        guard let date = parsedDate(from: chartDate) else { return chartDate }
+        let formatter = DateFormatter()
+        formatter.dateFormat = "MMM d, yyyy"
+        return formatter.string(from: date)
+    }
+
+    private func fundCAGR(for points: [InvestmentHistoryChartPoint]) -> Double {
+        guard let first = points.first,
+              let last = points.last,
+              first.value.isFinite,
+              last.value.isFinite,
+              first.value > 0,
+              last.value > 0,
+              let firstDate = parsedDate(from: first.date),
+              let lastDate = parsedDate(from: last.date) else {
+            return 0
+        }
+
+        let days = max(lastDate.timeIntervalSince(firstDate) / 86_400, 1)
+        let years = days / 365.0
+        return (pow(last.value / first.value, 1.0 / years) - 1.0) * 100
+    }
+
+    private func purchaseChartPoints(for chartData: [InvestmentHistoryChartPoint]) -> [InvestmentTransactionChartPoint] {
         let txList = inv?.installments ?? []
-        guard historyChartPoints.count > 1, !txList.isEmpty else { return [] }
+        guard chartData.count > 1, !txList.isEmpty else { return [] }
+
+        if historyChartPoints.isEmpty {
+            return txList
+                .filter { $0.nav.isFinite && $0.nav > 0 }
+                .sorted { $0.date < $1.date }
+                .enumerated()
+                .compactMap { index, tx in
+                    guard chartData.indices.contains(index) else { return nil }
+                    return InvestmentTransactionChartPoint(id: tx.id, index: index, value: tx.nav)
+                }
+        }
 
         let df = DateFormatter()
         df.dateFormat = "dd-MM-yyyy"
@@ -667,7 +886,13 @@ private extension View {
             RoundedRectangle(cornerRadius: 18, style: .continuous)
                 .stroke(colorScheme == .dark ? Color.white.opacity(0.10) : Color.black.opacity(0.04), lineWidth: 1)
         }
-        .shadow(color: Color.black.opacity(colorScheme == .dark ? 0.35 : 0.05), radius: 10, x: 0, y: 3)
+            .shadow(color: Color.black.opacity(colorScheme == .dark ? 0.35 : 0.05), radius: 10, x: 0, y: 3)
+    }
+}
+
+private extension Array {
+    subscript(safe index: Int) -> Element? {
+        indices.contains(index) ? self[index] : nil
     }
 }
 
