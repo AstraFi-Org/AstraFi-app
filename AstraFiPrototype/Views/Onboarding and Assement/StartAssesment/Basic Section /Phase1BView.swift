@@ -228,18 +228,18 @@ struct InvestmentQuestionCard: View {
 
             HStack(spacing: 12) {
                 InvestChoiceButton(
-                    label: "Yes, I invest",
-                    //icon: "chart.bar.fill",
-                    color: AppTheme.auraGreen,
-                    isSelected: doesInvest == true
-                ) { doesInvest = true }
-
-                InvestChoiceButton(
                     label: "Not yet",
                     //icon: "banknote",
                     color: AppTheme.vibrantOrange,
                     isSelected: doesInvest == false
                 ) { doesInvest = false }
+
+                InvestChoiceButton(
+                    label: "Yes, I invest",
+                    //icon: "chart.bar.fill",
+                    color: AppTheme.auraGreen,
+                    isSelected: doesInvest == true
+                ) { doesInvest = true }
             }
         }
         .padding(18)
@@ -323,17 +323,7 @@ struct InvestmentAnalyseCard: View {
 
             // Two side-by-side buttons
             HStack(spacing: 12) {
-                Button(action: onAnalyse) {
-                    Text("Yes, analyse")
-                        .font(.system(size: 14, weight: .bold, design: .rounded))
-                        .foregroundStyle(.white)
-                        .frame(maxWidth: .infinity)
-                        .padding(.vertical, 12)
-                        .background(AppTheme.auraGreen)
-                        .clipShape(RoundedRectangle(cornerRadius: 12, style: .continuous))
-                }
-                .buttonStyle(.plain)
-
+                // SKIP button
                 Button(action: onSkip) {
                     Text("Skip for now")
                         .font(.system(size: 14, weight: .bold, design: .rounded))
@@ -346,6 +336,18 @@ struct InvestmentAnalyseCard: View {
                             RoundedRectangle(cornerRadius: 12, style: .continuous)
                                 .stroke(AppTheme.vibrantOrange.opacity(0.30), lineWidth: 1)
                         )
+                }
+                .buttonStyle(.plain)
+
+                // YES button
+                Button(action: onAnalyse) {
+                    Text("Yes, analyse")
+                        .font(.system(size: 14, weight: .bold, design: .rounded))
+                        .foregroundStyle(.white)
+                        .frame(maxWidth: .infinity)
+                        .padding(.vertical, 12)
+                        .background(AppTheme.auraGreen)
+                        .clipShape(RoundedRectangle(cornerRadius: 12, style: .continuous))
                 }
                 .buttonStyle(.plain)
             }

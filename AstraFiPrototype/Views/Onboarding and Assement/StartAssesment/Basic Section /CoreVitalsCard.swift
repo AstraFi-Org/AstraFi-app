@@ -395,14 +395,9 @@ struct CoreVitalsCard: View {
                 Button {
                     showKnowledge = true
                 } label: {
-                    ZStack {
-//                        Circle()
-//                            .fill(AppTheme.auraIndigo.opacity(0.12))
-//                            .frame(width: 28, height: 28)
-                        Image(systemName: "info.circle")
-                            .font(.system(size: 12, weight: .bold))
-                            .foregroundStyle(AppTheme.auraIndigo)
-                    }
+                    Image(systemName: "info.circle")
+                        .font(.title3)
+                        .foregroundStyle(AppTheme.auraIndigo)
                 }
                 .buttonStyle(.plain)
                 .accessibilityLabel("Financial insights and tips")
@@ -448,6 +443,7 @@ struct CoreVitalsCard: View {
                     Text("Target: 30% of income · Healthy saving discipline")
                         .font(.system(size: 11, design: .rounded))
                         .foregroundStyle(.secondary)
+                        .frame(maxWidth: .infinity, alignment: .leading)
                 }
 
                 divider
@@ -474,6 +470,7 @@ struct CoreVitalsCard: View {
                     Text("Target: below 50% of income · Lower is better")
                         .font(.system(size: 11, design: .rounded))
                         .foregroundStyle(.secondary)
+                        .frame(maxWidth: .infinity, alignment: .leading)
                 }
 
                 divider

@@ -492,13 +492,9 @@ private struct SectionHeader: View {
                 .font(.system(size: 20, weight: .bold))
             Spacer()
             NavigationLink(destination: destination) {
-                HStack(spacing: 4) {
-                    Text("See all")
-                        .font(.system(size: 13, weight: .semibold))
-                    Image(systemName: "chevron.right")
-                        .font(.system(size: 10, weight: .bold))
-                }
-                .foregroundStyle(Color(hex: "#007AFF"))
+                Image(systemName: "chevron.right")
+                    .font(.system(size: 12, weight: .bold))
+                    .foregroundStyle(Color(hex: "#007AFF"))
             }
         }
     }
