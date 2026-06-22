@@ -295,7 +295,7 @@ struct DashboardView: View {
     
     // MARK: Investment Intelligence
     private var investmentIntelligenceSection: some View {
-        let assets = InvestmentIntelligenceHomeViewModel().stocks
+        let assets = Self.investmentIntelligencePreviewAssets
 
         return VStack(alignment: .leading, spacing: 14) {
             SectionHeader(title: "Investment Intelligence", destination: AnyView(InvestmentIntelligenceView()))
@@ -312,6 +312,97 @@ struct DashboardView: View {
                 .padding(.horizontal, 2)
                 .padding(.vertical, 2)
             }
+        }
+    }
+
+    private static var investmentIntelligencePreviewAssets: [InvestmentSummaryAsset] {
+        [
+            InvestmentSummaryAsset(
+                id: "home-preview-stock-tcs",
+                kind: .stock,
+                symbol: "TCS.NS",
+                name: "Tata Consultancy Services",
+                sector: "IT Services",
+                currentValue: 3520,
+                dailyChange: -0.34,
+                oneYearReturn: nil,
+                riskLevel: .moderate,
+                sparkline: previewSparkline(base: 3520, moves: [-1.4, 0.8, 1.2, -0.5, 1.7, -0.3]),
+                metadata: "NSE"
+            ),
+            InvestmentSummaryAsset(
+                id: "home-preview-stock-reliance",
+                kind: .stock,
+                symbol: "RELIANCE.NS",
+                name: "Reliance Industries",
+                sector: "Energy & Retail",
+                currentValue: 2896,
+                dailyChange: 0.62,
+                oneYearReturn: nil,
+                riskLevel: .moderate,
+                sparkline: previewSparkline(base: 2896, moves: [0.5, 1.1, -0.4, 0.9, 1.3, 0.6]),
+                metadata: "NSE"
+            ),
+            InvestmentSummaryAsset(
+                id: "home-preview-mf-large-cap",
+                kind: .mutualFund,
+                symbol: "119436",
+                name: "Aditya Birla Large & Mid Cap",
+                sector: "Large & Mid Cap",
+                currentValue: 1043,
+                dailyChange: nil,
+                oneYearReturn: 12.4,
+                riskLevel: .moderate,
+                sparkline: previewSparkline(base: 1043, moves: [0.6, 0.8, 1.0, -0.2, 1.1, 1.4]),
+                metadata: "AMFI"
+            ),
+            InvestmentSummaryAsset(
+                id: "home-preview-mf-nifty",
+                kind: .mutualFund,
+                symbol: "151165",
+                name: "360 ONE Nifty 50 Index Fund",
+                sector: "Index Fund",
+                currentValue: 13.62,
+                dailyChange: nil,
+                oneYearReturn: 10.1,
+                riskLevel: .moderate,
+                sparkline: previewSparkline(base: 13.62, moves: [0.4, 0.7, 0.2, 0.9, -0.1, 0.8]),
+                metadata: "AMFI"
+            ),
+            InvestmentSummaryAsset(
+                id: "home-preview-etf-goldbees",
+                kind: .goldETF,
+                symbol: "GOLDBEES.NS",
+                name: "Nippon India Gold Bees",
+                sector: "Gold ETF",
+                currentValue: 68.4,
+                dailyChange: 0.18,
+                oneYearReturn: nil,
+                riskLevel: .moderate,
+                sparkline: previewSparkline(base: 68.4, moves: [0.2, 0.5, -0.1, 0.7, 0.4, 0.9]),
+                metadata: "NSE"
+            ),
+            InvestmentSummaryAsset(
+                id: "home-preview-etf-hdfc-gold",
+                kind: .goldETF,
+                symbol: "HDFCGOLD.NS",
+                name: "HDFC Gold ETF",
+                sector: "Gold ETF",
+                currentValue: 69.1,
+                dailyChange: -0.08,
+                oneYearReturn: nil,
+                riskLevel: .moderate,
+                sparkline: previewSparkline(base: 69.1, moves: [-0.1, 0.3, 0.6, 0.2, 0.5, -0.1]),
+                metadata: "NSE"
+            )
+        ]
+    }
+
+    private static func previewSparkline(base: Double, moves: [Double]) -> [InvestmentChartPoint] {
+        let calendar = Calendar.current
+        return moves.enumerated().map { index, move in
+            let date = calendar.date(byAdding: .day, value: index - moves.count + 1, to: Date()) ?? Date()
+            return InvestmentChartPoint(date: date, value: base * (1 + move / 100))
         }
     }
     
@@ -401,13 +492,9 @@ private struct SectionHeader: View {
                 .font(.system(size: 20, weight: .bold))
             Spacer()
             NavigationLink(destination: destination) {
-                HStack(spacing: 4) {
-                    Text("See all")
-                        .font(.system(size: 13, weight: .semibold))
-                    Image(systemName: "chevron.right")
-                        .font(.system(size: 10, weight: .bold))
-                }
-                .foregroundStyle(Color(hex: "#007AFF"))
+                Image(systemName: "chevron.right")
+                    .font(.system(size: 12, weight: .bold))
+                    .foregroundStyle(Color(hex: "#007AFF"))
             }
         }
     }
