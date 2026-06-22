@@ -133,30 +133,7 @@ struct NotificationCard: View {
             }
 
             VStack(alignment: .leading, spacing: 6) {
-                HStack {
-                    Text(item.title)
-                        .font(.subheadline)
-                        .fontWeight(.bold)
-                        .foregroundColor(.primary)
-                    Spacer()
-                    Text(timeAgo(item.date))
-                        .font(.caption2)
-                        .foregroundColor(.secondary)
-
-                    if item.isUnread {
-                        Circle()
-                            .fill(Color.blue)
-                            .frame(width: 8, height: 8)
-                    }
-                }
-
-                Text(item.message)
-                    .font(.caption)
-                    .foregroundColor(.secondary)
-                    .lineLimit(2)
-                    .fixedSize(horizontal: false, vertical: true)
-
-                HStack {
+                HStack(alignment: .center) {
                     Text(item.category)
                         .font(.system(size: 10, weight: .bold))
                         .padding(.horizontal, 8)
@@ -164,9 +141,31 @@ struct NotificationCard: View {
                         .background(item.iconColor.opacity(0.1))
                         .foregroundColor(item.iconColor)
                         .cornerRadius(6)
+                    
                     Spacer()
+                    
+                    HStack(spacing: 6) {
+                        if item.isUnread {
+                            Circle()
+                                .fill(Color.blue)
+                                .frame(width: 8, height: 8)
+                        }
+                        Text(timeAgo(item.date))
+                            .font(.caption2)
+                            .foregroundColor(.secondary)
+                    }
                 }
-                .padding(.top, 4)
+
+                Text(item.title)
+                    .font(.subheadline)
+                    .fontWeight(.bold)
+                    .foregroundColor(.primary)
+
+                Text(item.message)
+                    .font(.caption)
+                    .foregroundColor(.secondary)
+                    .lineLimit(2)
+                    .fixedSize(horizontal: false, vertical: true)
             }
         }
         .padding(16)

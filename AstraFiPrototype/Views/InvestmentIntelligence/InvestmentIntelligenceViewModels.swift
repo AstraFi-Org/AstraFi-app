@@ -13,7 +13,6 @@ final class InvestmentIntelligenceHomeViewModel {
 
     init(repository: InvestmentIntelligenceRepository = InvestmentIntelligenceRepository()) {
         self.repository = repository
-        loadSeedData()
     }
 
     func load() async {
@@ -22,85 +21,12 @@ final class InvestmentIntelligenceHomeViewModel {
         defer { isLoading = false }
 
         let assets = await repository.homeAssets()
-        stocks = assets.stocks.isEmpty ? stocks : assets.stocks
-        mutualFunds = assets.funds.isEmpty ? mutualFunds : assets.funds
-        goldETFs = assets.gold.isEmpty ? goldETFs : assets.gold
-    }
-
-    private func loadSeedData() {
-        stocks = [
-            seedStock("HDFCBANK.NS", "HDFC Bank", "Banking", 1680, 0.42),
-            seedStock("TCS.NS", "TCS", "IT", 3520, -0.34),
-            seedStock("HINDUNILVR.NS", "Hindustan Unilever", "FMCG", 2460, 0.18),
-            seedStock("SUNPHARMA.NS", "Sun Pharma", "Healthcare", 1520, 0.64),
-            seedStock("RELIANCE.NS", "Reliance", "Energy", 2450, 0.52),
-            seedStock("NTPC.NS", "NTPC", "Power", 365, 1.1),
-            seedStock("MARUTI.NS", "Maruti Suzuki", "Automobile", 12200, -0.22)
-        ]
-
-        mutualFunds = [
-            seedFund("mf-large", "Large Cap Fund", "Large Cap", 82.4, 11.2, .moderate),
-            seedFund("mf-flexi", "Flexi Cap Fund", "Flexi Cap", 64.8, 14.5, .moderate),
-            seedFund("mf-mid", "Mid Cap Fund", "Mid Cap", 118.2, 18.1, .high),
-            seedFund("mf-small", "Small Cap Fund", "Small Cap", 151.7, 22.6, .high),
-            seedFund("mf-index", "Nifty Index Fund", "Index Fund", 42.3, 12.8, .moderate),
-            seedFund("mf-gold", "Gold Fund", "Gold Fund", 29.6, 13.4, .moderate)
-        ]
-
-        goldETFs = [
-            seedGold("GOLDBEES.NS", "Nippon India Gold ETF"),
-            seedGold("HDFCGOLD.NS", "HDFC Gold ETF"),
-            seedGold("SETFGOLD.NS", "SBI Gold ETF"),
-            seedGold("ICICIGOLD.NS", "ICICI Gold ETF")
-        ]
-    }
-
-    private func seedStock(_ symbol: String, _ name: String, _ sector: String, _ price: Double, _ change: Double) -> InvestmentSummaryAsset {
-        InvestmentSummaryAsset(
-            id: "stock-\(symbol)",
-            kind: .stock,
-            symbol: symbol,
-            name: name,
-            sector: sector,
-            currentValue: price,
-            dailyChange: change,
-            oneYearReturn: nil,
-            riskLevel: .moderate,
-            sparkline: SearchService.seedSparkline(base: price),
-            metadata: "NSE"
-        )
-    }
-
-    private func seedFund(_ id: String, _ name: String, _ category: String, _ nav: Double, _ oneYearReturn: Double, _ risk: IntelligenceRiskLevel) -> InvestmentSummaryAsset {
-        InvestmentSummaryAsset(
-            id: id,
-            kind: .mutualFund,
-            symbol: id.replacingOccurrences(of: "mf-", with: ""),
-            name: name,
-            sector: category,
-            currentValue: nav,
-            dailyChange: nil,
-            oneYearReturn: oneYearReturn,
-            riskLevel: risk,
-            sparkline: SearchService.seedSparkline(base: nav),
-            metadata: "AMFI"
-        )
-    }
-
-    private func seedGold(_ symbol: String, _ name: String) -> InvestmentSummaryAsset {
-        InvestmentSummaryAsset(
-            id: "gold-\(symbol)",
-            kind: .goldETF,
-            symbol: symbol,
-            name: name,
-            sector: "Gold ETF",
-            currentValue: nil,
-            dailyChange: nil,
-            oneYearReturn: nil,
-            riskLevel: .moderate,
-            sparkline: SearchService.seedSparkline(base: 62),
-            metadata: "NSE"
-        )
+        stocks = assets.stocks
+        mutualFunds = assets.funds
+        goldETFs = assets.gold
+        errorMessage = (stocks.isEmpty && mutualFunds.isEmpty && goldETFs.isEmpty)
+            ? "No verified market data loaded. Check FINNHUB_API_KEY, network access, and AMFI availability."
+            : nil
     }
 }
 
