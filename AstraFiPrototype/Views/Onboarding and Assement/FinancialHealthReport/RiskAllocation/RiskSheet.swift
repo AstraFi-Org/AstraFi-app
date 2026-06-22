@@ -75,16 +75,16 @@ struct RiskSheet: View {
                              : "Regularly rebalance between equity and debt based on market conditions and your goals.")
                             .font(.subheadline).foregroundStyle(.secondary).lineSpacing(3)
                     }
-                    .frame(maxWidth: .infinity, alignment: .leading)
                     .padding(14).background(Color(hex: "#FF9F0A").opacity(0.08))
                     .clipShape(RoundedRectangle(cornerRadius: 12, style: .continuous))
+                    .listRowInsets(EdgeInsets(top: 8, leading: 16, bottom: 8, trailing: 16))
                 }
 
                 if !concerns.isEmpty {
                     Section(header: Text("Action Items").font(.footnote).textCase(.uppercase)) {
                         ForEach(concerns) { concern in
                             ConcernCard(concern: concern)
-                                .listRowInsets(EdgeInsets(top: 6, leading: 0, bottom: 6, trailing: 0))
+                                .listRowInsets(EdgeInsets(top: 6, leading: 16, bottom: 6, trailing: 16))
                                 .listRowBackground(Color.clear).listRowSeparator(.hidden)
                         }
                     }
