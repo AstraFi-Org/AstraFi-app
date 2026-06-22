@@ -99,7 +99,7 @@ struct SectionGateView: View {
             icon: "building.columns.fill",
             iconColor: .blue,
             question: "Do you have any investments?",
-            detail: "Adding your investments helps us understand your wealth growth and suggest better strategies.",
+            detail: "Adding your investments helps us understand your wealth growth and illustrate better strategies.",
             yesLabel: "Yes, add investments",
             noLabel: "Skip for now",
             onYes: {},

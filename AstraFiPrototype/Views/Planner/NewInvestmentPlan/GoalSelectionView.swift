@@ -64,7 +64,7 @@ struct GoalSelectionView: View {
                             }
                         }) {
                             HStack(spacing: 8) {
-                                Text("Set Up My Plan")
+                                Text("Start Illustration")
                             }
                             .font(.headline).fontWeight(.bold)
                             .foregroundColor(.white)
@@ -95,7 +95,7 @@ struct GoalSelectionView: View {
         VStack(alignment: .leading, spacing: 8) {
             Text("What are you investing for?")
                 .font(.system(size: 24, weight: .bold))
-            Text("We'll tailor your investment plan to your goal.")
+            Text("We'll tailor your investment strategy to your goal.")
                 .font(.subheadline)
                 .foregroundColor(.secondary)
         }

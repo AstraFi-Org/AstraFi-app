@@ -20,7 +20,7 @@ struct TrackerInvestmentsSection: View {
                                   message: "No investments recorded yet. Complete your assessment to get started.")
             } else {
                 VStack(spacing: 12) {
-                    ForEach(investments) { investment in
+                    ForEach(Array(investments.prefix(3))) { investment in
                         NavigationLink(destination: investmentDestination(for: investment)) {
                             InvestmentCard(investment: investment)
                         }

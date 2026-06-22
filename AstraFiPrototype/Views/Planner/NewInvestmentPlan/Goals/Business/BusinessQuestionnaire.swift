@@ -73,7 +73,7 @@ struct BusinessQuestionnaire: View {
                         icon: "calendar.badge.clock",
                         iconColor: goalAccentColor,
                         title: "Launch Timeline",
-                        subtitle: "When do you plan to start your business?"
+                        subtitle: "When are you aiming to start your business?"
                     )
                     
                     Divider()

@@ -20,7 +20,7 @@ struct TrackerGoalsSection: View {
                                   message: "No goals set yet. Complete your assessment to start tracking goals.")
             } else {
                 VStack(spacing: 12) { 
-                    ForEach(goals) { goal in 
+                    ForEach(Array(goals.prefix(3))) { goal in 
                         NavigationLink(destination: goalDestination(for: goal)) {
                             GoalCard(goal: goal) 
                         }

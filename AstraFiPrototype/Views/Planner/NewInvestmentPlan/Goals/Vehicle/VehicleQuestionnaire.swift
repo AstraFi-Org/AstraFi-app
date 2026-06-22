@@ -73,7 +73,7 @@ struct VehicleQuestionnaire: View {
                         icon: "calendar.badge.clock",
                         iconColor: goalAccentColor,
                         title: "Purchase Timeline",
-                        subtitle: "When do you plan to buy your vehicle?"
+                        subtitle: "When are you aiming to buy your vehicle?"
                     )
                     
                     Divider()

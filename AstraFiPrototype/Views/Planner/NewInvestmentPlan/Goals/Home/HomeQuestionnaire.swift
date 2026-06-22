@@ -75,7 +75,7 @@ struct HomeQuestionnaire: View {
                         icon: "calendar.badge.clock",
                         iconColor: goalAccentColor,
                         title: "Purchase Timeline",
-                        subtitle: "When do you plan to buy your home?"
+                        subtitle: "When are you aiming to buy your home?"
                     )
                     
                     Divider()

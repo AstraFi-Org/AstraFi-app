@@ -17,7 +17,7 @@ struct TrackerLoansSection: View {
                 }
             }
             VStack(spacing: 12) {
-                ForEach(loans) { loan in
+                ForEach(Array(loans.prefix(3))) { loan in
                     NavigationLink(destination: LoanDetailView(loanID: loan.id)) {
                         TrackerLoanCard(loan: loan)
                     }

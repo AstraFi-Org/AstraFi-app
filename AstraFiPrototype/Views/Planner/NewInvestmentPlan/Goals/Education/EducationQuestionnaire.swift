@@ -619,7 +619,7 @@ struct EducationInsightCard: View {
                     SectionHeader2(
                         icon: "graduationcap.fill",
                         iconColor: accentColor,
-                        title: "Education Corpus Plan",
+                        title: "Education Corpus Illustration",
                         subtitle: "Your complete financial target"
                     )
                     
@@ -711,7 +711,7 @@ struct EducationInsightCard: View {
                             .font(.system(size: 11))
                             .foregroundStyle(.blue)
                         VStack(alignment: .leading, spacing: 4) {
-                            Text("International Planning")
+                            Text("International Illustration")
                                 .font(.system(size: 11, weight: .bold))
                             Text("Costs include international travel & higher rent. Consider forex-hedged plans to avoid currency risk.")
                                 .font(.system(size: 10))
@@ -727,7 +727,7 @@ struct EducationInsightCard: View {
                             .font(.system(size: 11))
                             .foregroundStyle(.green)
                         VStack(alignment: .leading, spacing: 4) {
-                            Text("Domestic Planning")
+                            Text("Domestic Illustration")
                                 .font(.system(size: 11, weight: .bold))
                             Text("Assuming hostel/PG stay and mess food. Indian inflation is assumed at 6-8% for education.")
                                 .font(.system(size: 10))

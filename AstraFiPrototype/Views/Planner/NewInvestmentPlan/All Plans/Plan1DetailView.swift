@@ -41,6 +41,7 @@ struct Plan1DetailView: View {
                 .padding(.horizontal, 16)
 
                 .padding(.bottom, 120) 
+                .frame(maxWidth: UIScreen.main.bounds.width)
             }
             .background(AppTheme.appBackground(for: colorScheme))
             .onChange(of: selectedRisk) { _, _ in
@@ -59,7 +60,7 @@ struct Plan1DetailView: View {
         }
         .alert("Action Successful", isPresented: $showingSaveAlert) {
              Button("View in Tracker") { 
-                 appState.showDashboard = true
+                 appState.selectedTab = 2
                  dismiss()
              }
              Button("OK", role: .cancel) { }
@@ -71,7 +72,7 @@ struct Plan1DetailView: View {
         } message: {
             Text("Educational illustration only. Not investment advice. Values use fixed CAGR assumptions, reinvestment of returns, and no taxes, fees, or severe market drawdowns unless shown. Actual returns may vary.")
         }
-        .navigationTitle("Investment Scenario")
+        .navigationTitle("Investment Illustration")
         .navigationBarTitleDisplayMode(.inline)
         .onAppear {
             setupInitialValues()
@@ -121,7 +122,7 @@ struct Plan1DetailView: View {
                     alertMessage = "Plan removed."
                 } else {
                     trackerVM.savePlan(planName: planName, input: input)
-                    alertMessage = "Plan saved to 'Your Plans'."
+                    alertMessage = "Plan saved to 'Saved Illustrations'."
                 }
                 showingSaveAlert = true
             }) {
@@ -153,7 +154,7 @@ struct Plan1DetailView: View {
                 showingSaveAlert = true
             }) {
                 HStack {
-                    Text(isFollowed ? "Following" : "Follow Plan")
+                    Text(isFollowed ? "Following" : "Follow")
                 }
                 .font(.headline).fontWeight(.bold)
                 .frame(maxWidth: .infinity)

@@ -2,15 +2,16 @@ import SwiftUI
 
 struct FinalTab: View {
     @State private var trackerVM = TrackerViewModel()
-    @State private var selectedTab: Int = 0
+    @Environment(AppStateManager.self) var appState
 
     var body: some View {
-        TabView(selection: $selectedTab) {
+        @Bindable var appState = appState
+        TabView(selection: $appState.selectedTab) {
             NavigationStack {
                 DashboardView()
             }
             .tabItem {
-                Label("Home", systemImage: selectedTab == 0 ? "house.fill" : "house")
+                Label("Home", systemImage: appState.selectedTab == 0 ? "house.fill" : "house")
             }
             .tag(0)
 
@@ -18,7 +19,7 @@ struct FinalTab: View {
                 PlannerView()
             }
             .tabItem {
-                Label("Planner", systemImage: selectedTab == 1
+                Label("Planner", systemImage: appState.selectedTab == 1
                       ? "chart.line.uptrend.xyaxis.circle.fill"
                       : "chart.line.uptrend.xyaxis.circle")
             }
@@ -28,7 +29,7 @@ struct FinalTab: View {
                 TrackerView()
             }
             .tabItem {
-                Label("Tracker", systemImage: selectedTab == 2 ? "chart.pie.fill" : "chart.pie")
+                Label("Tracker", systemImage: appState.selectedTab == 2 ? "chart.pie.fill" : "chart.pie")
             }
             .tag(2)
         }

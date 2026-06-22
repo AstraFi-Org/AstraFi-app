@@ -177,6 +177,7 @@ final class AppStateManager {
     var isAuthLoading: Bool = false
     
     var showDashboard: Bool = false
+    var selectedTab: Int = 0
     var showPostAuthOnboarding: Bool = false
     
     var requiresMFAChallenge: Bool = false

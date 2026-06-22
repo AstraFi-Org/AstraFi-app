@@ -188,7 +188,7 @@ struct InsuranceAdviceSheet: View {
             }
             .listStyle(.plain)
             .background(Color(.systemGroupedBackground).opacity(0.5))
-            .navigationTitle("Insurance Recommendations")
+            .navigationTitle("Insurance Projections")
             .navigationBarTitleDisplayMode(.inline)
             .sheet(item: $selectedInsurance) { type in
                 InsuranceDetailModal(type: type)

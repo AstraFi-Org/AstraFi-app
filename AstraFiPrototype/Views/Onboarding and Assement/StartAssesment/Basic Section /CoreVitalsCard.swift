@@ -528,7 +528,7 @@ struct CoreVitalsCard: View {
 
             // Caption
             HStack {
-                Text("Based on standard financial planning rules.")
+                Text("Projected using standard financial assumptions.")
                     .font(.system(size: 11, design: .rounded))
                     .foregroundStyle(Color.secondary.opacity(0.6))
                 Spacer()

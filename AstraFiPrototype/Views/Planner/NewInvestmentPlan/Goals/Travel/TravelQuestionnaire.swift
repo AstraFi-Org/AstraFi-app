@@ -319,7 +319,7 @@ struct TravelInsightCard: View {
                     SectionHeader2(
                         icon: "globe.americas.fill",
                         iconColor: accentColor,
-                        title: "Travel Budget Plan",
+                        title: "Travel Budget Illustration",
                         subtitle: "Your \(years)-year adventure goal"
                     )
                     

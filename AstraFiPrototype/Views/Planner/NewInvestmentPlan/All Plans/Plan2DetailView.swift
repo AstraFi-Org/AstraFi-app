@@ -39,6 +39,7 @@ struct Plan2DetailView: View {
                 }
                 .padding(.horizontal, 20)
                 .padding(.bottom, 120)
+                .frame(maxWidth: UIScreen.main.bounds.width)
             }
             .background(AppTheme.appBackground(for: colorScheme))
 
@@ -47,11 +48,11 @@ struct Plan2DetailView: View {
             }
         }
         .alert("Plan Updated", isPresented: $showingSaveAlert) {
-             Button("OK", role: .cancel) { }
-             Button("Tracker") { 
-                 appState.showDashboard = true
+             Button("View in Tracker") { 
+                 appState.selectedTab = 2
                  dismiss()
              }
+             Button("OK", role: .cancel) { }
         } message: {
              Text(alertMessage)
         }
@@ -158,7 +159,7 @@ struct Plan2DetailView: View {
                 showingSaveAlert = true
             }) {
                 HStack {
-                    Text(isFollowed ? "Following" : "Follow Plan")
+                    Text(isFollowed ? "Following" : "Follow")
                 }
                 .font(.headline).fontWeight(.bold)
                 .frame(maxWidth: .infinity)
