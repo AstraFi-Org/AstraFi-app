@@ -1,5 +1,15 @@
 import Foundation
 
+private extension CompanyFinancialSnapshot {
+    var hasAnyProviderValue: Bool {
+        [
+            marketCap, peRatio, weekHigh52, weekLow52, dividendYield, revenue,
+            netProfit, eps, cashFlow, operatingMargin, profitMargin, roe, roa,
+            debtRatio, quarterlyGrowth, historicalGrowth
+        ].contains { $0 != nil }
+    }
+}
+
 actor CacheManager {
     static let shared = CacheManager()
 
@@ -144,6 +154,19 @@ final class CompanyProfileService {
     func fetch(symbol: String) async -> CompanyProfileSnapshot? {
         do {
             let profile = try await finnhub.companyProfile(symbol: symbol)
+            let hasProfileData = [
+                profile.name,
+                profile.ticker,
+                profile.finnhubIndustry,
+                profile.country,
+                profile.exchange,
+                profile.logo
+            ].contains { value in
+                guard let value else { return false }
+                return !value.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty
+            }
+            guard hasProfileData else { return nil }
+
             return CompanyProfileSnapshot(
                 name: profile.name ?? symbol,
                 ticker: profile.ticker ?? symbol,
@@ -170,7 +193,7 @@ final class FinancialService {
     func fetch(symbol: String) async -> CompanyFinancialSnapshot? {
         do {
             let metrics = try await finnhub.metrics(symbol: symbol).metric
-            return CompanyFinancialSnapshot(
+            let liveSnapshot = CompanyFinancialSnapshot(
                 marketCap: metrics.marketCapitalization,
                 peRatio: metrics.peNormalizedAnnual ?? metrics.peBasicExclExtraTTM,
                 weekHigh52: metrics.weekHigh52,
@@ -188,6 +211,7 @@ final class FinancialService {
                 quarterlyGrowth: metrics.revenueGrowthQuarterlyYoy,
                 historicalGrowth: metrics.revenueGrowthTTMYoy
             )
+            return liveSnapshot.hasAnyProviderValue ? liveSnapshot : nil
         } catch {
             return nil
         }
@@ -230,32 +254,65 @@ final class CompetitorService {
     }
 
     func fetch(symbol: String) async -> [InvestmentCompetitor] {
-        do {
-            let peers = try await finnhub.competitors(symbol: symbol).filter { !$0.isEmpty && $0 != symbol }.prefix(8)
-            return await withTaskGroup(of: InvestmentCompetitor?.self) { group in
-                for peer in peers {
-                    group.addTask {
-                        let quote = await self.stockService.fetchPrice(symbol: peer)
-                        let profile = try? await self.finnhub.companyProfile(symbol: peer)
-                        return InvestmentCompetitor(
-                            symbol: peer,
-                            name: profile?.name ?? quote?.name ?? peer,
-                            currentPrice: quote?.currentPrice,
-                            marketCap: profile?.marketCapitalization,
-                            dailyChange: quote?.priceChangePercentage
-                        )
-                    }
-                }
+        let remotePeers = (try? await finnhub.competitors(symbol: symbol)) ?? []
+        let peers = await normalizedPeers(remotePeers, symbol: symbol)
 
-                var results: [InvestmentCompetitor] = []
-                for await item in group {
-                    if let item { results.append(item) }
+        return await withTaskGroup(of: InvestmentCompetitor?.self) { group in
+            for peer in peers.prefix(8) {
+                group.addTask {
+                    let quote = await self.stockService.fetchPrice(symbol: peer)
+                    let profile = try? await self.finnhub.companyProfile(symbol: peer)
+                    return InvestmentCompetitor(
+                        symbol: peer,
+                        name: profile?.name ?? quote?.name ?? Self.symbolName(peer),
+                        currentPrice: quote?.currentPrice,
+                        marketCap: profile?.marketCapitalization,
+                        dailyChange: quote?.priceChangePercentage
+                    )
                 }
-                return results
             }
-        } catch {
-            return []
+
+            var results: [InvestmentCompetitor] = []
+            for await item in group {
+                if let item { results.append(item) }
+            }
+            return results.sorted { $0.name < $1.name }
         }
+    }
+
+    private func normalizedPeers(_ remotePeers: [String], symbol: String) async -> [String] {
+        let normalizedSymbol = Self.normalizeSymbol(symbol)
+        var seen = Set<String>()
+        var peers: [String] = []
+
+        for peer in remotePeers.map(Self.normalizeSymbol) {
+            guard !peer.isEmpty, peer != normalizedSymbol, seen.insert(peer).inserted else { continue }
+            peers.append(peer)
+        }
+
+        if peers.isEmpty,
+           let profile = try? await finnhub.companyProfile(symbol: normalizedSymbol),
+           let industry = profile.finnhubIndustry,
+           !industry.isEmpty {
+            let matches = await stockService.searchStocks(query: industry)
+            for match in matches.map(\.symbol).map(Self.normalizeSymbol) {
+                guard !match.isEmpty, match != normalizedSymbol, seen.insert(match).inserted else { continue }
+                peers.append(match)
+            }
+        }
+
+        return peers
+    }
+
+    private nonisolated static func normalizeSymbol(_ symbol: String) -> String {
+        let upper = symbol.uppercased()
+        if upper.hasPrefix("NSE:") { return "\(upper.dropFirst(4)).NS" }
+        if upper.hasPrefix("BSE:") { return "\(upper.dropFirst(4)).BO" }
+        return upper
+    }
+
+    private nonisolated static func symbolName(_ symbol: String) -> String {
+        symbol.replacingOccurrences(of: ".NS", with: "").replacingOccurrences(of: ".BO", with: "")
     }
 }
 
@@ -298,11 +355,57 @@ final class SearchService {
         async let funds = amfiService.searchSchemes(query: query)
         async let gold = stockService.searchGoldETFs(query: query)
 
-        let stockAssets = await stocks.prefix(8).map { stockAsset(from: $0, sector: "Equity") }
+        let stockAssets = await enrichedStockAssets(from: Array(stocks.prefix(8)))
         let fundAssets = await funds.prefix(8).map { fundAsset(from: $0) }
-        let goldAssets = await gold.prefix(4).map { goldAsset(from: $0) }
+        let goldAssets = await enrichedGoldAssets(from: Array(gold.prefix(4)))
 
         return stockAssets + fundAssets + goldAssets
+    }
+
+    private func enrichedStockAssets(from stocks: [AstraStock]) async -> [InvestmentSummaryAsset] {
+        await withTaskGroup(of: InvestmentSummaryAsset.self) { group in
+            for stock in stocks {
+                group.addTask {
+                    let quote = await self.stockService.fetchPrice(symbol: stock.symbol) ?? stock
+                    let resolved = AstraStock(
+                        symbol: stock.symbol,
+                        name: quote.name == stock.symbol ? stock.name : quote.name,
+                        exchange: quote.exchange,
+                        currentPrice: quote.currentPrice,
+                        priceChange: quote.priceChange,
+                        priceChangePercentage: quote.priceChangePercentage
+                    )
+                    return Self.stockAsset(from: resolved, sector: "Equity")
+                }
+            }
+
+            var assets: [InvestmentSummaryAsset] = []
+            for await asset in group { assets.append(asset) }
+            return assets.sorted { $0.name < $1.name }
+        }
+    }
+
+    private func enrichedGoldAssets(from stocks: [AstraStock]) async -> [InvestmentSummaryAsset] {
+        await withTaskGroup(of: InvestmentSummaryAsset.self) { group in
+            for stock in stocks {
+                group.addTask {
+                    let quote = await self.stockService.fetchPrice(symbol: stock.symbol) ?? stock
+                    let resolved = AstraStock(
+                        symbol: stock.symbol,
+                        name: quote.name == stock.symbol ? stock.name : quote.name,
+                        exchange: quote.exchange,
+                        currentPrice: quote.currentPrice,
+                        priceChange: quote.priceChange,
+                        priceChangePercentage: quote.priceChangePercentage
+                    )
+                    return Self.goldAsset(from: resolved)
+                }
+            }
+
+            var assets: [InvestmentSummaryAsset] = []
+            for await asset in group { assets.append(asset) }
+            return assets.sorted { $0.name < $1.name }
+        }
     }
 
     nonisolated func stockAsset(from stock: AstraStock, sector: String) -> InvestmentSummaryAsset {
@@ -317,10 +420,10 @@ final class SearchService {
             name: stock.name,
             sector: sector,
             currentValue: stock.currentPrice > 0 ? stock.currentPrice : nil,
-            dailyChange: stock.priceChangePercentage,
+            dailyChange: abs(stock.priceChangePercentage) > 0.0001 ? stock.priceChangePercentage : nil,
             oneYearReturn: nil,
             riskLevel: .moderate,
-            sparkline: seedSparkline(base: max(stock.currentPrice, 100)),
+            sparkline: [],
             metadata: stock.exchange
         )
     }
@@ -341,7 +444,7 @@ final class SearchService {
             dailyChange: nil,
             oneYearReturn: nil,
             riskLevel: category.localizedCaseInsensitiveContains("Small") ? .high : .moderate,
-            sparkline: seedSparkline(base: scheme.nav),
+            sparkline: [],
             metadata: scheme.date
         )
     }
@@ -358,21 +461,12 @@ final class SearchService {
             name: stock.name,
             sector: "Gold ETF",
             currentValue: stock.currentPrice > 0 ? stock.currentPrice : nil,
-            dailyChange: stock.priceChangePercentage,
+            dailyChange: abs(stock.priceChangePercentage) > 0.0001 ? stock.priceChangePercentage : nil,
             oneYearReturn: nil,
             riskLevel: .moderate,
-            sparkline: seedSparkline(base: max(stock.currentPrice, 50)),
+            sparkline: [],
             metadata: stock.exchange
         )
-    }
-
-    nonisolated static func seedSparkline(base: Double) -> [InvestmentChartPoint] {
-        let calendar = Calendar.current
-        return (0..<8).compactMap { index in
-            guard let date = calendar.date(byAdding: .day, value: index - 7, to: Date()) else { return nil }
-            let wave = sin(Double(index)) * 0.018
-            return InvestmentChartPoint(date: date, value: base * (1 + wave + Double(index) * 0.006))
-        }
     }
 
     nonisolated static func fundCategory(for name: String) -> String {
@@ -459,162 +553,36 @@ final class FAQService {
     }
 }
 
-final class AIInsightService {
-    private let apiKey: String
-    private let endpoint: URL
-    private let model: String
+typealias InvestmentHomeAssets = (stocks: [InvestmentSummaryAsset], funds: [InvestmentSummaryAsset], gold: [InvestmentSummaryAsset])
 
-    init(
-        apiKey: String = ProcessInfo.processInfo.environment["GROQ_API_KEY"] ?? "",
-        endpoint: URL = URL(string: "https://api.groq.com/openai/v1/chat/completions")!,
-        model: String = ProcessInfo.processInfo.environment["GROQ_MODEL"] ?? "qwen/qwen3-32b"
-    ) {
-        self.apiKey = apiKey
-        self.endpoint = endpoint
-        self.model = model
-    }
+private actor InvestmentIntelligenceHomeAssetCache {
+    static let shared = InvestmentIntelligenceHomeAssetCache()
 
-    func analyze(
-        asset: InvestmentSummaryAsset,
-        profile: CompanyProfileSnapshot?,
-        financials: CompanyFinancialSnapshot?,
-        mutualFund: MutualFundSnapshot?,
-        goldETF: GoldETFSnapshot?,
-        competitors: [InvestmentCompetitor]
-    ) async -> String? {
-        guard !apiKey.isEmpty else {
-            return "AI explanation is ready, but `GROQ_API_KEY` is not configured. Add it to the Xcode scheme environment or proxy requests through your backend."
+    private var cachedAssets: InvestmentHomeAssets?
+    private var loadingTask: Task<InvestmentHomeAssets, Never>?
+
+    func assets(repository: InvestmentIntelligenceRepository) async -> InvestmentHomeAssets {
+        if let cachedAssets { return cachedAssets }
+
+        if let loadingTask {
+            let assets = await loadingTask.value
+            cachedAssets = assets
+            self.loadingTask = nil
+            return assets
         }
 
-        let request = GroqChatCompletionRequest(
-            model: model,
-            messages: [
-                GroqChatMessage(
-                    role: "system",
-                    content: "You are AstraFi's educational investment explainer. Use plain language. Do not recommend buying, selling, or guaranteeing returns. Mention uncertainty and risk."
-                ),
-                GroqChatMessage(
-                    role: "user",
-                    content: prompt(
-                        asset: asset,
-                        profile: profile,
-                        financials: financials,
-                        mutualFund: mutualFund,
-                        goldETF: goldETF,
-                        competitors: competitors
-                    )
-                )
-            ],
-            temperature: 0.25,
-            maxTokens: 650
-        )
+        let task = Task { await repository.fetchHomeAssetsFresh() }
+        loadingTask = task
 
-        do {
-            var urlRequest = URLRequest(url: endpoint)
-            urlRequest.httpMethod = "POST"
-            urlRequest.setValue("Bearer \(apiKey)", forHTTPHeaderField: "Authorization")
-            urlRequest.setValue("application/json", forHTTPHeaderField: "Content-Type")
-            urlRequest.timeoutInterval = 30
-            urlRequest.httpBody = try JSONEncoder().encode(request)
-
-            let (data, response) = try await URLSession.shared.data(for: urlRequest)
-            guard let httpResponse = response as? HTTPURLResponse, 200..<300 ~= httpResponse.statusCode else {
-                return "AI explanation could not be loaded right now. AstraFi is still showing transparent rule-based insights below."
-            }
-
-            let decoded = try JSONDecoder().decode(GroqChatCompletionResponse.self, from: data)
-            return decoded.choices.first?.message.content
-        } catch {
-            return "AI explanation could not be generated right now. AstraFi is still showing transparent rule-based insights below."
-        }
+        let assets = await task.value
+        cachedAssets = assets
+        loadingTask = nil
+        return assets
     }
 
-    private func prompt(
-        asset: InvestmentSummaryAsset,
-        profile: CompanyProfileSnapshot?,
-        financials: CompanyFinancialSnapshot?,
-        mutualFund: MutualFundSnapshot?,
-        goldETF: GoldETFSnapshot?,
-        competitors: [InvestmentCompetitor]
-    ) -> String {
-        """
-        Analyze the following investment for education only.
-
-        Asset:
-        Name: \(asset.name)
-        Type: \(asset.kind.rawValue)
-        Symbol: \(asset.symbol)
-        Sector/Category: \(asset.sector)
-        Current value: \(asset.currentValue?.description ?? "Unavailable")
-        Daily change: \(asset.dailyChange?.description ?? "Unavailable")
-        Risk level: \(asset.riskLevel.rawValue)
-
-        Company profile:
-        Sector: \(profile?.sector ?? "Unavailable")
-        Industry: \(profile?.industry ?? "Unavailable")
-        Country: \(profile?.country ?? "Unavailable")
-        Exchange: \(profile?.exchange ?? "Unavailable")
-
-        Financials:
-        PE Ratio: \(financials?.peRatio?.description ?? "Unavailable")
-        Revenue Growth: \(financials?.revenue?.description ?? "Unavailable")
-        Profit Margin: \(financials?.profitMargin?.description ?? "Unavailable")
-        ROE: \(financials?.roe?.description ?? "Unavailable")
-        ROA: \(financials?.roa?.description ?? "Unavailable")
-        Debt Ratio: \(financials?.debtRatio?.description ?? "Unavailable")
-        Market Cap: \(financials?.marketCap?.description ?? "Unavailable")
-
-        Mutual fund:
-        Scheme: \(mutualFund?.schemeName ?? "Not applicable")
-        Fund House: \(mutualFund?.fundHouse ?? "Not applicable")
-        Category: \(mutualFund?.category ?? "Not applicable")
-        Current NAV: \(mutualFund?.currentNAV.description ?? "Not applicable")
-
-        Gold ETF:
-        Fund House: \(goldETF?.fundHouse ?? "Not applicable")
-        Tracking Error: \(goldETF?.trackingError ?? "Not applicable")
-        Expense Ratio: \(goldETF?.expenseRatio ?? "Not applicable")
-
-        Competitors:
-        \(competitors.prefix(5).map { "\($0.name) (\($0.symbol))" }.joined(separator: ", "))
-
-        Explain in short paragraphs:
-        1. Business or fund overview.
-        2. Strengths.
-        3. Risks.
-        4. Growth drivers or demand drivers.
-        5. Explain like I am 20 years old.
-
-        Use factual and cautious language. Never say guaranteed. Never say buy, sell, or hold.
-        """
+    func warm(repository: InvestmentIntelligenceRepository) async {
+        _ = await assets(repository: repository)
     }
-}
-
-private struct GroqChatCompletionRequest: Encodable {
-    let model: String
-    let messages: [GroqChatMessage]
-    let temperature: Double
-    let maxTokens: Int
-
-    enum CodingKeys: String, CodingKey {
-        case model
-        case messages
-        case temperature
-        case maxTokens = "max_tokens"
-    }
-}
-
-private struct GroqChatMessage: Codable {
-    let role: String
-    let content: String
-}
-
-private struct GroqChatCompletionResponse: Decodable {
-    let choices: [GroqChatChoice]
-}
-
-private struct GroqChatChoice: Decodable {
-    let message: GroqChatMessage
 }
 
 final class InvestmentIntelligenceRepository {
@@ -627,7 +595,6 @@ final class InvestmentIntelligenceRepository {
     private let recommendationService: RecommendationService
     private let insightEngine: InsightEngine
     private let faqService: FAQService
-    private let aiInsightService: AIInsightService
 
     init(
         stockService: StockService = .shared,
@@ -638,8 +605,7 @@ final class InvestmentIntelligenceRepository {
         competitorService: CompetitorService = CompetitorService(),
         recommendationService: RecommendationService = RecommendationService(),
         insightEngine: InsightEngine = InsightEngine(),
-        faqService: FAQService = FAQService(),
-        aiInsightService: AIInsightService = AIInsightService()
+        faqService: FAQService = FAQService()
     ) {
         self.stockService = stockService
         self.amfiService = amfiService
@@ -650,10 +616,17 @@ final class InvestmentIntelligenceRepository {
         self.recommendationService = recommendationService
         self.insightEngine = insightEngine
         self.faqService = faqService
-        self.aiInsightService = aiInsightService
     }
 
-    func homeAssets() async -> (stocks: [InvestmentSummaryAsset], funds: [InvestmentSummaryAsset], gold: [InvestmentSummaryAsset]) {
+    func homeAssets() async -> InvestmentHomeAssets {
+        await InvestmentIntelligenceHomeAssetCache.shared.assets(repository: self)
+    }
+
+    func warmHomeAssets() async {
+        await InvestmentIntelligenceHomeAssetCache.shared.warm(repository: self)
+    }
+
+    fileprivate func fetchHomeAssetsFresh() async -> InvestmentHomeAssets {
         async let stocks = loadStocks()
         async let funds = loadFunds()
         async let gold = loadGoldETFs()
@@ -672,38 +645,35 @@ final class InvestmentIntelligenceRepository {
     }
 
     private func loadStocks() async -> [InvestmentSummaryAsset] {
-        let seeds: [(String, String, String)] = [
-            ("HDFCBANK.NS", "HDFC Bank Ltd", "Banking"),
-            ("TCS.NS", "Tata Consultancy Services", "IT"),
-            ("HINDUNILVR.NS", "Hindustan Unilever Ltd", "FMCG"),
-            ("SUNPHARMA.NS", "Sun Pharma", "Healthcare"),
+        let seeds: [(symbol: String, name: String, sector: String)] = [
             ("RELIANCE.NS", "Reliance Industries", "Energy"),
-            ("NTPC.NS", "NTPC Ltd", "Power"),
-            ("MARUTI.NS", "Maruti Suzuki", "Automobile")
+            ("TCS.NS", "Tata Consultancy Services", "IT"),
+            ("HDFCBANK.NS", "HDFC Bank", "Banking"),
+            ("INFY.NS", "Infosys", "IT"),
+            ("ICICIBANK.NS", "ICICI Bank", "Banking"),
+            ("HINDUNILVR.NS", "Hindustan Unilever", "FMCG"),
+            ("BHARTIARTL.NS", "Bharti Airtel", "Telecom"),
+            ("SUNPHARMA.NS", "Sun Pharma", "Healthcare")
         ]
 
         return await withTaskGroup(of: InvestmentSummaryAsset.self) { group in
             for seed in seeds {
                 group.addTask {
-                    let quote = await self.stockService.fetchPrice(symbol: seed.0)
-                    return InvestmentSummaryAsset(
-                        id: "stock-\(seed.0)",
-                        kind: .stock,
-                        symbol: seed.0,
-                        name: quote?.name == seed.0 ? seed.1 : quote?.name ?? seed.1,
-                        sector: seed.2,
-                        currentValue: quote?.currentPrice,
-                        dailyChange: quote?.priceChangePercentage,
-                        oneYearReturn: nil,
-                        riskLevel: .moderate,
-                        sparkline: SearchService.seedSparkline(base: max(quote?.currentPrice ?? 100, 100)),
-                        metadata: quote?.exchange ?? "NSE"
+                    let quote = await self.stockService.fetchPrice(symbol: seed.symbol)
+                    let stock = AstraStock(
+                        symbol: seed.symbol,
+                        name: quote?.name == seed.symbol ? seed.name : quote?.name ?? seed.name,
+                        exchange: quote?.exchange ?? "NSE",
+                        currentPrice: quote?.currentPrice ?? 0,
+                        priceChange: quote?.priceChange ?? 0,
+                        priceChangePercentage: quote?.priceChangePercentage ?? 0
                     )
+                    return SearchService.stockAsset(from: stock, sector: seed.sector)
                 }
             }
 
             var assets: [InvestmentSummaryAsset] = []
-            for await item in group { assets.append(item) }
+            for await asset in group { assets.append(asset) }
             return assets.sorted { $0.sector < $1.sector }
         }
     }
@@ -718,23 +688,32 @@ final class InvestmentIntelligenceRepository {
     }
 
     private func loadGoldETFs() async -> [InvestmentSummaryAsset] {
-        let seeds = [
-            AstraStock(symbol: "GOLDBEES.NS", name: "Nippon India Gold ETF", exchange: "NSE", currentPrice: 0, priceChange: 0, priceChangePercentage: 0),
-            AstraStock(symbol: "HDFCGOLD.NS", name: "HDFC Gold ETF", exchange: "NSE", currentPrice: 0, priceChange: 0, priceChangePercentage: 0),
-            AstraStock(symbol: "SETFGOLD.NS", name: "SBI Gold ETF", exchange: "NSE", currentPrice: 0, priceChange: 0, priceChangePercentage: 0),
-            AstraStock(symbol: "ICICIGOLD.NS", name: "ICICI Gold ETF", exchange: "NSE", currentPrice: 0, priceChange: 0, priceChangePercentage: 0)
+        let seeds: [(symbol: String, name: String)] = [
+            ("GOLDBEES.NS", "Nippon India Gold ETF"),
+            ("HDFCGOLD.NS", "HDFC Gold ETF"),
+            ("SETFGOLD.NS", "SBI Gold ETF"),
+            ("ICICIGOLD.NS", "ICICI Prudential Gold ETF")
         ]
 
         return await withTaskGroup(of: InvestmentSummaryAsset.self) { group in
             for seed in seeds {
                 group.addTask {
                     let quote = await self.stockService.fetchPrice(symbol: seed.symbol)
-                    return SearchService.goldAsset(from: quote ?? seed)
+                    let stock = AstraStock(
+                        symbol: seed.symbol,
+                        name: quote?.name == seed.symbol ? seed.name : quote?.name ?? seed.name,
+                        exchange: quote?.exchange ?? "NSE",
+                        currentPrice: quote?.currentPrice ?? 0,
+                        priceChange: quote?.priceChange ?? 0,
+                        priceChangePercentage: quote?.priceChangePercentage ?? 0
+                    )
+                    return SearchService.goldAsset(from: stock)
                 }
             }
+
             var assets: [InvestmentSummaryAsset] = []
-            for await item in group { assets.append(item) }
-            return assets
+            for await asset in group { assets.append(asset) }
+            return assets.sorted { $0.name < $1.name }
         }
     }
 
@@ -750,14 +729,6 @@ final class InvestmentIntelligenceRepository {
         let resolvedFinancials = await financials
         let resolvedCompetitors = await competitors
         let resolvedRecommendations = await recommendations
-        let aiInsight = await aiInsightService.analyze(
-            asset: asset,
-            profile: resolvedProfile,
-            financials: resolvedFinancials,
-            mutualFund: nil,
-            goldETF: nil,
-            competitors: resolvedCompetitors
-        )
 
         return await InvestmentDetailSnapshot(
             asset: asset,
@@ -770,7 +741,7 @@ final class InvestmentIntelligenceRepository {
             news: news,
             recommendations: resolvedRecommendations,
             insights: insightEngine.insights(asset: asset, financials: resolvedFinancials, recommendations: resolvedRecommendations),
-            aiInsight: aiInsight,
+            aiInsight: nil,
             faqs: faqService.faqs()
         )
     }
@@ -802,14 +773,7 @@ final class InvestmentIntelligenceRepository {
             news: [],
             recommendations: [],
             insights: insightEngine.insights(asset: asset, financials: nil, recommendations: []),
-            aiInsight: await aiInsightService.analyze(
-                asset: asset,
-                profile: nil,
-                financials: nil,
-                mutualFund: fund,
-                goldETF: nil,
-                competitors: []
-            ),
+            aiInsight: nil,
             faqs: faqService.faqs()
         )
     }
@@ -839,14 +803,7 @@ final class InvestmentIntelligenceRepository {
             news: [],
             recommendations: [],
             insights: insightEngine.insights(asset: asset, financials: nil, recommendations: []),
-            aiInsight: await aiInsightService.analyze(
-                asset: asset,
-                profile: nil,
-                financials: nil,
-                mutualFund: nil,
-                goldETF: snapshot,
-                competitors: []
-            ),
+            aiInsight: nil,
             faqs: faqService.faqs()
         )
     }

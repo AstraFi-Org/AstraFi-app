@@ -68,10 +68,12 @@ class StockService {
         let q = trimmedQuery.lowercased()
         let filteredResults = remoteResults.filter { stock in
             let searchable = "\(stock.symbol) \(stock.name)".lowercased()
-            return searchable.contains("gold") ||
-                   searchable.contains("goldbees") ||
-                   searchable.contains("setfgold") ||
-                   q.contains("gold")
+            let isIndianListing = stock.symbol.hasSuffix(".NS") || stock.symbol.hasSuffix(".BO") || stock.exchange.localizedCaseInsensitiveContains("NSE") || stock.exchange.localizedCaseInsensitiveContains("BSE")
+            let isGoldETF = searchable.contains("gold") ||
+                searchable.contains("goldbees") ||
+                searchable.contains("setfgold") ||
+                q.contains("gold")
+            return isIndianListing && isGoldETF
         }
 
         return filteredResults
@@ -412,7 +414,7 @@ class StockService {
     private func fetchPriceFromYahoo(symbol: String) async -> AstraStock? {
         let yahooSymbol = toYahooSymbol(symbol)
         guard let encoded = yahooSymbol.addingPercentEncoding(withAllowedCharacters: .urlQueryAllowed),
-              let url = URL(string: "https://query1.finance.yahoo.com/v8/finance/chart/\(encoded)?interval=1d&range=1d") else {
+              let url = URL(string: "https://query1.finance.yahoo.com/v8/finance/chart/\(encoded)?interval=1d&range=5d") else {
             return mockStocks.first { $0.symbol == symbol }
         }
 
@@ -422,21 +424,50 @@ class StockService {
             if let result = response.chart.result?.first,
                let price = result.meta.regularMarketPrice,
                price > 0 {
-                let change = result.meta.regularMarketChange ?? 0
-                let changePct = result.meta.regularMarketChangePercent ?? 0
+                let resolvedChange = resolvedDailyChange(
+                    currentPrice: price,
+                    reportedChange: result.meta.regularMarketChange,
+                    reportedChangePercent: result.meta.regularMarketChangePercent,
+                    closes: result.indicators?.quote?.first?.close
+                )
                 return AstraStock(
                     symbol: symbol,
                     name: result.meta.shortName ?? symbol,
                     exchange: result.meta.exchangeName ?? "Market",
                     currentPrice: price,
-                    priceChange: change,
-                    priceChangePercentage: changePct
+                    priceChange: resolvedChange.amount,
+                    priceChangePercentage: resolvedChange.percent
                 )
             }
         } catch {
             print("Yahoo Finance Quote Error: \(error)")
         }
         return mockStocks.first { $0.symbol == symbol }
+    }
+
+    private func resolvedDailyChange(
+        currentPrice: Double,
+        reportedChange: Double?,
+        reportedChangePercent: Double?,
+        closes: [Double?]?
+    ) -> (amount: Double, percent: Double) {
+        if let reportedChangePercent,
+           abs(reportedChangePercent) > 0.0001 {
+            return (reportedChange ?? currentPrice * reportedChangePercent / 100, reportedChangePercent)
+        }
+
+        let validCloses = closes?.compactMap { $0 }.filter { $0 > 0 } ?? []
+        guard validCloses.count >= 2 else {
+            return (reportedChange ?? 0, reportedChangePercent ?? 0)
+        }
+
+        let previousClose = validCloses.dropLast().last ?? validCloses[validCloses.count - 2]
+        guard previousClose > 0 else {
+            return (reportedChange ?? 0, reportedChangePercent ?? 0)
+        }
+
+        let amount = currentPrice - previousClose
+        return (amount, (amount / previousClose) * 100)
     }
 
     // Bug 4a Fix: Use Yahoo Finance for historical prices (free, no paid plan needed)
