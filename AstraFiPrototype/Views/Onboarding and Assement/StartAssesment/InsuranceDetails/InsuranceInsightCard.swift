@@ -80,15 +80,11 @@ struct InsuranceInsightCard: View {
                     .font(.system(size: 15, weight: .bold, design: .rounded))
                 Spacer()
                 Button { showKnowledge = true } label: {
-                    ZStack {
-                        Circle()
-                            .fill(AppTheme.auraIndigo.opacity(0.12))
-                            .frame(width: 28, height: 28)
-                        Image(systemName: "info")
-                            .font(.system(size: 12, weight: .bold))
-                            .foregroundStyle(AppTheme.auraIndigo)
-                    }
+                    Image(systemName: "info.circle")
+                        .font(.title3)
+                        .foregroundStyle(AppTheme.auraIndigo)
                 }
+                .buttonStyle(.plain)
                 .accessibilityLabel("Insurance insights and tips")
             }
             .padding(.bottom, 16)
@@ -561,13 +557,12 @@ struct InsuranceKnowledgeSheet: View {
                 Text(title)
                     .font(.system(size: 15, weight: .bold, design: .rounded))
             }
-            VStack(alignment: .leading, spacing: 8) {
+            VStack(alignment: .leading, spacing: 10) {
                 ForEach(rows, id: \.0) { row in
-                    HStack(alignment: .top, spacing: 8) {
+                    VStack(alignment: .leading, spacing: 3) {
                         Text(row.0)
                             .font(.system(size: 12, weight: .semibold, design: .rounded))
                             .foregroundStyle(.primary)
-                            .frame(width: 120, alignment: .leading)
                         Text(row.1)
                             .font(.system(size: 12, design: .rounded))
                             .foregroundStyle(.secondary)
@@ -576,6 +571,7 @@ struct InsuranceKnowledgeSheet: View {
                 }
             }
         }
+        .frame(maxWidth: .infinity, alignment: .leading)
         .padding(14)
         .background(AppTheme.cardBackground)
         .clipShape(RoundedRectangle(cornerRadius: 14, style: .continuous))
