@@ -137,15 +137,17 @@ struct AstraInvestmentTransaction: Codable, Identifiable, Equatable {
 
 enum AstraInvestmentType: String, Codable, CaseIterable {
     case mutualFund = "Mutual Fund"
-    case goldETF = "Gold ETF"
-    case physicalGold = "Physical Gold"
     case stocks = "Stocks"
-    case deposits = "Deposits"
+    case goldETF = "Gold ETF"
     case cryptocurrency = "Cryptocurrency"
-    case realEstate = "Real Estate"
-    case bonds = "Bonds"
+    case deposits = "Deposits"
+    case physicalGold = "Physical Gold"
     case ppf = "PPF"
     case nps = "NPS"
+    case bonds = "Bonds"
+    case realEstate = "Real Estate"
+    case cashSavings = "Cash Savings"
+    case emergencyFund = "Emergency Fund"
     case other = "Other"
 }
 
@@ -251,6 +253,7 @@ extension AstraInvestment {
         case .goldETF, .physicalGold: return 0.09
         case .realEstate:     return 0.08
         case .nps:            return 0.10
+        case .cashSavings, .emergencyFund: return 0.03
         default:              return 0.10
         }
     }

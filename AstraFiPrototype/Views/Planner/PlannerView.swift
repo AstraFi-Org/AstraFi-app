@@ -403,6 +403,8 @@ struct PlannerView: View {
         case .bonds:          return "Debt"
         case .ppf:            return "Debt"
         case .nps:            return "Debt"
+        case .cashSavings:    return "Cash"
+        case .emergencyFund:  return "Cash"
         case .other:          return "Other"
         }
     }

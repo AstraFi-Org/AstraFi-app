@@ -238,6 +238,190 @@ struct UpstoxMutualFundHolding: Decodable, Identifiable, Equatable {
     }
 }
 
+struct UpstoxMutualFundOrderResponse: Decodable {
+    let status: String?
+    let data: [UpstoxMutualFundOrder]?
+    let metaData: UpstoxPaginationMetadata?
+
+    enum CodingKeys: String, CodingKey {
+        case status
+        case data
+        case metaData = "meta_data"
+    }
+}
+
+struct UpstoxMutualFundSIPResponse: Decodable {
+    let status: String?
+    let data: [UpstoxMutualFundSIP]?
+    let metaData: UpstoxPaginationMetadata?
+
+    enum CodingKeys: String, CodingKey {
+        case status
+        case data
+        case metaData = "meta_data"
+    }
+}
+
+struct UpstoxPaginationMetadata: Decodable {
+    let page: UpstoxPageMetadata?
+}
+
+struct UpstoxPageMetadata: Decodable {
+    let pageNumber: Int
+    let totalPages: Int
+    let records: Int
+    let totalRecords: Int
+
+    enum CodingKeys: String, CodingKey {
+        case pageNumber = "page_number"
+        case totalPages = "total_pages"
+        case records
+        case totalRecords = "total_records"
+    }
+}
+
+struct UpstoxMutualFundOrder: Decodable, Identifiable, Equatable {
+    var id: String { orderID }
+
+    let instrumentKey: String?
+    let status: String?
+    let folio: String?
+    let fund: String?
+    let amount: Double
+    let quantity: Double
+    let price: Double
+    let orderID: String
+    let orderTimestamp: String?
+    let exchangeTimestamp: String?
+    let transactionType: String?
+    let lastPrice: Double
+    let averagePrice: Double
+    let variety: String?
+
+    enum CodingKeys: String, CodingKey {
+        case instrumentKey = "instrument_key"
+        case status
+        case folio
+        case fund
+        case amount
+        case quantity
+        case price
+        case orderID = "order_id"
+        case orderTimestamp = "order_timestamp"
+        case exchangeTimestamp = "exchange_timestamp"
+        case transactionType = "transaction_type"
+        case lastPrice = "last_price"
+        case averagePrice = "average_price"
+        case variety
+    }
+
+    init(from decoder: Decoder) throws {
+        let container = try decoder.container(keyedBy: CodingKeys.self)
+        instrumentKey = try container.decodeIfPresent(String.self, forKey: .instrumentKey)
+        status = try container.decodeIfPresent(String.self, forKey: .status)
+        folio = try container.decodeIfPresent(String.self, forKey: .folio)
+        fund = try container.decodeIfPresent(String.self, forKey: .fund)
+        amount = container.flexibleDouble(forKey: .amount)
+        quantity = container.flexibleDouble(forKey: .quantity)
+        price = container.flexibleDouble(forKey: .price)
+        orderID = (try container.decodeIfPresent(String.self, forKey: .orderID)) ?? UUID().uuidString
+        orderTimestamp = try container.decodeIfPresent(String.self, forKey: .orderTimestamp)
+        exchangeTimestamp = try container.decodeIfPresent(String.self, forKey: .exchangeTimestamp)
+        transactionType = try container.decodeIfPresent(String.self, forKey: .transactionType)
+        lastPrice = container.flexibleDouble(forKey: .lastPrice)
+        averagePrice = container.flexibleDouble(forKey: .averagePrice)
+        variety = try container.decodeIfPresent(String.self, forKey: .variety)
+    }
+
+    var isCompleted: Bool {
+        status?.uppercased() == "COMPLETED" && quantity > 0
+    }
+
+    var isSIP: Bool {
+        variety?.uppercased() == "SIP"
+    }
+
+    var transactionDate: Date? {
+        Self.parseDate(exchangeTimestamp) ?? Self.parseDate(orderTimestamp)
+    }
+
+    var executedNAV: Double {
+        if averagePrice > 0 { return averagePrice }
+        if price > 0 { return price }
+        if quantity > 0 && amount > 0 { return amount / quantity }
+        return 0
+    }
+
+    private static func parseDate(_ value: String?) -> Date? {
+        guard let value, !value.isEmpty else { return nil }
+        for format in ["yyyy-MM-dd HH:mm:ss.S", "yyyy-MM-dd HH:mm:ss", "yyyy-MM-dd"] {
+            let formatter = DateFormatter()
+            formatter.locale = Locale(identifier: "en_US_POSIX")
+            formatter.timeZone = TimeZone(identifier: "Asia/Kolkata")
+            formatter.dateFormat = format
+            if let date = formatter.date(from: value) { return date }
+        }
+        return nil
+    }
+}
+
+struct UpstoxMutualFundSIP: Decodable, Identifiable, Equatable {
+    var id: String { sipID }
+
+    let instrumentKey: String?
+    let fund: String?
+    let status: String?
+    let created: String?
+    let frequency: String?
+    let sipID: String
+    let nextInstalment: String?
+    let instalmentAmount: Double
+    let lastInstalment: String?
+    let instalmentDay: Int?
+    let completedInstalments: Int?
+
+    enum CodingKeys: String, CodingKey {
+        case instrumentKey = "instrument_key"
+        case fund
+        case status
+        case created
+        case frequency
+        case sipID = "sip_id"
+        case nextInstalment = "next_instalment"
+        case instalmentAmount = "instalment_amount"
+        case lastInstalment = "last_instalment"
+        case instalmentDay = "instalment_day"
+        case completedInstalments = "completed_instalments"
+    }
+
+    init(from decoder: Decoder) throws {
+        let container = try decoder.container(keyedBy: CodingKeys.self)
+        instrumentKey = try container.decodeIfPresent(String.self, forKey: .instrumentKey)
+        fund = try container.decodeIfPresent(String.self, forKey: .fund)
+        status = try container.decodeIfPresent(String.self, forKey: .status)
+        created = try container.decodeIfPresent(String.self, forKey: .created)
+        frequency = try container.decodeIfPresent(String.self, forKey: .frequency)
+        sipID = (try container.decodeIfPresent(String.self, forKey: .sipID)) ?? UUID().uuidString
+        nextInstalment = try container.decodeIfPresent(String.self, forKey: .nextInstalment)
+        instalmentAmount = container.flexibleDouble(forKey: .instalmentAmount)
+        lastInstalment = try container.decodeIfPresent(String.self, forKey: .lastInstalment)
+        instalmentDay = try container.decodeIfPresent(Int.self, forKey: .instalmentDay)
+        completedInstalments = try container.decodeIfPresent(Int.self, forKey: .completedInstalments)
+    }
+
+    var createdDate: Date? {
+        guard let created else { return nil }
+        for format in ["yyyy-MM-dd HH:mm:ss.S", "yyyy-MM-dd HH:mm:ss", "yyyy-MM-dd"] {
+            let formatter = DateFormatter()
+            formatter.locale = Locale(identifier: "en_US_POSIX")
+            formatter.timeZone = TimeZone(identifier: "Asia/Kolkata")
+            formatter.dateFormat = format
+            if let date = formatter.date(from: created) { return date }
+        }
+        return nil
+    }
+}
+
 private extension KeyedDecodingContainer {
     func flexibleDouble(forKey key: Key) -> Double {
         if let value = try? decode(Double.self, forKey: key) {

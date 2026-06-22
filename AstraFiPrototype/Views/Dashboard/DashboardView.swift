@@ -25,6 +25,7 @@ struct DashboardView: View {
                     nextStepCard
                 }
                 
+                investmentIntelligenceSection
                 goalsSection
                 upcomingEMISection
             }
@@ -288,6 +289,28 @@ struct DashboardView: View {
                         .fixedSize(horizontal: false, vertical: true)
                 }
                 Spacer()
+            }
+        }
+    }
+    
+    // MARK: Investment Intelligence
+    private var investmentIntelligenceSection: some View {
+        let assets = InvestmentIntelligenceHomeViewModel().stocks
+
+        return VStack(alignment: .leading, spacing: 14) {
+            SectionHeader(title: "Investment Intelligence", destination: AnyView(InvestmentIntelligenceView()))
+
+            ScrollView(.horizontal, showsIndicators: false) {
+                HStack(spacing: 12) {
+                    ForEach(assets) { asset in
+                        NavigationLink(destination: InvestmentIntelligenceDetailView(asset: asset)) {
+                            InvestmentHomePreviewCard(asset: asset)
+                        }
+                        .buttonStyle(.plain)
+                    }
+                }
+                .padding(.horizontal, 2)
+                .padding(.vertical, 2)
             }
         }
     }

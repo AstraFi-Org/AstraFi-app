@@ -680,7 +680,7 @@ final class AppStateManager {
         let assets = AstraAssets(
             stocksHoldingAmount: profileInvestments.filter { $0.investmentType == .stocks }.map { $0.investmentAmount }.reduce(0, +),
             mutualFundHoldingAmount: profileInvestments.filter { $0.investmentType == .mutualFund }.map { $0.investmentAmount }.reduce(0, +),
-            otherInvestmentAmount: profileInvestments.filter { [.cryptocurrency, .other, .nps, .ppf, .bonds].contains($0.investmentType) }.map { $0.investmentAmount }.reduce(0, +),
+            otherInvestmentAmount: profileInvestments.filter { [.cryptocurrency, .other, .nps, .ppf, .bonds, .cashSavings, .emergencyFund].contains($0.investmentType) }.map { $0.investmentAmount }.reduce(0, +),
             propertyAmount: profileInvestments.filter { $0.investmentType == .realEstate }.map { $0.investmentAmount }.reduce(0, +),
             vehiclesAmount: 0,
             depositsAmount: profileInvestments.filter { $0.investmentType == .deposits }.map { $0.investmentAmount }.reduce(0, +),
@@ -901,7 +901,7 @@ final class AppStateManager {
         newAssets.depositsAmount = profile.investments.filter { $0.investmentType == .deposits }.map { $0.currentValue.safeFinite }.reduce(0, +)
         newAssets.propertyAmount = profile.investments.filter { $0.investmentType == .realEstate }.map { $0.currentValue.safeFinite }.reduce(0, +)
         newAssets.jewelleryAmount = profile.investments.filter { $0.investmentType == .physicalGold }.map { $0.currentValue.safeFinite }.reduce(0, +)
-        newAssets.otherInvestmentAmount = profile.investments.filter { [.cryptocurrency, .other, .nps, .ppf, .bonds].contains($0.investmentType) }.map { $0.currentValue.safeFinite }.reduce(0, +)
+        newAssets.otherInvestmentAmount = profile.investments.filter { [.cryptocurrency, .other, .nps, .ppf, .bonds, .cashSavings, .emergencyFund].contains($0.investmentType) }.map { $0.currentValue.safeFinite }.reduce(0, +)
         profile.assets = newAssets
         
         var newLiabilities = profile.liabilities
@@ -1062,19 +1062,33 @@ final class AppStateManager {
         }
     }
 
-    func syncUpstoxHoldings(_ holdings: [UpstoxHolding], mutualFunds: [UpstoxMutualFundHolding] = []) {
+    func syncUpstoxHoldings(
+        _ holdings: [UpstoxHolding],
+        mutualFunds: [UpstoxMutualFundHolding] = [],
+        mutualFundOrders: [UpstoxMutualFundOrder] = [],
+        mutualFundSIPs: [UpstoxMutualFundSIP] = []
+    ) {
         guard var profile = currentProfile else { return }
 
         let manualInvestments = profile.investments.filter { $0.brokerSource != "Upstox" }
+        let existingUpstoxInvestments = Dictionary(
+            profile.investments
+                .filter { $0.brokerSource == "Upstox" }
+                .compactMap { investment in
+                    investment.brokerInstrumentID.map { ($0, investment) }
+                },
+            uniquingKeysWith: { first, _ in first }
+        )
         let connectedStockInvestments = holdings
             .filter { $0.quantity > 0 }
             .map { holding in
-                AstraInvestment(
+                return AstraInvestment(
+                    id: existingUpstoxInvestments[holding.id]?.id ?? UUID(),
                     investmentType: .stocks,
                     subtype: .largeCap,
                     investmentName: holding.displayName,
                     investmentAmount: holding.investedAmount.safeFinite,
-                    startDate: Date(),
+                    startDate: existingUpstoxInvestments[holding.id]?.startDate ?? Date(),
                     mode: .lumpsum,
                     isin: holding.isin,
                     symbol: holding.tradingSymbol,
@@ -1089,13 +1103,46 @@ final class AppStateManager {
         let connectedMutualFundInvestments = mutualFunds
             .filter { $0.quantity > 0 }
             .map { holding in
-                AstraInvestment(
+                let matchedOrders = mutualFundOrders
+                    .filter { order in
+                        order.isCompleted && mutualFundRecord(
+                            instrumentKey: order.instrumentKey,
+                            folio: order.folio,
+                            matches: holding
+                        )
+                    }
+                    .sorted { ($0.transactionDate ?? .distantPast) < ($1.transactionDate ?? .distantPast) }
+                let matchedSIP = mutualFundSIPs.first { sip in
+                    normalizedUpstoxKey(sip.instrumentKey) == normalizedUpstoxKey(holding.instrumentKey)
+                }
+                let isSIP = matchedSIP != nil || matchedOrders.contains(where: \.isSIP)
+                let installments = matchedOrders.compactMap { order -> AstraInvestmentTransaction? in
+                    guard let date = order.transactionDate else { return nil }
+                    let nav = order.executedNAV.safeFinite
+                    let amount = order.amount > 0 ? order.amount.safeFinite : (order.quantity * nav).safeFinite
+                    return AstraInvestmentTransaction(
+                        date: date,
+                        type: order.transactionType?.uppercased() == "SELL" ? .sell : .buy,
+                        amount: amount,
+                        nav: nav,
+                        units: order.quantity.safeFinite
+                    )
+                }
+                let startDate = matchedSIP?.createdDate
+                    ?? installments.first?.date
+                    ?? existingUpstoxInvestments[holding.id]?.startDate
+                    ?? Date()
+                let recurringAmount = matchedSIP?.instalmentAmount
+                    ?? matchedOrders.last(where: { $0.isSIP && $0.transactionType?.uppercased() == "BUY" })?.amount
+
+                return AstraInvestment(
+                    id: existingUpstoxInvestments[holding.id]?.id ?? UUID(),
                     investmentType: .mutualFund,
                     subtype: .equityFund,
                     investmentName: holding.displayName,
-                    investmentAmount: holding.investedAmount.safeFinite,
-                    startDate: Date(),
-                    mode: .lumpsum,
+                    investmentAmount: (isSIP ? (recurringAmount ?? holding.investedAmount) : holding.investedAmount).safeFinite,
+                    startDate: startDate,
+                    mode: isSIP ? .sip : .lumpsum,
                     isin: holding.instrumentKey,
                     lastNAV: holding.lastPrice.safeFinite,
                     lastUpdated: Date(),
@@ -1104,13 +1151,34 @@ final class AppStateManager {
                     livePrice: holding.lastPrice.safeFinite,
                     priceChange: holding.pnl.safeFinite,
                     brokerSource: "Upstox",
-                    brokerInstrumentID: holding.id
+                    brokerInstrumentID: holding.id,
+                    installments: installments
                 )
             }
 
         profile.investments = manualInvestments + connectedStockInvestments + connectedMutualFundInvestments
         currentProfile = profile
         recalculateFinancials()
+    }
+
+    private func normalizedUpstoxKey(_ value: String?) -> String {
+        value?
+            .trimmingCharacters(in: .whitespacesAndNewlines)
+            .uppercased() ?? ""
+    }
+
+    private func mutualFundRecord(
+        instrumentKey: String?,
+        folio: String?,
+        matches holding: UpstoxMutualFundHolding
+    ) -> Bool {
+        guard normalizedUpstoxKey(instrumentKey) == normalizedUpstoxKey(holding.instrumentKey) else {
+            return false
+        }
+
+        let orderFolio = normalizedUpstoxKey(folio)
+        let holdingFolio = normalizedUpstoxKey(holding.folio)
+        return orderFolio.isEmpty || holdingFolio.isEmpty || orderFolio == holdingFolio
     }
 
     func removeUpstoxHoldings() {
@@ -1274,12 +1342,16 @@ final class AppStateManager {
         var updated = false
         
         // Update Stock Prices
-        let stockSymbols = profile.investments.compactMap { $0.investmentType == .stocks ? $0.symbol : nil }
+        let marketTypes: Set<AstraInvestmentType> = [.stocks, .goldETF, .cryptocurrency]
+        let stockSymbols = profile.investments.compactMap { marketTypes.contains($0.investmentType) ? $0.symbol : nil }
         if !stockSymbols.isEmpty {
             let stockPrices = await StockService.shared.fetchLivePrices(symbols: stockSymbols)
             for i in 0..<profile.investments.count {
-                if let symbol = profile.investments[i].symbol, let price = stockPrices[symbol] {
+                if marketTypes.contains(profile.investments[i].investmentType),
+                   let symbol = profile.investments[i].symbol,
+                   let price = stockPrices[symbol] {
                     profile.investments[i].livePrice = price
+                    profile.investments[i].lastNAV = price
                     profile.investments[i].lastUpdated = Date()
                     updated = true
                 }
@@ -1349,12 +1421,26 @@ final class AppStateManager {
                         }
                     }
                 }
-            } else if inv.investmentType == .stocks {
+            } else if marketTypes.contains(inv.investmentType) {
                 guard let symbol = inv.symbol else { continue }
-                
-                
-                // Populate Missing Installments for Stocks
-                if profile.investments[i].installments.isEmpty {
+
+                let expectedCount: Int = {
+                    guard inv.mode == .sip else { return 1 }
+                    let cal = Calendar.current
+                    var count = 0
+                    var d = inv.startDate
+                    let today = Date()
+                    while d <= today {
+                        count += 1
+                        guard let next = cal.date(byAdding: .month, value: 1, to: d) else { break }
+                        d = next
+                    }
+                    return max(count, 1)
+                }()
+                let needsRecalc = profile.investments[i].installments.isEmpty || (inv.mode == .sip && profile.investments[i].installments.count < expectedCount)
+
+                // Populate Missing Installments for Stocks, Gold ETFs, and Crypto
+                if needsRecalc {
                     if inv.mode == .sip {
                         let (sipUnits, _, simulatedInstallments) = await StockService.shared.calculateHistoricalSIPUnits(
                             symbol: symbol,

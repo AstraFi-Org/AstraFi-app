@@ -60,6 +60,64 @@ class StockService {
         return mergeSearchResults([localResults, yahooResults, finnhubResults])
     }
 
+    func searchGoldETFs(query: String) async -> [AstraStock] {
+        let trimmedQuery = query.trimmingCharacters(in: .whitespacesAndNewlines)
+        guard trimmedQuery.count >= 2 else { return [] }
+
+        let remoteResults = await searchStocks(query: trimmedQuery)
+        let q = trimmedQuery.lowercased()
+        let filteredResults = remoteResults.filter { stock in
+            let searchable = "\(stock.symbol) \(stock.name)".lowercased()
+            return searchable.contains("gold") ||
+                   searchable.contains("goldbees") ||
+                   searchable.contains("setfgold") ||
+                   q.contains("gold")
+        }
+
+        return filteredResults
+    }
+
+    func searchCryptoSymbols(query: String) async -> [AstraStock] {
+        let trimmedQuery = query.trimmingCharacters(in: .whitespacesAndNewlines)
+        guard !trimmedQuery.isEmpty else { return [] }
+
+        let q = trimmedQuery.uppercased()
+        guard let url = URL(string: "https://api.binance.com/api/v3/exchangeInfo") else {
+            return []
+        }
+
+        do {
+            let (data, _) = try await URLSession.shared.data(from: url)
+            let response = try JSONDecoder().decode(BinanceExchangeInfoResponse.self, from: data)
+            let results = response.symbols
+                .filter { symbol in
+                    symbol.status == "TRADING" &&
+                    symbol.quoteAsset == "USDT" &&
+                    (
+                        symbol.symbol.contains(q) ||
+                        symbol.baseAsset.contains(q) ||
+                        cryptoDisplayName(for: symbol.baseAsset).uppercased().contains(q)
+                    )
+                }
+                .prefix(30)
+                .map { symbol in
+                    AstraStock(
+                        symbol: "BINANCE:\(symbol.symbol)",
+                        name: cryptoDisplayName(for: symbol.baseAsset),
+                        exchange: "Binance",
+                        currentPrice: 0,
+                        priceChange: 0,
+                        priceChangePercentage: 0
+                    )
+                }
+
+            return mergeSearchResults([Array(results)])
+        } catch {
+            print("Binance crypto search error: \(error)")
+            return []
+        }
+    }
+
     private func searchFinnhubStocks(query: String) async -> [AstraStock] {
         let encodedQuery = query.addingPercentEncoding(withAllowedCharacters: .urlQueryAllowed) ?? query
         let urlString = "\(baseURL)/search?q=\(encodedQuery)&token=\(apiKey)"
@@ -195,6 +253,18 @@ class StockService {
     }
     
     func fetchPrice(symbol: String) async -> AstraStock? {
+        if isCryptoSymbol(symbol),
+           let cryptoPrice = await fetchCryptoINRPrice(symbol: symbol, date: nil) {
+            return AstraStock(
+                symbol: symbol,
+                name: symbol,
+                exchange: "Binance",
+                currentPrice: cryptoPrice,
+                priceChange: 0,
+                priceChangePercentage: 0
+            )
+        }
+
         if apiKey.isEmpty {
             return await fetchPriceFromYahoo(symbol: symbol)
         }
@@ -232,6 +302,112 @@ class StockService {
         }
     }
 
+    func fetchCryptoINRPrice(symbol: String, date: Date? = nil) async -> Double? {
+        guard let usdtPair = cryptoUSDTTradingPair(from: symbol) else { return nil }
+
+        let usdPrice: Double?
+        if let date {
+            usdPrice = await fetchHistoricalCryptoUSDPrice(pair: usdtPair, date: date)
+        } else {
+            usdPrice = await fetchCurrentCryptoUSDPrice(pair: usdtPair)
+        }
+
+        guard let usdPrice, usdPrice > 0 else { return nil }
+        let usdInr = await fetchUSDINRRate() ?? 83.0
+        return usdPrice * usdInr
+    }
+
+    private func isCryptoSymbol(_ symbol: String) -> Bool {
+        cryptoUSDTTradingPair(from: symbol) != nil
+    }
+
+    private func cryptoUSDTTradingPair(from symbol: String) -> String? {
+        let upper = symbol.uppercased()
+        if upper.hasPrefix("BINANCE:") {
+            return String(upper.dropFirst("BINANCE:".count))
+        }
+        if upper.hasSuffix("USDT"), !upper.contains(".") {
+            return upper
+        }
+        return nil
+    }
+
+    private func cryptoDisplayName(for asset: String) -> String {
+        let names = [
+            "BTC": "Bitcoin",
+            "ETH": "Ethereum",
+            "SOL": "Solana",
+            "XRP": "XRP",
+            "BNB": "BNB",
+            "ADA": "Cardano",
+            "DOGE": "Dogecoin",
+            "DOT": "Polkadot",
+            "MATIC": "Polygon",
+            "AVAX": "Avalanche",
+            "LINK": "Chainlink",
+            "LTC": "Litecoin",
+            "TRX": "TRON",
+            "UNI": "Uniswap",
+            "ATOM": "Cosmos",
+            "NEAR": "NEAR Protocol"
+        ]
+        return names[asset.uppercased()] ?? asset.uppercased()
+    }
+
+    private func fetchCurrentCryptoUSDPrice(pair: String) async -> Double? {
+        guard let url = URL(string: "https://api.binance.com/api/v3/ticker/price?symbol=\(pair)") else {
+            return nil
+        }
+
+        do {
+            let (data, _) = try await URLSession.shared.data(from: url)
+            let response = try JSONDecoder().decode(BinanceTickerPriceResponse.self, from: data)
+            return Double(response.price)
+        } catch {
+            print("Binance crypto quote error: \(error)")
+            return nil
+        }
+    }
+
+    private func fetchHistoricalCryptoUSDPrice(pair: String, date: Date) async -> Double? {
+        let calendar = Calendar(identifier: .gregorian)
+        let startOfDay = calendar.startOfDay(for: date)
+        let startMs = Int(startOfDay.timeIntervalSince1970 * 1000)
+        let endMs = startMs + (24 * 60 * 60 * 1000)
+        let urlString = "https://api.binance.com/api/v3/klines?symbol=\(pair)&interval=1d&startTime=\(startMs)&endTime=\(endMs)&limit=1"
+        guard let url = URL(string: urlString) else { return nil }
+
+        do {
+            let (data, _) = try await URLSession.shared.data(from: url)
+            let rows = try JSONDecoder().decode([[BinanceKlineValue]].self, from: data)
+            guard let row = rows.first, row.count > 4 else {
+                return await fetchCurrentCryptoUSDPrice(pair: pair)
+            }
+            if case let .string(closeString) = row[4] {
+                return Double(closeString)
+            }
+            return nil
+        } catch {
+            print("Binance crypto historical quote error: \(error)")
+            return await fetchCurrentCryptoUSDPrice(pair: pair)
+        }
+    }
+
+    private func fetchUSDINRRate() async -> Double? {
+        guard let url = URL(string: "https://query1.finance.yahoo.com/v8/finance/chart/USDINR=X?interval=1d&range=1d") else {
+            return nil
+        }
+
+        do {
+            let (data, _) = try await URLSession.shared.data(from: url)
+            let response = try JSONDecoder().decode(YahooChartResponse.self, from: data)
+            return response.chart.result?.first?.meta.regularMarketPrice
+        } catch {
+            print("USD/INR quote error: \(error)")
+            return nil
+        }
+    }
+
     // Bug 4a Fix: Yahoo Finance fallback for live price
     private func fetchPriceFromYahoo(symbol: String) async -> AstraStock? {
         let yahooSymbol = toYahooSymbol(symbol)
@@ -265,6 +441,10 @@ class StockService {
 
     // Bug 4a Fix: Use Yahoo Finance for historical prices (free, no paid plan needed)
     func fetchHistoricalPrice(symbol: String, date: Date) async -> Double? {
+        if isCryptoSymbol(symbol) {
+            return await fetchCryptoINRPrice(symbol: symbol, date: date)
+        }
+
         let yahooSymbol = toYahooSymbol(symbol)
         // Use a 5-day window to handle weekends and market holidays
         let from = Int(date.timeIntervalSince1970) - (4 * 86400)
@@ -311,6 +491,10 @@ class StockService {
     /// Returns an array of MFHistoryPoint (date string "dd-MM-yyyy" + nav string) so it's
     /// compatible with the existing chart rendering code in InvestmentDetailView.
     func fetchStockChartHistory(symbol: String, startDate: Date) async -> [MFHistoryPoint] {
+        if isCryptoSymbol(symbol) {
+            return await fetchCryptoChartHistory(symbol: symbol, startDate: startDate)
+        }
+
         let yahooSymbol = toYahooSymbol(symbol)
         let from = Int(startDate.timeIntervalSince1970)
         let to   = Int(Date().timeIntervalSince1970) + 86400
@@ -338,6 +522,40 @@ class StockService {
             return points
         } catch {
             print("Stock chart history error for \(symbol): \(error)")
+            return []
+        }
+    }
+
+    func fetchCryptoChartHistory(symbol: String, startDate: Date) async -> [MFHistoryPoint] {
+        guard let pair = cryptoUSDTTradingPair(from: symbol) else { return [] }
+
+        let calendar = Calendar(identifier: .gregorian)
+        let start = calendar.startOfDay(for: startDate)
+        let end = calendar.startOfDay(for: Date())
+        let startMs = Int(start.timeIntervalSince1970 * 1000)
+        let endMs = Int(end.addingTimeInterval(86_400).timeIntervalSince1970 * 1000)
+        let urlString = "https://api.binance.com/api/v3/klines?symbol=\(pair)&interval=1d&startTime=\(startMs)&endTime=\(endMs)&limit=1000"
+        guard let url = URL(string: urlString) else { return [] }
+
+        do {
+            let (data, _) = try await URLSession.shared.data(from: url)
+            let rows = try JSONDecoder().decode([[BinanceKlineValue]].self, from: data)
+            let usdInr = await fetchUSDINRRate() ?? 83.0
+            let formatter = DateFormatter()
+            formatter.dateFormat = "dd-MM-yyyy"
+            formatter.timeZone = TimeZone(identifier: "UTC")
+
+            return rows.compactMap { row in
+                guard row.count > 4,
+                      let openTime = row[0].doubleValue,
+                      let close = row[4].doubleValue,
+                      close > 0 else { return nil }
+
+                let date = Date(timeIntervalSince1970: openTime / 1000)
+                return MFHistoryPoint(date: formatter.string(from: date), nav: String(format: "%.2f", close * usdInr))
+            }
+        } catch {
+            print("Crypto chart history error for \(symbol): \(error)")
             return []
         }
     }
@@ -451,6 +669,53 @@ struct FinnhubSearchItem: Codable {
 struct FinnhubCandleResponse: Codable {
     let c: [Double]? // Close prices
     let s: String?   // Status
+}
+
+struct BinanceTickerPriceResponse: Codable {
+    let symbol: String
+    let price: String
+}
+
+struct BinanceExchangeInfoResponse: Codable {
+    let symbols: [BinanceExchangeSymbol]
+}
+
+struct BinanceExchangeSymbol: Codable {
+    let symbol: String
+    let status: String
+    let baseAsset: String
+    let quoteAsset: String
+}
+
+enum BinanceKlineValue: Decodable {
+    case string(String)
+    case double(Double)
+    case int(Int)
+    case null
+
+    init(from decoder: Decoder) throws {
+        let container = try decoder.singleValueContainer()
+        if container.decodeNil() {
+            self = .null
+        } else if let value = try? container.decode(String.self) {
+            self = .string(value)
+        } else if let value = try? container.decode(Double.self) {
+            self = .double(value)
+        } else if let value = try? container.decode(Int.self) {
+            self = .int(value)
+        } else {
+            self = .null
+        }
+    }
+
+    var doubleValue: Double? {
+        switch self {
+        case .string(let value): return Double(value)
+        case .double(let value): return value
+        case .int(let value): return Double(value)
+        case .null: return nil
+        }
+    }
 }
 
 // MARK: - Yahoo Finance Models

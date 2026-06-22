@@ -113,6 +113,14 @@ struct AuraMoneyFlowChart: View {
         return (pct: ((abs(diff) / prevI) * 100).safeFinite, up: diff >= 0)
     }
 
+    private var chartYDomain: ClosedRange<Double> {
+        let largestMagnitude = chartData
+            .map { abs($0.amount.safeFinite) }
+            .max() ?? 0
+        let bound = max(largestMagnitude * 1.15, 1)
+        return (-bound)...bound
+    }
+
     // MARK: Body
     var body: some View {
         VStack(spacing: 0) {
@@ -141,6 +149,7 @@ struct AuraMoneyFlowChart: View {
                         .zIndex(-1)
                 }
             }
+            .chartYScale(domain: chartYDomain)
             .chartXSelection(value: $selectedMonth)
             .chartScrollableAxes(.horizontal)
             .chartXVisibleDomain(length: max(1, min(uniqueMonths.count, 6)))
