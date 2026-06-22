@@ -54,7 +54,7 @@ enum InvestmentType: String, CaseIterable, Identifiable, Hashable {
     }
 
     var supportsMode: Bool {
-        [.mutualFund, .goldETF].contains(self)
+        [.mutualFund, .goldETF, .crypto].contains(self)
     }
 
     var supportsQuantity: Bool {
@@ -288,7 +288,9 @@ struct AddInvestmentView: View {
                     }
                 }
                 ToolbarItem(placement: .navigationBarTrailing) {
-                    Button(action: saveInvestment) {
+                    Button {
+                        Task { await saveInvestment() }
+                    } label: {
                         Image(systemName: "checkmark")
                             .font(.system(size: 16, weight: .bold))
                     }
@@ -386,7 +388,8 @@ struct AddInvestmentView: View {
                 title: "Search Coin / Symbol",
                 seeds: InvestmentFormViewModel.popularCrypto
             )
-            amountField("Investment Amount")
+            modePicker
+            amountField(mode == .sip ? "Monthly Investment Amount" : "Investment Amount")
                 .onChange(of: amount) { _, _ in recalculateMarketQuantity() }
             quantityPreview(label: "Quantity")
             DatePicker("Start Date", selection: $startDate, displayedComponents: .date)
@@ -934,16 +937,48 @@ struct AddInvestmentView: View {
         if selectedType == .cashSavings { bankName = "" }
     }
 
-    private func saveInvestment() {
+    @MainActor
+    private func saveInvestment() async {
         let investedAmount = Double(amount) ?? Double(currentValue) ?? 0
         let staticCurrentValue = resolvedCurrentValue(investedAmount: investedAmount)
-        let marketPrice = selectedMarketAsset?.currentPrice ?? historicalPriceOnDate
-        let resolvedUnits = Double(units) ?? Double(quantity)
+        var marketPrice = selectedMarketAsset?.currentPrice ?? historicalPriceOnDate
+        var resolvedUnits = Double(units) ?? Double(quantity)
+        var generatedInstallments: [AstraInvestmentTransaction] = []
 
         let investmentName = resolvedInvestmentName
         let effectiveMode: AstraInvestmentMode = selectedType.supportsMode ? mode : (selectedType == .ppf ? .sip : .lumpsum)
 
-        let newInvestment = AstraInvestment(
+        if [.stock, .goldETF, .crypto].contains(selectedType), let symbol = selectedMarketAsset?.symbol {
+            if effectiveMode == .sip {
+                let result = await StockService.shared.calculateHistoricalSIPUnits(
+                    symbol: symbol,
+                    monthlyAmount: investedAmount,
+                    startDate: startDate
+                )
+                generatedInstallments = result.installments
+                if result.totalUnits > 0 {
+                    resolvedUnits = result.totalUnits
+                }
+            } else {
+                let result = await StockService.shared.calculateLumpsumUnits(
+                    symbol: symbol,
+                    amount: investedAmount,
+                    startDate: startDate
+                )
+                generatedInstallments = result.installments
+                if result.totalUnits > 0 {
+                    resolvedUnits = result.totalUnits
+                }
+            }
+
+            if let live = await StockService.shared.fetchPrice(symbol: symbol), live.currentPrice > 0 {
+                marketPrice = live.currentPrice
+            } else if marketPrice == nil || marketPrice == 0 {
+                marketPrice = generatedInstallments.last?.nav
+            }
+        }
+
+        var newInvestment = AstraInvestment(
             id: UUID(),
             investmentType: selectedType.astraType,
             subtype: nil,
@@ -964,6 +999,12 @@ struct AddInvestmentView: View {
             priceChange: selectedMarketAsset?.priceChange,
             priceChangePercentage: selectedMarketAsset?.priceChangePercentage
         )
+        newInvestment.installments = generatedInstallments
+        if selectedType == .crypto || selectedType == .goldETF || selectedType == .stock {
+            newInvestment.purchaseNAV = weightedAverageRate(from: generatedInstallments) ?? newInvestment.purchaseNAV
+            newInvestment.lastNAV = marketPrice
+            newInvestment.livePrice = marketPrice
+        }
 
         appState.addInvestment(newInvestment)
         dismiss()
@@ -1031,6 +1072,13 @@ struct AddInvestmentView: View {
         if let price = selectedMarketAsset?.currentPrice, price > 0 { return price }
         if let units, units > 0 { return investedAmount / units }
         return investedAmount
+    }
+
+    private func weightedAverageRate(from installments: [AstraInvestmentTransaction]) -> Double? {
+        let totalAmount = installments.reduce(0.0) { $0 + $1.amount }
+        let totalUnits = installments.reduce(0.0) { $0 + $1.units }
+        guard totalUnits > 0 else { return nil }
+        return totalAmount / totalUnits
     }
 
     private func recalculateMarketQuantity() {

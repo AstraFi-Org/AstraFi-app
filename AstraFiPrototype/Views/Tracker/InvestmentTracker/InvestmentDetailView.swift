@@ -97,6 +97,64 @@ struct InvestmentDetailView: View {
         inv?.installments.sorted(by: { $0.date > $1.date }) ?? []
     }
 
+    private var selectedInvestmentType: AstraInvestmentType? {
+        inv?.investmentType
+    }
+
+    private var totalUnitsOwned: Double? {
+        if let installments = inv?.installments, !installments.isEmpty {
+            let total = installments.reduce(0.0) { result, tx in
+                tx.type == .buy ? result + tx.units : result - tx.units
+            }
+            return total > 0 ? total : nil
+        }
+        return inv?.units ?? inv?.quantity
+    }
+
+    private var currentDisplayPrice: Double? {
+        let price = inv?.livePrice ?? inv?.lastNAV
+        guard let price, price.isFinite, price > 0 else { return nil }
+        return price
+    }
+
+    private var unitLabel: String {
+        switch selectedInvestmentType {
+        case .stocks: return "Total Shares Owned"
+        case .cryptocurrency: return "Total Quantity Owned"
+        default: return "Total Units Owned"
+        }
+    }
+
+    private var averageEntryLabel: String {
+        switch selectedInvestmentType {
+        case .mutualFund: return "Avg. Entry NAV"
+        default: return "Avg. Entry Price"
+        }
+    }
+
+    private var currentPriceLabel: String {
+        switch selectedInvestmentType {
+        case .mutualFund: return "Current NAV"
+        default: return "Current Price"
+        }
+    }
+
+    private var transactionRateLabel: String {
+        switch selectedInvestmentType {
+        case .mutualFund: return "NAV"
+        default: return "Rate"
+        }
+    }
+
+    private func isMarketPricedInvestment(_ type: AstraInvestmentType?) -> Bool {
+        switch type {
+        case .stocks, .goldETF, .cryptocurrency:
+            return true
+        default:
+            return false
+        }
+    }
+
     var body: some View {
         ScrollView {
             VStack(alignment: .leading, spacing: 16) {
@@ -163,6 +221,7 @@ struct InvestmentDetailView: View {
         }
         .background(Color(uiColor: .systemGroupedBackground))
         .task {
+            await repairMarketDataIfNeeded()
             await loadFundHistory()
         }
         .onChange(of: inv?.schemeCode) { _ in
@@ -191,11 +250,22 @@ struct InvestmentDetailView: View {
             isLoadingHistory = true
             history = await MFService.shared.fetchHistoricalGraphData(schemeCode: code, startDate: startDate)
             isLoadingHistory = false
-        } else if currentInv?.investmentType == .stocks, let symbol = currentInv?.symbol ?? currentInv?.investmentName {
+        } else if isMarketPricedInvestment(currentInv?.investmentType), let symbol = currentInv?.symbol ?? currentInv?.investmentName {
             isLoadingHistory = true
             history = await StockService.shared.fetchStockChartHistory(symbol: symbol, startDate: startDate ?? currentInv?.startDate ?? Date())
             isLoadingHistory = false
         }
+    }
+
+    @MainActor
+    private func repairMarketDataIfNeeded() async {
+        guard let currentInv = inv,
+              isMarketPricedInvestment(currentInv.investmentType),
+              ((currentInv.livePrice ?? currentInv.lastNAV ?? 0) <= 0 || currentInv.installments.isEmpty) else {
+            return
+        }
+
+        await appState.syncMutualFundNAVs(force: true)
     }
 
     @ViewBuilder
@@ -326,8 +396,8 @@ struct InvestmentDetailView: View {
         VStack(spacing: 0) {
             detailRow(label: "Total Invested", value: inv?.totalInvestedAmount.toCurrency() ?? "—")
             
-            if let units = inv?.units {
-                detailRow(label: "Total Units Owned", value: String(format: "%.3f", units))
+            if let units = totalUnitsOwned {
+                detailRow(label: unitLabel, value: String(format: selectedInvestmentType == .cryptocurrency ? "%.6f" : "%.3f", units))
                 Divider().padding(.leading)
             }
 
@@ -337,12 +407,12 @@ struct InvestmentDetailView: View {
             Divider().padding(.leading)
 
             if let pNAV = inv?.purchaseNAV {
-                detailRow(label: "Avg. Entry NAV", value: "₹\(String(format: "%.2f", pNAV))")
+                detailRow(label: averageEntryLabel, value: "₹\(String(format: "%.2f", pNAV))")
                 Divider().padding(.leading)
             }
 
-            if let lastNAV = inv?.lastNAV {
-                detailRow(label: "Current NAV", value: "₹\(String(format: "%.2f", lastNAV))", valueColor: profitPct >= 0 ? .green : .red)
+            if let lastNAV = currentDisplayPrice {
+                detailRow(label: currentPriceLabel, value: "₹\(String(format: "%.2f", lastNAV))", valueColor: profitPct >= 0 ? .green : .red)
                 Divider().padding(.leading)
             }
 
@@ -578,7 +648,7 @@ struct InvestmentDetailView: View {
                     }
                     HStack(spacing: 5) {
                         Circle().fill(lineColor).frame(width: 7, height: 7)
-                        Text("Latest NAV").font(.system(size: 10)).foregroundColor(.secondary)
+                        Text(selectedInvestmentType == .mutualFund ? "Latest NAV" : "Latest price").font(.system(size: 10)).foregroundColor(.secondary)
                     }
                     if !(inv?.installments ?? []).isEmpty {
                         HStack(spacing: 5) {
@@ -686,7 +756,7 @@ struct InvestmentDetailView: View {
                                 Text("Units: \(String(format: "%.3f", item.units))")
                                     .font(.subheadline)
                                     .fontWeight(.semibold)
-                                Text("NAV / Rate: ₹\(String(format: "%.2f", item.nav))")
+                                Text("\(transactionRateLabel): ₹\(String(format: "%.2f", item.nav))")
                                     .font(.caption2)
                                     .foregroundColor(.secondary)
                                 Text("Amount: ₹\(String(format: "%.0f", item.amount))")
@@ -776,7 +846,7 @@ struct InvestmentDetailView: View {
                 (date: transaction.date, value: transaction.nav)
             }
 
-        if let currentNAV = currentInv.lastNAV, currentNAV.isFinite, currentNAV > 0 {
+        if let currentNAV = currentInv.livePrice ?? currentInv.lastNAV, currentNAV.isFinite, currentNAV > 0 {
             let latestDate = currentInv.lastUpdated ?? Date()
             if points.isEmpty || points.last?.date != latestDate || points.last?.value != currentNAV {
                 points.append((date: latestDate, value: currentNAV))

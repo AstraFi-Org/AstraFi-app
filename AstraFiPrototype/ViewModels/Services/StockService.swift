@@ -441,6 +441,10 @@ class StockService {
 
     // Bug 4a Fix: Use Yahoo Finance for historical prices (free, no paid plan needed)
     func fetchHistoricalPrice(symbol: String, date: Date) async -> Double? {
+        if isCryptoSymbol(symbol) {
+            return await fetchCryptoINRPrice(symbol: symbol, date: date)
+        }
+
         let yahooSymbol = toYahooSymbol(symbol)
         // Use a 5-day window to handle weekends and market holidays
         let from = Int(date.timeIntervalSince1970) - (4 * 86400)
@@ -487,6 +491,10 @@ class StockService {
     /// Returns an array of MFHistoryPoint (date string "dd-MM-yyyy" + nav string) so it's
     /// compatible with the existing chart rendering code in InvestmentDetailView.
     func fetchStockChartHistory(symbol: String, startDate: Date) async -> [MFHistoryPoint] {
+        if isCryptoSymbol(symbol) {
+            return await fetchCryptoChartHistory(symbol: symbol, startDate: startDate)
+        }
+
         let yahooSymbol = toYahooSymbol(symbol)
         let from = Int(startDate.timeIntervalSince1970)
         let to   = Int(Date().timeIntervalSince1970) + 86400
@@ -514,6 +522,40 @@ class StockService {
             return points
         } catch {
             print("Stock chart history error for \(symbol): \(error)")
+            return []
+        }
+    }
+
+    func fetchCryptoChartHistory(symbol: String, startDate: Date) async -> [MFHistoryPoint] {
+        guard let pair = cryptoUSDTTradingPair(from: symbol) else { return [] }
+
+        let calendar = Calendar(identifier: .gregorian)
+        let start = calendar.startOfDay(for: startDate)
+        let end = calendar.startOfDay(for: Date())
+        let startMs = Int(start.timeIntervalSince1970 * 1000)
+        let endMs = Int(end.addingTimeInterval(86_400).timeIntervalSince1970 * 1000)
+        let urlString = "https://api.binance.com/api/v3/klines?symbol=\(pair)&interval=1d&startTime=\(startMs)&endTime=\(endMs)&limit=1000"
+        guard let url = URL(string: urlString) else { return [] }
+
+        do {
+            let (data, _) = try await URLSession.shared.data(from: url)
+            let rows = try JSONDecoder().decode([[BinanceKlineValue]].self, from: data)
+            let usdInr = await fetchUSDINRRate() ?? 83.0
+            let formatter = DateFormatter()
+            formatter.dateFormat = "dd-MM-yyyy"
+            formatter.timeZone = TimeZone(identifier: "UTC")
+
+            return rows.compactMap { row in
+                guard row.count > 4,
+                      let openTime = row[0].doubleValue,
+                      let close = row[4].doubleValue,
+                      close > 0 else { return nil }
+
+                let date = Date(timeIntervalSince1970: openTime / 1000)
+                return MFHistoryPoint(date: formatter.string(from: date), nav: String(format: "%.2f", close * usdInr))
+            }
+        } catch {
+            print("Crypto chart history error for \(symbol): \(error)")
             return []
         }
     }
@@ -663,6 +705,15 @@ enum BinanceKlineValue: Decodable {
             self = .int(value)
         } else {
             self = .null
+        }
+    }
+
+    var doubleValue: Double? {
+        switch self {
+        case .string(let value): return Double(value)
+        case .double(let value): return value
+        case .int(let value): return Double(value)
+        case .null: return nil
         }
     }
 }

@@ -1324,12 +1324,16 @@ final class AppStateManager {
         var updated = false
         
         // Update Stock Prices
-        let stockSymbols = profile.investments.compactMap { $0.investmentType == .stocks ? $0.symbol : nil }
+        let marketTypes: Set<AstraInvestmentType> = [.stocks, .goldETF, .cryptocurrency]
+        let stockSymbols = profile.investments.compactMap { marketTypes.contains($0.investmentType) ? $0.symbol : nil }
         if !stockSymbols.isEmpty {
             let stockPrices = await StockService.shared.fetchLivePrices(symbols: stockSymbols)
             for i in 0..<profile.investments.count {
-                if let symbol = profile.investments[i].symbol, let price = stockPrices[symbol] {
+                if marketTypes.contains(profile.investments[i].investmentType),
+                   let symbol = profile.investments[i].symbol,
+                   let price = stockPrices[symbol] {
                     profile.investments[i].livePrice = price
+                    profile.investments[i].lastNAV = price
                     profile.investments[i].lastUpdated = Date()
                     updated = true
                 }
@@ -1399,12 +1403,26 @@ final class AppStateManager {
                         }
                     }
                 }
-            } else if inv.investmentType == .stocks {
+            } else if marketTypes.contains(inv.investmentType) {
                 guard let symbol = inv.symbol else { continue }
-                
-                
-                // Populate Missing Installments for Stocks
-                if profile.investments[i].installments.isEmpty {
+
+                let expectedCount: Int = {
+                    guard inv.mode == .sip else { return 1 }
+                    let cal = Calendar.current
+                    var count = 0
+                    var d = inv.startDate
+                    let today = Date()
+                    while d <= today {
+                        count += 1
+                        guard let next = cal.date(byAdding: .month, value: 1, to: d) else { break }
+                        d = next
+                    }
+                    return max(count, 1)
+                }()
+                let needsRecalc = profile.investments[i].installments.isEmpty || (inv.mode == .sip && profile.investments[i].installments.count < expectedCount)
+
+                // Populate Missing Installments for Stocks, Gold ETFs, and Crypto
+                if needsRecalc {
                     if inv.mode == .sip {
                         let (sipUnits, _, simulatedInstallments) = await StockService.shared.calculateHistoricalSIPUnits(
                             symbol: symbol,
