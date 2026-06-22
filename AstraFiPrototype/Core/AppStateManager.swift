@@ -11,6 +11,7 @@ final class AppStateManager {
     
     var isLoading: Bool = true
     var isAssessmentSkipped: Bool = false
+    var isLockedByBiometric: Bool = false
     
     static func withSampleData() -> AppStateManager {
         let mgr = AppStateManager()
@@ -275,12 +276,24 @@ final class AppStateManager {
                     }
                 }
                 try? await minimumDelay
+                
+                // Check if biometric lock should be shown
+                // Note: requireUnlockOnLaunch defaults to true in @AppStorage,
+                // so we must use the same default here since the key may never
+                // have been explicitly written to UserDefaults.
+                let biometricEnabled = UserDefaults.standard.bool(forKey: "securityBiometricUnlockEnabled")
+                let requireOnLaunch = UserDefaults.standard.object(forKey: "securityRequireUnlockOnLaunch") as? Bool ?? true
+                
                 await MainActor.run {
                     self.currentProfile = profile
                     self.isAuthenticated = true
                     self.hasCompletedOnboarding = true
                     self.showDashboard = true
                     self.isLoading = false
+                    
+                    if biometricEnabled && requireOnLaunch {
+                        self.isLockedByBiometric = true
+                    }
                 }
                 recalculateFinancials()
             } else {
@@ -301,6 +314,11 @@ final class AppStateManager {
             }
         }
     }
+    
+    func unlockApp() {
+        isLockedByBiometric = false
+    }
+
     func signUp(name: String, email: String, password: String) async -> Bool {
         isAuthLoading = true
         authError = nil
