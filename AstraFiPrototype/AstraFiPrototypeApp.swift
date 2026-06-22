@@ -9,6 +9,7 @@ struct AstraFiPrototypeApp: App {
             AppRootView()
                 .environment(appState)
                 .task {
+                    Secrets.printConfigurationStatus()
                     await InvestmentIntelligenceRepository().warmHomeAssets()
                 }
                 .onOpenURL { url in

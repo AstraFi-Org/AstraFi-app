@@ -32,16 +32,8 @@ class StockService {
         AstraStock(symbol: "AAPL", name: "Apple Inc", exchange: "NASDAQ", currentPrice: 185.20, priceChange: 1.25, priceChangePercentage: 0.68)
     ]
 
-    // Bug 4b Fix: Map user-friendly symbols to Finnhub format
-    // Finnhub uses "NSE:RELIANCE" not "RELIANCE.NS"
     private func toFinnhubSymbol(_ symbol: String) -> String {
-        if symbol.hasSuffix(".NS") {
-            return "NSE:" + symbol.dropLast(3)
-        }
-        if symbol.hasSuffix(".BO") {
-            return "BSE:" + symbol.dropLast(3)
-        }
-        return symbol
+        symbol.uppercased()
     }
 
     // Yahoo Finance symbol: RELIANCE.NS stays as-is, AAPL stays as-is
@@ -276,10 +268,11 @@ class StockService {
         guard let url = URL(string: urlString) else { return nil }
         
         do {
+            print("Finnhub Symbol:", finnhubSymbol)
             let (data, _) = try await URLSession.shared.data(from: url)
             
             if let jsonString = String(data: data, encoding: .utf8) {
-                print("Finnhub Quote Response for \(finnhubSymbol): \(jsonString)")
+                print("Quote Response:", jsonString)
             }
             
             let quote = try JSONDecoder().decode(FinnhubQuote.self, from: data)

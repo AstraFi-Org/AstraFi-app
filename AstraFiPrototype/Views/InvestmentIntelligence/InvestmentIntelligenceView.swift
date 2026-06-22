@@ -209,6 +209,7 @@ struct InvestmentSearchView: View {
 struct InvestmentIntelligenceDetailView: View {
     @Environment(\.colorScheme) private var colorScheme
     @State private var viewModel: InvestmentDetailViewModel
+    @State private var stockIntelligenceViewModel = StockIntelligenceViewModel()
 
     init(asset: InvestmentSummaryAsset) {
         _viewModel = State(initialValue: InvestmentDetailViewModel(asset: asset))
@@ -218,8 +219,7 @@ struct InvestmentIntelligenceDetailView: View {
         ScrollView(showsIndicators: false) {
             VStack(alignment: .leading, spacing: 18) {
                 detailHeader
-                tabControl
-                selectedTabContent
+                singleScreenContent
             }
             .padding(.horizontal, AppTheme.auraPadding)
             .padding(.bottom, 44)
@@ -228,7 +228,6 @@ struct InvestmentIntelligenceDetailView: View {
         .navigationTitle(viewModel.asset.name)
         .navigationBarTitleDisplayMode(.inline)
         .task { await viewModel.load() }
-        .sensoryFeedback(.selection, trigger: viewModel.selectedTab)
     }
 
     private var detailHeader: some View {
@@ -266,35 +265,43 @@ struct InvestmentIntelligenceDetailView: View {
         .shadow(color: AppTheme.adaptiveShadow, radius: 14, x: 0, y: 5)
     }
 
-    private var tabControl: some View {
-        Picker("Detail section", selection: $viewModel.selectedTab) {
-            ForEach(InvestmentDetailTab.allCases) { tab in
-                Text(tab.rawValue).tag(tab)
+    @ViewBuilder
+    private var singleScreenContent: some View {
+        let snapshot = viewModel.snapshot
+
+        if viewModel.isLoading && snapshot == nil {
+            DetailCard(title: "Loading Intelligence", systemImage: "arrow.triangle.2.circlepath") {
+                HStack(spacing: 10) {
+                    ProgressView()
+                    Text("Fetching provider data and preparing this screen...")
+                        .font(.system(size: 13, weight: .semibold))
+                        .foregroundStyle(.secondary)
+                }
+                .frame(maxWidth: .infinity, alignment: .leading)
             }
         }
-        .pickerStyle(.segmented)
-        .accessibilityLabel("Investment detail sections")
-    }
 
-    @ViewBuilder
-    private var selectedTabContent: some View {
-        let snapshot = viewModel.snapshot
-        switch viewModel.selectedTab {
-        case .overview:
+        Group {
             OverviewTab(snapshot: snapshot, asset: viewModel.asset)
-        case .financials:
             FinancialsTab(snapshot: snapshot, asset: viewModel.asset)
-        case .competition:
-            CompetitionTab(competitors: snapshot?.competitors ?? [])
-        case .news:
-            NewsTab(news: snapshot?.news ?? [])
-        case .insights:
+            if viewModel.asset.kind == .stock {
+                StockIntelligenceSection(viewModel: stockIntelligenceViewModel)
+                    .task(id: viewModel.asset.symbol) {
+                        await stockIntelligenceViewModel.loadIntelligence(for: viewModel.asset)
+                    }
+            }
             InsightsTab(
+                asset: viewModel.asset,
                 aiInsight: snapshot?.aiInsight,
                 insights: snapshot?.insights ?? [],
                 recommendations: snapshot?.recommendations ?? []
             )
-        case .faq:
+
+            if viewModel.asset.kind == .stock {
+                CompetitionTab(competitors: snapshot?.competitors ?? [])
+                NewsTab(news: snapshot?.news ?? [])
+            }
+
             FAQTab(faqs: snapshot?.faqs ?? FAQService().faqs())
         }
     }
@@ -608,6 +615,7 @@ private struct NewsTab: View {
 }
 
 private struct InsightsTab: View {
+    let asset: InvestmentSummaryAsset
     let aiInsight: String?
     let insights: [InvestmentInsight]
     let recommendations: [RecommendationTrend]
@@ -650,6 +658,41 @@ private struct InsightsTab: View {
                 }
             }
         }
+    }
+}
+
+private struct StockIntelligenceCard: View {
+    let viewModel: StockIntelligenceViewModel
+
+    var body: some View {
+        StockIntelligenceSection(viewModel: viewModel)
+    }
+}
+
+private struct IntelligenceSection: View {
+    let title: String
+    let text: String
+    let icon: String
+    let color: Color
+
+    var body: some View {
+        HStack(alignment: .top, spacing: 12) {
+            Image(systemName: icon)
+                .foregroundStyle(color)
+                .frame(width: 22)
+            VStack(alignment: .leading, spacing: 5) {
+                Text(title)
+                    .font(.system(size: 14, weight: .bold))
+                Text(text.isEmpty ? "Unavailable" : text)
+                    .font(.system(size: 13))
+                    .foregroundStyle(.secondary)
+                    .fixedSize(horizontal: false, vertical: true)
+            }
+        }
+        .frame(maxWidth: .infinity, alignment: .leading)
+        .padding(13)
+        .background(AppTheme.elevatedCardBackground)
+        .clipShape(RoundedRectangle(cornerRadius: 14, style: .continuous))
     }
 }
 

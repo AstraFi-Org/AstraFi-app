@@ -45,7 +45,11 @@ final class FinnhubService {
     }
 
     func quote(symbol: String) async throws -> FinnhubQuoteResponse {
-        try await request(path: "quote", query: ["symbol": finnhubSymbol(symbol)])
+        let mappedSymbol = finnhubSymbol(symbol)
+        print("Finnhub Symbol:", mappedSymbol)
+        let response: FinnhubQuoteResponse = try await request(path: "quote", query: ["symbol": mappedSymbol])
+        print("Quote Response:", response)
+        return response
     }
 
     func metrics(symbol: String) async throws -> FinnhubMetricResponse {
@@ -89,7 +93,8 @@ final class FinnhubService {
         }
 
         let (data, response) = try await URLSession.shared.data(from: url)
-        guard (response as? HTTPURLResponse)?.statusCode ?? 200 < 400 else {
+        let statusCode = (response as? HTTPURLResponse)?.statusCode ?? 200
+        guard statusCode < 400 else {
             throw URLError(.badServerResponse)
         }
         await cache.store(data, for: cacheKey)
@@ -97,10 +102,7 @@ final class FinnhubService {
     }
 
     private func finnhubSymbol(_ symbol: String) -> String {
-        let upper = symbol.uppercased()
-        if upper.hasSuffix(".NS") { return "NSE:\(upper.dropLast(3))" }
-        if upper.hasSuffix(".BO") { return "BSE:\(upper.dropLast(3))" }
-        return upper
+        symbol.uppercased()
     }
 }
 
@@ -146,12 +148,28 @@ final class AMFIService {
 
 final class CompanyProfileService {
     private let finnhub: FinnhubService
+    private let fmpService: FMPService
 
-    init(finnhub: FinnhubService = .shared) {
+    init(finnhub: FinnhubService = .shared, fmpService: FMPService = .shared) {
         self.finnhub = finnhub
+        self.fmpService = fmpService
     }
 
     func fetch(symbol: String) async -> CompanyProfileSnapshot? {
+        if let profile = try? await fmpService.profile(symbol: symbol),
+           hasFMPProfileData(profile) {
+            return CompanyProfileSnapshot(
+                name: profile.companyName ?? symbol,
+                ticker: profile.symbol ?? symbol,
+                sector: profile.sector ?? "Market",
+                industry: profile.industry ?? profile.sector ?? "Unknown",
+                country: "Unknown",
+                exchange: symbol.uppercased().hasSuffix(".NS") ? "NSE" : "Market",
+                logoURL: nil,
+                description: profile.description ?? "Provider profile text is unavailable for this company."
+            )
+        }
+
         do {
             let profile = try await finnhub.companyProfile(symbol: symbol)
             let hasProfileData = [
@@ -181,16 +199,70 @@ final class CompanyProfileService {
             return nil
         }
     }
+
+    private func hasFMPProfileData(_ profile: FMPProfile) -> Bool {
+        [
+            profile.companyName,
+            profile.symbol,
+            profile.sector,
+            profile.industry,
+            profile.description
+        ].contains { value in
+            guard let value else { return false }
+            return !value.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty
+        }
+    }
 }
 
 final class FinancialService {
     private let finnhub: FinnhubService
+    private let fmpService: FMPService
 
-    init(finnhub: FinnhubService = .shared) {
+    init(finnhub: FinnhubService = .shared, fmpService: FMPService = .shared) {
         self.finnhub = finnhub
+        self.fmpService = fmpService
     }
 
     func fetch(symbol: String) async -> CompanyFinancialSnapshot? {
+        async let fmpProfile = try? fmpService.profile(symbol: symbol)
+        async let fmpMetrics = try? fmpService.keyMetrics(symbol: symbol)
+        async let fmpRatios = try? fmpService.ratios(symbol: symbol)
+        async let fmpIncome = try? fmpService.incomeStatements(symbol: symbol)
+
+        let profile = await fmpProfile
+        let metrics = await fmpMetrics
+        let ratios = await fmpRatios
+        let income = (await fmpIncome) ?? []
+        let revenueGrowth = growthRate(
+            latest: income.first?.revenue,
+            previous: income.dropFirst().first?.revenue
+        )
+        let profitGrowth = growthRate(
+            latest: income.first?.netIncome,
+            previous: income.dropFirst().first?.netIncome
+        )
+        let fmpSnapshot = CompanyFinancialSnapshot(
+            marketCap: normalizedMarketCap(profile?.mktCap),
+            peRatio: metrics?.peRatioTTM ?? ratios?.priceEarningsRatioTTM,
+            weekHigh52: nil,
+            weekLow52: nil,
+            dividendYield: nil,
+            revenue: revenueGrowth,
+            netProfit: profitGrowth ?? ratios?.netProfitMarginTTM,
+            eps: nil,
+            cashFlow: nil,
+            operatingMargin: nil,
+            profitMargin: ratios?.netProfitMarginTTM,
+            roe: metrics?.roeTTM ?? ratios?.returnOnEquityTTM,
+            roa: nil,
+            debtRatio: metrics?.debtToEquityTTM ?? ratios?.debtEquityRatioTTM,
+            quarterlyGrowth: nil,
+            historicalGrowth: revenueGrowth
+        )
+        if fmpSnapshot.hasAnyProviderValue {
+            return fmpSnapshot
+        }
+
         do {
             let metrics = try await finnhub.metrics(symbol: symbol).metric
             let liveSnapshot = CompanyFinancialSnapshot(
@@ -215,6 +287,16 @@ final class FinancialService {
         } catch {
             return nil
         }
+    }
+
+    private func growthRate(latest: Double?, previous: Double?) -> Double? {
+        guard let latest, let previous, previous != 0 else { return nil }
+        return ((latest - previous) / abs(previous)) * 100
+    }
+
+    private func normalizedMarketCap(_ marketCap: Double?) -> Double? {
+        guard let marketCap else { return nil }
+        return marketCap > 1_000_000 ? marketCap / 1_000_000 : marketCap
     }
 }
 
