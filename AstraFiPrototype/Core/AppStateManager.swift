@@ -1,5 +1,7 @@
 import SwiftUI
 import Supabase
+import AuthenticationServices
+import CryptoKit
 
 @Observable @MainActor
 final class AppStateManager {
@@ -11,6 +13,7 @@ final class AppStateManager {
     
     var isLoading: Bool = true
     var isAssessmentSkipped: Bool = false
+    var isLockedByBiometric: Bool = false
     
     static func withSampleData() -> AppStateManager {
         let mgr = AppStateManager()
@@ -276,12 +279,45 @@ final class AppStateManager {
                     }
                 }
                 try? await minimumDelay
+                
+                // Check if biometric lock should be shown
+                // Note: requireUnlockOnLaunch defaults to true in @AppStorage,
+                // so we must use the same default here since the key may never
+                // have been explicitly written to UserDefaults.
+                let biometricEnabled = UserDefaults.standard.bool(forKey: "securityBiometricUnlockEnabled")
+                let requireOnLaunch = UserDefaults.standard.object(forKey: "securityRequireUnlockOnLaunch") as? Bool ?? true
+                
+                let aal = try? await supabase.auth.mfa.getAuthenticatorAssuranceLevel()
+                if aal?.nextLevel == "aal2" && aal?.currentLevel == "aal1" {
+                    if let factors = try? await supabase.auth.mfa.listFactors(), let factor = factors.all.first(where: { $0.status == FactorStatus.verified }) {
+                        await MainActor.run {
+                            self.mfaFactorId = factor.id
+                            self.requiresMFAChallenge = true
+                            self.currentProfile = profile
+                            self.isAuthenticated = true
+                            self.hasCompletedOnboarding = true
+                            self.showDashboard = true
+                            self.isLoading = false
+                            
+                            if biometricEnabled && requireOnLaunch {
+                                self.isLockedByBiometric = true
+                            }
+                        }
+                        recalculateFinancials()
+                        return
+                    }
+                }
+                
                 await MainActor.run {
                     self.currentProfile = profile
                     self.isAuthenticated = true
                     self.hasCompletedOnboarding = true
                     self.showDashboard = true
                     self.isLoading = false
+                    
+                    if biometricEnabled && requireOnLaunch {
+                        self.isLockedByBiometric = true
+                    }
                 }
                 recalculateFinancials()
             } else {
@@ -302,6 +338,11 @@ final class AppStateManager {
             }
         }
     }
+    
+    func unlockApp() {
+        isLockedByBiometric = false
+    }
+
     func signUp(name: String, email: String, password: String) async -> Bool {
         isAuthLoading = true
         authError = nil
@@ -340,6 +381,130 @@ final class AppStateManager {
         isAuthenticated = true
         showPostAuthOnboarding = true
         hasCompletedOnboarding = true
+    }
+    
+    // MARK: - Sign in with Apple
+    
+    /// A random nonce used to verify the Apple ID token.
+    private var currentNonce: String?
+    
+    /// Generates a cryptographically-secure random nonce string.
+    private static func randomNonce(length: Int = 32) -> String {
+        precondition(length > 0)
+        var randomBytes = [UInt8](repeating: 0, count: length)
+        let errorCode = SecRandomCopyBytes(kSecRandomDefault, randomBytes.count, &randomBytes)
+        guard errorCode == errSecSuccess else {
+            fatalError("Unable to generate nonce. SecRandomCopyBytes failed with OSStatus \(errorCode)")
+        }
+        let charset: [Character] = Array("0123456789ABCDEFGHIJKLMNOPQRSTUVXYZabcdefghijklmnopqrstuvwxyz-._")
+        return String(randomBytes.map { charset[Int($0) % charset.count] })
+    }
+    
+    /// Returns the SHA256 hash of the input string.
+    private static func sha256(_ input: String) -> String {
+        let inputData = Data(input.utf8)
+        let hashed = SHA256.hash(data: inputData)
+        return hashed.compactMap { String(format: "%02x", $0) }.joined()
+    }
+    
+    /// Initiates the Sign in with Apple flow.
+    func signInWithApple() {
+        let nonce = Self.randomNonce()
+        currentNonce = nonce
+        
+        let appleIDProvider = ASAuthorizationAppleIDProvider()
+        let request = appleIDProvider.createRequest()
+        request.requestedScopes = [.fullName, .email]
+        request.nonce = Self.sha256(nonce)
+        
+        let delegate = AppleSignInDelegate { result in
+            Task { @MainActor in
+                await self.handleAppleSignInResult(result)
+            }
+        }
+        // Retain the delegate for the duration of the request
+        self.appleSignInDelegate = delegate
+        
+        let controller = ASAuthorizationController(authorizationRequests: [request])
+        controller.delegate = delegate
+        controller.performRequests()
+    }
+    
+    /// Stored reference to the delegate so it isn't deallocated.
+    private var appleSignInDelegate: AppleSignInDelegate?
+    
+    /// Handles the result from Apple Sign-In and authenticates with Supabase.
+    private func handleAppleSignInResult(_ result: Result<ASAuthorization, Error>) async {
+        isAuthLoading = true
+        authError = nil
+        
+        switch result {
+        case .success(let authorization):
+            guard let appleIDCredential = authorization.credential as? ASAuthorizationAppleIDCredential,
+                  let identityTokenData = appleIDCredential.identityToken,
+                  let identityToken = String(data: identityTokenData, encoding: .utf8),
+                  let nonce = currentNonce else {
+                authError = "Failed to get Apple ID credentials."
+                isAuthLoading = false
+                return
+            }
+            
+            do {
+                let session = try await supabase.auth.signInWithIdToken(
+                    credentials: .init(
+                        provider: .apple,
+                        idToken: identityToken,
+                        nonce: nonce
+                    )
+                )
+                
+                // Try to insert user record (will silently fail if already exists)
+                try? await supabase.from("users").insert([
+                    "id": session.user.id.uuidString,
+                    "email": session.user.email ?? ""
+                ]).execute()
+                
+                // Load existing profile or create new one
+                if let profile = try? await SupabaseRepository.shared.fetchFullProfile(userId: session.user.id) {
+                    self.currentProfile = profile
+                    recalculateFinancials()
+                    isAuthenticated = true
+                    showPostAuthOnboarding = false
+                    hasCompletedOnboarding = true
+                    showDashboard = true
+                } else {
+                    // Build display name from Apple credential if available
+                    let fullName = [appleIDCredential.fullName?.givenName, appleIDCredential.fullName?.familyName]
+                        .compactMap { $0 }
+                        .joined(separator: " ")
+                    let displayName = fullName.isEmpty ? (session.user.email ?? "User") : fullName
+                    
+                    setupEmptyProfile(name: displayName)
+                    isAuthenticated = true
+                    showPostAuthOnboarding = true
+                    hasCompletedOnboarding = true
+                }
+                
+                if let plans = try? await SupabaseRepository.shared.fetchSavedPlans(userId: session.user.id) {
+                    self.savedPlans = plans
+                }
+                
+            } catch {
+                authError = error.localizedDescription
+            }
+            
+        case .failure(let error):
+            // User cancelled — don't show an error
+            if (error as NSError).code == ASAuthorizationError.canceled.rawValue {
+                // Do nothing
+            } else {
+                authError = error.localizedDescription
+            }
+        }
+        
+        isAuthLoading = false
+        appleSignInDelegate = nil
+        currentNonce = nil
     }
 
     func signIn(email: String, password: String) async {
