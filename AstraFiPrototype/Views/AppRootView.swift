@@ -9,9 +9,6 @@ struct AppRootView: View {
             if appState.isLoading {
                 SplashScreenView()
 
-            } else if appState.isLockedByBiometric {
-                BiometricLockScreenView()
-
             } else if appState.requiresMFAChallenge {
                 MFAChallengeView()
 
@@ -34,7 +31,6 @@ struct AppRootView: View {
             }
         }
         .animation(.easeInOut(duration: 0.4), value: appState.isLoading)
-        .animation(.easeInOut(duration: 0.35), value: appState.isLockedByBiometric)
         .animation(.easeInOut(duration: 0.35), value: appState.hasCompletedOnboarding)
         .animation(.easeInOut(duration: 0.35), value: appState.isAuthenticated)
         .animation(.easeInOut(duration: 0.35), value: appState.showDashboard)

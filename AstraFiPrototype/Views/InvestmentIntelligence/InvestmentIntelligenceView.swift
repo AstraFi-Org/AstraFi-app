@@ -10,9 +10,9 @@ struct InvestmentIntelligenceView: View {
         ScrollView(showsIndicators: false) {
             VStack(alignment: .leading, spacing: 26) {
                 header
-                assetSection(title: "Stocks", subtitle: "Popular companies with live prices when available", assets: viewModel.stocks)
+                assetSection(title: "Stocks", subtitle: "Top companies across key sectors", assets: viewModel.stocks)
                 assetSection(title: "Mutual Funds", subtitle: "Popular categories from AMFI data", assets: viewModel.mutualFunds)
-                assetSection(title: "Gold ETFs", subtitle: "Indian listed Gold ETFs", assets: viewModel.goldETFs)
+                assetSection(title: "Gold ETFs", subtitle: "Gold exposure through listed ETFs", assets: viewModel.goldETFs)
                 educationFooter
             }
             .padding(.horizontal, AppTheme.auraPadding)
@@ -77,33 +77,15 @@ struct InvestmentIntelligenceView: View {
 
             ScrollView(.horizontal, showsIndicators: false) {
                 HStack(spacing: 14) {
-                    if assets.isEmpty {
-                        VStack(alignment: .leading, spacing: 8) {
-                            Image(systemName: "magnifyingglass.circle.fill")
-                                .font(.system(size: 28))
-                                .foregroundStyle(AppTheme.auraIndigo)
-                            Text("Use Search")
-                                .font(.system(size: 17, weight: .bold))
-                            Text("No verified provider list is loaded here yet.")
-                                .font(.system(size: 13, weight: .semibold))
-                                .foregroundStyle(.secondary)
+                    ForEach(assets) { asset in
+                        NavigationLink(destination: InvestmentIntelligenceDetailView(asset: asset)) {
+                            InvestmentSummaryCard(asset: asset)
+                                .matchedGeometryEffect(id: asset.id, in: cardNamespace)
                         }
-                        .padding(18)
-                        .frame(width: 260, alignment: .leading)
-                        .frame(minHeight: 120, alignment: .leading)
-                        .background(AppTheme.cardBackground)
-                        .clipShape(RoundedRectangle(cornerRadius: 20, style: .continuous))
-                    } else {
-                        ForEach(assets) { asset in
-                            NavigationLink(destination: InvestmentIntelligenceDetailView(asset: asset)) {
-                                InvestmentSummaryCard(asset: asset)
-                                    .matchedGeometryEffect(id: asset.id, in: cardNamespace)
-                            }
-                            .buttonStyle(.plain)
-                            .contextMenu {
-                                Text(asset.kind.rawValue)
-                                Text(asset.symbol)
-                            }
+                        .buttonStyle(.plain)
+                        .contextMenu {
+                            Text(asset.kind.rawValue)
+                            Text(asset.symbol)
                         }
                     }
                 }
@@ -137,9 +119,9 @@ struct InvestmentSearchView: View {
                 if viewModel.query.trimmingCharacters(in: .whitespacesAndNewlines).count >= 2 {
                     searchResults
                 } else {
-                    searchSection(title: "Provider Stocks", assets: viewModel.trendingStocks)
-                    searchSection(title: "AMFI Mutual Funds", assets: viewModel.popularFunds)
-                    searchSection(title: "Gold ETFs", assets: viewModel.topGoldETFs)
+                    searchSection(title: "Trending Stocks", assets: viewModel.trendingStocks)
+                    searchSection(title: "Popular Mutual Funds", assets: viewModel.popularFunds)
+                    searchSection(title: "Top Gold ETFs", assets: viewModel.topGoldETFs)
                 }
             }
             .padding(.horizontal, AppTheme.auraPadding)
@@ -189,17 +171,12 @@ struct InvestmentSearchView: View {
                 .font(.system(size: 21, weight: .bold))
 
             VStack(spacing: 10) {
-                if assets.isEmpty {
-                    ContentUnavailableView("No provider data", systemImage: "tray", description: Text("Search for a company, mutual fund, or ETF to load verified data."))
-                        .frame(maxWidth: .infinity)
-                } else {
-                    ForEach(assets.prefix(8)) { asset in
-                        NavigationLink(destination: InvestmentIntelligenceDetailView(asset: asset)) {
-                            SearchResultRow(asset: asset)
-                        }
-                        .buttonStyle(.plain)
-                        .simultaneousGesture(TapGesture().onEnded { viewModel.recordRecent(asset) })
+                ForEach(assets.prefix(8)) { asset in
+                    NavigationLink(destination: InvestmentIntelligenceDetailView(asset: asset)) {
+                        SearchResultRow(asset: asset)
                     }
+                    .buttonStyle(.plain)
+                    .simultaneousGesture(TapGesture().onEnded { viewModel.recordRecent(asset) })
                 }
             }
         }
@@ -209,7 +186,6 @@ struct InvestmentSearchView: View {
 struct InvestmentIntelligenceDetailView: View {
     @Environment(\.colorScheme) private var colorScheme
     @State private var viewModel: InvestmentDetailViewModel
-    @State private var stockIntelligenceViewModel = StockIntelligenceViewModel()
 
     init(asset: InvestmentSummaryAsset) {
         _viewModel = State(initialValue: InvestmentDetailViewModel(asset: asset))
@@ -219,7 +195,8 @@ struct InvestmentIntelligenceDetailView: View {
         ScrollView(showsIndicators: false) {
             VStack(alignment: .leading, spacing: 18) {
                 detailHeader
-                singleScreenContent
+                tabControl
+                selectedTabContent
             }
             .padding(.horizontal, AppTheme.auraPadding)
             .padding(.bottom, 44)
@@ -228,6 +205,7 @@ struct InvestmentIntelligenceDetailView: View {
         .navigationTitle(viewModel.asset.name)
         .navigationBarTitleDisplayMode(.inline)
         .task { await viewModel.load() }
+        .sensoryFeedback(.selection, trigger: viewModel.selectedTab)
     }
 
     private var detailHeader: some View {
@@ -265,43 +243,35 @@ struct InvestmentIntelligenceDetailView: View {
         .shadow(color: AppTheme.adaptiveShadow, radius: 14, x: 0, y: 5)
     }
 
-    @ViewBuilder
-    private var singleScreenContent: some View {
-        let snapshot = viewModel.snapshot
-
-        if viewModel.isLoading && snapshot == nil {
-            DetailCard(title: "Loading Intelligence", systemImage: "arrow.triangle.2.circlepath") {
-                HStack(spacing: 10) {
-                    ProgressView()
-                    Text("Fetching provider data and preparing this screen...")
-                        .font(.system(size: 13, weight: .semibold))
-                        .foregroundStyle(.secondary)
-                }
-                .frame(maxWidth: .infinity, alignment: .leading)
+    private var tabControl: some View {
+        Picker("Detail section", selection: $viewModel.selectedTab) {
+            ForEach(InvestmentDetailTab.allCases) { tab in
+                Text(tab.rawValue).tag(tab)
             }
         }
+        .pickerStyle(.segmented)
+        .accessibilityLabel("Investment detail sections")
+    }
 
-        Group {
+    @ViewBuilder
+    private var selectedTabContent: some View {
+        let snapshot = viewModel.snapshot
+        switch viewModel.selectedTab {
+        case .overview:
             OverviewTab(snapshot: snapshot, asset: viewModel.asset)
+        case .financials:
             FinancialsTab(snapshot: snapshot, asset: viewModel.asset)
-            if viewModel.asset.kind == .stock {
-                StockIntelligenceSection(viewModel: stockIntelligenceViewModel)
-                    .task(id: viewModel.asset.symbol) {
-                        await stockIntelligenceViewModel.loadIntelligence(for: viewModel.asset)
-                    }
-            }
+        case .competition:
+            CompetitionTab(competitors: snapshot?.competitors ?? [])
+        case .news:
+            NewsTab(news: snapshot?.news ?? [])
+        case .insights:
             InsightsTab(
-                asset: viewModel.asset,
                 aiInsight: snapshot?.aiInsight,
                 insights: snapshot?.insights ?? [],
                 recommendations: snapshot?.recommendations ?? []
             )
-
-            if viewModel.asset.kind == .stock {
-                CompetitionTab(competitors: snapshot?.competitors ?? [])
-                NewsTab(news: snapshot?.news ?? [])
-            }
-
+        case .faq:
             FAQTab(faqs: snapshot?.faqs ?? FAQService().faqs())
         }
     }
@@ -328,16 +298,27 @@ private struct InvestmentSummaryCard: View {
                 Spacer(minLength: 8)
             }
 
+            ChartPanel(points: asset.sparkline, color: asset.kind.accent, compact: true)
+                .frame(height: 70)
+
             HStack(spacing: 8) {
-                InfoPill(title: asset.kind == .mutualFund ? "Current NAV" : "Current Price", value: valueText(for: asset), color: asset.kind.accent)
-                InfoPill(title: "Growth", value: growthText(for: asset), color: growthColor(for: asset))
+                InfoPill(title: asset.kind == .mutualFund ? "NAV" : "Price", value: valueText(for: asset), color: asset.kind.accent)
+                InfoPill(title: asset.dailyChange == nil ? "Risk" : "Move", value: shortChangeText(for: asset), color: changeColor(for: asset))
+            }
+
+            HStack(spacing: 6) {
+                RiskBadge(level: asset.riskLevel)
+                Spacer(minLength: 8)
+                Image(systemName: "chevron.right.circle.fill")
+                    .font(.system(size: 18, weight: .semibold))
+                    .foregroundStyle(asset.kind.accent)
             }
         }
         .padding(16)
-        .frame(width: 248, height: 152, alignment: .topLeading)
+        .frame(width: 248, height: 246, alignment: .topLeading)
         .background(AppTheme.cardBackground)
         .clipShape(RoundedRectangle(cornerRadius: 20, style: .continuous))
-        .shadow(color: AppTheme.adaptiveShadow.opacity(0.7), radius: 10, x: 0, y: 3)
+        .shadow(color: AppTheme.adaptiveShadow, radius: 12, x: 0, y: 4)
     }
 }
 
@@ -345,7 +326,7 @@ struct InvestmentHomePreviewCard: View {
     let asset: InvestmentSummaryAsset
 
     var body: some View {
-        VStack(alignment: .leading, spacing: 14) {
+        VStack(alignment: .leading, spacing: 13) {
             HStack(alignment: .top, spacing: 10) {
                 AssetIcon(kind: asset.kind, size: 36)
                 VStack(alignment: .leading, spacing: 5) {
@@ -362,16 +343,27 @@ struct InvestmentHomePreviewCard: View {
                 Spacer(minLength: 8)
             }
 
+            ChartPanel(points: asset.sparkline, color: asset.kind.accent, compact: true)
+                .frame(height: 58)
+
             HStack(spacing: 8) {
-                InfoPill(title: asset.kind == .mutualFund ? "Current NAV" : "Current Price", value: valueText(for: asset), color: asset.kind.accent)
-                InfoPill(title: "Growth", value: growthText(for: asset), color: growthColor(for: asset))
+                InfoPill(title: asset.kind == .mutualFund ? "NAV" : "Price", value: valueText(for: asset), color: asset.kind.accent)
+                InfoPill(title: asset.dailyChange == nil ? "Risk" : "Move", value: shortChangeText(for: asset), color: changeColor(for: asset))
+            }
+
+            HStack {
+                RiskBadge(level: asset.riskLevel)
+                Spacer(minLength: 8)
+                Image(systemName: "chevron.right.circle.fill")
+                    .font(.system(size: 18, weight: .semibold))
+                    .foregroundStyle(asset.kind.accent)
             }
         }
         .padding(16)
-        .frame(width: 232, height: 152, alignment: .topLeading)
+        .frame(width: 232, height: 228, alignment: .topLeading)
         .background(AppTheme.cardBackground)
         .clipShape(RoundedRectangle(cornerRadius: 20, style: .continuous))
-        .shadow(color: AppTheme.adaptiveShadow.opacity(0.7), radius: 10, x: 0, y: 3)
+        .shadow(color: AppTheme.adaptiveShadow, radius: 12, x: 0, y: 4)
     }
 }
 
@@ -489,11 +481,6 @@ private struct FinancialsTab: View {
 
     var body: some View {
         DetailCard(title: "Financials", systemImage: "chart.bar.xaxis") {
-            Label("Only provider fundamentals are shown. Missing values stay unavailable until Finnhub or another connected source returns them.", systemImage: "info.circle.fill")
-                .font(.system(size: 12, weight: .semibold))
-                .foregroundStyle(.secondary)
-                .fixedSize(horizontal: false, vertical: true)
-
             MetricGrid(metrics: metrics)
 
             let chartMetrics = numericMetrics
@@ -571,10 +558,7 @@ private struct CompetitionTab: View {
     var body: some View {
         DetailCard(title: "Competitors", systemImage: "person.3.fill") {
             if competitors.isEmpty {
-                EmptyDetailMessage(
-                    title: "Competitor data unavailable",
-                    message: "AstraFi asks Finnhub for peers first, then searches provider results by industry. No hardcoded peer list is used."
-                )
+                EmptyDetailMessage(title: "Competitor data unavailable", message: "Finnhub peers are shown here when available for the selected symbol.")
             } else {
                 VStack(spacing: 10) {
                     ForEach(competitors) { competitor in
@@ -615,13 +599,27 @@ private struct NewsTab: View {
 }
 
 private struct InsightsTab: View {
-    let asset: InvestmentSummaryAsset
     let aiInsight: String?
     let insights: [InvestmentInsight]
     let recommendations: [RecommendationTrend]
 
     var body: some View {
         VStack(alignment: .leading, spacing: 14) {
+            if let aiInsight, !aiInsight.isEmpty {
+                DetailCard(title: "AI Explanation", systemImage: "sparkles") {
+                    Text(aiInsight)
+                        .font(.system(size: 14))
+                        .foregroundStyle(.secondary)
+                        .fixedSize(horizontal: false, vertical: true)
+                        .textSelection(.enabled)
+
+                    Label("Educational only. No buy, sell, hold, or guaranteed-return advice.", systemImage: "info.circle.fill")
+                        .font(.system(size: 12, weight: .semibold))
+                        .foregroundStyle(.secondary)
+                        .padding(.top, 2)
+                }
+            }
+
             if !recommendations.isEmpty {
                 DetailCard(title: "Recommendation Trends", systemImage: "chart.bar.fill") {
                     Chart(recommendations) { trend in
@@ -658,41 +656,6 @@ private struct InsightsTab: View {
                 }
             }
         }
-    }
-}
-
-private struct StockIntelligenceCard: View {
-    let viewModel: StockIntelligenceViewModel
-
-    var body: some View {
-        StockIntelligenceSection(viewModel: viewModel)
-    }
-}
-
-private struct IntelligenceSection: View {
-    let title: String
-    let text: String
-    let icon: String
-    let color: Color
-
-    var body: some View {
-        HStack(alignment: .top, spacing: 12) {
-            Image(systemName: icon)
-                .foregroundStyle(color)
-                .frame(width: 22)
-            VStack(alignment: .leading, spacing: 5) {
-                Text(title)
-                    .font(.system(size: 14, weight: .bold))
-                Text(text.isEmpty ? "Unavailable" : text)
-                    .font(.system(size: 13))
-                    .foregroundStyle(.secondary)
-                    .fixedSize(horizontal: false, vertical: true)
-            }
-        }
-        .frame(maxWidth: .infinity, alignment: .leading)
-        .padding(13)
-        .background(AppTheme.elevatedCardBackground)
-        .clipShape(RoundedRectangle(cornerRadius: 14, style: .continuous))
     }
 }
 
@@ -1039,7 +1002,7 @@ private extension InvestmentCompetitor {
             dailyChange: dailyChange,
             oneYearReturn: nil,
             riskLevel: .moderate,
-            sparkline: [],
+            sparkline: SearchService.seedSparkline(base: max(currentPrice ?? 100, 100)),
             metadata: marketCap.map { "Market cap \($0.compactCurrency)" } ?? "Peer"
         )
     }
@@ -1053,47 +1016,27 @@ private func valueText(for asset: InvestmentSummaryAsset) -> String {
 }
 
 private func changeText(for asset: InvestmentSummaryAsset) -> String {
-    if let daily = asset.dailyChange, abs(daily) > 0.0001 {
+    if let daily = asset.dailyChange {
         return "\(daily >= 0 ? "+" : "")\(daily.percentText) today"
     }
     if let oneYear = asset.oneYearReturn {
         return "\(oneYear >= 0 ? "+" : "")\(oneYear.percentText) 1Y"
     }
-    return "Growth loading"
+    return asset.riskLevel.rawValue + " risk"
 }
 
 private func shortChangeText(for asset: InvestmentSummaryAsset) -> String {
-    if let daily = asset.dailyChange, abs(daily) > 0.0001 {
+    if let daily = asset.dailyChange {
         return "\(daily >= 0 ? "+" : "")\(daily.percentText)"
     }
     if let oneYear = asset.oneYearReturn {
         return "\(oneYear >= 0 ? "+" : "")\(oneYear.percentText)"
     }
-    return "Loading"
-}
-
-private func growthText(for asset: InvestmentSummaryAsset) -> String {
-    if let daily = asset.dailyChange, abs(daily) > 0.0001 {
-        return "\(daily >= 0 ? "+" : "")\(daily.percentText)"
-    }
-    if let oneYear = asset.oneYearReturn {
-        return "\(oneYear >= 0 ? "+" : "")\(oneYear.percentText)"
-    }
-    return "Loading"
-}
-
-private func growthColor(for asset: InvestmentSummaryAsset) -> Color {
-    if let daily = asset.dailyChange, abs(daily) > 0.0001 {
-        return daily >= 0 ? AppTheme.auraGreen : AppTheme.vibrantRed
-    }
-    if let oneYear = asset.oneYearReturn {
-        return oneYear >= 0 ? AppTheme.auraGreen : AppTheme.vibrantRed
-    }
-    return .secondary
+    return asset.riskLevel.rawValue
 }
 
 private func changeColor(for asset: InvestmentSummaryAsset) -> Color {
-    if let daily = asset.dailyChange, abs(daily) > 0.0001 {
+    if let daily = asset.dailyChange {
         return daily >= 0 ? AppTheme.auraGreen : AppTheme.vibrantRed
     }
     if let oneYear = asset.oneYearReturn {

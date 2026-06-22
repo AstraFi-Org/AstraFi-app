@@ -12,9 +12,6 @@ struct TwoFactorSetupView: View {
     @State private var successMessage: String?
     @State private var totpUri: String?
     @State private var totpSecret: String?
-    @State private var isConfirmingDisable = false
-    @State private var disableVerificationCode = ""
-    @State private var isDisabling = false
     
     let context = CIContext()
     let filter = CIFilter.qrCodeGenerator()
@@ -29,81 +26,31 @@ struct TwoFactorSetupView: View {
                         .padding(.top, 50)
                 } else if isEnrolled {
                     VStack(spacing: 20) {
-                        if isConfirmingDisable {
-                            Image(systemName: "lock.shield.fill")
-                                .font(.system(size: 80))
-                                .foregroundColor(.red)
-                                .padding(.top, 40)
-                            
-                            Text("Confirm Disabling 2FA")
-                                .font(.title2.bold())
-                            
-                            Text("For your security, please enter the 6-digit verification code from your authenticator app to disable Two-Factor Authentication.")
-                                .multilineTextAlignment(.center)
-                                .foregroundColor(.secondary)
-                                .padding(.horizontal)
-                            
-                            TextField("6-digit code", text: $disableVerificationCode)
-                                .keyboardType(.numberPad)
-                                .multilineTextAlignment(.center)
-                                .font(.title2.bold())
+                        Image(systemName: "checkmark.shield.fill")
+                            .font(.system(size: 80))
+                            .foregroundColor(.green)
+                            .padding(.top, 40)
+                        
+                        Text("2FA is Enabled")
+                            .font(.title2.bold())
+                        
+                        Text("Your account is secured with Authenticator-based Two-Factor Authentication.")
+                            .multilineTextAlignment(.center)
+                            .foregroundColor(.secondary)
+                            .padding(.horizontal)
+                        
+                        Button(role: .destructive) {
+                            Task { await unenrollMFA() }
+                        } label: {
+                            Text("Disable 2FA")
+                                .font(.headline)
+                                .frame(maxWidth: .infinity)
                                 .padding()
                                 .background(Color(uiColor: .secondarySystemBackground))
                                 .cornerRadius(12)
-                                .padding(.horizontal, 40)
-                            
-                            Button(role: .destructive) {
-                                Task { await confirmAndUnenroll() }
-                            } label: {
-                                if isDisabling {
-                                    ProgressView().tint(.white)
-                                } else {
-                                    Text("Verify and Disable")
-                                        .font(.headline)
-                                        .frame(maxWidth: .infinity)
-                                        .padding()
-                                        .background(disableVerificationCode.count == 6 ? Color.red : Color.gray)
-                                        .foregroundColor(.white)
-                                        .cornerRadius(12)
-                                }
-                            }
-                            .disabled(disableVerificationCode.count != 6 || isDisabling)
-                            .padding(.horizontal, 40)
-                            
-                            Button("Cancel") {
-                                isConfirmingDisable = false
-                                disableVerificationCode = ""
-                                errorMessage = nil
-                            }
-                            .foregroundColor(.secondary)
-                            .padding(.top, 8)
-                        } else {
-                            Image(systemName: "checkmark.shield.fill")
-                                .font(.system(size: 80))
-                                .foregroundColor(.green)
-                                .padding(.top, 40)
-                            
-                            Text("2FA is Enabled")
-                                .font(.title2.bold())
-                            
-                            Text("Your account is secured with Authenticator-based Two-Factor Authentication.")
-                                .multilineTextAlignment(.center)
-                                .foregroundColor(.secondary)
-                                .padding(.horizontal)
-                            
-                            Button(role: .destructive) {
-                                Task { await initiateUnenroll() }
-                            } label: {
-                                Text("Disable 2FA")
-                                    .font(.headline)
-                                    .frame(maxWidth: .infinity)
-                                    .padding()
-                                    .background(Color(uiColor: .secondarySystemBackground))
-                                    .cornerRadius(12)
-                            }
-                            .padding(.horizontal, 40)
-                            .padding(.top, 20)
                         }
+                        .padding(.horizontal, 40)
+                        .padding(.top, 20)
                     }
                 } else {
                     VStack(spacing: 20) {
@@ -295,60 +242,18 @@ struct TwoFactorSetupView: View {
         }
     }
     
-    private func initiateUnenroll() async {
+    private func unenrollMFA() async {
         guard let factorId = factorId else { return }
         errorMessage = nil
         do {
-            let aal = try await supabase.auth.mfa.getAuthenticatorAssuranceLevel()
-            if aal.currentLevel == "aal1" {
-                await MainActor.run {
-                    self.isConfirmingDisable = true
-                }
-            } else {
-                await MainActor.run {
-                    self.isDisabling = true
-                }
-                try await supabase.auth.mfa.unenroll(params: MFAUnenrollParams(factorId: factorId))
-                _ = try? await supabase.auth.refreshSession()
-                await MainActor.run {
-                    self.isEnrolled = false
-                    self.factorId = nil
-                    self.isDisabling = false
-                    dismiss()
-                }
-            }
-        } catch {
-            await MainActor.run {
-                errorMessage = "Failed to disable 2FA: \(error.localizedDescription)"
-                self.isDisabling = false
-            }
-        }
-    }
-    
-    private func confirmAndUnenroll() async {
-        guard let factorId = factorId else { return }
-        errorMessage = nil
-        await MainActor.run { isDisabling = true }
-        do {
-            let challenge = try await supabase.auth.mfa.challenge(params: MFAChallengeParams(factorId: factorId))
-            _ = try await supabase.auth.mfa.verify(params: MFAVerifyParams(factorId: factorId, challengeId: challenge.id, code: disableVerificationCode))
-            
             try await supabase.auth.mfa.unenroll(params: MFAUnenrollParams(factorId: factorId))
-            _ = try? await supabase.auth.refreshSession()
-            
-            await MainActor.run {
-                isEnrolled = false
-                self.factorId = nil
-                self.isConfirmingDisable = false
-                self.disableVerificationCode = ""
-                isDisabling = false
-                dismiss()
-            }
+            isEnrolled = false
+            self.factorId = nil
+            successMessage = "2FA has been disabled."
+            // Restart enrollment
+            await checkStatusAndEnroll()
         } catch {
-            await MainActor.run {
-                errorMessage = "Verification or disabling failed: \(error.localizedDescription)"
-                isDisabling = false
-            }
+            errorMessage = "Failed to disable 2FA: \(error.localizedDescription)"
         }
     }
     

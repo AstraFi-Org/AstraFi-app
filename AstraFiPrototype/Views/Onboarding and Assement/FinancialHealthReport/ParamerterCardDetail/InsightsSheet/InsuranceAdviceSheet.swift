@@ -116,7 +116,7 @@ struct InsuranceAdviceSheet: View {
                 if !concerns.isEmpty {
                     Section(header: Text("Action Items").font(.footnote).textCase(.uppercase)) {
                         ForEach(concerns) { ConcernCard(concern: $0)
-                                .listRowInsets(EdgeInsets(top: 6, leading: 0, bottom: 6, trailing: 0))
+                                .listRowInsets(EdgeInsets(top: 6, leading: 16, bottom: 6, trailing: 16))
                                 .listRowBackground(Color.clear).listRowSeparator(.hidden)
                         }
                     }
@@ -305,7 +305,7 @@ struct InsuranceDetailModal: View {
 
                     // Deep Explanation Sections
                     DetailSection(title: "What exactly it covers", content: type.deepExplanation.whatItCovers)
-                    DetailSection(title: "Real-life use case", content: type.deepExplanation.useCase)
+                    DetailSection(title: "Real-life use case", content: type.deepExplanation.useCase, isItalic: true)
                     DetailSection(title: "Why it is important", content: type.deepExplanation.whyImportant)
 
                     VStack(alignment: .leading, spacing: 16) {

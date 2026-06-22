@@ -81,13 +81,11 @@ struct VitalsDetailSheet: View {
                                  ? "Channel these savings into goal-linked investments to build long-term wealth."
                                  : "Trim discretionary expenses and auto-transfer savings to hit 20% first.")
                                 .font(.subheadline).foregroundStyle(.secondary).lineSpacing(3)
-                                .fixedSize(horizontal: false, vertical: true)
                         }
                     }
-                    .frame(maxWidth: .infinity, alignment: .leading)
                     .padding(14).background(savingsColor.opacity(0.07))
                     .clipShape(RoundedRectangle(cornerRadius: 12, style: .continuous))
-                    .listRowInsets(EdgeInsets(top: 4, leading: 16, bottom: 8, trailing: 16))
+                    .listRowInsets(EdgeInsets(top: 8, leading: 16, bottom: 8, trailing: 16))
                 }
 
                 // Action items
@@ -95,7 +93,7 @@ struct VitalsDetailSheet: View {
                     Section(header: Text("Action Items").font(.footnote).textCase(.uppercase)) {
                         ForEach(concerns) { concern in
                             ConcernCard(concern: concern)
-                                .listRowInsets(EdgeInsets(top: 6, leading: 0, bottom: 6, trailing: 0))
+                                .listRowInsets(EdgeInsets(top: 6, leading: 16, bottom: 6, trailing: 16))
                                 .listRowBackground(Color.clear)
                                 .listRowSeparator(.hidden)
                         }

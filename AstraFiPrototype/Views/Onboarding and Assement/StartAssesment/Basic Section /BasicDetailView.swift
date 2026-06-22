@@ -260,19 +260,19 @@ struct EmergencyFundQuestionCard: View {
 
             HStack(spacing: 12) {
                 EFChoiceButton(
-                    label: "Not yet",
-                    color: AppTheme.vibrantRed,
-                    isSelected: hasEmergencyFund == false
-                ) {
-                    hasEmergencyFund = false
-                }
-
-                EFChoiceButton(
                     label: "Yes, I do",
                     color: AppTheme.auraGreen,
                     isSelected: hasEmergencyFund == true
                 ) {
                     hasEmergencyFund = true
+                }
+
+                EFChoiceButton(
+                    label: "Not yet",
+                    color: AppTheme.vibrantRed,
+                    isSelected: hasEmergencyFund == false
+                ) {
+                    hasEmergencyFund = false
                 }
             }
         }
@@ -382,19 +382,6 @@ struct EFSharePromptCard: View {
             }
 
             HStack(spacing: 12) {
-                // SKIP button
-                EFChoiceButton2(
-                    label: "Skip for now",
-                    color: AppTheme.vibrantOrange,
-                    isSelected: selectedChoice == false
-                ) {
-                    selectedChoice = false
-                    wantsToShareEF = false
-                    DispatchQueue.main.asyncAfter(deadline: .now() + 0.2) {
-                        onSkip()
-                    }
-                }
-
                 // YES button
                 EFChoiceButton2(
                     label: "Yes, let's do it",
@@ -406,6 +393,19 @@ struct EFSharePromptCard: View {
                     // Small delay so user sees the selection before navigation
                     DispatchQueue.main.asyncAfter(deadline: .now() + 0.2) {
                         onYes()
+                    }
+                }
+
+                // SKIP button
+                EFChoiceButton2(
+                    label: "Skip for now",
+                    color: AppTheme.vibrantOrange,
+                    isSelected: selectedChoice == false
+                ) {
+                    selectedChoice = false
+                    wantsToShareEF = false
+                    DispatchQueue.main.asyncAfter(deadline: .now() + 0.2) {
+                        onSkip()
                     }
                 }
             }
