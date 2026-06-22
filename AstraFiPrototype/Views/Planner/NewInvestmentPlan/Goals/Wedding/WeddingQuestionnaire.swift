@@ -19,7 +19,7 @@ enum WeddingScale: String, CaseIterable {
         switch self {
         case .destination: return "airplane.circle.fill"
         case .grand: return "building.columns.fill"
-        case .standard: return "hottub.fill"
+        case .standard: return "party.popper.fill"
         case .intimate: return "heart.fill"
         }
     }
@@ -414,15 +414,15 @@ struct WeddingPriceHikeSheet: View {
     var body: some View {
         NavigationStack {
             ScrollView {
-                VStack(alignment: .leading, spacing: 24) {
+                VStack(alignment: .leading, spacing: 32) {
                     
                     // 1. Current Scenario Section
-                    VStack(alignment: .leading, spacing: 10) {
+                    VStack(alignment: .leading, spacing: 12) {
                         Text("Current Market Scenario")
                             .font(.system(size: 18, weight: .bold, design: .rounded))
                         
                         Text(scenarioText)
-                            .font(.system(size: 14))
+                            .font(.system(size: 15))
                             .foregroundStyle(.secondary)
                             .lineSpacing(4)
                     }
@@ -431,37 +431,42 @@ struct WeddingPriceHikeSheet: View {
                     // 2. Historical Trend Chart
                     VStack(alignment: .leading, spacing: 16) {
                         Text("Wedding Cost Trend (Previous 10 Years)")
-                            .font(.system(size: 16, weight: .bold, design: .rounded))
+                            .font(.system(size: 18, weight: .bold, design: .rounded))
                         
-                        HStack(alignment: .bottom, spacing: 8) {
-                            let data = historicalData
-                            ForEach(data.indices, id: \.self) { index in
-                                VStack(spacing: 8) {
-                                    Spacer(minLength: 0)
-                                    RoundedRectangle(cornerRadius: 4)
-                                        .fill(accentColor.opacity(index == data.count - 1 ? 1.0 : 0.4))
-                                        .frame(height: CGFloat(data[index].value) * 1.5)
-                                    
-                                    Text(data[index].year)
-                                        .font(.system(size: 9, weight: .medium))
-                                        .foregroundStyle(.secondary)
+                        VStack(alignment: .leading, spacing: 20) {
+                            HStack(alignment: .bottom, spacing: 8) {
+                                let data = historicalData
+                                ForEach(data.indices, id: \.self) { index in
+                                    VStack(spacing: 8) {
+                                        Spacer(minLength: 0)
+                                        RoundedRectangle(cornerRadius: 6)
+                                            .fill(accentColor.opacity(index == data.count - 1 ? 1.0 : 0.4))
+                                            .frame(height: CGFloat(data[index].value) * 1.5)
+                                        
+                                        Text(data[index].year)
+                                            .font(.system(size: 10, weight: .medium))
+                                            .foregroundStyle(.secondary)
+                                    }
+                                    .frame(maxWidth: .infinity)
                                 }
-                                .frame(maxWidth: .infinity)
+                            }
+                            .frame(height: 140)
+                            
+                            HStack(alignment: .top, spacing: 10) {
+                                Image(systemName: "chart.line.uptrend.xyaxis")
+                                    .font(.system(size: 14))
+                                    .foregroundStyle(accentColor)
+                                    .padding(.top, 2)
+                                Text("Hospitality & Catering costs have grown by ~\(Int(totalTenYearGrowth * 100))% since \(Calendar.current.component(.year, from: Date()) - 9)")
+                                    .font(.system(size: 13))
+                                    .foregroundStyle(.secondary)
+                                    .lineSpacing(2)
                             }
                         }
-                        .frame(height: 120)
-                        
-                        HStack {
-                            Image(systemName: "chart.line.uptrend.xyaxis")
-                                .font(.caption)
-                                .foregroundStyle(accentColor)
-                            Text("Hospitality & Catering costs have grown by ~\(Int(totalTenYearGrowth * 100))% since 2014")
-                                .font(.caption)
-                                .foregroundStyle(.secondary)
-                        }
+                        .padding(20)
+                        .background(AppTheme.cardBackground, in: RoundedRectangle(cornerRadius: 20))
+                        .shadow(color: AppTheme.adaptiveShadow, radius: 10, x: 0, y: 4)
                     }
-                    .padding()
-                    .background(Color(.secondarySystemBackground), in: RoundedRectangle(cornerRadius: 16))
                     .padding(.horizontal)
                     
                     // 3. Price Hike Factors
@@ -469,20 +474,22 @@ struct WeddingPriceHikeSheet: View {
                         Text("Wedding Inflation Factors")
                             .font(.system(size: 18, weight: .bold, design: .rounded))
                         
-                        VStack(spacing: 16) {
+                        VStack(alignment: .leading, spacing: 24) {
                             factorItem(icon: "wineglass.fill", title: "Hospitality & Venue", desc: "Premium venues hike prices annually due to high peak-season demand.")
                             factorItem(icon: "fork.knife", title: "Catering Costs", desc: "Rising food inflation and labor costs impact per-plate pricing.")
                             factorItem(icon: "sparkles", title: "Decor & Experience", desc: "Higher demand for unique themes and experiential setups.")
                             factorItem(icon: "camera.fill", title: "Photography & Media", desc: "Specialized wedding cinematography and AI-driven edits.")
                         }
-                        .padding()
-                        .background(AppTheme.elevatedCardBackground, in: RoundedRectangle(cornerRadius: 16))
+                        .padding(20)
+                        .frame(maxWidth: .infinity, alignment: .leading)
+                        .background(AppTheme.cardBackground, in: RoundedRectangle(cornerRadius: 20))
+                        .shadow(color: AppTheme.adaptiveShadow, radius: 10, x: 0, y: 4)
                     }
                     .padding(.horizontal)
                     
-                    Spacer(minLength: 30)
+                    Spacer(minLength: 40)
                 }
-                .padding(.top)
+                .padding(.top, 24)
             }
             .navigationTitle("Wedding Insights")
             .navigationBarTitleDisplayMode(.inline)
@@ -517,28 +524,35 @@ struct WeddingPriceHikeSheet: View {
         let rate = scale.annualInflation
         var base: Double = 20
         var results: [(year: String, value: Double)] = []
+        let currentYear = Calendar.current.component(.year, from: Date())
+        let startYear = currentYear - 9
         for i in 0..<10 {
-            let year = 2014 + i
-            results.append((year: "'\(year-2000)", value: base))
+            let year = startYear + i
+            let yearString = String(year).suffix(2)
+            results.append((year: "'\(yearString)", value: base))
             base *= (1 + rate)
         }
         return results
     }
     
     private func factorItem(icon: String, title: String, desc: String) -> some View {
-        HStack(alignment: .top, spacing: 14) {
+        HStack(alignment: .top, spacing: 16) {
             Image(systemName: icon)
-                .font(.system(size: 16, weight: .bold))
+                .font(.system(size: 18, weight: .bold))
                 .foregroundStyle(accentColor)
-                .frame(width: 24)
+                .frame(width: 28, alignment: .center)
+                .padding(.top, 2)
             
-            VStack(alignment: .leading, spacing: 2) {
+            VStack(alignment: .leading, spacing: 6) {
                 Text(title)
-                    .font(.system(size: 15, weight: .bold))
+                    .font(.system(size: 16, weight: .bold))
+                    .foregroundStyle(.primary)
                 Text(desc)
-                    .font(.system(size: 12))
+                    .font(.system(size: 13))
                     .foregroundStyle(.secondary)
+                    .lineSpacing(2)
             }
+            .frame(maxWidth: .infinity, alignment: .leading)
         }
     }
 }

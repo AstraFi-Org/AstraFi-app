@@ -29,18 +29,18 @@ struct PlanNavigationLink: View {
     var body: some View {
         let full = InvestmentPlannerEngine.generateFullPlan(input: plan.input, profile: nil)
         
-        if plan.name == "Pure Investment" {
+        if plan.name.contains("Pure Investment") {
             NavigationLink(destination: Plan1DetailView(input: plan.input, result: full.plan1, isFromTracker: true)) {
                 PlanCard(plan: plan)
             }
             .buttonStyle(PlainButtonStyle())
-        } else if plan.name == "Loan Strategy", let p2 = full.plan2 {
-            NavigationLink(destination: Plan2DetailView(input: plan.input, result: p2, isFromTracker: true)) {
+        } else if plan.name.contains("Loan Strategy") {
+            NavigationLink(destination: Plan2DetailView(input: plan.input, result: full.plan2 ?? Plan2Result.empty(), isFromTracker: true)) {
                 PlanCard(plan: plan)
             }
             .buttonStyle(PlainButtonStyle())
-        } else if plan.name == "Leveraged Investing", let p3 = full.plan3 {
-            NavigationLink(destination: Plan3DetailView(input: plan.input, result: p3, isFromTracker: true)) {
+        } else if plan.name.contains("Leveraged Investing") || plan.name.contains("Loan Stress Test") {
+            NavigationLink(destination: Plan3DetailView(input: plan.input, result: full.plan3 ?? Plan3Result.empty(), isFromTracker: true)) {
                 PlanCard(plan: plan)
             }
             .buttonStyle(PlainButtonStyle())

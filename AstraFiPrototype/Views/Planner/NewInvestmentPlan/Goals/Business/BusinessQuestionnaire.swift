@@ -317,7 +317,7 @@ struct BusinessInsightCard: View {
                 // Header
                 HStack {
                     SectionHeader2(
-                        icon: "rocket.fill",
+                        icon: "briefcase.fill",
                         iconColor: accentColor,
                         title: "Capital Goal Plan",
                         subtitle: "Your \(years)-year launch target"
@@ -457,7 +457,7 @@ struct BusinessPriceHikeSheet: View {
                             Image(systemName: "chart.line.uptrend.xyaxis")
                                 .font(.caption)
                                 .foregroundStyle(accentColor)
-                            Text("Setup costs for this sector have grown by ~\(Int(totalTenYearGrowth * 100))% since 2014")
+                            Text("Setup costs for this sector have grown by ~\(Int(totalTenYearGrowth * 100))% since 2017")
                                 .font(.caption)
                                 .foregroundStyle(.secondary)
                         }
@@ -471,14 +471,15 @@ struct BusinessPriceHikeSheet: View {
                         Text("Capital Inflation Factors")
                             .font(.system(size: 18, weight: .bold, design: .rounded))
                         
-                        VStack(spacing: 16) {
-                            factorItem(icon: "person.badge.plus.fill", title: "Talent Acquisition", desc: "Rising salary expectations for skilled workers and specialists.")
+                        VStack(alignment: .leading, spacing: 20) {
+                            factorItem(icon: "person.2.fill", title: "Talent Acquisition", desc: "Rising salary expectations for skilled workers and specialists.")
                             factorItem(icon: "building.2.fill", title: "Commercial Rent", desc: "Prime office and retail spaces hike rent by 7-10% annually.")
                             factorItem(icon: "gearshape.fill", title: "Compliance & Legal", desc: "Periodic changes in licensing, taxes, and government norms.")
                             factorItem(icon: "antenna.radiowaves.left.and.right", title: "Digital Infrastructure", desc: "Cost of cloud, marketing tools, and specialized software.")
                         }
                         .padding()
-                        .background(AppTheme.elevatedCardBackground, in: RoundedRectangle(cornerRadius: 16))
+                        .frame(maxWidth: .infinity, alignment: .leading)
+                        .background(Color(.secondarySystemBackground), in: RoundedRectangle(cornerRadius: 16))
                     }
                     .padding(.horizontal)
                     
@@ -520,7 +521,7 @@ struct BusinessPriceHikeSheet: View {
         var base: Double = 30
         var results: [(year: String, value: Double)] = []
         for i in 0..<10 {
-            let year = 2014 + i
+            let year = 2017 + i
             results.append((year: "'\(year-2000)", value: base))
             base *= (1 + rate)
         }
@@ -528,20 +529,22 @@ struct BusinessPriceHikeSheet: View {
     }
     
     private func factorItem(icon: String, title: String, desc: String) -> some View {
-        HStack(alignment: .top, spacing: 14) {
+        HStack(alignment: .top, spacing: 16) {
             Image(systemName: icon)
-                .font(.system(size: 16, weight: .bold))
+                .font(.system(size: 20))
                 .foregroundStyle(accentColor)
-                .frame(width: 24)
+                .frame(width: 24, alignment: .center)
             
-            VStack(alignment: .leading, spacing: 2) {
+            VStack(alignment: .leading, spacing: 4) {
                 Text(title)
                     .font(.system(size: 15, weight: .bold))
                 Text(desc)
-                    .font(.system(size: 12))
+                    .font(.system(size: 13))
                     .foregroundStyle(.secondary)
+                    .fixedSize(horizontal: false, vertical: true)
             }
         }
+        .frame(maxWidth: .infinity, alignment: .leading)
     }
 }
 

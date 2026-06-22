@@ -118,7 +118,8 @@ struct Plan2DetailView: View {
 
     // MARK: - Footer Section
     private var savePlanFooter: some View {
-        let planName = result.name
+        let purpose = input.purposeOfInvestment.isEmpty ? "General" : input.purposeOfInvestment
+        let planName = "Loan Strategy - \(purpose)"
         let isSaved = trackerVM.savedPlanNames.contains(planName)
         let isFollowed = trackerVM.followedPlanNames.contains(planName)
 
@@ -128,7 +129,10 @@ struct Plan2DetailView: View {
                     trackerVM.unsavePlan(planName: planName)
                     alertMessage = "Plan removed."
                 } else {
-                    trackerVM.savePlan(planName: planName, input: input)
+                    var inputToSave = input
+                    inputToSave.targetAmount = String(Int(loanOverride))
+                    inputToSave.timePeriod = String(tenureOverride)
+                    trackerVM.savePlan(planName: planName, input: inputToSave)
                     alertMessage = "Plan saved to profile."
                 }
                 showingSaveAlert = true

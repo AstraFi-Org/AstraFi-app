@@ -19,74 +19,72 @@ struct GoalSelectionView: View {
     ]
 
     var body: some View {
-        NavigationStack {
-            ZStack(alignment: .bottom) {
-                AppTheme.appBackground(for: colorScheme)
-                    .ignoresSafeArea()
+        ZStack(alignment: .bottom) {
+            AppTheme.appBackground(for: colorScheme)
+                .ignoresSafeArea()
 
-                ScrollView {
-                    VStack(alignment: .leading, spacing: 24) {
-                        headerSection
+            ScrollView {
+                VStack(alignment: .leading, spacing: 24) {
+                    headerSection
 
-                        LazyVGrid(columns: Array(repeating: GridItem(.flexible(), spacing: 16), count: 3), spacing: 16) {
-                            ForEach(goals) { goal in
-                                GoalGridItem(goal: goal, isSelected: selectedGoal == goal.name) {
-                                    withAnimation(.spring(response: 0.3, dampingFraction: 0.7)) {
-                                        selectedGoal = goal.name
-                                    }
+                    LazyVGrid(columns: Array(repeating: GridItem(.flexible(), spacing: 16), count: 3), spacing: 16) {
+                        ForEach(goals) { goal in
+                            GoalGridItem(goal: goal, isSelected: selectedGoal == goal.name) {
+                                withAnimation(.spring(response: 0.3, dampingFraction: 0.7)) {
+                                    selectedGoal = goal.name
                                 }
                             }
                         }
-                        .padding(.horizontal, 24)
-
-                        if let selection = selectedGoal {
-                            timelineHint(for: selection)
-                                .transition(.move(edge: .bottom).combined(with: .opacity))
-                        }
-
-                        Spacer(minLength: 120)
                     }
-                    .padding(.top, 20)
-                }
+                    .padding(.horizontal, 24)
 
-                VStack {
-                    Spacer()
-                    ZStack(alignment: .bottom) {
-                        Rectangle()
-                            .fill(.ultraThinMaterial)
-                            .frame(height: 180)
-                            .mask(LinearGradient(colors: [.clear, .black], startPoint: .top, endPoint: .bottom))
-
-                        Button(action: {
-                            if selectedGoal != nil {
-                                UIImpactFeedbackGenerator(style: .medium).impactOccurred()
-                                navigateToForm = true
-                            }
-                        }) {
-                            HStack(spacing: 8) {
-                                Text("Start Illustration")
-                            }
-                            .font(.headline).fontWeight(.bold)
-                            .foregroundColor(.white)
-                            .frame(maxWidth: .infinity)
-                            .padding(.vertical, 18)
-                            .background(selectedGoal == nil ? Color.gray : Color.blue)
-                            .cornerRadius(16)
-                            .shadow(color: (selectedGoal == nil ? Color.clear : Color.blue).opacity(0.4), radius: 10, x: 0, y: 5)
-                        }
-                        .disabled(selectedGoal == nil)
-                        .padding(.horizontal, 24)
-                        .padding(.bottom, 120)
+                    if let selection = selectedGoal {
+                        timelineHint(for: selection)
+                            .transition(.move(edge: .bottom).combined(with: .opacity))
                     }
+
+                    Spacer(minLength: 120)
                 }
-                .ignoresSafeArea()
+                .padding(.top, 20)
             }
-            .navigationTitle("Choose Your Goal")
-            .navigationBarTitleDisplayMode(.inline)
-            .navigationDestination(isPresented: $navigateToForm) {
-                if let selection = selectedGoal {
-                    NewInvestmentPlanView(initialGoal: selection)
+
+            VStack {
+                Spacer()
+                ZStack(alignment: .bottom) {
+                    Rectangle()
+                        .fill(.ultraThinMaterial)
+                        .frame(height: 180)
+                        .mask(LinearGradient(colors: [.clear, .black], startPoint: .top, endPoint: .bottom))
+
+                    Button(action: {
+                        if selectedGoal != nil {
+                            UIImpactFeedbackGenerator(style: .medium).impactOccurred()
+                            navigateToForm = true
+                        }
+                    }) {
+                        HStack(spacing: 8) {
+                            Text("Start Illustration")
+                        }
+                        .font(.headline).fontWeight(.bold)
+                        .foregroundColor(.white)
+                        .frame(maxWidth: .infinity)
+                        .padding(.vertical, 18)
+                        .background(selectedGoal == nil ? Color.gray : Color.blue)
+                        .cornerRadius(16)
+                        .shadow(color: (selectedGoal == nil ? Color.clear : Color.blue).opacity(0.4), radius: 10, x: 0, y: 5)
+                    }
+                    .disabled(selectedGoal == nil)
+                    .padding(.horizontal, 24)
+                    .padding(.bottom, 120)
                 }
+            }
+            .ignoresSafeArea()
+        }
+        .navigationTitle("Choose Your Goal")
+        .navigationBarTitleDisplayMode(.inline)
+        .navigationDestination(isPresented: $navigateToForm) {
+            if let selection = selectedGoal {
+                NewInvestmentPlanView(initialGoal: selection)
             }
         }
     }
@@ -160,7 +158,7 @@ struct GoalGridItem: View {
 
                 Text(goal.name)
                     .font(.system(size: 10, weight: .medium))
-                    .foregroundColor(isSelected ? .white : .secondary)
+                    .foregroundColor(isSelected ? .primary : .secondary)
                     .multilineTextAlignment(.center)
                     .lineLimit(2)
             }

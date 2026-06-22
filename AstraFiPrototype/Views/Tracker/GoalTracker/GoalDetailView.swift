@@ -69,18 +69,55 @@ struct GoalDetailView: View {
         return linked.map { $0.startDate }.min() ?? Date()
     }
 
+    private func investedAmountUpTo(date: Date, linked: [AstraInvestment]) -> Double {
+        var total = 0.0
+        for inv in linked {
+            if !inv.installments.isEmpty {
+                let pastTx = inv.installments.filter { $0.date <= date }
+                total += pastTx.reduce(0.0) { res, tx in
+                    tx.type == .buy ? res + tx.amount : res - tx.amount
+                }
+            } else if inv.startDate <= date {
+                if inv.mode == .sip {
+                    var count = 0
+                    var checkDate = inv.startDate
+                    while checkDate <= date {
+                        count += 1
+                        guard let next = calendar.date(byAdding: .month, value: 1, to: checkDate) else { break }
+                        checkDate = next
+                    }
+                    total += (inv.investmentAmount * Double(count))
+                } else {
+                    total += inv.investmentAmount
+                }
+            }
+        }
+        return max(0, total)
+    }
+
     private var progressData: [ProgressDataPoint] {
         let components = calendar.dateComponents([.month], from: firstDate, to: Date())
         let monthsPassed = max(1, components.month ?? 0)
 
         var points: [ProgressDataPoint] = []
-        let step = currentAmount / Double(max(1, monthsPassed))
-
+        let linked = goal.map { appState.investments(for: $0.id) } ?? []
+        
+        let totalInvestedNow = investedAmountUpTo(date: Date(), linked: linked)
+        let manualSavings = goal?.manualSavingsContribution ?? 0
+        let currentTotal = currentAmount
+        
         for i in (0...monthsPassed).reversed() {
             if let date = calendar.date(byAdding: .month, value: -i, to: Date()) {
                 let monthName = shortDF.string(from: date)
-                let amount = Double(monthsPassed - i) * step
-                points.append(ProgressDataPoint(month: monthName, amount: amount))
+                
+                let investedUpToDate = investedAmountUpTo(date: date, linked: linked)
+                let fraction = Double(monthsPassed - i) / Double(max(1, monthsPassed))
+                let savingsUpToDate = manualSavings * fraction
+                
+                let ratio = totalInvestedNow > 0 ? max(0, (currentTotal - manualSavings)) / totalInvestedNow : 1.0
+                
+                let amount = savingsUpToDate + (investedUpToDate * ratio)
+                points.append(ProgressDataPoint(month: monthName, amount: max(0, amount)))
             }
         }
 
@@ -95,7 +132,6 @@ struct GoalDetailView: View {
     private var dynamicSIPData: [SIPBarPoint] {
         let linked = goal.map { appState.investments(for: $0.id) } ?? []
         guard !linked.isEmpty else {
-
             return (1...6).map { i in SIPBarPoint(month: "M\(i)", amount: 0) }
         }
 
@@ -103,18 +139,26 @@ struct GoalDetailView: View {
         let components = calendar.dateComponents([.month], from: firstDate, to: Date())
         let monthsPassed = max(5, components.month ?? 0) 
 
-        let sipBase = linked.filter { $0.mode == .sip }.reduce(0.0) { $0 + $1.investmentAmount }
-
         for i in (0...monthsPassed).reversed() {
             if let date = calendar.date(byAdding: .month, value: -i, to: Date()) {
-
                 let monthName = shortDF.string(from: date)
+                var monthAmount = 0.0
+                
+                for inv in linked {
+                    if !inv.installments.isEmpty {
+                        let monthTx = inv.installments.filter { 
+                            calendar.isDate($0.date, equalTo: date, toGranularity: .month) && 
+                            calendar.isDate($0.date, equalTo: date, toGranularity: .year)
+                        }
+                        monthAmount += monthTx.reduce(0.0) { res, tx in
+                            tx.type == .buy ? res + tx.amount : res - tx.amount
+                        }
+                    } else if inv.mode == .sip && inv.startDate <= date {
+                        monthAmount += inv.investmentAmount
+                    }
+                }
 
-                var amount = sipBase
-
-                if i > 0 && i % 4 == 0 { amount *= 1.2 } 
-
-                data.append(SIPBarPoint(month: monthName, amount: amount))
+                data.append(SIPBarPoint(month: monthName, amount: max(0, monthAmount)))
             }
         }
 

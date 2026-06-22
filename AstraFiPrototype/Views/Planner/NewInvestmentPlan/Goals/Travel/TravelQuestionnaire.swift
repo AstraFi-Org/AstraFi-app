@@ -457,12 +457,13 @@ struct TravelPriceHikeSheet: View {
                             Image(systemName: "chart.line.uptrend.xyaxis")
                                 .font(.caption)
                                 .foregroundStyle(accentColor)
-                            Text("Global travel costs have grown by ~\(Int(totalTenYearGrowth * 100))% since 2014")
+                            Text("Global travel costs have grown by ~\(Int(totalTenYearGrowth * 100))% since 2017")
                                 .font(.caption)
                                 .foregroundStyle(.secondary)
                         }
                     }
                     .padding()
+                    .frame(maxWidth: .infinity)
                     .background(Color(.secondarySystemBackground), in: RoundedRectangle(cornerRadius: 16))
                     .padding(.horizontal)
                     
@@ -471,14 +472,15 @@ struct TravelPriceHikeSheet: View {
                         Text("Travel Inflation Factors")
                             .font(.system(size: 18, weight: .bold, design: .rounded))
                         
-                        VStack(spacing: 16) {
+                        VStack(alignment: .leading, spacing: 20) {
                             factorItem(icon: "dollarsign.circle.fill", title: "Forex Volatility", desc: "Indian Rupee's gradual depreciation against the Dollar/Euro.")
                             factorItem(icon: "fuelpump.fill", title: "Aviation Fuel", desc: "Global oil price hikes directly impact airfare tickets.")
                             factorItem(icon: "bed.double.fill", title: "Hospitality Demand", desc: "Increased demand for stays in post-pandemic 'revenge travel' era.")
-                            factorItem(icon: "ticket.fill", title: "Dynamic Pricing", desc: "AI-driven hotel and flight pricing based on real-time demand.")
+                            factorItem(icon: "tag.fill", title: "Dynamic Pricing", desc: "AI-driven hotel and flight pricing based on real-time demand.")
                         }
                         .padding()
-                        .background(AppTheme.elevatedCardBackground, in: RoundedRectangle(cornerRadius: 16))
+                        .frame(maxWidth: .infinity, alignment: .leading)
+                        .background(Color(.secondarySystemBackground), in: RoundedRectangle(cornerRadius: 16))
                     }
                     .padding(.horizontal)
                     
@@ -520,7 +522,7 @@ struct TravelPriceHikeSheet: View {
         var base: Double = 25
         var results: [(year: String, value: Double)] = []
         for i in 0..<10 {
-            let year = 2014 + i
+            let year = 2017 + i
             results.append((year: "'\(year-2000)", value: base))
             base *= (1 + rate)
         }
@@ -528,20 +530,22 @@ struct TravelPriceHikeSheet: View {
     }
     
     private func factorItem(icon: String, title: String, desc: String) -> some View {
-        HStack(alignment: .top, spacing: 14) {
+        HStack(alignment: .top, spacing: 16) {
             Image(systemName: icon)
-                .font(.system(size: 16, weight: .bold))
+                .font(.system(size: 20))
                 .foregroundStyle(accentColor)
-                .frame(width: 24)
+                .frame(width: 24, alignment: .center)
             
-            VStack(alignment: .leading, spacing: 2) {
+            VStack(alignment: .leading, spacing: 4) {
                 Text(title)
                     .font(.system(size: 15, weight: .bold))
                 Text(desc)
-                    .font(.system(size: 12))
+                    .font(.system(size: 13))
                     .foregroundStyle(.secondary)
+                    .fixedSize(horizontal: false, vertical: true)
             }
         }
+        .frame(maxWidth: .infinity, alignment: .leading)
     }
 }
 
