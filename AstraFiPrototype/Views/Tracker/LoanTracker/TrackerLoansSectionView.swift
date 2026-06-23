@@ -12,7 +12,7 @@ struct TrackerLoansSection: View {
                 Spacer()
                 NavigationLink(destination: LoanTrackerView()) {
                     Image(systemName: "chevron.right")
-                        .font(.title3)
+                        .font(.system(size: 14, weight: .semibold))
                         .foregroundColor(AppTheme.auraIndigo)
                 }
             }

@@ -493,8 +493,8 @@ private struct SectionHeader: View {
             Spacer()
             NavigationLink(destination: destination) {
                 Image(systemName: "chevron.right")
-                    .font(.system(size: 12, weight: .bold))
-                    .foregroundStyle(Color(hex: "#007AFF"))
+                    .font(.system(size: 14, weight: .semibold))
+                    .foregroundStyle(AppTheme.auraIndigo)
             }
         }
     }

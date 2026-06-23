@@ -11,7 +11,7 @@ struct TrackerInvestmentsSection: View {
                 Spacer()
                 NavigationLink(destination: InvestmentOverviewView()) {
                     Image(systemName: "chevron.right")
-                        .font(.title3)
+                        .font(.system(size: 14, weight: .semibold))
                         .foregroundColor(AppTheme.auraIndigo)
                 }
             }

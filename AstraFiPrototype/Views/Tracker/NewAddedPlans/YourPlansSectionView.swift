@@ -10,7 +10,7 @@ struct TrackerYourPlansSection: View {
                 Spacer()
                 NavigationLink(destination: AllPlansListView(plans: plans)) {
                     Image(systemName: "chevron.right")
-                        .font(.title3)
+                        .font(.system(size: 14, weight: .semibold))
                         .foregroundColor(AppTheme.auraIndigo)
                 }
             }
@@ -90,12 +90,15 @@ struct PlanCard: View {
         VStack(spacing: 16) {
             HStack(alignment: .top) {
                 VStack(alignment: .leading, spacing: 4) {
-                    Text(plan.name).font(.auraHeader(size: 17)).foregroundColor(AppTheme.auraIndigo)
+                    Text(plan.name).font(.auraHeader(size: 17))
                     Text(plan.targetGoal).font(.auraCaption()).foregroundColor(.secondary)
                 }
                 Spacer()
                 VStack(alignment: .trailing, spacing: 6) {
-                    Text("₹\(plan.input.targetAmount)").font(.auraDigital(size: 18)).foregroundColor(AppTheme.auraIndigo)
+                    let amountStr = plan.input.targetAmount.replacingOccurrences(of: "₹", with: "").replacingOccurrences(of: ",", with: "")
+                    let amountVal = Double(amountStr) ?? 0
+                    let formattedAmount = amountVal > 0 ? amountVal.toCurrency() : "₹\(plan.input.targetAmount)"
+                    Text(formattedAmount).font(.auraDigital(size: 18)).foregroundColor(AppTheme.auraIndigo)
                 }
             }
             
