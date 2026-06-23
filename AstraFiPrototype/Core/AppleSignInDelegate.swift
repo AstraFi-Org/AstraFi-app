@@ -13,19 +13,28 @@ final class AppleSignInDelegate: NSObject, ASAuthorizationControllerDelegate, AS
 
     func authorizationController(controller: ASAuthorizationController,
                                  didCompleteWithAuthorization authorization: ASAuthorization) {
+        print("AppleSignInDelegate: didCompleteWithAuthorization success")
         completion(.success(authorization))
     }
 
     func authorizationController(controller: ASAuthorizationController,
                                  didCompleteWithError error: Error) {
+        print("AppleSignInDelegate: didCompleteWithError: \(error.localizedDescription) (code: \((error as NSError).code))")
         completion(.failure(error))
     }
 
     @MainActor
     func presentationAnchor(for controller: ASAuthorizationController) -> ASPresentationAnchor {
-        UIApplication.shared.connectedScenes
-            .compactMap { $0 as? UIWindowScene }
-            .flatMap { $0.windows }
-            .first { $0.isKeyWindow } ?? UIWindow()
+        let scenes = UIApplication.shared.connectedScenes
+        let windowScene = scenes.first { $0.activationState == .foregroundActive } as? UIWindowScene
+            ?? scenes.first as? UIWindowScene
+        
+        let window = windowScene?.windows.first { $0.isKeyWindow }
+            ?? windowScene?.windows.first
+            ?? UIApplication.shared.windows.first { $0.isKeyWindow }
+            ?? UIApplication.shared.windows.first
+            ?? UIWindow()
+            
+        return window
     }
 }
