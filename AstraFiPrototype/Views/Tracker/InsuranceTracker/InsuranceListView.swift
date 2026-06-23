@@ -95,8 +95,11 @@ struct InsuranceListView: View {
                 }
             }
             HStack(spacing: 20) {
-                Text("Active Policies: \(activePoliciesCount)")
-                    .font(.subheadline).foregroundColor(.secondary)
+                VStack(alignment: .leading, spacing: 2) {
+                    Text("Active Policies").font(.subheadline).foregroundColor(.secondary)
+                    Text("\(activePoliciesCount)")
+                        .font(.subheadline).fontWeight(.semibold).foregroundColor(.primary)
+                }
                 Spacer()
                 VStack(alignment: .trailing, spacing: 2) {
                     Text("Total Sum Assured").font(.subheadline).foregroundColor(.secondary)

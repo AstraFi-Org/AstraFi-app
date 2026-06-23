@@ -15,6 +15,7 @@ struct TrackerInvestmentsSection: View {
                         .foregroundColor(AppTheme.auraIndigo)
                 }
             }
+            .padding(.horizontal, 8)
             if investments.isEmpty {
                 TrackerEmptyState(icon: "chart.pie.fill",
                                   message: "No investments recorded yet. Complete your assessment to get started.")
