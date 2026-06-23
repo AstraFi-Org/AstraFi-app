@@ -17,7 +17,7 @@ struct InsuranceListRow: View {
                     Label(insurance.provider, systemImage: "building.2.fill")
                         .font(.caption).foregroundColor(.secondary)
                     Spacer()
-                    Text("₹\(Int(insurance.annualPremium))/yr")
+                    Text("₹\(insurance.annualPremium.safeInt)/yr")
                         .font(.caption).foregroundColor(.secondary)
                 }
                 Text("Policy: \(insurance.policyNumber)")

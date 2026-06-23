@@ -116,16 +116,16 @@ class TrackerViewModel {
         let newInvestments = self.calculateInvestments(profile, df: df)
         let newGoals = self.calculateGoals(profile, df: df)
 
-        let totalAssets = profile.assets.totalAssets
-        let totalLiabilities = profile.liabilities.totalLiabilities
+        let totalAssets = profile.assets.totalAssets.safeFinite
+        let totalLiabilities = profile.liabilities.totalLiabilities.safeFinite
         let nw = totalAssets - totalLiabilities
 
         let calendar = Calendar.current
         let monthIndex = calendar.component(.month, from: Date()) - 1
         let currentMonth = df.shortMonthSymbols[monthIndex]
-        let expenses = profile.basicDetails.monthlyExpenses
-        let savings = max(0, profile.basicDetails.monthlyIncomeAfterTax - expenses)
-        let emergencyContrib = profile.basicDetails.emergencyFundAmount > 0 ? (profile.basicDetails.emergencyFundAmount / 12.0) : 0
+        let expenses = profile.basicDetails.monthlyExpenses.safeFinite
+        let savings = max(0, (profile.basicDetails.monthlyIncomeAfterTax - expenses).safeFinite)
+        let emergencyContrib = profile.basicDetails.emergencyFundAmount > 0 ? (profile.basicDetails.emergencyFundAmount / 12.0).safeFinite : 0
 
         let totalEMI = profile.loans.reduce(0.0) { $0 + $1.calculatedEMI }
         let dti = (profile.basicDetails.monthlyIncome > 0) ? (totalEMI / profile.basicDetails.monthlyIncome) : 0
@@ -159,19 +159,19 @@ class TrackerViewModel {
             // ── Portfolio summary ──────────────────────────────────────────
             let allInv = profile.investments
 
-            let totalInv = allInv.reduce(0.0) { $0 + $1.totalInvestedAmount }
-            let totalCurr = allInv.reduce(0.0) { $0 + $1.currentValue }
-            let netGain = totalCurr - totalInv
-            let returnPct = totalInv > 0 ? (netGain / totalInv) * 100 : 0
+            let totalInv = allInv.reduce(0.0) { $0 + $1.totalInvestedAmount.safeFinite }.safeFinite
+            let totalCurr = allInv.reduce(0.0) { $0 + $1.currentValue.safeFinite }.safeFinite
+            let netGain = (totalCurr - totalInv).safeFinite
+            let returnPct = totalInv > 0 ? ((netGain / totalInv) * 100).safeFinite : 0
 
             // Portfolio CAGR: weight each investment's CAGR by its invested share
             let cagrWeighted: Double = {
                 guard totalInv > 0 else { return 0 }
                 let weightedSum = allInv.reduce(0.0) { sum, inv in
-                    let w = inv.totalInvestedAmount / totalInv
-                    return sum + (inv.expectedAnnualRate * w)
+                    let w = (inv.totalInvestedAmount.safeFinite / totalInv).safeFinite
+                    return sum + (inv.expectedAnnualRate.safeFinite * w)
                 }
-                return weightedSum * 100 // convert to %
+                return (weightedSum * 100).safeFinite // convert to %
             }()
 
             // Build per-investment summary items
@@ -187,8 +187,8 @@ class TrackerViewModel {
                     name: inv.investmentName,
                     category: inv.investmentType.rawValue,
                     risk: risk,
-                    invested: inv.totalInvestedAmount,
-                    currentValue: inv.currentValue
+                    invested: inv.totalInvestedAmount.safeFinite,
+                    currentValue: inv.currentValue.safeFinite
                 )
             }
 
@@ -214,26 +214,26 @@ class TrackerViewModel {
         if let cashflow = profile.cashflowData {
             if cashflow.incomeSources.isEmpty {
                 // Fallback to assessment income
-                items.append(MoneyFlowChartItem(month: currentMonth, type: "Income", category: "Fixed Salary", amount: profile.basicDetails.monthlyIncome))
+                items.append(MoneyFlowChartItem(month: currentMonth, type: "Income", category: "Fixed Salary", amount: profile.basicDetails.monthlyIncome.safeFinite))
             } else {
                 for source in cashflow.incomeSources {
-                    items.append(MoneyFlowChartItem(month: currentMonth, type: "Income", category: source.name, amount: source.amount))
+                    items.append(MoneyFlowChartItem(month: currentMonth, type: "Income", category: source.name, amount: source.amount.safeFinite))
                 }
             }
             
             if cashflow.expenseSources.isEmpty {
                 // Fallback to flat expenses
-                items.append(MoneyFlowChartItem(month: currentMonth, type: "Expense", category: "Rent/EMI", amount: cashflow.rent))
-                items.append(MoneyFlowChartItem(month: currentMonth, type: "Expense", category: "Groceries", amount: cashflow.groceries))
-                items.append(MoneyFlowChartItem(month: currentMonth, type: "Expense", category: "Utilities", amount: cashflow.utilities))
-                items.append(MoneyFlowChartItem(month: currentMonth, type: "Expense", category: "Entertainment", amount: cashflow.entertainment))
-                let others = cashflow.transport + cashflow.shopping + cashflow.dining + cashflow.misc
+                items.append(MoneyFlowChartItem(month: currentMonth, type: "Expense", category: "Rent/EMI", amount: cashflow.rent.safeFinite))
+                items.append(MoneyFlowChartItem(month: currentMonth, type: "Expense", category: "Groceries", amount: cashflow.groceries.safeFinite))
+                items.append(MoneyFlowChartItem(month: currentMonth, type: "Expense", category: "Utilities", amount: cashflow.utilities.safeFinite))
+                items.append(MoneyFlowChartItem(month: currentMonth, type: "Expense", category: "Entertainment", amount: cashflow.entertainment.safeFinite))
+                let others = (cashflow.transport + cashflow.shopping + cashflow.dining + cashflow.misc).safeFinite
                 if others > 0 {
                     items.append(MoneyFlowChartItem(month: currentMonth, type: "Expense", category: "Others", amount: others))
                 }
             } else {
                 for exp in cashflow.expenseSources {
-                    items.append(MoneyFlowChartItem(month: currentMonth, type: "Expense", category: exp.name, amount: exp.amount))
+                    items.append(MoneyFlowChartItem(month: currentMonth, type: "Expense", category: exp.name, amount: exp.amount.safeFinite))
                 }
             }
         }
@@ -248,61 +248,61 @@ class TrackerViewModel {
                 let mName = df.shortMonthSymbols[max(0, min(11, m - 1))]
                 
                 for src in snap.incomeSources {
-                    items.append(MoneyFlowChartItem(month: mName, type: "Income", category: src.name, amount: src.amount))
+                    items.append(MoneyFlowChartItem(month: mName, type: "Income", category: src.name, amount: src.amount.safeFinite))
                 }
                 for exp in snap.expenseSources {
-                    items.append(MoneyFlowChartItem(month: mName, type: "Expense", category: exp.name, amount: exp.amount))
+                    items.append(MoneyFlowChartItem(month: mName, type: "Expense", category: exp.name, amount: exp.amount.safeFinite))
                 }
             }
         }
         
-        return items
+        return items.filter { $0.amount.isFinite }
     }
 
     private func calculateAccounts(_ profile: AstraUserProfile) -> [Account] {
         var newAccounts: [Account] = []
         if profile.assets.mutualFundHoldingAmount > 0 {
-            newAccounts.append(Account(name: "Mutual Funds", institution: "Investment", balance: profile.assets.mutualFundHoldingAmount))
+            newAccounts.append(Account(name: "Mutual Funds", institution: "Investment", balance: profile.assets.mutualFundHoldingAmount.safeFinite))
         }
         if profile.assets.stocksHoldingAmount > 0 {
-            newAccounts.append(Account(name: "Stocks", institution: "Equity", balance: profile.assets.stocksHoldingAmount))
+            newAccounts.append(Account(name: "Stocks", institution: "Equity", balance: profile.assets.stocksHoldingAmount.safeFinite))
         }
         if profile.assets.depositsAmount > 0 {
-            newAccounts.append(Account(name: "Fixed Deposits", institution: "Bank", balance: profile.assets.depositsAmount))
+            newAccounts.append(Account(name: "Fixed Deposits", institution: "Bank", balance: profile.assets.depositsAmount.safeFinite))
         }
         if profile.assets.savingsAccountAmount > 0 {
-            newAccounts.append(Account(name: "Savings Account", institution: "Bank", balance: profile.assets.savingsAccountAmount))
+            newAccounts.append(Account(name: "Savings Account", institution: "Bank", balance: profile.assets.savingsAccountAmount.safeFinite))
         }
         if profile.assets.currentAccountAmount > 0 {
-            newAccounts.append(Account(name: "Current Account", institution: "Bank", balance: profile.assets.currentAccountAmount))
+            newAccounts.append(Account(name: "Current Account", institution: "Bank", balance: profile.assets.currentAccountAmount.safeFinite))
         }
         if profile.assets.propertyAmount > 0 {
-            newAccounts.append(Account(name: "Property / Real Estate", institution: "Asset", balance: profile.assets.propertyAmount))
+            newAccounts.append(Account(name: "Property / Real Estate", institution: "Asset", balance: profile.assets.propertyAmount.safeFinite))
         }
         if profile.assets.jewelleryAmount > 0 {
-            newAccounts.append(Account(name: "Gold / Jewellery", institution: "Asset", balance: profile.assets.jewelleryAmount))
+            newAccounts.append(Account(name: "Gold / Jewellery", institution: "Asset", balance: profile.assets.jewelleryAmount.safeFinite))
         }
         if profile.assets.otherInvestmentAmount > 0 {
-            newAccounts.append(Account(name: "Other Investments", institution: "Various", balance: profile.assets.otherInvestmentAmount))
+            newAccounts.append(Account(name: "Other Investments", institution: "Various", balance: profile.assets.otherInvestmentAmount.safeFinite))
         }
 
         if profile.liabilities.homeLoanAmount > 0 {
-            newAccounts.append(Account(name: "Home Loan", institution: "Liability", balance: -profile.liabilities.homeLoanAmount))
+            newAccounts.append(Account(name: "Home Loan", institution: "Liability", balance: -profile.liabilities.homeLoanAmount.safeFinite))
         }
         if profile.liabilities.vehicleLoanAmount > 0 {
-            newAccounts.append(Account(name: "Vehicle Loan", institution: "Liability", balance: -profile.liabilities.vehicleLoanAmount))
+            newAccounts.append(Account(name: "Vehicle Loan", institution: "Liability", balance: -profile.liabilities.vehicleLoanAmount.safeFinite))
         }
         if profile.liabilities.educationLoanAmount > 0 {
-            newAccounts.append(Account(name: "Education Loan", institution: "Liability", balance: -profile.liabilities.educationLoanAmount))
+            newAccounts.append(Account(name: "Education Loan", institution: "Liability", balance: -profile.liabilities.educationLoanAmount.safeFinite))
         }
         if profile.liabilities.creditCardBills > 0 {
-            newAccounts.append(Account(name: "Credit Card Dues", institution: "Liability", balance: -profile.liabilities.creditCardBills))
+            newAccounts.append(Account(name: "Credit Card Dues", institution: "Liability", balance: -profile.liabilities.creditCardBills.safeFinite))
         }
         if profile.liabilities.otherLoanAmount > 0 {
-            newAccounts.append(Account(name: "Other Loans", institution: "Liability", balance: -profile.liabilities.otherLoanAmount))
+            newAccounts.append(Account(name: "Other Loans", institution: "Liability", balance: -profile.liabilities.otherLoanAmount.safeFinite))
         }
         if profile.liabilities.otherDebtAmount > 0 {
-            newAccounts.append(Account(name: "Other Debts", institution: "Liability", balance: -profile.liabilities.otherDebtAmount))
+            newAccounts.append(Account(name: "Other Debts", institution: "Liability", balance: -profile.liabilities.otherDebtAmount.safeFinite))
         }
         return newAccounts
     }
@@ -310,8 +310,8 @@ class TrackerViewModel {
     private func calculateLoans(_ profile: AstraUserProfile, df: DateFormatter) -> [Loan] {
         return profile.loans.map { loan in
             let tenure = max(1, loan.loanTenureMonths)
-            let monthlyPrincipal = loan.loanAmount / Double(tenure)
-            let paidAmountValue = Double(loan.installmentsPaid) * monthlyPrincipal
+            let monthlyPrincipal = (loan.loanAmount.safeFinite / Double(tenure)).safeFinite
+            let paidAmountValue = (Double(loan.installmentsPaid) * monthlyPrincipal).safeFinite
             return Loan(
                 name: loan.displayName,
                 timePeriod: "\(tenure / 12) Years",
@@ -331,12 +331,13 @@ class TrackerViewModel {
                 name: inv.investmentName,
                 category: inv.investmentType.rawValue.capitalized,
                 risk: riskLabel(for: inv.investmentType),
-                amount: Int(inv.currentValue),
-                returns: String(format: "%@%.1f%%", gainPct >= 0 ? "+" : "", gainPct),
+                amount: inv.currentValue.safeInt,
+                returns: String(format: "%@%.1f%%", gainPct >= 0 ? "+" : "", gainPct.safeFinite),
                 startDate: df.string(from: inv.startDate),
                 associatedGoal: goalName(for: inv.associatedGoalID, in: profile),
                 schemeCode: inv.schemeCode,
-                lastNAV: inv.lastNAV
+                lastNAV: inv.lastNAV,
+                source: inv.brokerSource
             )
         }
     }
@@ -359,7 +360,7 @@ class TrackerViewModel {
             let linked = profile.investments.filter { $0.associatedGoalID == g.id }
             let linkedFund = linked.first?.investmentName ?? "None"
             let totalColl = self.calculateTotalCollected(for: g.id, profile: profile)
-            let progressRatio = g.targetAmount > 0 ? min(totalColl / g.targetAmount, 1.0) : 0
+            let progressRatio = g.targetAmount > 0 ? min(max((totalColl / g.targetAmount).safeFinite, 0), 1.0) : 0
             
             return Goal(
                 name: g.goalName,
@@ -375,38 +376,39 @@ class TrackerViewModel {
     private func calculateTotalCollected(for goalID: UUID, profile: AstraUserProfile) -> Double {
         guard let goal = profile.goals.first(where: { $0.id == goalID }) else { return 0 }
         let linked = profile.investments.filter { $0.associatedGoalID == goalID }
-        let linkedTotal = linked.reduce(0.0) { $0 + $1.currentValue }
-        return linkedTotal + goal.manualSavingsContribution
+        let linkedTotal = linked.reduce(0.0) { $0 + $1.currentValue.safeFinite }.safeFinite
+        return (linkedTotal + goal.manualSavingsContribution.safeFinite).safeFinite
     }
 
     private func calculateAllocations(_ profile: AstraUserProfile, totalAssets: Double) -> [FundAllocation] {
-        guard totalAssets > 0 else { return [] }
+        let safeTotalAssets = totalAssets.safeFinite
+        guard safeTotalAssets > 0 else { return [] }
         var newAllocations: [FundAllocation] = []
 
-        let mf = profile.assets.mutualFundHoldingAmount
+        let mf = profile.assets.mutualFundHoldingAmount.safeFinite
         if mf > 0 {
-            let pct = (mf / totalAssets) * 100
-            newAllocations.append(FundAllocation(name: "MF", percentage: pct.isFinite ? pct : 0, color: .blue))
+            let pct = (mf / safeTotalAssets) * 100
+            newAllocations.append(FundAllocation(name: "MF", percentage: min(max(pct.safeFinite, 0), 100), color: .blue))
         }
 
-        let stocks = profile.assets.stocksHoldingAmount
+        let stocks = profile.assets.stocksHoldingAmount.safeFinite
         if stocks > 0 {
-            let pct = (stocks / totalAssets) * 100
-            newAllocations.append(FundAllocation(name: "Stocks", percentage: pct.isFinite ? pct : 0, color: .purple))
+            let pct = (stocks / safeTotalAssets) * 100
+            newAllocations.append(FundAllocation(name: "Stocks", percentage: min(max(pct.safeFinite, 0), 100), color: .purple))
         }
 
-        let deposits = profile.assets.depositsAmount
+        let deposits = profile.assets.depositsAmount.safeFinite
         if deposits > 0 {
-            let pct = (deposits / totalAssets) * 100
-            newAllocations.append(FundAllocation(name: "Deposits", percentage: pct.isFinite ? pct : 0, color: .orange))
+            let pct = (deposits / safeTotalAssets) * 100
+            newAllocations.append(FundAllocation(name: "Deposits", percentage: min(max(pct.safeFinite, 0), 100), color: .orange))
         }
 
-        let others = profile.assets.totalAssets - (mf + stocks + deposits)
+        let others = (profile.assets.totalAssets.safeFinite - (mf + stocks + deposits)).safeFinite
         if others > 0 {
-            let pct = (others / totalAssets) * 100
-            newAllocations.append(FundAllocation(name: "Others", percentage: pct.isFinite ? pct : 0, color: .gray))
+            let pct = (others / safeTotalAssets) * 100
+            newAllocations.append(FundAllocation(name: "Others", percentage: min(max(pct.safeFinite, 0), 100), color: .gray))
         }
 
-        return newAllocations
+        return newAllocations.filter { $0.percentage.isFinite && $0.percentage > 0 }
     }
 }

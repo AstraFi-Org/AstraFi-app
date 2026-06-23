@@ -101,13 +101,15 @@ struct GoalListView: View {
         .toolbar {
             ToolbarItem(placement: .navigationBarLeading) {
                 Button { dismiss() } label: {
-                    Image(systemName: "chevron.left").fontWeight(.semibold)
+                    Image(systemName: "chevron.left")
+                        .font(.system(size: 16, weight: .bold))
+                        .foregroundColor(.primary)
                 }
             }
             ToolbarItem(placement: .navigationBarTrailing) {
                 Button { showingAddGoal = true } label: {
-                    Image(systemName: "plus.circle.fill")
-                        .font(.title3)
+                    Image(systemName: "plus")
+                        .font(.system(size: 16, weight: .bold))
                         .foregroundColor(.blue)
                 }
             }

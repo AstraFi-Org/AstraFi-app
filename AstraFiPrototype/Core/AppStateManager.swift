@@ -1,5 +1,7 @@
 import SwiftUI
 import Supabase
+import AuthenticationServices
+import CryptoKit
 
 @Observable @MainActor
 final class AppStateManager {
@@ -11,6 +13,7 @@ final class AppStateManager {
     
     var isLoading: Bool = true
     var isAssessmentSkipped: Bool = false
+    var isLockedByBiometric: Bool = false
     
     static func withSampleData() -> AppStateManager {
         let mgr = AppStateManager()
@@ -177,6 +180,7 @@ final class AppStateManager {
     var isAuthLoading: Bool = false
     
     var showDashboard: Bool = false
+    var selectedTab: Int = 0
     var showPostAuthOnboarding: Bool = false
     
     var requiresMFAChallenge: Bool = false
@@ -194,7 +198,7 @@ final class AppStateManager {
         savedPlans.append(plan)
         Task {
             if let session = try? await supabase.auth.session {
-                try? await SupabaseRepository.shared.savePlan(plan, userId: session.user.id)
+                _ = try? await SupabaseRepository.shared.savePlan(plan, userId: session.user.id)
             }
         }
     }
@@ -203,8 +207,8 @@ final class AppStateManager {
         if let index = savedPlans.firstIndex(where: { $0.id == plan.id }) {
             savedPlans[index].isFollowed = true
             Task {
-                if let session = try? await supabase.auth.session {
-                    try? await SupabaseRepository.shared.updatePlanFollowStatus(
+                if (try? await supabase.auth.session) != nil {
+                    _ = try? await SupabaseRepository.shared.updatePlanFollowStatus(
                         planId: plan.id, isFollowed: true
                     )
                 }
@@ -216,8 +220,8 @@ final class AppStateManager {
         if let index = savedPlans.firstIndex(where: { $0.id == plan.id }) {
             savedPlans[index].isFollowed = false
             Task {
-                if let session = try? await supabase.auth.session {
-                    try? await SupabaseRepository.shared.updatePlanFollowStatus(
+                if (try? await supabase.auth.session) != nil {
+                    _ = try? await SupabaseRepository.shared.updatePlanFollowStatus(
                         planId: plan.id, isFollowed: false
                     )
                 }
@@ -246,7 +250,7 @@ final class AppStateManager {
             currentProfile = profile
             Task {
                 if let session = try? await supabase.auth.session {
-                    try? await SupabaseRepository.shared.saveHealthAssessment(newAssessment, userId: session.user.id)
+                    _ = try? await SupabaseRepository.shared.saveHealthAssessment(newAssessment, userId: session.user.id)
                 }
             }
         }
@@ -275,12 +279,45 @@ final class AppStateManager {
                     }
                 }
                 try? await minimumDelay
+                
+                // Check if biometric lock should be shown
+                // Note: requireUnlockOnLaunch defaults to true in @AppStorage,
+                // so we must use the same default here since the key may never
+                // have been explicitly written to UserDefaults.
+                let biometricEnabled = UserDefaults.standard.bool(forKey: "securityBiometricUnlockEnabled")
+                let requireOnLaunch = UserDefaults.standard.object(forKey: "securityRequireUnlockOnLaunch") as? Bool ?? true
+                
+                let aal = try? await supabase.auth.mfa.getAuthenticatorAssuranceLevel()
+                if aal?.nextLevel == "aal2" && aal?.currentLevel == "aal1" {
+                    if let factors = try? await supabase.auth.mfa.listFactors(), let factor = factors.all.first(where: { $0.status == FactorStatus.verified }) {
+                        await MainActor.run {
+                            self.mfaFactorId = factor.id
+                            self.requiresMFAChallenge = true
+                            self.currentProfile = profile
+                            self.isAuthenticated = true
+                            self.hasCompletedOnboarding = true
+                            self.showDashboard = true
+                            self.isLoading = false
+                            
+                            if biometricEnabled && requireOnLaunch {
+                                self.isLockedByBiometric = true
+                            }
+                        }
+                        recalculateFinancials()
+                        return
+                    }
+                }
+                
                 await MainActor.run {
                     self.currentProfile = profile
                     self.isAuthenticated = true
                     self.hasCompletedOnboarding = true
                     self.showDashboard = true
                     self.isLoading = false
+                    
+                    if biometricEnabled && requireOnLaunch {
+                        self.isLockedByBiometric = true
+                    }
                 }
                 recalculateFinancials()
             } else {
@@ -301,6 +338,11 @@ final class AppStateManager {
             }
         }
     }
+    
+    func unlockApp() {
+        isLockedByBiometric = false
+    }
+
     func signUp(name: String, email: String, password: String) async -> Bool {
         isAuthLoading = true
         authError = nil
@@ -339,6 +381,130 @@ final class AppStateManager {
         isAuthenticated = true
         showPostAuthOnboarding = true
         hasCompletedOnboarding = true
+    }
+    
+    // MARK: - Sign in with Apple
+    
+    /// A random nonce used to verify the Apple ID token.
+    private var currentNonce: String?
+    
+    /// Generates a cryptographically-secure random nonce string.
+    private static func randomNonce(length: Int = 32) -> String {
+        precondition(length > 0)
+        var randomBytes = [UInt8](repeating: 0, count: length)
+        let errorCode = SecRandomCopyBytes(kSecRandomDefault, randomBytes.count, &randomBytes)
+        guard errorCode == errSecSuccess else {
+            fatalError("Unable to generate nonce. SecRandomCopyBytes failed with OSStatus \(errorCode)")
+        }
+        let charset: [Character] = Array("0123456789ABCDEFGHIJKLMNOPQRSTUVXYZabcdefghijklmnopqrstuvwxyz-._")
+        return String(randomBytes.map { charset[Int($0) % charset.count] })
+    }
+    
+    /// Returns the SHA256 hash of the input string.
+    private static func sha256(_ input: String) -> String {
+        let inputData = Data(input.utf8)
+        let hashed = SHA256.hash(data: inputData)
+        return hashed.compactMap { String(format: "%02x", $0) }.joined()
+    }
+    
+    /// Initiates the Sign in with Apple flow.
+    func signInWithApple() {
+        let nonce = Self.randomNonce()
+        currentNonce = nonce
+        
+        let appleIDProvider = ASAuthorizationAppleIDProvider()
+        let request = appleIDProvider.createRequest()
+        request.requestedScopes = [.fullName, .email]
+        request.nonce = Self.sha256(nonce)
+        
+        let delegate = AppleSignInDelegate { result in
+            Task { @MainActor in
+                await self.handleAppleSignInResult(result)
+            }
+        }
+        // Retain the delegate for the duration of the request
+        self.appleSignInDelegate = delegate
+        
+        let controller = ASAuthorizationController(authorizationRequests: [request])
+        controller.delegate = delegate
+        controller.performRequests()
+    }
+    
+    /// Stored reference to the delegate so it isn't deallocated.
+    private var appleSignInDelegate: AppleSignInDelegate?
+    
+    /// Handles the result from Apple Sign-In and authenticates with Supabase.
+    private func handleAppleSignInResult(_ result: Result<ASAuthorization, Error>) async {
+        isAuthLoading = true
+        authError = nil
+        
+        switch result {
+        case .success(let authorization):
+            guard let appleIDCredential = authorization.credential as? ASAuthorizationAppleIDCredential,
+                  let identityTokenData = appleIDCredential.identityToken,
+                  let identityToken = String(data: identityTokenData, encoding: .utf8),
+                  let nonce = currentNonce else {
+                authError = "Failed to get Apple ID credentials."
+                isAuthLoading = false
+                return
+            }
+            
+            do {
+                let session = try await supabase.auth.signInWithIdToken(
+                    credentials: .init(
+                        provider: .apple,
+                        idToken: identityToken,
+                        nonce: nonce
+                    )
+                )
+                
+                // Try to insert user record (will silently fail if already exists)
+                try? await supabase.from("users").insert([
+                    "id": session.user.id.uuidString,
+                    "email": session.user.email ?? ""
+                ]).execute()
+                
+                // Load existing profile or create new one
+                if let profile = try? await SupabaseRepository.shared.fetchFullProfile(userId: session.user.id) {
+                    self.currentProfile = profile
+                    recalculateFinancials()
+                    isAuthenticated = true
+                    showPostAuthOnboarding = false
+                    hasCompletedOnboarding = true
+                    showDashboard = true
+                } else {
+                    // Build display name from Apple credential if available
+                    let fullName = [appleIDCredential.fullName?.givenName, appleIDCredential.fullName?.familyName]
+                        .compactMap { $0 }
+                        .joined(separator: " ")
+                    let displayName = fullName.isEmpty ? (session.user.email ?? "User") : fullName
+                    
+                    setupEmptyProfile(name: displayName)
+                    isAuthenticated = true
+                    showPostAuthOnboarding = true
+                    hasCompletedOnboarding = true
+                }
+                
+                if let plans = try? await SupabaseRepository.shared.fetchSavedPlans(userId: session.user.id) {
+                    self.savedPlans = plans
+                }
+                
+            } catch {
+                authError = error.localizedDescription
+            }
+            
+        case .failure(let error):
+            // User cancelled — don't show an error
+            if (error as NSError).code == ASAuthorizationError.canceled.rawValue {
+                // Do nothing
+            } else {
+                authError = error.localizedDescription
+            }
+        }
+        
+        isAuthLoading = false
+        appleSignInDelegate = nil
+        currentNonce = nil
     }
 
     func signIn(email: String, password: String) async {
@@ -662,7 +828,7 @@ final class AppStateManager {
         let assets = AstraAssets(
             stocksHoldingAmount: profileInvestments.filter { $0.investmentType == .stocks }.map { $0.investmentAmount }.reduce(0, +),
             mutualFundHoldingAmount: profileInvestments.filter { $0.investmentType == .mutualFund }.map { $0.investmentAmount }.reduce(0, +),
-            otherInvestmentAmount: profileInvestments.filter { [.cryptocurrency, .other, .nps, .ppf, .bonds].contains($0.investmentType) }.map { $0.investmentAmount }.reduce(0, +),
+            otherInvestmentAmount: profileInvestments.filter { [.cryptocurrency, .other, .nps, .ppf, .bonds, .cashSavings, .emergencyFund].contains($0.investmentType) }.map { $0.investmentAmount }.reduce(0, +),
             propertyAmount: profileInvestments.filter { $0.investmentType == .realEstate }.map { $0.investmentAmount }.reduce(0, +),
             vehiclesAmount: 0,
             depositsAmount: profileInvestments.filter { $0.investmentType == .deposits }.map { $0.investmentAmount }.reduce(0, +),
@@ -681,22 +847,23 @@ final class AppStateManager {
         let totalLi = liabilities.totalLiabilities
         let netWorth = totalAs - totalLi
         
-        let savingsRate = incomeAfterTaxValue > 0 ? ((incomeAfterTaxValue - expensesValue) / incomeAfterTaxValue) * 100 : 0
+        let savingsRate = incomeAfterTaxValue > 0 ? (((incomeAfterTaxValue - expensesValue) / incomeAfterTaxValue) * 100).safeFinite : 0
         
         let totalEMIs = profileLoans.reduce(0.0) { $0 + $1.calculatedEMI }
-        let dti = incomeValue > 0 ? (totalEMIs / incomeValue) : 0
+        let dti = incomeValue > 0 ? (totalEMIs / incomeValue).safeFinite : 0
         
-        let efMonths = expensesValue > 0 ? (emergencyValue / expensesValue) : 0
+        let efMonths = expensesValue > 0 ? (emergencyValue / expensesValue).safeFinite : 0
+        let investmentScore = min(100, max(0, (savingsRate * 0.5) + (efMonths * 10))).safeInt
         
         let report = AstraFinancialHealthReport(
             netWorth: netWorth,
             savingsRate: savingsRate,
             debtToIncomeRatio: dti,
-            investmentScore: Int(min(100, (savingsRate * 0.5) + (efMonths * 10))),
+            investmentScore: investmentScore,
             emergencyFundMonths: efMonths
         )
         
-        let initialScore = 400 + Int(report.investmentScore * 4)
+        let initialScore = 400 + report.investmentScore * 4
         let status = initialScore >= 750 ? "Excellent" : initialScore >= 650 ? "Good" : "Needs Work"
         let firstAssessment = AstraHealthAssessment(
             date: Date(),
@@ -704,7 +871,7 @@ final class AppStateManager {
             status: status,
             keyInsights: ["First assessment generated from initial data",
                           "Emergency fund covers \(String(format: "%.1f", efMonths)) months",
-                          "Savings rate stands at \(Int(savingsRate))%"]
+                          "Savings rate stands at \(savingsRate.safeInt)%"]
         )
         
         let newInvestments = profileInvestments
@@ -877,12 +1044,12 @@ final class AppStateManager {
         guard var profile = currentProfile else { return }
         
         var newAssets = profile.assets
-        newAssets.stocksHoldingAmount = profile.investments.filter { $0.investmentType == .stocks }.map { $0.currentValue }.reduce(0, +)
-        newAssets.mutualFundHoldingAmount = profile.investments.filter { $0.investmentType == .mutualFund }.map { $0.currentValue }.reduce(0, +)
-        newAssets.depositsAmount = profile.investments.filter { $0.investmentType == .deposits }.map { $0.currentValue }.reduce(0, +)
-        newAssets.propertyAmount = profile.investments.filter { $0.investmentType == .realEstate }.map { $0.currentValue }.reduce(0, +)
-        newAssets.jewelleryAmount = profile.investments.filter { $0.investmentType == .physicalGold }.map { $0.currentValue }.reduce(0, +)
-        newAssets.otherInvestmentAmount = profile.investments.filter { [.cryptocurrency, .other, .nps, .ppf, .bonds].contains($0.investmentType) }.map { $0.currentValue }.reduce(0, +)
+        newAssets.stocksHoldingAmount = profile.investments.filter { $0.investmentType == .stocks }.map { $0.currentValue.safeFinite }.reduce(0, +)
+        newAssets.mutualFundHoldingAmount = profile.investments.filter { $0.investmentType == .mutualFund }.map { $0.currentValue.safeFinite }.reduce(0, +)
+        newAssets.depositsAmount = profile.investments.filter { $0.investmentType == .deposits }.map { $0.currentValue.safeFinite }.reduce(0, +)
+        newAssets.propertyAmount = profile.investments.filter { $0.investmentType == .realEstate }.map { $0.currentValue.safeFinite }.reduce(0, +)
+        newAssets.jewelleryAmount = profile.investments.filter { $0.investmentType == .physicalGold }.map { $0.currentValue.safeFinite }.reduce(0, +)
+        newAssets.otherInvestmentAmount = profile.investments.filter { [.cryptocurrency, .other, .nps, .ppf, .bonds, .cashSavings, .emergencyFund].contains($0.investmentType) }.map { $0.currentValue.safeFinite }.reduce(0, +)
         profile.assets = newAssets
         
         var newLiabilities = profile.liabilities
@@ -898,19 +1065,20 @@ final class AppStateManager {
         
         let incomeAfterTax = profile.basicDetails.monthlyIncomeAfterTax
         let expenses = profile.basicDetails.monthlyExpenses
-        let savingsRate = incomeAfterTax > 0 ? ((incomeAfterTax - expenses) / incomeAfterTax) * 100 : 0
+        let savingsRate = incomeAfterTax > 0 ? (((incomeAfterTax - expenses) / incomeAfterTax) * 100).safeFinite : 0
         
         let totalEMIs = profile.loans.reduce(0.0) { $0 + $1.calculatedEMI }
-        let dti = profile.basicDetails.monthlyIncome > 0 ? (totalEMIs / profile.basicDetails.monthlyIncome) : 0
+        let dti = profile.basicDetails.monthlyIncome > 0 ? (totalEMIs / profile.basicDetails.monthlyIncome).safeFinite : 0
         
         let efTarget = profile.basicDetails.monthlyIncome * 6.0
-        let efMonths = efTarget > 0 ? (profile.basicDetails.emergencyFundAmount / efTarget) * 6.0 : 0
+        let efMonths = efTarget > 0 ? ((profile.basicDetails.emergencyFundAmount / efTarget) * 6.0).safeFinite : 0
+        let investmentScore = min(100, max(0, (savingsRate * 0.5) + (efMonths * 10))).safeInt
         
         profile.financialHealthReport = AstraFinancialHealthReport(
             netWorth: netWorth,
             savingsRate: savingsRate,
             debtToIncomeRatio: dti,
-            investmentScore: Int(min(100, (savingsRate * 0.5) + (efMonths * 10))),
+            investmentScore: investmentScore,
             emergencyFundMonths: efMonths
         )
         
@@ -1040,6 +1208,132 @@ final class AppStateManager {
                 }
             }
         }
+    }
+
+    func syncUpstoxHoldings(
+        _ holdings: [UpstoxHolding],
+        mutualFunds: [UpstoxMutualFundHolding] = [],
+        mutualFundOrders: [UpstoxMutualFundOrder] = [],
+        mutualFundSIPs: [UpstoxMutualFundSIP] = []
+    ) {
+        guard var profile = currentProfile else { return }
+
+        let manualInvestments = profile.investments.filter { $0.brokerSource != "Upstox" }
+        let existingUpstoxInvestments = Dictionary(
+            profile.investments
+                .filter { $0.brokerSource == "Upstox" }
+                .compactMap { investment in
+                    investment.brokerInstrumentID.map { ($0, investment) }
+                },
+            uniquingKeysWith: { first, _ in first }
+        )
+        let connectedStockInvestments = holdings
+            .filter { $0.quantity > 0 }
+            .map { holding in
+                return AstraInvestment(
+                    id: existingUpstoxInvestments[holding.id]?.id ?? UUID(),
+                    investmentType: .stocks,
+                    subtype: .largeCap,
+                    investmentName: holding.displayName,
+                    investmentAmount: holding.investedAmount.safeFinite,
+                    startDate: existingUpstoxInvestments[holding.id]?.startDate ?? Date(),
+                    mode: .lumpsum,
+                    isin: holding.isin,
+                    symbol: holding.tradingSymbol,
+                    quantity: holding.quantity.safeFinite,
+                    livePrice: holding.currentPrice.safeFinite,
+                    priceChange: holding.dayChange.safeFinite,
+                    priceChangePercentage: holding.dayChangePercentage.safeFinite,
+                    brokerSource: "Upstox",
+                    brokerInstrumentID: holding.id
+                )
+            }
+        let connectedMutualFundInvestments = mutualFunds
+            .filter { $0.quantity > 0 }
+            .map { holding in
+                let matchedOrders = mutualFundOrders
+                    .filter { order in
+                        order.isCompleted && mutualFundRecord(
+                            instrumentKey: order.instrumentKey,
+                            folio: order.folio,
+                            matches: holding
+                        )
+                    }
+                    .sorted { ($0.transactionDate ?? .distantPast) < ($1.transactionDate ?? .distantPast) }
+                let matchedSIP = mutualFundSIPs.first { sip in
+                    normalizedUpstoxKey(sip.instrumentKey) == normalizedUpstoxKey(holding.instrumentKey)
+                }
+                let isSIP = matchedSIP != nil || matchedOrders.contains(where: \.isSIP)
+                let installments = matchedOrders.compactMap { order -> AstraInvestmentTransaction? in
+                    guard let date = order.transactionDate else { return nil }
+                    let nav = order.executedNAV.safeFinite
+                    let amount = order.amount > 0 ? order.amount.safeFinite : (order.quantity * nav).safeFinite
+                    return AstraInvestmentTransaction(
+                        date: date,
+                        type: order.transactionType?.uppercased() == "SELL" ? .sell : .buy,
+                        amount: amount,
+                        nav: nav,
+                        units: order.quantity.safeFinite
+                    )
+                }
+                let startDate = matchedSIP?.createdDate
+                    ?? installments.first?.date
+                    ?? existingUpstoxInvestments[holding.id]?.startDate
+                    ?? Date()
+                let recurringAmount = matchedSIP?.instalmentAmount
+                    ?? matchedOrders.last(where: { $0.isSIP && $0.transactionType?.uppercased() == "BUY" })?.amount
+
+                return AstraInvestment(
+                    id: existingUpstoxInvestments[holding.id]?.id ?? UUID(),
+                    investmentType: .mutualFund,
+                    subtype: .equityFund,
+                    investmentName: holding.displayName,
+                    investmentAmount: (isSIP ? (recurringAmount ?? holding.investedAmount) : holding.investedAmount).safeFinite,
+                    startDate: startDate,
+                    mode: isSIP ? .sip : .lumpsum,
+                    isin: holding.instrumentKey,
+                    lastNAV: holding.lastPrice.safeFinite,
+                    lastUpdated: Date(),
+                    units: holding.quantity.safeFinite,
+                    purchaseNAV: holding.averagePrice.safeFinite,
+                    livePrice: holding.lastPrice.safeFinite,
+                    priceChange: holding.pnl.safeFinite,
+                    brokerSource: "Upstox",
+                    brokerInstrumentID: holding.id,
+                    installments: installments
+                )
+            }
+
+        profile.investments = manualInvestments + connectedStockInvestments + connectedMutualFundInvestments
+        currentProfile = profile
+        recalculateFinancials()
+    }
+
+    private func normalizedUpstoxKey(_ value: String?) -> String {
+        value?
+            .trimmingCharacters(in: .whitespacesAndNewlines)
+            .uppercased() ?? ""
+    }
+
+    private func mutualFundRecord(
+        instrumentKey: String?,
+        folio: String?,
+        matches holding: UpstoxMutualFundHolding
+    ) -> Bool {
+        guard normalizedUpstoxKey(instrumentKey) == normalizedUpstoxKey(holding.instrumentKey) else {
+            return false
+        }
+
+        let orderFolio = normalizedUpstoxKey(folio)
+        let holdingFolio = normalizedUpstoxKey(holding.folio)
+        return orderFolio.isEmpty || holdingFolio.isEmpty || orderFolio == holdingFolio
+    }
+
+    func removeUpstoxHoldings() {
+        guard var profile = currentProfile else { return }
+        profile.investments.removeAll { $0.brokerSource == "Upstox" }
+        currentProfile = profile
+        recalculateFinancials()
     }
     
     func deleteInvestment(at indexSet: IndexSet) {
@@ -1196,12 +1490,16 @@ final class AppStateManager {
         var updated = false
         
         // Update Stock Prices
-        let stockSymbols = profile.investments.compactMap { $0.investmentType == .stocks ? $0.symbol : nil }
+        let marketTypes: Set<AstraInvestmentType> = [.stocks, .goldETF, .cryptocurrency]
+        let stockSymbols = profile.investments.compactMap { marketTypes.contains($0.investmentType) ? $0.symbol : nil }
         if !stockSymbols.isEmpty {
             let stockPrices = await StockService.shared.fetchLivePrices(symbols: stockSymbols)
             for i in 0..<profile.investments.count {
-                if let symbol = profile.investments[i].symbol, let price = stockPrices[symbol] {
+                if marketTypes.contains(profile.investments[i].investmentType),
+                   let symbol = profile.investments[i].symbol,
+                   let price = stockPrices[symbol] {
                     profile.investments[i].livePrice = price
+                    profile.investments[i].lastNAV = price
                     profile.investments[i].lastUpdated = Date()
                     updated = true
                 }
@@ -1271,12 +1569,26 @@ final class AppStateManager {
                         }
                     }
                 }
-            } else if inv.investmentType == .stocks {
+            } else if marketTypes.contains(inv.investmentType) {
                 guard let symbol = inv.symbol else { continue }
-                
-                
-                // Populate Missing Installments for Stocks
-                if profile.investments[i].installments.isEmpty {
+
+                let expectedCount: Int = {
+                    guard inv.mode == .sip else { return 1 }
+                    let cal = Calendar.current
+                    var count = 0
+                    var d = inv.startDate
+                    let today = Date()
+                    while d <= today {
+                        count += 1
+                        guard let next = cal.date(byAdding: .month, value: 1, to: d) else { break }
+                        d = next
+                    }
+                    return max(count, 1)
+                }()
+                let needsRecalc = profile.investments[i].installments.isEmpty || (inv.mode == .sip && profile.investments[i].installments.count < expectedCount)
+
+                // Populate Missing Installments for Stocks, Gold ETFs, and Crypto
+                if needsRecalc {
                     if inv.mode == .sip {
                         let (sipUnits, _, simulatedInstallments) = await StockService.shared.calculateHistoricalSIPUnits(
                             symbol: symbol,

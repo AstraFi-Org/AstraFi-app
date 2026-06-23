@@ -27,9 +27,9 @@ private struct RadarChartInfoSheet: View {
         insights.insuranceCount >= 2 ? 9.0 : insights.insuranceCount == 1 ? 6.5 : 2.0
     }
 
-    private var savingsPct: Int   { Int((insights.savingsRate * 100).rounded()) }
+    private var savingsPct: Int   { (insights.savingsRate * 100).rounded().safeInt }
     private var coverageMonths: Double { insights.emergencyCoverageRatio * 6 }
-    private var highRiskPct: Int  { Int((insights.investmentBreakdown.highRiskRatio * 100).rounded()) }
+    private var highRiskPct: Int  { (insights.investmentBreakdown.highRiskRatio * 100).rounded().safeInt }
 
     var body: some View {
         NavigationStack {
@@ -301,7 +301,7 @@ struct HeroCard: View {
                         .rotationEffect(.degrees(90))
                         .animation(.easeOut(duration: 1.4), value: score)
                     VStack(spacing: 1) {
-                        Text("\(Int(score))").font(.title3).fontWeight(.black).foregroundStyle(scoreColor)
+                        Text("\(score.safeInt)").font(.title3).fontWeight(.black).foregroundStyle(scoreColor)
                         Text(scoreLabel).font(.system(size: 9, weight: .semibold)).foregroundStyle(.secondary)
                     }
                 }

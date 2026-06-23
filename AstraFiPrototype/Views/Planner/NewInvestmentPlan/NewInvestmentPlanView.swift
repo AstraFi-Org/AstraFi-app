@@ -73,7 +73,7 @@ struct NewInvestmentPlanView: View {
 
             bottomNav
         }
-        .navigationTitle("\(initialGoal) Plan")
+        .navigationTitle("\(initialGoal) Illustration")
         .navigationBarTitleDisplayMode(.inline)
         .navigationBarBackButtonHidden(true)
         .toolbar {

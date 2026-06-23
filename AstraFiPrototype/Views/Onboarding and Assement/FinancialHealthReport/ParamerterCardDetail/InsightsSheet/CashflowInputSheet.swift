@@ -77,7 +77,7 @@ struct CashflowInputSheet: View {
                         HStack {
                             Text("Estimated Monthly Total").font(.subheadline).foregroundStyle(.secondary)
                             Spacer()
-                            Text("₹\(Int(draft.total).formatted())").font(.headline).bold().foregroundStyle(.blue)
+                            Text("₹\(draft.total.safeInt.formatted())").font(.headline).bold().foregroundStyle(.blue)
                         }
                     }
                 }

@@ -37,11 +37,11 @@ struct AuraMoneyFlowChart: View {
                               mIdx + 1)
             data.append(.init(month: months[mIdx], dateKey: key,
                               category: "Total Income",
-                              amount: profile.basicDetails.monthlyIncome,
+                              amount: profile.basicDetails.monthlyIncome.safeFinite,
                               isIncome: true))
             data.append(.init(month: months[mIdx], dateKey: key,
                               category: "Total Expenses",
-                              amount: -profile.basicDetails.monthlyExpenses,
+                              amount: -profile.basicDetails.monthlyExpenses.safeFinite,
                               isIncome: false))
         } else {
             for key in snapshots.keys.sorted() {
@@ -58,25 +58,25 @@ struct AuraMoneyFlowChart: View {
                 if snap.incomeSources.isEmpty && snap.expenseSources.isEmpty {
                     data.append(.init(month: lbl, dateKey: key,
                                       category: "Income",
-                                      amount: snap.totalIncome, isIncome: true))
+                                      amount: snap.totalIncome.safeFinite, isIncome: true))
                     data.append(.init(month: lbl, dateKey: key,
                                       category: "Expenses",
-                                      amount: -snap.totalExpenses, isIncome: false))
+                                      amount: -snap.totalExpenses.safeFinite, isIncome: false))
                 } else {
                     for item in snap.incomeSources {
                         data.append(.init(month: lbl, dateKey: key,
                                           category: item.name,
-                                          amount: item.amount, isIncome: true))
+                                          amount: item.amount.safeFinite, isIncome: true))
                     }
                     for item in snap.expenseSources {
                         data.append(.init(month: lbl, dateKey: key,
                                           category: item.name,
-                                          amount: -item.amount, isIncome: false))
+                                          amount: -item.amount.safeFinite, isIncome: false))
                     }
                 }
             }
         }
-        return data
+        return data.filter { $0.amount.isFinite }
     }
 
     // MARK: Helpers
@@ -91,10 +91,10 @@ struct AuraMoneyFlowChart: View {
     }
 
     private func totalIncome(_ month: String) -> Double {
-        chartData.filter { $0.month == month && $0.isIncome }.map { $0.amount }.reduce(0, +)
+        chartData.filter { $0.month == month && $0.isIncome }.map { $0.amount.safeFinite }.reduce(0, +)
     }
     private func totalExpense(_ month: String) -> Double {
-        abs(chartData.filter { $0.month == month && !$0.isIncome }.map { $0.amount }.reduce(0, +))
+        abs(chartData.filter { $0.month == month && !$0.isIncome }.map { $0.amount.safeFinite }.reduce(0, +))
     }
     private func netSaving(_ month: String) -> Double {
         totalIncome(month) - totalExpense(month)
@@ -106,11 +106,19 @@ struct AuraMoneyFlowChart: View {
         guard sorted.count >= 2 else { return nil }
         let last = sorted[sorted.count - 1]
         let prev = sorted[sorted.count - 2]
-        let lastI = chartData.filter { $0.dateKey == last && $0.isIncome }.map { $0.amount }.reduce(0, +)
-        let prevI = chartData.filter { $0.dateKey == prev && $0.isIncome }.map { $0.amount }.reduce(0, +)
+        let lastI = chartData.filter { $0.dateKey == last && $0.isIncome }.map { $0.amount.safeFinite }.reduce(0, +)
+        let prevI = chartData.filter { $0.dateKey == prev && $0.isIncome }.map { $0.amount.safeFinite }.reduce(0, +)
         guard prevI > 0 else { return nil }
         let diff = lastI - prevI
-        return (pct: (abs(diff) / prevI) * 100, up: diff >= 0)
+        return (pct: ((abs(diff) / prevI) * 100).safeFinite, up: diff >= 0)
+    }
+
+    private var chartYDomain: ClosedRange<Double> {
+        let largestMagnitude = chartData
+            .map { abs($0.amount.safeFinite) }
+            .max() ?? 0
+        let bound = max(largestMagnitude * 1.15, 1)
+        return (-bound)...bound
     }
 
     // MARK: Body
@@ -141,6 +149,7 @@ struct AuraMoneyFlowChart: View {
                         .zIndex(-1)
                 }
             }
+            .chartYScale(domain: chartYDomain)
             .chartXSelection(value: $selectedMonth)
             .chartScrollableAxes(.horizontal)
             .chartXVisibleDomain(length: max(1, min(uniqueMonths.count, 6)))
@@ -283,6 +292,6 @@ struct AuraMoneyFlowChart: View {
         if a >= 1_00_00_000 { return "\(s)₹\(String(format: "%.1f", a/1_00_00_000))Cr" }
         if a >= 1_00_000     { return "\(s)₹\(String(format: "%.1f", a/1_00_000))L"   }
         if a >= 1_000        { return "\(s)₹\(String(format: "%.0f", a/1_000))K"      }
-        return "\(s)₹\(Int(a))"
+        return "\(s)₹\(a.safeInt)"
     }
 }

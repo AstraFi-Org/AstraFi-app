@@ -137,7 +137,7 @@ struct WealthQuestionnaire: View {
             SectionCard {
                 VStack(alignment: .leading, spacing: 14) {
                     SectionHeader2(
-                        icon: "brain.headset",
+                        icon: "chart.pie.fill",
                         iconColor: .blue,
                         title: "Growth Strategy",
                         subtitle: "Risk-Return profile for this goal"

@@ -144,19 +144,13 @@ struct AddLoanView: View {
                         Image(systemName: "xmark")
                             .font(.system(size: 16, weight: .bold))
                             .foregroundColor(.red)
-                            .padding(8)
-                            .background(Color(.systemGray6))
-                            .clipShape(Circle())
                     }
                 }
                 ToolbarItem(placement: .navigationBarTrailing) {
                     Button(action: saveLoan) {
                         Image(systemName: "checkmark")
                             .font(.system(size: 16, weight: .bold))
-                            .foregroundColor(.white)
-                            .padding(8)
-                            .background(amount.isEmpty || rate.isEmpty || tenure.isEmpty ? Color.gray : .blue)
-                            .clipShape(Circle())
+                            .foregroundColor(amount.isEmpty || rate.isEmpty || tenure.isEmpty ? .gray : .blue)
                     }
                     .disabled(amount.isEmpty || rate.isEmpty || tenure.isEmpty)
                 }

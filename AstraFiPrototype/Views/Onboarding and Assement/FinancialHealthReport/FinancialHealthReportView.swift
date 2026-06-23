@@ -137,7 +137,7 @@ struct FinancialHealthReportView: View {
     }
 
     private var footerSection: some View {
-        ReportFooterCTA(data: data, score: Int(score), status: status,
+        ReportFooterCTA(data: data, score: score.safeInt, status: status,
                         insights: insights.activeConcerns.map { $0.title },
                         assessmentInsights: insights)
             .padding(.horizontal, 20).padding(.bottom, 48)

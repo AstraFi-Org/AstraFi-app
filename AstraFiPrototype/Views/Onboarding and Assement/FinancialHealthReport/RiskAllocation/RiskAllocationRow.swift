@@ -9,7 +9,7 @@ import SwiftUI
 
 struct RiskAllocationRow: View {
     let label: String; let amount: Double; let total: Double; let color: Color
-    private var ratio: Double { total > 0 ? amount / total : 0 }
+    private var ratio: Double { total > 0 ? min(max((amount / total).safeFinite, 0), 1) : 0 }
 
     var body: some View {
         VStack(alignment: .leading, spacing: 8) {
@@ -20,7 +20,7 @@ struct RiskAllocationRow: View {
                 }
                 Spacer()
                 VStack(alignment: .trailing, spacing: 1) {
-                    Text("\(Int(ratio * 100))%").font(.subheadline).bold().foregroundStyle(color)
+                    Text("\((ratio * 100).safeInt)%").font(.subheadline).bold().foregroundStyle(color)
                     Text(amount.toCurrency(compact: true)).font(.caption).foregroundStyle(.secondary)
                 }
             }

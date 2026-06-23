@@ -133,8 +133,9 @@ struct AuthOrDivider: View {
 }
 
 struct AuthAppleButton: View {
+    let action: () -> Void
     var body: some View {
-        Button(action: {}) {
+        Button(action: action) {
             HStack(spacing: 10) {
                 Image(systemName: "apple.logo")
                     .font(.system(size: 18, weight: .medium)).foregroundColor(Color(uiColor: .systemBackground))

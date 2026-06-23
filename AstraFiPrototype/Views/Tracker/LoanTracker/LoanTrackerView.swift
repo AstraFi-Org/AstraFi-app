@@ -27,6 +27,7 @@ extension AstraLoanType {
 }
 
 struct LoanTrackerView: View {
+    @Environment(\.dismiss) var dismiss
     @Environment(AppStateManager.self) var appState
     @Environment(\.colorScheme) private var colorScheme
 
@@ -81,12 +82,20 @@ struct LoanTrackerView: View {
         .background(AppTheme.appBackground(for: colorScheme).ignoresSafeArea())
         .navigationTitle("Loan Tracker")
         .navigationBarTitleDisplayMode(.large)
+        .navigationBarBackButtonHidden(true)
         .toolbar {
+            ToolbarItem(placement: .navigationBarLeading) {
+                Button { dismiss() } label: {
+                    Image(systemName: "chevron.left")
+                        .font(.system(size: 16, weight: .bold))
+                        .foregroundColor(.primary)
+                }
+            }
             ToolbarItem(placement: .navigationBarTrailing) {
                 Button { showingAddLoan = true } label: {
-                    Image(systemName: "plus.circle.fill")
-                        .font(.title3)
-                        .foregroundColor(.accentColor)
+                    Image(systemName: "plus")
+                        .font(.system(size: 16, weight: .bold))
+                        .foregroundColor(.blue)
                 }
             }
         }

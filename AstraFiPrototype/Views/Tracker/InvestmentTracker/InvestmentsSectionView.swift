@@ -11,7 +11,7 @@ struct TrackerInvestmentsSection: View {
                 Spacer()
                 NavigationLink(destination: InvestmentOverviewView()) {
                     Image(systemName: "chevron.right")
-                        .font(.title3)
+                        .font(.system(size: 14, weight: .semibold))
                         .foregroundColor(AppTheme.auraIndigo)
                 }
             }
@@ -20,7 +20,7 @@ struct TrackerInvestmentsSection: View {
                                   message: "No investments recorded yet. Complete your assessment to get started.")
             } else {
                 VStack(spacing: 12) {
-                    ForEach(investments) { investment in
+                    ForEach(Array(investments.prefix(3))) { investment in
                         NavigationLink(destination: investmentDestination(for: investment)) {
                             InvestmentCard(investment: investment)
                         }
@@ -58,6 +58,16 @@ struct InvestmentCard: View {
                         
                         if investment.schemeCode != nil {
                             Text("LIVE").font(.auraCaption(size: 9, weight: .black)).padding(.horizontal, 6).padding(.vertical, 2).background(.green).cornerRadius(4).foregroundColor(.black)
+                        }
+
+                        if let source = investment.source {
+                            Text(source.uppercased())
+                                .font(.auraCaption(size: 9, weight: .black))
+                                .padding(.horizontal, 6)
+                                .padding(.vertical, 2)
+                                .background(AppTheme.auraIndigo.opacity(0.14))
+                                .foregroundColor(AppTheme.auraIndigo)
+                                .cornerRadius(4)
                         }
                     }
                 }

@@ -115,6 +115,8 @@ struct AstraInvestment: Codable, Identifiable, Equatable {
     var priceChange: Double?
     var priceChangePercentage: Double?
     var createdAt: Date = Date()
+    var brokerSource: String?
+    var brokerInstrumentID: String?
     
     var installments: [AstraInvestmentTransaction] = []
 }
@@ -135,15 +137,17 @@ struct AstraInvestmentTransaction: Codable, Identifiable, Equatable {
 
 enum AstraInvestmentType: String, Codable, CaseIterable {
     case mutualFund = "Mutual Fund"
-    case goldETF = "Gold ETF"
-    case physicalGold = "Physical Gold"
     case stocks = "Stocks"
-    case deposits = "Deposits"
+    case goldETF = "Gold ETF"
     case cryptocurrency = "Cryptocurrency"
-    case realEstate = "Real Estate"
-    case bonds = "Bonds"
+    case deposits = "Deposits"
+    case physicalGold = "Physical Gold"
     case ppf = "PPF"
     case nps = "NPS"
+    case bonds = "Bonds"
+    case realEstate = "Real Estate"
+    case cashSavings = "Cash Savings"
+    case emergencyFund = "Emergency Fund"
     case other = "Other"
 }
 
@@ -179,9 +183,9 @@ extension AstraInvestment {
                 guard let next = calendar.date(byAdding: .month, value: 1, to: checkDate) else { break }
                 checkDate = next
             }
-            return investmentAmount * Double(count)
+            return (investmentAmount * Double(count)).safeFinite
         }
-        return investmentAmount
+        return investmentAmount.safeFinite
     }
 
     var currentValue: Double {
@@ -199,11 +203,11 @@ extension AstraInvestment {
         }
         
         let price = livePrice ?? lastNAV ?? 0
-        return currentUnits * price
+        return (currentUnits.safeFinite * price.safeFinite).safeFinite
     }
 
     var currentGain: Double {
-        currentValue - totalInvestedAmount
+        (currentValue - totalInvestedAmount).safeFinite
     }
 
     var tenureInYears: Double {
@@ -213,7 +217,7 @@ extension AstraInvestment {
     
     var absoluteProfitRatio: Double {
         guard totalInvestedAmount > 0 else { return 0 }
-        return currentGain / totalInvestedAmount
+        return (currentGain / totalInvestedAmount).safeFinite
     }
     
     var expectedAnnualRate: Double {
@@ -249,6 +253,7 @@ extension AstraInvestment {
         case .goldETF, .physicalGold: return 0.09
         case .realEstate:     return 0.08
         case .nps:            return 0.10
+        case .cashSavings, .emergencyFund: return 0.03
         default:              return 0.10
         }
     }

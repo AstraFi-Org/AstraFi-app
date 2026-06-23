@@ -7,6 +7,7 @@ struct InvestmentAccountsDetailView: View {
 
     @State private var showingAddAccount = false
     @State private var setuConnecting = false
+    @ObservedObject private var upstoxViewModel = UpstoxViewModel.shared
 
     var body: some View {
         ScrollView {
@@ -20,7 +21,7 @@ struct InvestmentAccountsDetailView: View {
                         Text("Connected Portfolios")
                             .font(.headline)
                     }
-                    Text("We use Setu and Account Aggregator framework to securely fetch your investment data from CAS, NSDL, and CDSL.")
+                    Text("Securely connect broker and portfolio sources so AstraFi can keep your investment view fresh.")
                         .font(.caption)
                         .foregroundColor(.secondary)
                 }
@@ -30,7 +31,16 @@ struct InvestmentAccountsDetailView: View {
                 .shadow(color: AppTheme.adaptiveShadow, radius: 8, x: 0, y: 2)
 
                 VStack(alignment: .leading, spacing: 16) {
-                    Text("Linked Sources")
+                    Text("Connected Accounts")
+                        .font(.subheadline)
+                        .foregroundColor(.secondary)
+                        .padding(.horizontal)
+
+                    ConnectedAccountView(viewModel: upstoxViewModel)
+                }
+
+                VStack(alignment: .leading, spacing: 16) {
+                    Text("Portfolio Sources")
                         .font(.subheadline)
                         .foregroundColor(.secondary)
                         .padding(.horizontal)
@@ -126,6 +136,9 @@ struct InvestmentAccountsDetailView: View {
         .navigationTitle("Investment Accounts")
         .navigationBarTitleDisplayMode(.inline)
         .background(AppTheme.appBackground(for: colorScheme))
+        .task {
+            upstoxViewModel.loadStoredConnection()
+        }
     }
 }
 

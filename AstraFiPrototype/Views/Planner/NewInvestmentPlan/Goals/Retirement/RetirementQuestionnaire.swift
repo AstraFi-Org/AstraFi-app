@@ -45,7 +45,7 @@ struct RetirementQuestionnaire: View {
                             icon: "clock.fill",
                             iconColor: goalAccentColor,
                             title: "Retirement Timeline",
-                            subtitle: "When do you plan to stop working?"
+                            subtitle: "When are you aiming to stop working?"
                         )
                         
                         Divider()
@@ -189,7 +189,7 @@ struct RetirementQuestionnaire: View {
                     goalAccentColor: goalAccentColor,
                     onSave: {
                         let planModel = InvestmentPlanModel(
-                            name: "Retirement Plan",
+                            name: "Retirement Illustration",
                             dateSaved: DateFormatter.localizedString(from: Date(), dateStyle: .medium, timeStyle: .none),
                             targetGoal: "Retirement",
                             input: buildTrackerInput()
@@ -448,7 +448,7 @@ struct RetirementInsightCard: View {
         switch preference { case "Lavish": return "crown.fill"; case "Normal": return "star.fill"; default: return "leaf.fill" }
     }
     private var headerTitle: String {
-        switch preference { case "Lavish": return "That's smart thinking!"; case "Normal": return "Comfortable Planning"; default: return "Secure Foundations" }
+        switch preference { case "Lavish": return "That's smart thinking!"; case "Normal": return "Comfortable Lifestyle"; default: return "Secure Foundations" }
     }
     private var insightText: String {
         switch preference {

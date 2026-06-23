@@ -39,6 +39,7 @@ struct Plan2DetailView: View {
                 }
                 .padding(.horizontal, 20)
                 .padding(.bottom, 120)
+                .frame(maxWidth: .infinity)
             }
             .background(AppTheme.appBackground(for: colorScheme))
 
@@ -47,11 +48,11 @@ struct Plan2DetailView: View {
             }
         }
         .alert("Plan Updated", isPresented: $showingSaveAlert) {
-             Button("OK", role: .cancel) { }
-             Button("Tracker") { 
-                 appState.showDashboard = true
+             Button("View in Tracker") { 
+                 appState.selectedTab = 2
                  dismiss()
              }
+             Button("OK", role: .cancel) { }
         } message: {
              Text(alertMessage)
         }
@@ -117,7 +118,8 @@ struct Plan2DetailView: View {
 
     // MARK: - Footer Section
     private var savePlanFooter: some View {
-        let planName = result.name
+        let purpose = input.purposeOfInvestment.isEmpty ? "General" : input.purposeOfInvestment
+        let planName = "Loan Strategy - \(purpose)"
         let isSaved = trackerVM.savedPlanNames.contains(planName)
         let isFollowed = trackerVM.followedPlanNames.contains(planName)
 
@@ -127,7 +129,10 @@ struct Plan2DetailView: View {
                     trackerVM.unsavePlan(planName: planName)
                     alertMessage = "Plan removed."
                 } else {
-                    trackerVM.savePlan(planName: planName, input: input)
+                    var inputToSave = input
+                    inputToSave.targetAmount = String(Int(loanOverride))
+                    inputToSave.timePeriod = String(tenureOverride)
+                    trackerVM.savePlan(planName: planName, input: inputToSave)
                     alertMessage = "Plan saved to profile."
                 }
                 showingSaveAlert = true
@@ -158,7 +163,7 @@ struct Plan2DetailView: View {
                 showingSaveAlert = true
             }) {
                 HStack {
-                    Text(isFollowed ? "Following" : "Follow Plan")
+                    Text(isFollowed ? "Following" : "Follow")
                 }
                 .font(.headline).fontWeight(.bold)
                 .frame(maxWidth: .infinity)
@@ -423,7 +428,6 @@ struct Plan2DetailView: View {
         let interest = totalPaid - principal
 
         let wTotal = CGFloat(totalPaid / maxTotal)
-        let wInterest = CGFloat(max(0, interest) / maxTotal)
         let color = type == .compounded ? Color.blue : Color.green
 
         return VStack(alignment: .leading, spacing: 8) {

@@ -5,6 +5,7 @@ struct Plan3DetailView: View {
     @Environment(\.colorScheme) var colorScheme
     @Environment(\.dismiss) var dismiss
     @Environment(AppStateManager.self) var appState
+    @Environment(TrackerViewModel.self) var trackerVM
 
     var input: InvestmentPlanInputModel
     var result: Plan3Result
@@ -90,6 +91,7 @@ struct Plan3DetailView: View {
                 .padding(.horizontal, 16)
                 .padding(.top, 16)
                 .padding(.bottom, 120)
+                .frame(maxWidth: .infinity)
             }
             .background(AppTheme.appBackground(for: colorScheme))
 
@@ -107,7 +109,11 @@ struct Plan3DetailView: View {
         .navigationTitle("Loan Stress Test")
         .navigationBarTitleDisplayMode(.inline)
         .alert("Action Successful", isPresented: $showingSaveAlert) {
-            Button("OK", role: .cancel) { }
+             Button("View in Tracker") { 
+                 appState.selectedTab = 2
+                 dismiss()
+             }
+             Button("OK", role: .cancel) { }
         } message: {
             Text(alertMessage)
         }
@@ -119,36 +125,73 @@ struct Plan3DetailView: View {
     }
 
     private var savePlanFooter: some View {
-        Button(action: {
-            let model = InvestmentPlanModel(
-                name: "Loan stress test: \(activeResult.recommendedStrategy)",
-                dateSaved: DateFormatter.localizedString(from: Date(), dateStyle: .medium, timeStyle: .none),
-                targetGoal: input.purposeOfInvestment,
-                input: input
-            )
-            appState.savePlan(model)
-            appState.showDashboard = true
-        }) {
-            HStack(spacing: 12) {
-                Text("Save Scenario")
-                    .font(.headline).fontWeight(.bold)
+        let purpose = input.purposeOfInvestment.isEmpty ? "General" : input.purposeOfInvestment
+        let planName = "Loan Stress Test - \(purpose)"
+        let isSaved = trackerVM.savedPlanNames.contains(planName)
+        let isFollowed = trackerVM.followedPlanNames.contains(planName)
+
+        return HStack(spacing: 12) {
+            Button(action: {
+                if isSaved {
+                    trackerVM.unsavePlan(planName: planName)
+                    alertMessage = "Plan removed."
+                } else {
+                    var inputToSave = input
+                    inputToSave.targetAmount = String(Int(loanOverride))
+                    inputToSave.timePeriod = String(tenureOverride)
+                    inputToSave.bankName = bankName
+                    inputToSave.interestRate = interestRate
+                    trackerVM.savePlan(planName: planName, input: inputToSave)
+                    alertMessage = "Plan saved to 'Saved Illustrations'."
+                }
+                showingSaveAlert = true
+            }) {
+                HStack {
+                    Text(isSaved ? "Saved" : "Save")
+                }
+                .frame(maxWidth: .infinity)
+                .padding(.vertical, 14)
+                .background(isSaved ? Color.gray.opacity(0.1) : Color.blue.opacity(0.1))
+                .foregroundColor(isSaved ? .gray : .blue)
+                .cornerRadius(12)
             }
-            .foregroundColor(.white)
-            .frame(maxWidth: .infinity)
-            .padding(.vertical, 18)
-            .background(AppTheme.accentGradient)
-            .cornerRadius(16)
-            .shadow(color: Color.blue.opacity(0.3), radius: 10, x: 0, y: 5)
+
+            Button(action: {
+                if isFollowed {
+                    trackerVM.unfollowPlan(planName: planName)
+                    alertMessage = "You stopped following this plan."
+                } else {
+                    trackerVM.followPlan(planName: planName, input: input)
+
+                    let tAmount = currentStrategy.finalValue
+                    let targetDate = Calendar.current.date(byAdding: .year, value: tenureOverride, to: Date()) ?? Date()
+                    let goalName = input.purposeOfInvestment.isEmpty ? result.name : input.purposeOfInvestment
+                    appState.addGoal(AstraGoal(goalName: goalName, targetAmount: tAmount, currentAmount: 0, targetDate: targetDate))
+
+                    alertMessage = "Plan is now active! New goal added to your tracker."
+                }
+                showingSaveAlert = true
+            }) {
+                HStack {
+                    Text(isFollowed ? "Following" : "Follow")
+                }
+                .font(.headline).fontWeight(.bold)
+                .frame(maxWidth: .infinity)
+                .padding(.vertical, 14)
+                .background(isFollowed ? Color.green : Color.blue)
+                .foregroundColor(.white)
+                .cornerRadius(12)
+                .shadow(color: Color.blue.opacity(0.3), radius: 8, x: 0, y: 4)
+            }
         }
-        .padding(.horizontal, 24)
-        .padding(.bottom, 24)
+        .padding(20)
         .background(
             ZStack {
                 BlurView(style: .systemUltraThinMaterial)
                 LinearGradient(colors: [Color(UIColor.systemBackground).opacity(0.6), Color(UIColor.systemBackground)], startPoint: .top, endPoint: .bottom)
             }
             .ignoresSafeArea()
-            .frame(height: 120)
+            .frame(height: 100)
         )
     }
 
@@ -271,7 +314,7 @@ struct Plan3DetailView: View {
                 Image(systemName: "safari.fill")
                     .foregroundColor(.blue)
                     .font(.title3)
-                Text("Your Investment Plan")
+                Text("Illustrative Allocation")
                     .font(.title3)
                     .fontWeight(.black)
                 Spacer()
@@ -389,8 +432,7 @@ struct Plan3DetailView: View {
                     Spacer()
                     
                     Button(action: {
-                        alertMessage = "This is an educational stress test for debt-funded investing. It is not a recommendation to borrow and invest. Compare downside cases, EMI pressure, taxes, fees, and your emergency fund before making any decision."
-                        showingSaveAlert = true
+                        showAssumptionsAlert = true
                     }) {
                         Image(systemName: "info.circle")
                             .foregroundColor(.blue)

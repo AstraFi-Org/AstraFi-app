@@ -77,7 +77,7 @@ struct InvestmentPlanResultView: View {
                     //                )
                     
                     let targetVal = Double(input.targetAmount.replacingOccurrences(of: ",", with: "")) ?? 0
-                    Text("Based on your target of ₹\(targetVal >= 100000 ? String(format: "%.1fL", targetVal / 100000) : input.targetAmount), here are educational scenarios to compare possible planning paths.")
+                    Text("Based on your target of ₹\(targetVal >= 100000 ? String(format: "%.1fL", targetVal / 100000) : input.targetAmount), here are educational scenarios to compare possible illustration paths.")
                         .font(.system(size: 15, design: .rounded))
                         .multilineTextAlignment(.center)
                         .foregroundStyle(.secondary)

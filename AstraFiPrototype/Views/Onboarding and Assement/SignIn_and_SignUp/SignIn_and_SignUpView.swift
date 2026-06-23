@@ -63,7 +63,9 @@ struct SignInView: View {
                 }
 
                 AuthOrDivider().padding(.vertical, 24)
-                AuthAppleButton().padding(.bottom, 32)
+                AuthAppleButton {
+                    appState.signInWithApple()
+                }.padding(.bottom, 32)
 
                 // Sign up
                 HStack {
@@ -161,7 +163,7 @@ struct SignUpView: View {
                     HStack {
                         Spacer()
                         Button("Need Help?") {}
-                            .font(.system(size: 14)).foregroundColor(.primary)
+                            .font(.system(size: 14)).foregroundColor(.blue  )
                     }
                     .padding(.bottom, 16)
 

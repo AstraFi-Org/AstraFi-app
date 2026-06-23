@@ -9,7 +9,7 @@ public enum SavingPlanOption: String, CaseIterable, Identifiable {
         switch self {
         case .sip: return "I will start SIP"
         case .saveLeftover: return "Save as the amount left"
-        case .noPlan: return "No plan yet"
+        case .noPlan: return "No strategy yet"
         }
     }
     
@@ -78,7 +78,7 @@ public struct GoalSavingPlanSection<Destination: View>: View {
                     SectionHeader2(
                         icon: "questionmark.circle.fill",
                         iconColor: goalAccentColor,
-                        title: "What will be your plan?",
+                        title: "How will you fund this goal?",
                         subtitle: "Choose how you intend to reach this goal"
                     )
                     .padding(.bottom, 14)
@@ -216,11 +216,11 @@ public struct GoalSavingPlanSection<Destination: View>: View {
                                     
                                     if plan == .sip {
                                         let shortfall = max(0, totalCorpus - projectedMFCorpus)
-                                        Text("By SIP you can build \(fmt(projectedMFCorpus)), facing a shortfall of \(fmt(shortfall)).\n\nWanna know better plans?")
+                                        Text("By SIP you can build \(fmt(projectedMFCorpus)), facing a shortfall of \(fmt(shortfall)).\n\nWanna know better illustrations ?")
                                             .font(.system(size: 13, design: .rounded))
                                             .foregroundStyle(.secondary)
                                     } else {
-                                        Text("Without a structured plan or with insufficient savings, inflation might outpace you. Wanna know better plans?")
+                                        Text("Without a structured strategy or with insufficient savings, inflation might outpace you. Wanna know better illustrations?")
                                             .font(.system(size: 13, design: .rounded))
                                             .foregroundStyle(.secondary)
                                     }

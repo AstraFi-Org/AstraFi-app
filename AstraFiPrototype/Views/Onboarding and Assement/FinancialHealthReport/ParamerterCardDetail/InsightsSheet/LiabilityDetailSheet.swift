@@ -144,7 +144,7 @@ struct LiabilityDetailSheet: View {
                         HStack {
                             Text("Debt-to-Income Ratio").font(.subheadline)
                             Spacer()
-                            Text("\(Int(insights.debtToIncomeRatio * 100))%").font(.subheadline).bold().foregroundStyle(dtiColor)
+                            Text("\((insights.debtToIncomeRatio * 100).safeInt)%").font(.subheadline).bold().foregroundStyle(dtiColor)
                             Text(dtiLabel).font(.caption).bold().foregroundStyle(dtiColor)
                                 .padding(.horizontal, 8).padding(.vertical, 3)
                                 .background(dtiColor.opacity(0.1)).clipShape(Capsule())
@@ -204,7 +204,7 @@ struct LiabilityDetailSheet: View {
                     Section(header: Text("Action Items").font(.footnote).textCase(.uppercase)) {
                         ForEach(concerns) { concern in
                             ConcernCard(concern: concern)
-                                .listRowInsets(EdgeInsets(top: 6, leading: 16, bottom: 6, trailing: 16))
+                                .listRowInsets(EdgeInsets(top: 6, leading: 0, bottom: 6, trailing: 0))
                                 .listRowBackground(Color.clear).listRowSeparator(.hidden)
                         }
                     }
@@ -323,7 +323,7 @@ struct LoanDetailModal: View {
 
                     DetailSection(title: "What this loan is used for", content: type.deepExplanation.whatItIsUsedFor)
                     DetailSection(title: "Typical interest rates", content: type.deepExplanation.typicalInterestRates)
-                    DetailSection(title: "Real-life example", content: type.deepExplanation.realLifeExample, isItalic: true)
+                    DetailSection(title: "Real-life example", content: type.deepExplanation.realLifeExample)
 
                     VStack(alignment: .leading, spacing: 16) {
                         Text("Pros").font(.headline)

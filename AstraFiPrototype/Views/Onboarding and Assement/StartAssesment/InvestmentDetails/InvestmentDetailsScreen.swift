@@ -45,6 +45,23 @@ struct InvestmentDetailsScreen: View {
                             }
                         }
                     }
+
+                    Section {
+                        VStack(alignment: .leading, spacing: 12) {
+                            VStack(alignment: .leading, spacing: 4) {
+                                Text("Connect Your Investment Account")
+                                    .font(.headline)
+                                Text("Automatically sync your investments and portfolio from your broker account.")
+                                    .font(.caption)
+                                    .foregroundColor(.secondary)
+                            }
+
+                            BrokerConnectionCard(compact: true)
+                        }
+                        .padding(.vertical, 4)
+                    } header: {
+                        Text("Broker Connection")
+                    }
                     
                     Section {
                         Button {

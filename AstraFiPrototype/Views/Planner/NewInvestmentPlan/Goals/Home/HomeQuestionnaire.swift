@@ -28,8 +28,8 @@ enum HomeLocationType: String, CaseIterable {
     
     var icon: String {
         switch self {
-        case .highTech: return "building.3.fill"
-        case .metro: return "building.2.fill"
+        case .highTech: return "building.2.fill"
+        case .metro: return "building.fill"
         case .nonMetro: return "house.lodge.fill"
         case .rural: return "tree.fill"
         }
@@ -75,7 +75,7 @@ struct HomeQuestionnaire: View {
                         icon: "calendar.badge.clock",
                         iconColor: goalAccentColor,
                         title: "Purchase Timeline",
-                        subtitle: "When do you plan to buy your home?"
+                        subtitle: "When are you aiming to buy your home?"
                     )
                     
                     Divider()
@@ -472,12 +472,13 @@ struct HomePriceHikeSheet: View {
                             Image(systemName: "chart.line.uptrend.xyaxis")
                                 .font(.caption)
                                 .foregroundStyle(accentColor)
-                            Text("Property prices have grown by ~\(Int(totalTenYearGrowth * 100))% since 2014")
+                            Text("Property prices have grown by ~\(Int(totalTenYearGrowth * 100))% since 2017")
                                 .font(.caption)
                                 .foregroundStyle(.secondary)
                         }
                     }
                     .padding()
+                    .frame(maxWidth: .infinity)
                     .background(Color(.secondarySystemBackground), in: RoundedRectangle(cornerRadius: 16))
                     .padding(.horizontal)
                     
@@ -486,14 +487,15 @@ struct HomePriceHikeSheet: View {
                         Text("Future Appreciation Factors")
                             .font(.system(size: 18, weight: .bold, design: .rounded))
                         
-                        VStack(spacing: 16) {
+                        VStack(alignment: .leading, spacing: 20) {
                             factorItem(icon: "bolt.fill", title: "Infrastructure Growth", desc: "New metros, highways, and flyovers nearby.")
                             factorItem(icon: "briefcase.fill", title: "Commercial Hubs", desc: "Nearby tech parks and offices drive rental demand.")
                             factorItem(icon: "person.2.fill", title: "Demand vs Supply", desc: "High migration to \(location.rawValue) increases prices.")
                             factorItem(icon: "chart.bar.fill", title: "General Inflation", desc: "Rising cost of cement, steel, and labor.")
                         }
                         .padding()
-                        .background(AppTheme.elevatedCardBackground, in: RoundedRectangle(cornerRadius: 16))
+                        .frame(maxWidth: .infinity, alignment: .leading)
+                        .background(Color(.secondarySystemBackground), in: RoundedRectangle(cornerRadius: 16))
                     }
                     .padding(.horizontal)
                     
@@ -535,7 +537,7 @@ struct HomePriceHikeSheet: View {
         var base: Double = 30
         var results: [(year: String, value: Double)] = []
         for i in 0..<10 {
-            let year = 2014 + i
+            let year = 2017 + i
             results.append((year: "'\(year-2000)", value: base))
             base *= (1 + rate)
         }
@@ -552,20 +554,22 @@ struct HomePriceHikeSheet: View {
     }
     
     private func factorItem(icon: String, title: String, desc: String) -> some View {
-        HStack(alignment: .top, spacing: 14) {
+        HStack(alignment: .top, spacing: 16) {
             Image(systemName: icon)
-                .font(.system(size: 16, weight: .bold))
+                .font(.system(size: 20))
                 .foregroundStyle(accentColor)
-                .frame(width: 24)
+                .frame(width: 24, alignment: .center)
             
-            VStack(alignment: .leading, spacing: 2) {
+            VStack(alignment: .leading, spacing: 4) {
                 Text(title)
                     .font(.system(size: 15, weight: .bold))
                 Text(desc)
-                    .font(.system(size: 12))
+                    .font(.system(size: 13))
                     .foregroundStyle(.secondary)
+                    .fixedSize(horizontal: false, vertical: true)
             }
         }
+        .frame(maxWidth: .infinity, alignment: .leading)
     }
 }
 

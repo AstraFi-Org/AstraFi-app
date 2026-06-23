@@ -11,7 +11,7 @@ struct TrackerGoalsSection: View {
                 Spacer()
                 NavigationLink(destination: GoalListView()) {
                     Image(systemName: "chevron.right")
-                        .font(.title3)
+                        .font(.system(size: 14, weight: .semibold))
                         .foregroundColor(AppTheme.auraIndigo)
                 }
             }
@@ -20,7 +20,7 @@ struct TrackerGoalsSection: View {
                                   message: "No goals set yet. Complete your assessment to start tracking goals.")
             } else {
                 VStack(spacing: 12) { 
-                    ForEach(goals) { goal in 
+                    ForEach(Array(goals.prefix(3))) { goal in 
                         NavigationLink(destination: goalDestination(for: goal)) {
                             GoalCard(goal: goal) 
                         }
@@ -49,7 +49,7 @@ struct GoalCard: View {
         VStack(spacing: 16) {
             HStack {
                 VStack(alignment: .leading, spacing: 4) {
-                    Text(goal.name).font(.auraHeader(size: 17)).foregroundColor(AppTheme.auraIndigo)
+                    Text(goal.name).font(.auraHeader(size: 17))
                     Text(goal.associatedFund).font(.auraCaption()).foregroundColor(.secondary)
                 }
                 Spacer()
@@ -64,7 +64,7 @@ struct GoalCard: View {
                 }
                 
                 // Apple-native progress bar
-                ProgressView(value: min(max(0, goal.progress), 1))
+                ProgressView(value: min(max(goal.progress.safeFinite, 0), 1))
                     .progressViewStyle(.linear)
                     .tint(AppTheme.auraIndigo)
             }

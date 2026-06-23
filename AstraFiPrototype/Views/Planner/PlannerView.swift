@@ -19,7 +19,7 @@ struct PlannerView: View {
     private var monthlyExpenses: Double { profile?.basicDetails.monthlyExpenses ?? 0 }
     private var savingRate:      Int    {
         guard monthlyIncome > 0 else { return 0 }
-        return Int(((monthlyIncome - monthlyExpenses) / monthlyIncome) * 100)
+        return (((monthlyIncome - monthlyExpenses) / monthlyIncome) * 100).safeInt
     }
 
     private var totalInvested: Double { investments.reduce(0) { $0 + $1.investmentAmount } }
@@ -334,7 +334,7 @@ struct PlannerView: View {
                                                 Text("Forecast:")
                                                     .font(.system(size: 10))
                                                     .foregroundStyle(.secondary)
-                                                Text("+\(Int(inv.expectedAnnualRate * 100))% p.a.")
+                                                Text("+\((inv.expectedAnnualRate * 100).safeInt)% p.a.")
                                                     .font(.system(size: 11, weight: .bold))
                                                     .foregroundStyle(AppTheme.auraGreen)
                                             }
@@ -375,8 +375,8 @@ struct PlannerView: View {
     private var actionButtonsSection: some View {
         VStack(spacing: 10) {
             ActionButton(
-                title: "New Investment Plan",
-                subtitle: "Plan a new investment strategy",
+                title: "New Investment Illustration",
+                subtitle: "Start a new investment strategy",
                 icon: "chart.line.uptrend.xyaxis.circle.fill",
                 gradientColors: [Color(hex: "#007AFF"), Color(hex: "#5E5CE6")],
                 action: { showNewInvestmentPlan = true }
@@ -403,6 +403,8 @@ struct PlannerView: View {
         case .bonds:          return "Debt"
         case .ppf:            return "Debt"
         case .nps:            return "Debt"
+        case .cashSavings:    return "Cash"
+        case .emergencyFund:  return "Cash"
         case .other:          return "Other"
         }
     }

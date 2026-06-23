@@ -26,7 +26,7 @@ struct EmergencyFundCard: View {
                 }
                 Spacer()
                 VStack(alignment: .trailing, spacing: 4) {
-                    Text("\(Int(progress * 100))% funded").font(.caption).fontWeight(.bold)
+                    Text("\((progress * 100).safeInt)% funded").font(.caption).fontWeight(.bold)
                         .foregroundStyle(progressColor).padding(.horizontal, 10).padding(.vertical, 4)
                         .background(progressColor.opacity(0.1)).clipShape(Capsule())
                 }
@@ -60,4 +60,3 @@ struct EmergencyFundCard: View {
         .shadow(color: AppTheme.adaptiveShadow, radius: 8, x: 0, y: 2)
     }
 }
-

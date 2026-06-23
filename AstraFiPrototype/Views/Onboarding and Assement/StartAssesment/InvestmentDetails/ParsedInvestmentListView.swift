@@ -90,10 +90,9 @@ struct ParsedInvestmentListView: View {
                         dismiss()
                     }, label: {
                         Image(systemName: "xmark")
-                            .foregroundStyle(.red)
-                            
+                            .font(.system(size: 16, weight: .bold))
+                            .foregroundColor(.red)
                     })
-
                 }
                 ToolbarItem(placement: .confirmationAction) {
                     Button(action: {
@@ -101,13 +100,9 @@ struct ParsedInvestmentListView: View {
                         dismiss()
                     }, label: {
                         Image(systemName: "checkmark")
-                            .foregroundStyle(Color.white)
-                            .padding(6.5)
-                            .background(Color.blue)
-                            .clipShape(Circle())
-                            
+                            .font(.system(size: 16, weight: .bold))
+                            .foregroundColor(.blue)
                     })
-                    .fontWeight(.bold)
                 }
             }
         }

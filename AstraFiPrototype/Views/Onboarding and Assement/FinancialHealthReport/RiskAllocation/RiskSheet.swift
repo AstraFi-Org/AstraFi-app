@@ -62,7 +62,7 @@ struct RiskSheet: View {
                                 .foregroundStyle(score >= 0.7 ? Color(hex: "#30D158") : score >= 0.5 ? Color(hex: "#FF9F0A") : Color(hex: "#FF453A"))
                         }
                         Spacer()
-                        Text("\(Int(score * 100))").font(.largeTitle).bold()
+                        Text("\((score * 100).safeInt)").font(.largeTitle).bold()
                             .foregroundStyle(score >= 0.7 ? Color(hex: "#30D158") : Color(hex: "#FF9F0A"))
                         Text("/100").font(.callout).foregroundStyle(.secondary).padding(.top, 10)
                     }
@@ -75,16 +75,16 @@ struct RiskSheet: View {
                              : "Regularly rebalance between equity and debt based on market conditions and your goals.")
                             .font(.subheadline).foregroundStyle(.secondary).lineSpacing(3)
                     }
+                    .frame(maxWidth: .infinity, alignment: .leading)
                     .padding(14).background(Color(hex: "#FF9F0A").opacity(0.08))
                     .clipShape(RoundedRectangle(cornerRadius: 12, style: .continuous))
-                    .listRowInsets(EdgeInsets(top: 8, leading: 16, bottom: 8, trailing: 16))
                 }
 
                 if !concerns.isEmpty {
                     Section(header: Text("Action Items").font(.footnote).textCase(.uppercase)) {
                         ForEach(concerns) { concern in
                             ConcernCard(concern: concern)
-                                .listRowInsets(EdgeInsets(top: 6, leading: 16, bottom: 6, trailing: 16))
+                                .listRowInsets(EdgeInsets(top: 6, leading: 0, bottom: 6, trailing: 0))
                                 .listRowBackground(Color.clear).listRowSeparator(.hidden)
                         }
                     }

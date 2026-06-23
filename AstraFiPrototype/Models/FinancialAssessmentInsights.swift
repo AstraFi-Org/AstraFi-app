@@ -201,11 +201,11 @@ struct FinancialAssessmentInsights: Hashable, Codable {
     }
 
     var savingRatioPercent: Int {
-        Int((savingsRate * 100).rounded())
+        (savingsRate * 100).rounded().safeInt
     }
 
     var highRiskInvestmentPercent: Int {
-        Int((investmentBreakdown.highRiskRatio * 100).rounded())
+        (investmentBreakdown.highRiskRatio * 100).rounded().safeInt
     }
 
     func status(for parameter: AssessmentParameter) -> AssessmentParameterStatus {
@@ -308,7 +308,7 @@ struct FinancialAssessmentInsights: Hashable, Codable {
                     parameter: .vitals,
                     status: .concern,
                     title: "Savings below 30% benchmark",
-                    summary: "Current savings rate is \(Int((savingsRate * 100).rounded()))%, below the 30% target.",
+                    summary: "Current savings rate is \((savingsRate * 100).rounded().safeInt)%, below the 30% target.",
                     recommendation: "Trim discretionary expenses and auto transfer savings to reach at least 30% each month."
                 )
             )
@@ -331,7 +331,7 @@ struct FinancialAssessmentInsights: Hashable, Codable {
                         parameter: .investment,
                         status: .concern,
                         title: "Portfolio is concentrated in high risk assets",
-                        summary: "\(Int((investmentBreakdown.highRiskRatio * 100).rounded()))% of your investments are high risk.",
+                        summary: "\((investmentBreakdown.highRiskRatio * 100).rounded().safeInt)% of your investments are high risk.",
                         recommendation: "Reduce concentration risk by diversifying into debt, deposits, or other lower volatility assets."
                     )
                 )
@@ -417,7 +417,7 @@ struct FinancialAssessmentInsights: Hashable, Codable {
                         parameter: .liabilities,
                         status: .concern,
                         title: "Debt pressure is high",
-                        summary: "Debt-to-income ratio is \(Int((debtToIncomeRatio * 100).rounded()))%, which is elevated.",
+                        summary: "Debt-to-income ratio is \((debtToIncomeRatio * 100).rounded().safeInt)%, which is elevated.",
                         recommendation: "Increase prepayments on high interest loans to bring debt-to-income under control."
                     )
                 )
@@ -427,7 +427,7 @@ struct FinancialAssessmentInsights: Hashable, Codable {
                         parameter: .liabilities,
                         status: .watch,
                         title: "Debt obligations need monitoring",
-                        summary: "Debt to income ratio is \(Int((debtToIncomeRatio * 100).rounded()))%.",
+                        summary: "Debt to income ratio is \((debtToIncomeRatio * 100).rounded().safeInt)%.",
                         recommendation: "Keep EMIs within 30% of income where possible and avoid adding unsecured debt."
                     )
                 )
@@ -461,7 +461,7 @@ struct FinancialAssessmentInsights: Hashable, Codable {
         let principal = parseNumber(entry.amount)
         let annualRate = parseNumber(entry.interestRate) / 100
         let tenureYears = parseNumber(entry.tenure)
-        let months = max(1, Int((tenureYears > 0 ? tenureYears : 1) * 12))
+        let months = max(1, ((tenureYears > 0 ? tenureYears : 1) * 12).safeInt)
 
         guard principal > 0 else { return 0 }
         if annualRate <= 0 {
@@ -543,7 +543,7 @@ struct FinancialAssessmentInsights: Hashable, Codable {
             switch type {
             case .stocks, .cryptocurrency:
                 return .high
-            case .deposits, .bonds:
+            case .deposits, .bonds, .cashSavings, .emergencyFund:
                 return .low
             case .ppf:
                 return .low
@@ -572,7 +572,7 @@ struct FinancialAssessmentInsights: Hashable, Codable {
         }
 
         private static func isLowRiskLiquid(type: AstraInvestmentType, name: String) -> Bool {
-            if [.deposits, .bonds].contains(type) {
+            if [.deposits, .bonds, .cashSavings, .emergencyFund].contains(type) {
                 return true
             }
             return containsAny(name, in: lowRiskLiquidKeywords)

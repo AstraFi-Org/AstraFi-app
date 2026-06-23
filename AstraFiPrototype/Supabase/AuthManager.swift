@@ -75,7 +75,7 @@ class AuthManager {
     // MARK: - Multi-Factor Authentication (MFA)
     
     func enrollMFA() async throws -> (factorId: String, qrCodeUri: String) {
-        let enrollment = try await supabase.auth.mfa.enroll(params: MFAEnrollParams())
+        let enrollment = try await supabase.auth.mfa.enroll(params: MFATotpEnrollParams())
         return (enrollment.id, enrollment.totp?.qrCode ?? "")
     }
     

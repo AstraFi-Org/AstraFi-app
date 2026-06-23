@@ -9,7 +9,7 @@ struct CircularActivityRing: View {
     var body: some View {
         ZStack {
             Circle()
-                .stroke(Color.white.opacity(0.1), lineWidth: 10)
+                .stroke(Color.gray.opacity(0.2), lineWidth: 10)
 
             Circle()
                 .trim(from: 0, to: CGFloat(min(percentage / 100, 1.0)))

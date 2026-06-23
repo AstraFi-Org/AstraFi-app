@@ -173,7 +173,7 @@ struct EmergencyFundSectionView: View {
     // MARK: Timeline
     private var monthsToGoal: Int {
         guard monthlyContribution > 0, remainingNeeded > 0 else { return 0 }
-        return Int(ceil(remainingNeeded / monthlyContribution))
+        return ceil(remainingNeeded / monthlyContribution).safeInt
     }
     private var completionDate: String {
         guard monthsToGoal > 0 else { return "" }
@@ -604,7 +604,7 @@ struct AllocationRecommendationScreen: View {
     private var riskLabel: String { switch riskTolerance { case .low: "Conservative"; case .medium: "Balanced"; case .high: "Growth-oriented" } }
     private var riskColor: Color  { switch riskTolerance { case .low: Color(hex: "#30D158"); case .medium: Color(hex: "#007AFF"); case .high: Color(hex: "#FF9F0A") } }
     private var riskRationale: String { switch riskTolerance {
-        case .low:    return "Your profile suggests you prefer safety and instant access."
+        case .low:    return "Your profile indicates you prefer safety and instant access."
         case .medium: return "A balanced split gives good liquidity with slightly better returns."
         case .high:   return "You can tolerate lower immediate liquidity for better returns via T-Bills."
     }}
@@ -659,7 +659,7 @@ struct AllocationRecommendationScreen: View {
 
     private var instrumentsSection: some View {
         VStack(alignment: .leading, spacing: 14) {
-            Text("Suggested Allocation").font(.system(size: 15, weight: .semibold, design: .rounded))
+            Text("Illustrative Allocation").font(.system(size: 15, weight: .semibold, design: .rounded))
             instrRow(name: "Treasury Bills", icon: "building.columns.fill", color: Color(hex: "#30D158"), pct: rec.t, rate: EFInstrumentRate.treasuryBills,  liq: "T+2 access",     info: .treasuryBills, guide: .treasuryBills)
             instrRow(name: "Saving Account", icon: "banknote.fill",         color: Color(hex: "#007AFF"), pct: rec.s, rate: EFInstrumentRate.savingsAccount, liq: "Instant access", info: .savingsAccount, guide: .savingsAccount)
             instrRow(name: "Sweep-in FD",    icon: "arrow.2.squarepath",    color: Color(hex: "#FF9F0A"), pct: rec.f, rate: EFInstrumentRate.sweepInFD,      liq: "Next-day",       info: .sweepInFD, guide: .sweepInFD)

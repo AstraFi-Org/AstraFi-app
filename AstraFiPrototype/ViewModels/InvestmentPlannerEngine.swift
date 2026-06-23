@@ -225,7 +225,7 @@ class InvestmentPlannerEngine {
             points.append(ValidationPoint(
                 icon: "exclamationmark.circle.fill",
                 title: "Aggressive Allocation",
-                detail: "SIP exceeds the suggested safe surplus. Ensure expenses are tightly managed.",
+                detail: "SIP exceeds the projected safe surplus. Ensure expenses are tightly managed.",
                 severity: .warning
             ))
         } else {

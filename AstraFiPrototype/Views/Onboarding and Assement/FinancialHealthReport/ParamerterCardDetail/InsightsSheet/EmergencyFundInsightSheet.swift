@@ -67,7 +67,7 @@ struct EmergencyFundInsightSheet: View {
                     Text(current.toCurrency(compact: false)).font(.title2).bold()
                 }
                 Spacer()
-                Text("\(Int(progress * 100))% of target")
+                Text("\((progress * 100).safeInt)% of target")
                     .font(.caption).bold()
                     .foregroundStyle(progress >= 1 ? Color(hex: "#30D158") : progress >= 0.5 ? Color(hex: "#FF9F0A") : Color(hex: "#FF453A"))
                     .padding(.horizontal, 10).padding(.vertical, 4)

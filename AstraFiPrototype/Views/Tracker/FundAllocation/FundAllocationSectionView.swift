@@ -5,21 +5,25 @@ struct TrackerFundAllocationSection: View {
     let allocations: [FundAllocation]
     @Environment(\.colorScheme) private var colorScheme
 
+    private var validAllocations: [FundAllocation] {
+        allocations.filter { $0.percentage.isFinite && $0.percentage > 0 }
+    }
+
     var body: some View {
         VStack(alignment: .leading, spacing: 12) {
             Text("Fund Allocation")
                 .font(.system(size: 22, weight: .bold))
 
             VStack(spacing: 24) {
-                if allocations.isEmpty {
+                if validAllocations.isEmpty {
                     TrackerEmptyState(icon: "chart.pie.fill", message: "No fund allocations found.")
                 } else {
-                    FundAllocationChart(allocations: allocations)
+                    FundAllocationChart(allocations: validAllocations)
                         .frame(height: 220)
                         .padding(.top, 16)
 
                     LazyVGrid(columns: [GridItem(.flexible()), GridItem(.flexible())], alignment: .leading, spacing: 16) {
-                        ForEach(allocations) { allocation in
+                        ForEach(validAllocations) { allocation in
                             HStack(alignment: .top, spacing: 8) {
                                 Circle()
                                     .fill(allocation.color.gradient)
@@ -50,17 +54,20 @@ struct TrackerFundAllocationSection: View {
 @available(iOS 17.0, *)
 struct FundAllocationChart: View {
     let allocations: [FundAllocation]
-    @State private var animated: Bool = false
+    @State private var isVisible = false
 
     var body: some View {
         Chart(allocations) { alloc in
             SectorMark(
-                angle: .value("Percentage", animated ? alloc.percentage : 0),
+                // Never animate sector angles from an all-zero data set.
+                // Charts can generate NaN arc geometry when every angle is zero.
+                angle: .value("Percentage", alloc.percentage),
                 innerRadius: .ratio(0.65),
                 angularInset: 2.0
             )
             .foregroundStyle(alloc.color.gradient)
             .cornerRadius(6)
+            .opacity(isVisible ? 1 : 0.01)
             .annotation(position: .overlay, alignment: .center) {
                 if alloc.percentage >= 5 {
                     VStack(spacing: 0) {
@@ -92,8 +99,8 @@ struct FundAllocationChart: View {
             }
         }
         .onAppear {
-            withAnimation(.spring(response: 0.8, dampingFraction: 0.7).delay(0.1)) {
-                animated = true
+            withAnimation(.easeOut(duration: 0.35)) {
+                isVisible = true
             }
         }
     }

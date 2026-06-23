@@ -511,6 +511,7 @@ private struct EducationLifestyleRow: View {
 // MARK: - Lifestyle Details Sheet
 struct LifestyleDetailsSheet: View {
     @Environment(\.dismiss) var dismiss
+    @Environment(\.colorScheme) var colorScheme
 
     var body: some View {
         NavigationStack {
@@ -520,7 +521,7 @@ struct LifestyleDetailsSheet: View {
                         Text("Lifestyle Details")
                             .font(.system(size: 28, weight: .bold, design: .rounded))
                         Text("Detailed breakdown of living options.")
-                            .font(.system(size: 15))
+                            .font(.system(size: 15, design: .rounded))
                             .foregroundStyle(.secondary)
                     }
                     .padding(.horizontal)
@@ -533,11 +534,11 @@ struct LifestyleDetailsSheet: View {
                                         .font(.system(size: 18, weight: .semibold))
                                         .foregroundStyle(option.color)
                                     Text(option.label)
-                                        .font(.system(size: 18, weight: .bold))
+                                        .font(.system(size: 18, weight: .bold, design: .rounded))
                                         .foregroundStyle(option.color)
                                 }
                                 Text(option.detailedDescription)
-                                    .font(.system(size: 14))
+                                    .font(.system(size: 14, design: .rounded))
                                     .foregroundStyle(.secondary)
                             }
                             .padding()
@@ -552,14 +553,11 @@ struct LifestyleDetailsSheet: View {
                 }
                 .padding(.top, 24)
             }
-            .background(AppTheme.darkBackground)
+            .background(AppTheme.appBackground(for: colorScheme))
             .toolbar {
                 ToolbarItem(placement: .topBarTrailing) {
                     Button("Done") { dismiss() }
                         .fontWeight(.bold)
-                        .tint(.purple)
-                        .buttonStyle(.borderedProminent)
-                        .clipShape(Capsule())
                 }
             }
             .navigationTitle("Lifestyles")
@@ -619,7 +617,7 @@ struct EducationInsightCard: View {
                     SectionHeader2(
                         icon: "graduationcap.fill",
                         iconColor: accentColor,
-                        title: "Education Corpus Plan",
+                        title: "Education Corpus Illustration",
                         subtitle: "Your complete financial target"
                     )
                     
@@ -711,7 +709,7 @@ struct EducationInsightCard: View {
                             .font(.system(size: 11))
                             .foregroundStyle(.blue)
                         VStack(alignment: .leading, spacing: 4) {
-                            Text("International Planning")
+                            Text("International Illustration")
                                 .font(.system(size: 11, weight: .bold))
                             Text("Costs include international travel & higher rent. Consider forex-hedged plans to avoid currency risk.")
                                 .font(.system(size: 10))
@@ -727,7 +725,7 @@ struct EducationInsightCard: View {
                             .font(.system(size: 11))
                             .foregroundStyle(.green)
                         VStack(alignment: .leading, spacing: 4) {
-                            Text("Domestic Planning")
+                            Text("Domestic Illustration")
                                 .font(.system(size: 11, weight: .bold))
                             Text("Assuming hostel/PG stay and mess food. Indian inflation is assumed at 6-8% for education.")
                                 .font(.system(size: 10))

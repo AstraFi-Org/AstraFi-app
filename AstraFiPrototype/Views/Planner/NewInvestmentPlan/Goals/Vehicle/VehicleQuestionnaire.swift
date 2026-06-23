@@ -19,7 +19,7 @@ enum VehicleType: String, CaseIterable {
         switch self {
         case .ev: return "bolt.car.fill"
         case .luxury: return "car.side.fill"
-        case .family: return "suv.fill"
+        case .family: return "car.side.fill"
         case .bike: return "bicycle"
         }
     }
@@ -73,7 +73,7 @@ struct VehicleQuestionnaire: View {
                         icon: "calendar.badge.clock",
                         iconColor: goalAccentColor,
                         title: "Purchase Timeline",
-                        subtitle: "When do you plan to buy your vehicle?"
+                        subtitle: "When are you aiming to buy your vehicle?"
                     )
                     
                     Divider()
@@ -457,12 +457,13 @@ struct VehiclePriceHikeSheet: View {
                             Image(systemName: "chart.line.uptrend.xyaxis")
                                 .font(.caption)
                                 .foregroundStyle(accentColor)
-                            Text("Prices for this segment have grown by ~\(Int(totalTenYearGrowth * 100))% since 2014")
+                            Text("Prices for this segment have grown by ~\(Int(totalTenYearGrowth * 100))% since 2017")
                                 .font(.caption)
                                 .foregroundStyle(.secondary)
                         }
                     }
                     .padding()
+                    .frame(maxWidth: .infinity)
                     .background(Color(.secondarySystemBackground), in: RoundedRectangle(cornerRadius: 16))
                     .padding(.horizontal)
                     
@@ -471,13 +472,14 @@ struct VehiclePriceHikeSheet: View {
                         Text("Appreciation Factors")
                             .font(.system(size: 18, weight: .bold, design: .rounded))
                         
-                        VStack(spacing: 16) {
+                        VStack(alignment: .leading, spacing: 20) {
                             factorItem(icon: "gearshape.2.fill", title: "Regulatory Changes", desc: "Periodic emission norm upgrades (BS6, BS7) increase costs.")
                             factorItem(icon: "cpu", title: "Technology Infusion", desc: "ADAS, premium infotainment, and smart features addition.")
                             factorItem(icon: "leaf.fill", title: "Environmental Cess", desc: "Higher taxes on internal combustion engines vs EVs.")
                             factorItem(icon: "shippingbox.fill", title: "Raw Material Costs", desc: "Fluctuating prices of steel, aluminum, and semiconductors.")
                         }
                         .padding()
+                        .frame(maxWidth: .infinity, alignment: .leading)
                         .background(AppTheme.elevatedCardBackground, in: RoundedRectangle(cornerRadius: 16))
                     }
                     .padding(.horizontal)
@@ -520,7 +522,7 @@ struct VehiclePriceHikeSheet: View {
         var base: Double = 35
         var results: [(year: String, value: Double)] = []
         for i in 0..<10 {
-            let year = 2014 + i
+            let year = 2017 + i
             results.append((year: "'\(year-2000)", value: base))
             base *= (1 + rate)
         }
@@ -528,20 +530,22 @@ struct VehiclePriceHikeSheet: View {
     }
     
     private func factorItem(icon: String, title: String, desc: String) -> some View {
-        HStack(alignment: .top, spacing: 14) {
+        HStack(alignment: .top, spacing: 16) {
             Image(systemName: icon)
-                .font(.system(size: 16, weight: .bold))
+                .font(.system(size: 20))
                 .foregroundStyle(accentColor)
-                .frame(width: 24)
+                .frame(width: 24, alignment: .center)
             
-            VStack(alignment: .leading, spacing: 2) {
+            VStack(alignment: .leading, spacing: 4) {
                 Text(title)
                     .font(.system(size: 15, weight: .bold))
                 Text(desc)
-                    .font(.system(size: 12))
+                    .font(.system(size: 13))
                     .foregroundStyle(.secondary)
+                    .fixedSize(horizontal: false, vertical: true)
             }
         }
+        .frame(maxWidth: .infinity, alignment: .leading)
     }
 }
 
