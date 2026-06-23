@@ -427,6 +427,7 @@ final class AppStateManager {
         
         let controller = ASAuthorizationController(authorizationRequests: [request])
         controller.delegate = delegate
+        controller.presentationContextProvider = delegate
         controller.performRequests()
     }
     
