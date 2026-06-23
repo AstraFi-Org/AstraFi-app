@@ -35,6 +35,7 @@ struct EnhancedGoalCard: View {
     let percentage: Int
     let targetAmount: String
     let gradient: [Color]
+    var cardWidth: CGFloat? = 230
     
     private var goalSymbol: String {
         let lower = title.lowercased()
@@ -48,32 +49,23 @@ struct EnhancedGoalCard: View {
     }
     
     var body: some View {
-        HStack(alignment: .center, spacing: 20) {
+        HStack(alignment: .top, spacing: 16) {
 
             // LEFT SIDE (RING)
-            VStack(spacing: 8) {
+            VStack(spacing: 12) {
                 CircularActivityRing(
                     percentage: Double(percentage),
                     gradient: gradient,
                     symbol: goalSymbol
                 )
 
-                Text("\(percentage)%")
-                    .font(.auraDigital(size: 18))
+                Text("Achieved: \(percentage)%")
+                    .font(.system(size: 12, weight: .bold))
                     .foregroundColor(gradient.first)
-
-                Text("Achieved")
-                    .font(.auraCaption(size: 11, weight: .bold))
-                    .padding(.horizontal, 8)
-                    .padding(.vertical, 4)
-                    .background(gradient.first!.opacity(0.1))
-                    .foregroundColor(gradient.first)
-                    .cornerRadius(6)
             }
 
             // RIGHT SIDE (TEXT)
             VStack(alignment: .leading, spacing: 6) {
-
                 Text(title)
                     .font(.auraHeader(size: 20)) // reduced from 28
                     .foregroundColor(AppTheme.auraIndigo)
@@ -83,10 +75,13 @@ struct EnhancedGoalCard: View {
                     .font(.auraCaption(size: 16)) // reduced from 28
                     .foregroundColor(.secondary)
             }
-            .frame(maxWidth: .infinity, alignment: .leading)
+            .frame(height: 80) // Aligns perfectly with the 80pt ring
+            
+            Spacer(minLength: 0)
         }
         .padding(20)
-        .frame(width:230) 
+        .frame(width: cardWidth)
+        .frame(maxWidth: cardWidth == nil ? .infinity : nil)
         .auraCardStyle(radius: 28)
     }
 }
