@@ -458,24 +458,74 @@ private struct NetWorthProjectionChart: View {
     var body: some View {
         Chart {
             ForEach(points) { point in
+                AreaMark(
+                    x: .value("Year", point.year),
+                    yStart: .value("Baseline", chartDomain.lowerBound),
+                    yEnd: .value("Net Worth", point.value)
+                )
+                .foregroundStyle(
+                    LinearGradient(
+                        colors: [
+                            AppTheme.auraIndigo.opacity(0.22),
+                            AppTheme.auraIndigo.opacity(0.04)
+                        ],
+                        startPoint: .top,
+                        endPoint: .bottom
+                    )
+                )
+                .interpolationMethod(.catmullRom)
+
                 LineMark(
                     x: .value("Year", point.year),
                     y: .value("Net Worth", point.value)
                 )
-                .foregroundStyle(AppTheme.auraIndigo)
+                .foregroundStyle(
+                    LinearGradient(
+                        colors: [AppTheme.auraIndigo, AppTheme.vibrantIndigo],
+                        startPoint: .leading,
+                        endPoint: .trailing
+                    )
+                )
                 .interpolationMethod(.catmullRom)
-                .lineStyle(StrokeStyle(lineWidth: 2, lineCap: .round, lineJoin: .round))
+                .lineStyle(StrokeStyle(lineWidth: 3, lineCap: .round, lineJoin: .round))
+
+                PointMark(
+                    x: .value("Year", point.year),
+                    y: .value("Net Worth", point.value)
+                )
+                .foregroundStyle(AppTheme.auraIndigo)
+                .symbolSize(point.id == points.last?.id ? 80 : 38)
+            }
+
+            if let lastPoint = points.last {
+                PointMark(
+                    x: .value("Year", lastPoint.year),
+                    y: .value("Net Worth", lastPoint.value)
+                )
+                .foregroundStyle(.white)
+                .symbolSize(28)
+                .annotation(position: .top, alignment: .trailing, spacing: 8) {
+                    Text(lastPoint.value.toCurrency(compact: true))
+                        .font(.auraCaption(size: 10, weight: .bold))
+                        .foregroundStyle(AppTheme.auraIndigo)
+                        .padding(.horizontal, 8)
+                        .padding(.vertical, 5)
+                        .background(AppTheme.auraIndigo.opacity(0.1))
+                        .clipShape(Capsule())
+                }
             }
         }
+        .chartXScale(domain: 0...max(points.last?.year ?? 1, 1))
+        .chartYScale(domain: chartDomain)
         .chartXAxis {
             AxisMarks(values: points.map(\.year)) { value in
                 AxisGridLine(stroke: StrokeStyle(lineWidth: 0.5, dash: [3, 4]))
-                    .foregroundStyle(.secondary.opacity(0.22))
+                    .foregroundStyle(AppTheme.auraIndigo.opacity(0.16))
                 AxisValueLabel {
                     if let year = value.as(Int.self) {
                         Text(year == 0 ? "Now" : "\(year)Y")
                             .font(.auraCaption(size: 10))
-                            .foregroundStyle(.secondary)
+                            .foregroundStyle(.secondary.opacity(0.8))
                     }
                 }
             }
@@ -483,16 +533,40 @@ private struct NetWorthProjectionChart: View {
         .chartYAxis {
             AxisMarks(position: .leading) { value in
                 AxisGridLine(stroke: StrokeStyle(lineWidth: 0.5))
-                    .foregroundStyle(.secondary.opacity(0.18))
+                    .foregroundStyle(AppTheme.auraIndigo.opacity(0.08))
                 AxisValueLabel {
                     if let amount = value.as(Double.self) {
                         Text(amount.toCurrency(compact: true))
                             .font(.auraCaption(size: 10))
-                            .foregroundStyle(.secondary)
+                            .foregroundStyle(.secondary.opacity(0.8))
                     }
                 }
             }
         }
+        .chartPlotStyle { plotArea in
+            plotArea
+                .background(
+                    RoundedRectangle(cornerRadius: 16, style: .continuous)
+                        .fill(AppTheme.auraIndigo.opacity(0.025))
+                )
+        }
+        .accessibilityLabel("Projected net worth chart")
+    }
+
+    private var chartDomain: ClosedRange<Double> {
+        let values = points.map(\.value)
+        guard let minValue = values.min(), let maxValue = values.max() else {
+            return 0...1
+        }
+
+        if minValue == maxValue {
+            let padding = Swift.max(abs(maxValue) * 0.18, 1)
+            return Swift.min(0, minValue - padding)...(maxValue + padding)
+        }
+
+        let padding = Swift.max((maxValue - minValue) * 0.16, abs(maxValue) * 0.04)
+        let lowerBound = minValue >= 0 ? 0 : minValue - padding
+        return lowerBound...(maxValue + padding)
     }
 }
 
@@ -710,7 +784,7 @@ private struct ProjectionGroupView: View {
     }
 
     var body: some View {
-        VStack(alignment: .leading, spacing: 10) {
+        VStack(alignment: .leading, spacing: 12) {
             HStack {
                 Text(title)
                     .font(.auraCaption(size: 12, weight: .bold))
@@ -721,18 +795,25 @@ private struct ProjectionGroupView: View {
                     .foregroundStyle(.secondary)
             }
 
-            VStack(spacing: 12) {
-                ForEach(items) { item in
+            VStack(spacing: 0) {
+                ForEach(Array(items.enumerated()), id: \.element.id) { index, item in
                     ProjectionBreakdownRow(
                         item: item,
                         years: years,
                         monthlyInvestment: allocatedMonthlyInvestment(for: item),
                         monthlyLoanPayment: allocatedPayment(for: item)
                     )
+                    .padding(.vertical, 7)
+
+                    if index < items.count - 1 {
+                        Divider()
+                            .padding(.leading, 18)
+                            .background(tint.opacity(0.08))
+                    }
                 }
             }
         }
-        .padding(12)
+        .padding(14)
         .background(tint.opacity(0.06))
         .clipShape(RoundedRectangle(cornerRadius: 16, style: .continuous))
     }
