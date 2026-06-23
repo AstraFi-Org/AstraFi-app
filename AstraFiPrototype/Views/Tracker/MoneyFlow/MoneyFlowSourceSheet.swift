@@ -61,11 +61,23 @@ struct MoneyFlowSourceSheet: View {
             .navigationBarTitleDisplayMode(.inline)
             .toolbar {
                 ToolbarItem(placement: .cancellationAction) {
-                    Button("Cancel") { dismiss() }
+                    ToolbarCircleButton(
+                        systemName: "xmark",
+                        iconColor: .white,
+                        fillColor: AppTheme.auraIndigo
+                    ) {
+                        dismiss()
+                    }
                 }
                 ToolbarItem(placement: .confirmationAction) {
-                    Button("Save") { saveData(); dismiss() }
-                        .fontWeight(.bold)
+                    ToolbarCircleButton(
+                        systemName: "checkmark",
+                        iconColor: AppTheme.auraIndigo,
+                        fillColor: Color(uiColor: .secondarySystemGroupedBackground)
+                    ) {
+                        saveData()
+                        dismiss()
+                    }
                 }
             }
             .onAppear { loadData() }
@@ -108,9 +120,6 @@ struct MoneyFlowSourceSheet: View {
 
                 // Add row
                 HStack {
-                    Image(systemName: "plus.circle.fill")
-                        .font(.system(size: 18))
-                        .foregroundStyle(color)
                     TextField("Source name", text: newName)
                         .font(.body)
                     Spacer()
@@ -179,6 +188,28 @@ struct MoneyFlowSourceSheet: View {
 }
 
 
+
+private struct ToolbarCircleButton: View {
+    let systemName: String
+    let iconColor: Color
+    let fillColor: Color
+    let onTap: () -> Void
+
+    var body: some View {
+        Button(action: onTap) {
+            Image(systemName: systemName)
+                .font(.system(size: 20, weight: .semibold))
+                .foregroundStyle(iconColor)
+                .frame(width: 52, height: 52)
+                .background(
+                    Circle()
+                        .fill(fillColor)
+                )
+                .contentShape(Circle())
+        }
+        .buttonStyle(.plain)
+    }
+}
 
 struct SourceRow: View {
     @Binding var name: String

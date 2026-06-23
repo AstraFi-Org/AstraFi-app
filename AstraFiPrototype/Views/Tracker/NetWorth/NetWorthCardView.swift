@@ -784,7 +784,7 @@ private struct ProjectionGroupView: View {
     }
 
     var body: some View {
-        VStack(alignment: .leading, spacing: 10) {
+        VStack(alignment: .leading, spacing: 12) {
             HStack {
                 Text(title)
                     .font(.auraCaption(size: 12, weight: .bold))
@@ -795,18 +795,25 @@ private struct ProjectionGroupView: View {
                     .foregroundStyle(.secondary)
             }
 
-            VStack(spacing: 12) {
-                ForEach(items) { item in
+            VStack(spacing: 0) {
+                ForEach(Array(items.enumerated()), id: \.element.id) { index, item in
                     ProjectionBreakdownRow(
                         item: item,
                         years: years,
                         monthlyInvestment: allocatedMonthlyInvestment(for: item),
                         monthlyLoanPayment: allocatedPayment(for: item)
                     )
+                    .padding(.vertical, 7)
+
+                    if index < items.count - 1 {
+                        Divider()
+                            .padding(.leading, 18)
+                            .background(tint.opacity(0.08))
+                    }
                 }
             }
         }
-        .padding(12)
+        .padding(14)
         .background(tint.opacity(0.06))
         .clipShape(RoundedRectangle(cornerRadius: 16, style: .continuous))
     }
