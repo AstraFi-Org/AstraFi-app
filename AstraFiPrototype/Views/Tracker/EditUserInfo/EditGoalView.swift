@@ -70,19 +70,13 @@ struct EditGoalView: View {
                         Image(systemName: "xmark")
                             .font(.system(size: 16, weight: .bold))
                             .foregroundColor(.red)
-                            .padding(8)
-                            .background(Color(.systemGray6))
-                            .clipShape(Circle())
                     }
                 }
                 ToolbarItem(placement: .navigationBarTrailing) {
                     Button(action: saveChanges) {
                         Image(systemName: "checkmark")
                             .font(.system(size: 16, weight: .bold))
-                            .foregroundColor(.white)
-                            .padding(8)
-                            .background(name.isEmpty || targetAmount.isEmpty ? Color.gray : .blue)
-                            .clipShape(Circle())
+                            .foregroundColor(name.isEmpty || targetAmount.isEmpty ? .gray : .blue)
                     }
                     .disabled(name.isEmpty || targetAmount.isEmpty)
                 }
