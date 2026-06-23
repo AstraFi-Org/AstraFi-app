@@ -378,6 +378,7 @@ struct SIPGrowthComparisonCard: View {
                             Spacer()
                             Text("Single Fund")
                                 .fontWeight(.bold)
+                                .foregroundColor(Color.orange)
                         }
                         .padding()
                         .background(Color.orange.opacity(0.1))
