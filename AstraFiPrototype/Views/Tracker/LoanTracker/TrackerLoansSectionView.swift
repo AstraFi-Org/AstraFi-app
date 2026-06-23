@@ -65,9 +65,9 @@ struct TrackerLoanCard: View {
                     }
                 }
                 Spacer()
-                Image(systemName: "arrow.up.forward.app.fill")
-                    .font(.subheadline)
-                    .foregroundColor(.secondary.opacity(0.5))
+//                Image(systemName: "arrow.up.forward.app.fill")
+//                    .font(.subheadline)
+//                    .foregroundColor(.secondary.opacity(0.5))
             }
             
             HStack(spacing: 12) {
