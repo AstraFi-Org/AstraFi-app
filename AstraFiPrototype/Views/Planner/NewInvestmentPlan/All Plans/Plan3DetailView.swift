@@ -91,7 +91,7 @@ struct Plan3DetailView: View {
                 .padding(.horizontal, 16)
                 .padding(.top, 16)
                 .padding(.bottom, 120)
-                .frame(maxWidth: UIScreen.main.bounds.width)
+                .frame(maxWidth: .infinity)
             }
             .background(AppTheme.appBackground(for: colorScheme))
 

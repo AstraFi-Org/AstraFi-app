@@ -39,7 +39,7 @@ struct Plan2DetailView: View {
                 }
                 .padding(.horizontal, 20)
                 .padding(.bottom, 120)
-                .frame(maxWidth: UIScreen.main.bounds.width)
+                .frame(maxWidth: .infinity)
             }
             .background(AppTheme.appBackground(for: colorScheme))
 
@@ -428,7 +428,6 @@ struct Plan2DetailView: View {
         let interest = totalPaid - principal
 
         let wTotal = CGFloat(totalPaid / maxTotal)
-        let wInterest = CGFloat(max(0, interest) / maxTotal)
         let color = type == .compounded ? Color.blue : Color.green
 
         return VStack(alignment: .leading, spacing: 8) {

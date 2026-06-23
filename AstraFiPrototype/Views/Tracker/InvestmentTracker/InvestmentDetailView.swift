@@ -224,17 +224,17 @@ struct InvestmentDetailView: View {
             await repairMarketDataIfNeeded()
             await loadFundHistory()
         }
-        .onChange(of: inv?.schemeCode) { _ in
+        .onChange(of: inv?.schemeCode) {
             Task {
                 await loadFundHistory()
             }
         }
-        .onChange(of: inv?.startDate) { _ in
+        .onChange(of: inv?.startDate) {
             Task {
                 await loadFundHistory()
             }
         }
-        .onChange(of: selectedFundRange) { _ in
+        .onChange(of: selectedFundRange) {
             Task {
                 await loadFundHistory()
             }

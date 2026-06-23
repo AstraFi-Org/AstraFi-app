@@ -198,7 +198,7 @@ final class AppStateManager {
         savedPlans.append(plan)
         Task {
             if let session = try? await supabase.auth.session {
-                try? await SupabaseRepository.shared.savePlan(plan, userId: session.user.id)
+                _ = try? await SupabaseRepository.shared.savePlan(plan, userId: session.user.id)
             }
         }
     }
@@ -207,8 +207,8 @@ final class AppStateManager {
         if let index = savedPlans.firstIndex(where: { $0.id == plan.id }) {
             savedPlans[index].isFollowed = true
             Task {
-                if let session = try? await supabase.auth.session {
-                    try? await SupabaseRepository.shared.updatePlanFollowStatus(
+                if (try? await supabase.auth.session) != nil {
+                    _ = try? await SupabaseRepository.shared.updatePlanFollowStatus(
                         planId: plan.id, isFollowed: true
                     )
                 }
@@ -220,8 +220,8 @@ final class AppStateManager {
         if let index = savedPlans.firstIndex(where: { $0.id == plan.id }) {
             savedPlans[index].isFollowed = false
             Task {
-                if let session = try? await supabase.auth.session {
-                    try? await SupabaseRepository.shared.updatePlanFollowStatus(
+                if (try? await supabase.auth.session) != nil {
+                    _ = try? await SupabaseRepository.shared.updatePlanFollowStatus(
                         planId: plan.id, isFollowed: false
                     )
                 }
@@ -250,7 +250,7 @@ final class AppStateManager {
             currentProfile = profile
             Task {
                 if let session = try? await supabase.auth.session {
-                    try? await SupabaseRepository.shared.saveHealthAssessment(newAssessment, userId: session.user.id)
+                    _ = try? await SupabaseRepository.shared.saveHealthAssessment(newAssessment, userId: session.user.id)
                 }
             }
         }
