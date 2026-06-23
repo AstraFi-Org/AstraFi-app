@@ -60,16 +60,16 @@ struct MoneyFlowSourceSheet: View {
             .navigationTitle("Update Money Flow")
             .navigationBarTitleDisplayMode(.inline)
             .toolbar {
-                ToolbarItem(placement: .cancellationAction) {
+                ToolbarItem(placement: .navigationBarLeading) {
                     ToolbarCircleButton(
                         systemName: "xmark",
-                        iconColor: .white,
-                        fillColor: AppTheme.auraIndigo
+                        iconColor: AppTheme.auraIndigo,
+                        fillColor: Color(uiColor: .secondarySystemGroupedBackground)
                     ) {
                         dismiss()
                     }
                 }
-                ToolbarItem(placement: .confirmationAction) {
+                ToolbarItem(placement: .navigationBarTrailing) {
                     ToolbarCircleButton(
                         systemName: "checkmark",
                         iconColor: AppTheme.auraIndigo,
@@ -123,20 +123,24 @@ struct MoneyFlowSourceSheet: View {
                     TextField("Source name", text: newName)
                         .font(.body)
                     Spacer()
-                    HStack(spacing: 2) {
+                    HStack(spacing: 4) {
                         Text("₹")
                             .foregroundStyle(.secondary)
                         TextField("0", text: newAmount)
                             .keyboardType(.decimalPad)
                             .multilineTextAlignment(.trailing)
-                            .frame(width: 90)
+                            .frame(width: 100)
                     }
                     .font(.body.weight(.semibold))
+                    
+                    Spacer()
+                        .frame(width: 8)
+                    
                     Button(action: onAdd) {
                         Text("Add")
                             .font(.system(size: 14, weight: .semibold))
                             .foregroundStyle(.white)
-                            .padding(.horizontal, 12).padding(.vertical, 6)
+                            .frame(width: 54, height: 28)
                             .background(color)
                             .clipShape(Capsule())
                     }
@@ -198,14 +202,15 @@ private struct ToolbarCircleButton: View {
     var body: some View {
         Button(action: onTap) {
             Image(systemName: systemName)
-                .font(.system(size: 20, weight: .semibold))
+                .font(.system(size: 16, weight: .semibold))
                 .foregroundStyle(iconColor)
-                .frame(width: 52, height: 52)
+                .frame(width: 38, height: 38)
                 .background(
                     Circle()
                         .fill(fillColor)
+                        .shadow(color: Color.black.opacity(0.12), radius: 6, x: 0, y: 3)
                 )
-                .contentShape(Circle())
+                .clipShape(Circle())
         }
         .buttonStyle(.plain)
     }
@@ -228,6 +233,9 @@ struct SourceRow: View {
                     .frame(width: 100)
             }
             .font(.body.weight(.semibold))
+            
+            Spacer()
+                .frame(width: 62)
         }
         .padding(.horizontal, 16)
         .padding(.vertical, 13)

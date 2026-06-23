@@ -16,6 +16,7 @@ struct TrackerLoansSection: View {
                         .foregroundColor(AppTheme.auraIndigo)
                 }
             }
+            .padding(.horizontal, 8)
             VStack(spacing: 12) {
                 ForEach(Array(loans.prefix(3))) { loan in
                     NavigationLink(destination: LoanDetailView(loanID: loan.id)) {

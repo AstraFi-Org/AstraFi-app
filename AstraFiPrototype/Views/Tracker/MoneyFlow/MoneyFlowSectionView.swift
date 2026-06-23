@@ -25,6 +25,7 @@ struct TrackerMoneyFlowSection: View {
                 }
                                 
             }
+            .padding(.horizontal, 8)
 
 
             // Card

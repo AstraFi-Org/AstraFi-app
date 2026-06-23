@@ -14,6 +14,7 @@ struct TrackerYourPlansSection: View {
                         .foregroundColor(AppTheme.auraIndigo)
                 }
             }
+            .padding(.horizontal, 8)
             VStack(spacing: 12) {
                 ForEach(Array(plans.prefix(3))) { plan in
                     PlanNavigationLink(plan: plan)

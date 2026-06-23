@@ -15,6 +15,7 @@ struct TrackerGoalsSection: View {
                         .foregroundColor(AppTheme.auraIndigo)
                 }
             }
+            .padding(.horizontal, 8)
             if goals.isEmpty {
                 TrackerEmptyState(icon: "flag.fill",
                                   message: "No goals set yet. Complete your assessment to start tracking goals.")
