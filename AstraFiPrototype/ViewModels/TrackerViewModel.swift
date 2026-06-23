@@ -16,6 +16,8 @@ class TrackerViewModel {
 
     var debtToIncomeRatio: Double = 0
     var savingsRate: Double = 0
+    var monthlySurplus: Double = 0
+    var totalMonthlyEMI: Double = 0
     var totalInvestmentValue: Double = 0
     var moneyFlowData: [MoneyFlowData] = []
     var moneyFlowChartData: [MoneyFlowChartItem] = []
@@ -130,6 +132,8 @@ class TrackerViewModel {
         let totalEMI = profile.loans.reduce(0.0) { $0 + $1.calculatedEMI }
         let dti = (profile.basicDetails.monthlyIncome > 0) ? (totalEMI / profile.basicDetails.monthlyIncome) : 0
         self.debtToIncomeRatio = dti.isFinite ? dti : 0
+        self.monthlySurplus = savings.isFinite ? savings : 0
+        self.totalMonthlyEMI = totalEMI.isFinite ? totalEMI : 0
 
         let savingsRate = (profile.basicDetails.monthlyIncome > 0) ? (savings / profile.basicDetails.monthlyIncome) : 0
         self.savingsRate = savingsRate.isFinite ? savingsRate : 0
@@ -279,11 +283,20 @@ class TrackerViewModel {
         if profile.assets.propertyAmount > 0 {
             newAccounts.append(Account(name: "Property / Real Estate", institution: "Asset", balance: profile.assets.propertyAmount.safeFinite))
         }
+        if profile.assets.vehiclesAmount > 0 {
+            newAccounts.append(Account(name: "Vehicles", institution: "Vehicle Asset", balance: profile.assets.vehiclesAmount.safeFinite))
+        }
         if profile.assets.jewelleryAmount > 0 {
             newAccounts.append(Account(name: "Gold / Jewellery", institution: "Asset", balance: profile.assets.jewelleryAmount.safeFinite))
         }
+        if profile.assets.luxuryBelongingsAmount > 0 {
+            newAccounts.append(Account(name: "Luxury Belongings", institution: "Personal Asset", balance: profile.assets.luxuryBelongingsAmount.safeFinite))
+        }
         if profile.assets.otherInvestmentAmount > 0 {
             newAccounts.append(Account(name: "Other Investments", institution: "Various", balance: profile.assets.otherInvestmentAmount.safeFinite))
+        }
+        if profile.assets.otherAssetsAmount > 0 {
+            newAccounts.append(Account(name: "Other Assets", institution: "Asset", balance: profile.assets.otherAssetsAmount.safeFinite))
         }
 
         if profile.liabilities.homeLoanAmount > 0 {

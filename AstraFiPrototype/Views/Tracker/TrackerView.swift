@@ -13,7 +13,10 @@ struct TrackerView: View {
                 NetWorthCard(
                     netWorth: viewModel.netWorth,
                     growthAmount: viewModel.growthAmount,
-                    accounts: viewModel.accounts
+                    accounts: viewModel.accounts,
+                    annualGrowthRate: viewModel.portfolioCAGR,
+                    monthlySurplus: viewModel.monthlySurplus,
+                    monthlyEMI: viewModel.totalMonthlyEMI
                 )
 
                 if upstoxViewModel.isConnected {
