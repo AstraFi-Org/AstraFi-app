@@ -38,14 +38,14 @@ struct DashboardView: View {
         .navigationBarTitleDisplayMode(.large)
         .background(AppTheme.appBackground(for: colorScheme))
         .toolbar {
-            ToolbarItem(placement: .navigationBarTrailing) {
-                NavigationLink(destination: NotificationsView()) {
-                    Image(systemName: "bell.fill")
+            ToolbarItem(placement: .navigationBarLeading) {
+                NavigationLink(destination: ProfileView()) {
+                    Image(systemName: "person.circle")
                 }
             }
             ToolbarItem(placement: .navigationBarTrailing) {
-                NavigationLink(destination: ProfileView()) {
-                    Image(systemName: "person.circle")
+                NavigationLink(destination: NotificationsView()) {
+                    Image(systemName: "bell.fill")
                 }
             }
         }
