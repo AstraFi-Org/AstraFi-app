@@ -238,20 +238,24 @@ final class AppStateManager {
                 keyInsights: insights,
                 insights: assessmentInsights
             )
-            let cal = Calendar.current
-            if let index = profile.monthlyHealthAssessments.firstIndex(where: {
-                cal.isDate($0.date, equalTo: Date(), toGranularity: .month) &&
-                cal.isDate($0.date, equalTo: Date(), toGranularity: .year)
-            }) {
-                profile.monthlyHealthAssessments[index] = newAssessment
-            } else {
-                profile.monthlyHealthAssessments.append(newAssessment)
-            }
+            profile.monthlyHealthAssessments.append(newAssessment)
             currentProfile = profile
             Task {
                 if let session = try? await supabase.auth.session {
                     _ = try? await SupabaseRepository.shared.saveHealthAssessment(newAssessment, userId: session.user.id)
                 }
+            }
+        }
+    }
+
+    func deleteAssessmentFromHistory(_ assessment: AstraHealthAssessment) {
+        guard var profile = currentProfile else { return }
+        profile.monthlyHealthAssessments.removeAll { $0.id == assessment.id }
+        currentProfile = profile
+
+        Task {
+            if (try? await supabase.auth.session) != nil {
+                try? await SupabaseRepository.shared.deleteHealthAssessment(assessment.id)
             }
         }
     }
@@ -876,8 +880,8 @@ final class AppStateManager {
             emergencyFundMonths: efMonths
         )
         
-        let initialScore = 400 + report.investmentScore * 4
-        let status = initialScore >= 750 ? "Excellent" : initialScore >= 650 ? "Good" : "Needs Work"
+        let initialScore = report.investmentScore
+        let status = initialScore >= 80 ? "Excellent" : initialScore >= 70 ? "Good" : "Needs Work"
         let firstAssessment = AstraHealthAssessment(
             date: Date(),
             score: initialScore,

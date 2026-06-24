@@ -8,6 +8,7 @@
 import SwiftUI
 
 struct ReportFooterCTA: View {
+    @Environment(\.dismiss) private var dismiss
     @Environment(AppStateManager.self) var appState
     var data: CompleteAssessmentData?
     var score: Int; var status: String; var insights: [String]
@@ -22,6 +23,7 @@ struct ReportFooterCTA: View {
                     appState.isAssessmentSkipped = false
                 }
                 appState.showDashboard = true
+                dismiss()
             } label: {
                 HStack(spacing: 8) {
                     Text("Save");
