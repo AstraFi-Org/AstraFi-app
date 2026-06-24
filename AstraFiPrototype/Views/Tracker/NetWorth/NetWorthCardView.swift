@@ -87,7 +87,7 @@ struct NetWorthCard: View {
                 }
                 Spacer()
                 Button(action: { showAddNetWorth = true }) {
-                    Image(systemName: "pencil.circle.fill")
+                    Image(systemName: "pencil.circle")
                         .font(.title2)
                         .foregroundColor(AppTheme.auraIndigo)
                 }

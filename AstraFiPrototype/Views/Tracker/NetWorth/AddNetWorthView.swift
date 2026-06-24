@@ -58,12 +58,18 @@ struct AddNetWorthView: View {
             .navigationBarTitleDisplayMode(.inline)
             .toolbar {
                 ToolbarItem(placement: .navigationBarLeading) {
-                    Button("Cancel") { dismiss() }
+                    Button { dismiss() } label: {
+                        Image(systemName: "xmark")
+                            .font(.system(size: 16, weight: .bold))
+                            .foregroundColor(.red)
+                    }
                 }
                 ToolbarItem(placement: .navigationBarTrailing) {
-                    Button("Save") { saveAndDismiss() }
-                        .fontWeight(.semibold)
-                        .tint(.blue)
+                    Button { saveAndDismiss() } label: {
+                        Image(systemName: "checkmark")
+                            .font(.system(size: 16, weight: .bold))
+                            .foregroundColor(.blue)
+                    }
                 }
             }
             .sheet(isPresented: $showAddAssetSheet) {

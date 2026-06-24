@@ -27,30 +27,27 @@ struct TrackerYourPlansSection: View {
 struct PlanNavigationLink: View {
     let plan: InvestmentPlanModel
     @Environment(TrackerViewModel.self) var trackerVM
+    @State private var navigateToPlan = false
+    
     var body: some View {
         let full = InvestmentPlannerEngine.generateFullPlan(input: plan.input, profile: nil)
         
-        if plan.name.contains("Pure Investment") {
-            NavigationLink(destination: Plan1DetailView(input: plan.input, result: full.plan1, isFromTracker: true)) {
-                PlanCard(plan: plan)
+        Button {
+            navigateToPlan = true
+        } label: {
+            PlanCard(plan: plan)
+        }
+        .buttonStyle(PlainButtonStyle())
+        .navigationDestination(isPresented: $navigateToPlan) {
+            if plan.name.contains("Pure Investment") {
+                Plan1DetailView(input: plan.input, result: full.plan1, isFromTracker: true)
+            } else if plan.name.contains("Loan Strategy") {
+                Plan2DetailView(input: plan.input, result: full.plan2 ?? Plan2Result.empty(), isFromTracker: true)
+            } else if plan.name.contains("Leveraged Investing") || plan.name.contains("Loan Stress Test") {
+                Plan3DetailView(input: plan.input, result: full.plan3 ?? Plan3Result.empty(), isFromTracker: true)
+            } else {
+                Plan1DetailView(input: plan.input, result: full.plan1, isFromTracker: true)
             }
-            .buttonStyle(PlainButtonStyle())
-        } else if plan.name.contains("Loan Strategy") {
-            NavigationLink(destination: Plan2DetailView(input: plan.input, result: full.plan2 ?? Plan2Result.empty(), isFromTracker: true)) {
-                PlanCard(plan: plan)
-            }
-            .buttonStyle(PlainButtonStyle())
-        } else if plan.name.contains("Leveraged Investing") || plan.name.contains("Loan Stress Test") {
-            NavigationLink(destination: Plan3DetailView(input: plan.input, result: full.plan3 ?? Plan3Result.empty(), isFromTracker: true)) {
-                PlanCard(plan: plan)
-            }
-            .buttonStyle(PlainButtonStyle())
-        } else {
-            // Fallback
-            NavigationLink(destination: Plan1DetailView(input: plan.input, result: full.plan1, isFromTracker: true)) {
-                PlanCard(plan: plan)
-            }
-            .buttonStyle(PlainButtonStyle())
         }
     }
 }
@@ -88,28 +85,45 @@ struct PlanCard: View {
     @Environment(\.colorScheme) private var colorScheme
 
     var body: some View {
-        VStack(spacing: 16) {
-            HStack(alignment: .top) {
-                VStack(alignment: .leading, spacing: 4) {
-                    Text(plan.name).font(.auraHeader(size: 17))
-                    Text(plan.targetGoal).font(.auraCaption()).foregroundColor(.secondary)
+        HStack(spacing: 12) {
+            VStack(spacing: 16) {
+                HStack(alignment: .top) {
+                    VStack(alignment: .leading, spacing: 4) {
+                        Text(plan.name)
+                            .font(.auraHeader(size: 17))
+                            .multilineTextAlignment(.leading)
+                        Text(plan.targetGoal)
+                            .font(.auraCaption())
+                            .foregroundColor(.secondary)
+                            .multilineTextAlignment(.leading)
+                    }
+                    Spacer()
+                    VStack(alignment: .trailing, spacing: 6) {
+                        let amountStr = plan.input.targetAmount.replacingOccurrences(of: "₹", with: "").replacingOccurrences(of: ",", with: "")
+                        let amountVal = Double(amountStr) ?? 0
+                        let formattedAmount = amountVal > 0 ? amountVal.toCurrency() : "₹\(plan.input.targetAmount)"
+                        Text(formattedAmount)
+                            .font(.auraDigital(size: 18))
+                            .foregroundColor(AppTheme.auraIndigo)
+                    }
                 }
-                Spacer()
-                VStack(alignment: .trailing, spacing: 6) {
-                    let amountStr = plan.input.targetAmount.replacingOccurrences(of: "₹", with: "").replacingOccurrences(of: ",", with: "")
-                    let amountVal = Double(amountStr) ?? 0
-                    let formattedAmount = amountVal > 0 ? amountVal.toCurrency() : "₹\(plan.input.targetAmount)"
-                    Text(formattedAmount).font(.auraDigital(size: 18)).foregroundColor(AppTheme.auraIndigo)
+                
+                VStack(spacing: 8) {
+                    HStack {
+                        Text("Time Period")
+                            .font(.auraCaption())
+                            .foregroundColor(.secondary)
+                        Spacer()
+                        Text("\(plan.input.timePeriod) Years")
+                            .font(.auraDigital(size: 14))
+                            .foregroundColor(AppTheme.auraIndigo)
+                    }
                 }
             }
             
-            VStack(spacing: 8) {
-                HStack {
-                    Text("Time Period").font(.auraCaption()).foregroundColor(.secondary)
-                    Spacer()
-                    Text("\(plan.input.timePeriod) Years").font(.auraDigital(size: 14)).foregroundColor(AppTheme.auraIndigo)
-                }
-            }
+//            Image(systemName: "chevron.right")
+//                .font(.system(size: 14, weight: .bold))
+//                .foregroundColor(.secondary.opacity(0.5))
         }
         .auraCardStyle(radius: 24)
     }
