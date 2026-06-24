@@ -231,15 +231,6 @@ private struct ProfileHeader: View {
                     .minimumScaleFactor(0.85)
             }
 
-            VStack(spacing: 6) {
-                ProgressView(value: completion)
-                    .tint(Color(hex: "#007AFF"))
-
-                Text("\((completion * 100).rounded().safeInt)% Profile Setup")
-                    .font(.footnote.weight(.semibold))
-                    .foregroundStyle(.secondary)
-            }
-
             HStack {
                 ProfileMetric(title: "Health", value: healthScore)
                 Divider().frame(height: 34)

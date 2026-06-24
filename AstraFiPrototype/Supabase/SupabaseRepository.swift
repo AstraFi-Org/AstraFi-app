@@ -38,6 +38,7 @@ final class SupabaseRepository {
         let maritalStatus: String
         let adultDependents: Int
         let childDependents: Int
+        let phoneNumber: String?
         let incomeType: String
         let monthlyIncome: Double
         let monthlyIncomeAfterTax: Double
@@ -55,6 +56,7 @@ final class SupabaseRepository {
             case maritalStatus = "maritalStatus"
             case adultDependents = "adultDependents"
             case childDependents = "childDependents"
+            case phoneNumber = "phoneNumber"
             case incomeType = "incomeType"
             case monthlyIncome = "monthlyIncome"
             case monthlyIncomeAfterTax = "monthlyIncomeAfterTax"
@@ -421,6 +423,7 @@ final class SupabaseRepository {
             maritalStatus: profile.basicDetails.maritalStatus.rawValue,
             adultDependents: profile.basicDetails.adultDependents,
             childDependents: profile.basicDetails.childDependents,
+            phoneNumber: profile.basicDetails.phoneNumber,
             incomeType: profile.basicDetails.incomeType.rawValue,
             monthlyIncome: profile.basicDetails.monthlyIncome,
             monthlyIncomeAfterTax: profile.basicDetails.monthlyIncomeAfterTax,
@@ -1093,6 +1096,7 @@ ins.maturityDate = row.maturityDate.flatMap { parseDate($0) }
             let signUpName: String?; let name: String?; let age: Int?
             let gender: String?; let maritalStatus: String?
             let adultDependents: Int?; let childDependents: Int?
+            let phoneNumber: String?
             let incomeType: String?; let monthlyIncome: Double?
             let monthlyIncomeAfterTax: Double?; let monthlyExpenses: Double?
             let emergencyFundAmount: Double?; let activeInvestment: Bool?
@@ -1144,7 +1148,8 @@ ins.maturityDate = row.maturityDate.flatMap { parseDate($0) }
             emergencyFundAmount: profileRow.emergencyFundAmount ?? 0,
             activeInvestment: profileRow.activeInvestment ?? false,
             riskTolerance: AstraRiskTolerance(rawValue: profileRow.riskTolerance ?? "Medium") ?? .medium,
-            investmentHorizon: AstraInvestmentHorizon(rawValue: profileRow.investmentHorizon ?? "Medium Term (3-7 yrs)") ?? .mediumTerm
+            investmentHorizon: AstraInvestmentHorizon(rawValue: profileRow.investmentHorizon ?? "Medium Term (3-7 yrs)") ?? .mediumTerm,
+            phoneNumber: profileRow.phoneNumber
         )
         let assets = AstraAssets(
             savingsAccountAmount: assetsRow?.savingsAccountAmount ?? 0,
