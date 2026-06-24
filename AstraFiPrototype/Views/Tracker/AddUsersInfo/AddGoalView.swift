@@ -50,19 +50,13 @@ struct AddGoalView: View {
                         Image(systemName: "xmark")
                             .font(.system(size: 16, weight: .bold))
                             .foregroundColor(.red)
-                            .padding(8)
-                            .background(Color(.systemGray6))
-                            .clipShape(Circle())
                     }
                 }
                 ToolbarItem(placement: .navigationBarTrailing) {
                     Button(action: saveGoal) {
                         Image(systemName: "checkmark")
                             .font(.system(size: 16, weight: .bold))
-                            .foregroundColor(.white)
-                            .padding(8)
-                            .background(goalName.isEmpty || targetAmount.isEmpty || (linkInvestment && (invName.isEmpty || invAmount.isEmpty)) ? Color.gray : .blue)
-                            .clipShape(Circle())
+                            .foregroundColor(goalName.isEmpty || targetAmount.isEmpty || (linkInvestment && (invName.isEmpty || invAmount.isEmpty)) ? .gray : .blue)
                     }
                     .disabled(goalName.isEmpty || targetAmount.isEmpty || (linkInvestment && (invName.isEmpty || invAmount.isEmpty)))
                 }

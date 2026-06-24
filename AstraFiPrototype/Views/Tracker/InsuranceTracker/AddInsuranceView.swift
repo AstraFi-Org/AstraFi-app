@@ -116,9 +116,9 @@ struct AddInsuranceView: View {
                     Button(action: savePolicy) {
                         Image(systemName: "checkmark")
                             .font(.system(size: 16, weight: .bold))
+                            .foregroundColor((provider.isEmpty || cover.isEmpty || premium.isEmpty) ? .gray : .blue)
                     }
                     .disabled(provider.isEmpty || cover.isEmpty || premium.isEmpty)
-                    .tint((provider.isEmpty || cover.isEmpty || premium.isEmpty) ? .gray : .blue)
                 }
                 .sharedBackgroundVisibility(.visible)
             }

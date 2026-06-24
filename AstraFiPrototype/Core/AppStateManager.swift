@@ -198,7 +198,7 @@ final class AppStateManager {
         savedPlans.append(plan)
         Task {
             if let session = try? await supabase.auth.session {
-                try? await SupabaseRepository.shared.savePlan(plan, userId: session.user.id)
+                _ = try? await SupabaseRepository.shared.savePlan(plan, userId: session.user.id)
             }
         }
     }
@@ -207,8 +207,8 @@ final class AppStateManager {
         if let index = savedPlans.firstIndex(where: { $0.id == plan.id }) {
             savedPlans[index].isFollowed = true
             Task {
-                if let session = try? await supabase.auth.session {
-                    try? await SupabaseRepository.shared.updatePlanFollowStatus(
+                if (try? await supabase.auth.session) != nil {
+                    _ = try? await SupabaseRepository.shared.updatePlanFollowStatus(
                         planId: plan.id, isFollowed: true
                     )
                 }
@@ -220,8 +220,8 @@ final class AppStateManager {
         if let index = savedPlans.firstIndex(where: { $0.id == plan.id }) {
             savedPlans[index].isFollowed = false
             Task {
-                if let session = try? await supabase.auth.session {
-                    try? await SupabaseRepository.shared.updatePlanFollowStatus(
+                if (try? await supabase.auth.session) != nil {
+                    _ = try? await SupabaseRepository.shared.updatePlanFollowStatus(
                         planId: plan.id, isFollowed: false
                     )
                 }
@@ -250,7 +250,7 @@ final class AppStateManager {
             currentProfile = profile
             Task {
                 if let session = try? await supabase.auth.session {
-                    try? await SupabaseRepository.shared.saveHealthAssessment(newAssessment, userId: session.user.id)
+                    _ = try? await SupabaseRepository.shared.saveHealthAssessment(newAssessment, userId: session.user.id)
                 }
             }
         }
@@ -409,6 +409,7 @@ final class AppStateManager {
     
     /// Initiates the Sign in with Apple flow.
     func signInWithApple() {
+        print("AppStateManager: signInWithApple() triggered")
         let nonce = Self.randomNonce()
         currentNonce = nonce
         
@@ -419,6 +420,7 @@ final class AppStateManager {
         
         let delegate = AppleSignInDelegate { result in
             Task { @MainActor in
+                print("AppStateManager: delegate callback received with result: \(result)")
                 await self.handleAppleSignInResult(result)
             }
         }
@@ -427,7 +429,9 @@ final class AppStateManager {
         
         let controller = ASAuthorizationController(authorizationRequests: [request])
         controller.delegate = delegate
+        controller.presentationContextProvider = delegate
         controller.performRequests()
+        print("AppStateManager: controller.performRequests() executed")
     }
     
     /// Stored reference to the delegate so it isn't deallocated.
@@ -435,21 +439,25 @@ final class AppStateManager {
     
     /// Handles the result from Apple Sign-In and authenticates with Supabase.
     private func handleAppleSignInResult(_ result: Result<ASAuthorization, Error>) async {
+        print("AppStateManager: handleAppleSignInResult starting")
         isAuthLoading = true
         authError = nil
         
         switch result {
         case .success(let authorization):
+            print("AppStateManager: Apple authorization succeeded, extracting token")
             guard let appleIDCredential = authorization.credential as? ASAuthorizationAppleIDCredential,
                   let identityTokenData = appleIDCredential.identityToken,
                   let identityToken = String(data: identityTokenData, encoding: .utf8),
                   let nonce = currentNonce else {
+                print("AppStateManager: Error - Failed to get Apple ID credentials or missing nonce")
                 authError = "Failed to get Apple ID credentials."
                 isAuthLoading = false
                 return
             }
             
             do {
+                print("AppStateManager: Attempting Supabase signInWithIdToken")
                 let session = try await supabase.auth.signInWithIdToken(
                     credentials: .init(
                         provider: .apple,
@@ -457,6 +465,7 @@ final class AppStateManager {
                         nonce: nonce
                     )
                 )
+                print("AppStateManager: Supabase sign in succeeded for user: \(session.user.id)")
                 
                 // Try to insert user record (will silently fail if already exists)
                 try? await supabase.from("users").insert([
@@ -466,6 +475,7 @@ final class AppStateManager {
                 
                 // Load existing profile or create new one
                 if let profile = try? await SupabaseRepository.shared.fetchFullProfile(userId: session.user.id) {
+                    print("AppStateManager: Found existing profile for user")
                     self.currentProfile = profile
                     recalculateFinancials()
                     isAuthenticated = true
@@ -473,6 +483,7 @@ final class AppStateManager {
                     hasCompletedOnboarding = true
                     showDashboard = true
                 } else {
+                    print("AppStateManager: No existing profile found, setting up empty profile")
                     // Build display name from Apple credential if available
                     let fullName = [appleIDCredential.fullName?.givenName, appleIDCredential.fullName?.familyName]
                         .compactMap { $0 }
@@ -490,10 +501,12 @@ final class AppStateManager {
                 }
                 
             } catch {
+                print("AppStateManager: Supabase auth error: \(error.localizedDescription)")
                 authError = error.localizedDescription
             }
             
         case .failure(let error):
+            print("AppStateManager: Apple authorization failed with error: \(error.localizedDescription) (code: \((error as NSError).code))")
             // User cancelled — don't show an error
             if (error as NSError).code == ASAuthorizationError.canceled.rawValue {
                 // Do nothing

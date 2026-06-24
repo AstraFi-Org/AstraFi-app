@@ -91,7 +91,7 @@ struct Plan3DetailView: View {
                 .padding(.horizontal, 16)
                 .padding(.top, 16)
                 .padding(.bottom, 120)
-                .frame(maxWidth: UIScreen.main.bounds.width)
+                .frame(maxWidth: .infinity)
             }
             .background(AppTheme.appBackground(for: colorScheme))
 
@@ -125,7 +125,8 @@ struct Plan3DetailView: View {
     }
 
     private var savePlanFooter: some View {
-        let planName = result.name
+        let purpose = input.purposeOfInvestment.isEmpty ? "General" : input.purposeOfInvestment
+        let planName = "Loan Stress Test - \(purpose)"
         let isSaved = trackerVM.savedPlanNames.contains(planName)
         let isFollowed = trackerVM.followedPlanNames.contains(planName)
 
@@ -135,7 +136,12 @@ struct Plan3DetailView: View {
                     trackerVM.unsavePlan(planName: planName)
                     alertMessage = "Plan removed."
                 } else {
-                    trackerVM.savePlan(planName: planName, input: input)
+                    var inputToSave = input
+                    inputToSave.targetAmount = String(Int(loanOverride))
+                    inputToSave.timePeriod = String(tenureOverride)
+                    inputToSave.bankName = bankName
+                    inputToSave.interestRate = interestRate
+                    trackerVM.savePlan(planName: planName, input: inputToSave)
                     alertMessage = "Plan saved to 'Saved Illustrations'."
                 }
                 showingSaveAlert = true
@@ -426,8 +432,7 @@ struct Plan3DetailView: View {
                     Spacer()
                     
                     Button(action: {
-                        alertMessage = "This is an educational stress test for debt-funded investing. It is not a recommendation to borrow and invest. Compare downside cases, EMI pressure, taxes, fees, and your emergency fund before making any decision."
-                        showingSaveAlert = true
+                        showAssumptionsAlert = true
                     }) {
                         Image(systemName: "info.circle")
                             .foregroundColor(.blue)

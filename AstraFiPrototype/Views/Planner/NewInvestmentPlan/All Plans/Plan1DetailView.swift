@@ -41,7 +41,7 @@ struct Plan1DetailView: View {
                 .padding(.horizontal, 16)
 
                 .padding(.bottom, 120) 
-                .frame(maxWidth: UIScreen.main.bounds.width)
+                .frame(maxWidth: .infinity)
             }
             .background(AppTheme.appBackground(for: colorScheme))
             .onChange(of: selectedRisk) { _, _ in
@@ -111,7 +111,8 @@ struct Plan1DetailView: View {
     }
 
     private var savePlanFooter: some View {
-        let planName = result.name
+        let purpose = input.purposeOfInvestment.isEmpty ? "General" : input.purposeOfInvestment
+        let planName = "Pure Investment - \(purpose)"
         let isSaved = trackerVM.savedPlanNames.contains(planName)
         let isFollowed = trackerVM.followedPlanNames.contains(planName)
 
@@ -121,7 +122,11 @@ struct Plan1DetailView: View {
                     trackerVM.unsavePlan(planName: planName)
                     alertMessage = "Plan removed."
                 } else {
-                    trackerVM.savePlan(planName: planName, input: input)
+                    var inputToSave = input
+                    inputToSave.amount = String(Int(sipOverride))
+                    inputToSave.timePeriod = String(tenureOverride)
+                    inputToSave.riskType = selectedRisk.rawValue.capitalized
+                    trackerVM.savePlan(planName: planName, input: inputToSave)
                     alertMessage = "Plan saved to 'Saved Illustrations'."
                 }
                 showingSaveAlert = true

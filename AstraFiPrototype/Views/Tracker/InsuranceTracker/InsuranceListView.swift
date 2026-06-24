@@ -68,12 +68,16 @@ struct InsuranceListView: View {
         .toolbar {
             ToolbarItem(placement: .navigationBarLeading) {
                 Button { dismiss() } label: {
-                    Image(systemName: "chevron.left").fontWeight(.semibold)
+                    Image(systemName: "chevron.left")
+                        .font(.system(size: 16, weight: .bold))
+                        .foregroundColor(.primary)
                 }
             }
             ToolbarItem(placement: .navigationBarTrailing) {
                 Button { showingAddPolicy = true } label: {
-                    Image(systemName: "plus").fontWeight(.semibold)
+                    Image(systemName: "plus")
+                        .font(.system(size: 16, weight: .bold))
+                        .foregroundColor(.blue)
                 }
             }
         }
@@ -91,8 +95,11 @@ struct InsuranceListView: View {
                 }
             }
             HStack(spacing: 20) {
-                Text("Active Policies: \(activePoliciesCount)")
-                    .font(.subheadline).foregroundColor(.secondary)
+                VStack(alignment: .leading, spacing: 2) {
+                    Text("Active Policies").font(.subheadline).foregroundColor(.secondary)
+                    Text("\(activePoliciesCount)")
+                        .font(.subheadline).fontWeight(.semibold).foregroundColor(.primary)
+                }
                 Spacer()
                 VStack(alignment: .trailing, spacing: 2) {
                     Text("Total Sum Assured").font(.subheadline).foregroundColor(.secondary)

@@ -11,10 +11,11 @@ struct TrackerInvestmentsSection: View {
                 Spacer()
                 NavigationLink(destination: InvestmentOverviewView()) {
                     Image(systemName: "chevron.right")
-                        .font(.title3)
+                        .font(.system(size: 14, weight: .semibold))
                         .foregroundColor(AppTheme.auraIndigo)
                 }
             }
+            .padding(.horizontal, 8)
             if investments.isEmpty {
                 TrackerEmptyState(icon: "chart.pie.fill",
                                   message: "No investments recorded yet. Complete your assessment to get started.")

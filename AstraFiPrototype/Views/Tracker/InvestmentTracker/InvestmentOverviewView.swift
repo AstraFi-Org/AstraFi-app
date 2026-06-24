@@ -213,15 +213,17 @@ struct InvestmentOverviewView: View {
         .toolbar {
             ToolbarItem(placement: .topBarLeading) {
                 Button { dismiss() } label: {
-                    Image(systemName: "chevron.left").fontWeight(.semibold)
+                    Image(systemName: "chevron.left")
+                        .font(.system(size: 16, weight: .bold))
+                        .foregroundColor(.primary)
                 }
-                .buttonStyle(.plain)
             }
             ToolbarItem(placement: .topBarTrailing) {
                 Button { showingAddInvestment = true } label: {
-                    Image(systemName: "plus.circle.fill").font(.title3)
+                    Image(systemName: "plus")
+                        .font(.system(size: 16, weight: .bold))
+                        .foregroundColor(.blue)
                 }
-                .buttonStyle(.plain)
             }
         }
         .sheet(isPresented: $showingAddInvestment) { AddInvestmentView() }

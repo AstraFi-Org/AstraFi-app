@@ -735,7 +735,21 @@ final class InvestmentIntelligenceRepository {
             ("ICICIBANK.NS", "ICICI Bank", "Banking"),
             ("HINDUNILVR.NS", "Hindustan Unilever", "FMCG"),
             ("BHARTIARTL.NS", "Bharti Airtel", "Telecom"),
-            ("SUNPHARMA.NS", "Sun Pharma", "Healthcare")
+            ("SUNPHARMA.NS", "Sun Pharma", "Healthcare"),
+            ("ITC.NS", "ITC", "FMCG"),
+            ("SBIN.NS", "State Bank of India", "Banking"),
+            ("LT.NS", "Larsen & Toubro", "Construction"),
+            ("BAJFINANCE.NS", "Bajaj Finance", "Financials"),
+            ("ASIANPAINT.NS", "Asian Paints", "Consumer"),
+            ("KOTAKBANK.NS", "Kotak Mahindra Bank", "Banking"),
+            ("AXISBANK.NS", "Axis Bank", "Banking"),
+            ("MARUTI.NS", "Maruti Suzuki", "Automobile"),
+            ("TATAMOTORS.NS", "Tata Motors", "Automobile"),
+            ("M&M.NS", "Mahindra & Mahindra", "Automobile"),
+            ("HCLTECH.NS", "HCL Technologies", "IT"),
+            ("WIPRO.NS", "Wipro", "IT"),
+            ("TATASTEEL.NS", "Tata Steel", "Metals"),
+            ("JSWSTEEL.NS", "JSW Steel", "Metals")
         ]
 
         return await withTaskGroup(of: InvestmentSummaryAsset.self) { group in
@@ -756,17 +770,34 @@ final class InvestmentIntelligenceRepository {
 
             var assets: [InvestmentSummaryAsset] = []
             for await asset in group { assets.append(asset) }
-            return assets.sorted { $0.sector < $1.sector }
+            return assets.sorted { ($0.dailyChange ?? 0) > ($1.dailyChange ?? 0) }
         }
     }
 
     private func loadFunds() async -> [InvestmentSummaryAsset] {
         let schemes = await amfiService.schemes()
-        let categories = ["Large Cap", "Flexi Cap", "Mid Cap", "Small Cap", "Index Fund", "Gold Fund"]
-        return categories.compactMap { category in
-            schemes.first { SearchService.fundCategory(for: $0.name) == category }
+        // We need 20+ funds. We'll grab the first 25 valid equity schemes.
+        let topSchemes = schemes
+            .filter { $0.name.localizedCaseInsensitiveContains("Direct") || $0.name.localizedCaseInsensitiveContains("Growth") }
+            .prefix(25)
+        
+        return await withTaskGroup(of: InvestmentSummaryAsset.self) { group in
+            for scheme in topSchemes {
+                group.addTask {
+                    let chart = await self.amfiService.navHistory(schemeCode: scheme.schemeCode)
+                    var asset = SearchService.fundAsset(from: scheme)
+                    if let first = chart.first?.value, let last = chart.last?.value, first > 0 {
+                        asset.oneYearReturn = ((last - first) / first) * 100
+                    }
+                    return asset
+                }
+            }
+
+            var assets: [InvestmentSummaryAsset] = []
+            for await asset in group { assets.append(asset) }
+            // Sort by 1-year return descending
+            return assets.sorted { ($0.oneYearReturn ?? 0) > ($1.oneYearReturn ?? 0) }
         }
-        .map { SearchService.fundAsset(from: $0) }
     }
 
     private func loadGoldETFs() async -> [InvestmentSummaryAsset] {
@@ -774,7 +805,24 @@ final class InvestmentIntelligenceRepository {
             ("GOLDBEES.NS", "Nippon India Gold ETF"),
             ("HDFCGOLD.NS", "HDFC Gold ETF"),
             ("SETFGOLD.NS", "SBI Gold ETF"),
-            ("ICICIGOLD.NS", "ICICI Prudential Gold ETF")
+            ("ICICIGOLD.NS", "ICICI Prudential Gold ETF"),
+            ("KOTAKGOLD.NS", "Kotak Gold ETF"),
+            ("AXISGOLD.NS", "Axis Gold ETF"),
+            ("ADITYAGOLD.NS", "Aditya Birla Gold ETF"),
+            ("IDBIGOLD.NS", "IDBI Gold ETF"),
+            ("INVESCOGOLD.NS", "Invesco India Gold ETF"),
+            ("QUANTUMGOLD.NS", "Quantum Gold Fund"),
+            ("UTIGOLDETF.NS", "UTI Gold ETF"),
+            ("BSLGOLDETF.NS", "BSL Gold ETF"),
+            ("CANROBGOLD.NS", "Canara Robeco Gold ETF"),
+            ("RELGOLD.NS", "Religare Gold ETF"),
+            ("LICNETFGOLD.NS", "LIC MF Gold ETF"),
+            ("MAGMAGOLD.NS", "Magma Gold ETF"),
+            ("RELIGAREGO.NS", "Religare Gold"),
+            ("SAHARAGOLD.NS", "Sahara Gold ETF"),
+            ("SYNDGOLD.NS", "Syndicate Gold ETF"),
+            ("TATAGOLD.NS", "Tata Gold ETF"),
+            ("EBIXGOLD.NS", "Ebix Gold ETF")
         ]
 
         return await withTaskGroup(of: InvestmentSummaryAsset.self) { group in
@@ -795,7 +843,7 @@ final class InvestmentIntelligenceRepository {
 
             var assets: [InvestmentSummaryAsset] = []
             for await asset in group { assets.append(asset) }
-            return assets.sorted { $0.name < $1.name }
+            return assets.sorted { ($0.dailyChange ?? 0) > ($1.dailyChange ?? 0) }
         }
     }
 

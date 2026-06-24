@@ -60,12 +60,24 @@ struct MoneyFlowSourceSheet: View {
             .navigationTitle("Update Money Flow")
             .navigationBarTitleDisplayMode(.inline)
             .toolbar {
-                ToolbarItem(placement: .cancellationAction) {
-                    Button("Cancel") { dismiss() }
+                ToolbarItem(placement: .navigationBarLeading) {
+                    ToolbarCircleButton(
+                        systemName: "xmark",
+                        iconColor: AppTheme.auraIndigo,
+                        fillColor: Color(uiColor: .secondarySystemGroupedBackground)
+                    ) {
+                        dismiss()
+                    }
                 }
-                ToolbarItem(placement: .confirmationAction) {
-                    Button("Save") { saveData(); dismiss() }
-                        .fontWeight(.bold)
+                ToolbarItem(placement: .navigationBarTrailing) {
+                    ToolbarCircleButton(
+                        systemName: "checkmark",
+                        iconColor: AppTheme.auraIndigo,
+                        fillColor: Color(uiColor: .secondarySystemGroupedBackground)
+                    ) {
+                        saveData()
+                        dismiss()
+                    }
                 }
             }
             .onAppear { loadData() }
@@ -108,26 +120,27 @@ struct MoneyFlowSourceSheet: View {
 
                 // Add row
                 HStack {
-                    Image(systemName: "plus.circle.fill")
-                        .font(.system(size: 18))
-                        .foregroundStyle(color)
                     TextField("Source name", text: newName)
                         .font(.body)
                     Spacer()
-                    HStack(spacing: 2) {
+                    HStack(spacing: 4) {
                         Text("₹")
                             .foregroundStyle(.secondary)
                         TextField("0", text: newAmount)
                             .keyboardType(.decimalPad)
                             .multilineTextAlignment(.trailing)
-                            .frame(width: 90)
+                            .frame(width: 100)
                     }
                     .font(.body.weight(.semibold))
+                    
+                    Spacer()
+                        .frame(width: 8)
+                    
                     Button(action: onAdd) {
                         Text("Add")
                             .font(.system(size: 14, weight: .semibold))
                             .foregroundStyle(.white)
-                            .padding(.horizontal, 12).padding(.vertical, 6)
+                            .frame(width: 54, height: 28)
                             .background(color)
                             .clipShape(Capsule())
                     }
@@ -180,6 +193,29 @@ struct MoneyFlowSourceSheet: View {
 
 
 
+private struct ToolbarCircleButton: View {
+    let systemName: String
+    let iconColor: Color
+    let fillColor: Color
+    let onTap: () -> Void
+
+    var body: some View {
+        Button(action: onTap) {
+            Image(systemName: systemName)
+                .font(.system(size: 16, weight: .semibold))
+                .foregroundStyle(iconColor)
+                .frame(width: 38, height: 38)
+                .background(
+                    Circle()
+                        .fill(fillColor)
+                        .shadow(color: Color.black.opacity(0.12), radius: 6, x: 0, y: 3)
+                )
+                .clipShape(Circle())
+        }
+        .buttonStyle(.plain)
+    }
+}
+
 struct SourceRow: View {
     @Binding var name: String
     @Binding var amount: Double
@@ -197,6 +233,9 @@ struct SourceRow: View {
                     .frame(width: 100)
             }
             .font(.body.weight(.semibold))
+            
+            Spacer()
+                .frame(width: 62)
         }
         .padding(.horizontal, 16)
         .padding(.vertical, 13)

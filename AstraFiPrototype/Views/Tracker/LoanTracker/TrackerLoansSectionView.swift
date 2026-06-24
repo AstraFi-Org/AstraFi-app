@@ -12,10 +12,11 @@ struct TrackerLoansSection: View {
                 Spacer()
                 NavigationLink(destination: LoanTrackerView()) {
                     Image(systemName: "chevron.right")
-                        .font(.title3)
+                        .font(.system(size: 14, weight: .semibold))
                         .foregroundColor(AppTheme.auraIndigo)
                 }
             }
+            .padding(.horizontal, 8)
             VStack(spacing: 12) {
                 ForEach(Array(loans.prefix(3))) { loan in
                     NavigationLink(destination: LoanDetailView(loanID: loan.id)) {
@@ -65,9 +66,9 @@ struct TrackerLoanCard: View {
                     }
                 }
                 Spacer()
-                Image(systemName: "arrow.up.forward.app.fill")
-                    .font(.subheadline)
-                    .foregroundColor(.secondary.opacity(0.5))
+//                Image(systemName: "arrow.up.forward.app.fill")
+//                    .font(.subheadline)
+//                    .foregroundColor(.secondary.opacity(0.5))
             }
             
             HStack(spacing: 12) {

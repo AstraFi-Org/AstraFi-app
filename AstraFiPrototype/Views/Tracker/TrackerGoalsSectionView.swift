@@ -11,10 +11,11 @@ struct TrackerGoalsSection: View {
                 Spacer()
                 NavigationLink(destination: GoalListView()) {
                     Image(systemName: "chevron.right")
-                        .font(.title3)
+                        .font(.system(size: 14, weight: .semibold))
                         .foregroundColor(AppTheme.auraIndigo)
                 }
             }
+            .padding(.horizontal, 8)
             if goals.isEmpty {
                 TrackerEmptyState(icon: "flag.fill",
                                   message: "No goals set yet. Complete your assessment to start tracking goals.")
@@ -49,7 +50,7 @@ struct GoalCard: View {
         VStack(spacing: 16) {
             HStack {
                 VStack(alignment: .leading, spacing: 4) {
-                    Text(goal.name).font(.auraHeader(size: 17)).foregroundColor(AppTheme.auraIndigo)
+                    Text(goal.name).font(.auraHeader(size: 17))
                     Text(goal.associatedFund).font(.auraCaption()).foregroundColor(.secondary)
                 }
                 Spacer()

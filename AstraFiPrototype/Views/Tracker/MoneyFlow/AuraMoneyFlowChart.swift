@@ -198,7 +198,7 @@ struct AuraMoneyFlowChart: View {
                 Image(systemName: "info.circle")
                     .font(.system(size: 14))
                     .foregroundStyle(AppTheme.auraIndigo)
-                Text("Click on any Month to see income and expense of that month")
+                Text("Press on any Month Bar to see income and expense of that month")
                     .font(.system(size: 13, design: .rounded))
                     .foregroundStyle(.secondary)
             }

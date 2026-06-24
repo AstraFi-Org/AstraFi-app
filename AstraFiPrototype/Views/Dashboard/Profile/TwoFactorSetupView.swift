@@ -265,10 +265,10 @@ struct TwoFactorSetupView: View {
                 // Delete unverified factors to avoid name conflict
                 let unverified = factors.all.filter { $0.status == FactorStatus.unverified }
                 for factor in unverified {
-                    try? await supabase.auth.mfa.unenroll(params: MFAUnenrollParams(factorId: factor.id))
+                    _ = try? await supabase.auth.mfa.unenroll(params: MFAUnenrollParams(factorId: factor.id))
                 }
                 
-                let enrollment = try await supabase.auth.mfa.enroll(params: MFAEnrollParams(issuer: "AstraFi", friendlyName: "AstraFi-\(UUID().uuidString.prefix(4))"))
+                let enrollment = try await supabase.auth.mfa.enroll(params: MFATotpEnrollParams(issuer: "AstraFi", friendlyName: "AstraFi-\(UUID().uuidString.prefix(4))"))
                 self.factorId = enrollment.id
                 self.totpUri = enrollment.totp?.uri
                 self.totpSecret = enrollment.totp?.secret

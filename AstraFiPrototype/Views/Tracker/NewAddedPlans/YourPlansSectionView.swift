@@ -10,10 +10,11 @@ struct TrackerYourPlansSection: View {
                 Spacer()
                 NavigationLink(destination: AllPlansListView(plans: plans)) {
                     Image(systemName: "chevron.right")
-                        .font(.title3)
+                        .font(.system(size: 14, weight: .semibold))
                         .foregroundColor(AppTheme.auraIndigo)
                 }
             }
+            .padding(.horizontal, 8)
             VStack(spacing: 12) {
                 ForEach(Array(plans.prefix(3))) { plan in
                     PlanNavigationLink(plan: plan)
@@ -29,18 +30,18 @@ struct PlanNavigationLink: View {
     var body: some View {
         let full = InvestmentPlannerEngine.generateFullPlan(input: plan.input, profile: nil)
         
-        if plan.name == "Pure Investment" {
+        if plan.name.contains("Pure Investment") {
             NavigationLink(destination: Plan1DetailView(input: plan.input, result: full.plan1, isFromTracker: true)) {
                 PlanCard(plan: plan)
             }
             .buttonStyle(PlainButtonStyle())
-        } else if plan.name == "Loan Strategy", let p2 = full.plan2 {
-            NavigationLink(destination: Plan2DetailView(input: plan.input, result: p2, isFromTracker: true)) {
+        } else if plan.name.contains("Loan Strategy") {
+            NavigationLink(destination: Plan2DetailView(input: plan.input, result: full.plan2 ?? Plan2Result.empty(), isFromTracker: true)) {
                 PlanCard(plan: plan)
             }
             .buttonStyle(PlainButtonStyle())
-        } else if plan.name == "Leveraged Investing", let p3 = full.plan3 {
-            NavigationLink(destination: Plan3DetailView(input: plan.input, result: p3, isFromTracker: true)) {
+        } else if plan.name.contains("Leveraged Investing") || plan.name.contains("Loan Stress Test") {
+            NavigationLink(destination: Plan3DetailView(input: plan.input, result: full.plan3 ?? Plan3Result.empty(), isFromTracker: true)) {
                 PlanCard(plan: plan)
             }
             .buttonStyle(PlainButtonStyle())
@@ -90,12 +91,15 @@ struct PlanCard: View {
         VStack(spacing: 16) {
             HStack(alignment: .top) {
                 VStack(alignment: .leading, spacing: 4) {
-                    Text(plan.name).font(.auraHeader(size: 17)).foregroundColor(AppTheme.auraIndigo)
+                    Text(plan.name).font(.auraHeader(size: 17))
                     Text(plan.targetGoal).font(.auraCaption()).foregroundColor(.secondary)
                 }
                 Spacer()
                 VStack(alignment: .trailing, spacing: 6) {
-                    Text("₹\(plan.input.targetAmount)").font(.auraDigital(size: 18)).foregroundColor(AppTheme.auraIndigo)
+                    let amountStr = plan.input.targetAmount.replacingOccurrences(of: "₹", with: "").replacingOccurrences(of: ",", with: "")
+                    let amountVal = Double(amountStr) ?? 0
+                    let formattedAmount = amountVal > 0 ? amountVal.toCurrency() : "₹\(plan.input.targetAmount)"
+                    Text(formattedAmount).font(.auraDigital(size: 18)).foregroundColor(AppTheme.auraIndigo)
                 }
             }
             

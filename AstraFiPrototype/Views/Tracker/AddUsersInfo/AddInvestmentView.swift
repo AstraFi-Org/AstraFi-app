@@ -293,9 +293,9 @@ struct AddInvestmentView: View {
                     } label: {
                         Image(systemName: "checkmark")
                             .font(.system(size: 16, weight: .bold))
+                            .foregroundColor(canSave ? .blue : .gray)
                     }
                     .disabled(!canSave)
-                    .tint(canSave ? .blue : .gray)
                 }
                 .sharedBackgroundVisibility(.visible)
             }
