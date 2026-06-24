@@ -4,6 +4,10 @@ struct DashboardView: View {
     @Environment(\.colorScheme) var colorScheme
     @Environment(AppStateManager.self) var appState
     
+    @State private var showNotifications = false
+    @State private var navigateToProfile = false
+    @State private var showAuthPrompt = false
+    
     private var profile: AstraUserProfile? { appState.currentProfile }
     private var investments: [AstraInvestment] { profile?.investments ?? [] }
     private var goals: [AstraGoal] { profile?.goals ?? [] }
@@ -45,11 +49,29 @@ struct DashboardView: View {
                             .font(.system(size: 18, weight: .semibold))
                     }
 
-                    NavigationLink(destination: ProfileView()) {
+                    Button {
+                        if appState.isAuthenticated {
+                            navigateToProfile = true
+                        } else {
+                            showAuthPrompt = true
+                        }
+                    } label: {
                         Image(systemName: "person.crop.circle")
                             .font(.system(size: 20, weight: .regular))
                     }
                 }
+            }
+        }
+        .navigationDestination(isPresented: $navigateToProfile) {
+            ProfileView()
+        }
+        .fullScreenCover(isPresented: $showAuthPrompt, onDismiss: {
+            if appState.isAuthenticated {
+                navigateToProfile = true
+            }
+        }) {
+            NavigationStack {
+                AuthenticationFlowView()
             }
         }
     }
