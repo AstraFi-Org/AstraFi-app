@@ -620,10 +620,6 @@ final class AppStateManager {
                 }
             }
             
-            isAuthenticated = true
-            hasCompletedOnboarding = true
-            isGuest = false
-            
             if let profile = try? await SupabaseRepository.shared.fetchFullProfile(userId: session.user.id) {
                 var sanitizedProfile = profile
                 if sanitizedProfile.signUp.email.isEmpty, let email = session.user.email, !email.isEmpty {
@@ -631,6 +627,10 @@ final class AppStateManager {
                 }
                 self.currentProfile = sanitizedProfile
                 recalculateFinancials()
+                
+                isAuthenticated = true
+                hasCompletedOnboarding = true
+                isGuest = false
                 
                 if let pending = pendingGuestAssessment {
                     linkGuestAssessmentAndSave(
@@ -647,6 +647,11 @@ final class AppStateManager {
                 }
             } else {
                 setupEmptyProfile(name: session.user.email ?? "User", email: session.user.email ?? "")
+                
+                isAuthenticated = true
+                hasCompletedOnboarding = true
+                isGuest = false
+                
                 if let pending = pendingGuestAssessment {
                     linkGuestAssessmentAndSave(
                         data: pending.data,
@@ -680,10 +685,6 @@ final class AppStateManager {
             _ = try await supabase.auth.mfa.verify(params: MFAVerifyParams(factorId: factorId, challengeId: challenge.id, code: code))
             
             let session = try await supabase.auth.session
-            isAuthenticated = true
-            hasCompletedOnboarding = true
-            isGuest = false
-            
             if let profile = try? await SupabaseRepository.shared.fetchFullProfile(userId: session.user.id) {
                 var sanitizedProfile = profile
                 if sanitizedProfile.signUp.email.isEmpty, let email = session.user.email, !email.isEmpty {
@@ -691,6 +692,10 @@ final class AppStateManager {
                 }
                 self.currentProfile = sanitizedProfile
                 recalculateFinancials()
+                
+                isAuthenticated = true
+                hasCompletedOnboarding = true
+                isGuest = false
                 
                 if let pending = pendingGuestAssessment {
                     linkGuestAssessmentAndSave(
@@ -707,6 +712,11 @@ final class AppStateManager {
                 }
             } else {
                 setupEmptyProfile(name: session.user.email ?? "User", email: session.user.email ?? "")
+                
+                isAuthenticated = true
+                hasCompletedOnboarding = true
+                isGuest = false
+                
                 if let pending = pendingGuestAssessment {
                     linkGuestAssessmentAndSave(
                         data: pending.data,
@@ -767,10 +777,6 @@ final class AppStateManager {
             _ = try await supabase.auth.update(user: UserAttributes(password: newPassword))
             
             let session = try await supabase.auth.session
-            isAuthenticated = true
-            hasCompletedOnboarding = true
-            isGuest = false
-            
             if let profile = try? await SupabaseRepository.shared.fetchFullProfile(userId: session.user.id) {
                 var sanitizedProfile = profile
                 if sanitizedProfile.signUp.email.isEmpty, let email = session.user.email, !email.isEmpty {
@@ -778,6 +784,10 @@ final class AppStateManager {
                 }
                 self.currentProfile = sanitizedProfile
                 recalculateFinancials()
+                
+                isAuthenticated = true
+                hasCompletedOnboarding = true
+                isGuest = false
                 
                 if let pending = pendingGuestAssessment {
                     linkGuestAssessmentAndSave(
@@ -794,6 +804,11 @@ final class AppStateManager {
                 }
             } else {
                 setupEmptyProfile(name: session.user.email ?? "User", email: session.user.email ?? "")
+                
+                isAuthenticated = true
+                hasCompletedOnboarding = true
+                isGuest = false
+                
                 if let pending = pendingGuestAssessment {
                     linkGuestAssessmentAndSave(
                         data: pending.data,
@@ -1085,7 +1100,6 @@ final class AppStateManager {
                 }
             }
             
-            // Update basic details only if assessment data is non-empty
             if !assessmentData.income.isEmpty {
                 existingProfile.basicDetails.monthlyIncome = incomeValue
                 existingProfile.basicDetails.monthlyIncomeAfterTax = incomeValue
@@ -1106,10 +1120,36 @@ final class AppStateManager {
             existingProfile.basicDetails.gender = assessmentData.gender == .male ? .male : .female
             existingProfile.basicDetails.incomeType = assessmentData.incomeType == .fixed ? .fixed : .variable
             
+            let df = DateFormatter()
+            df.dateFormat = "yyyy-MM"
+            let monthKey = df.string(from: Date())
+            
+            var cf = existingProfile.cashflowData ?? CashflowEntry()
+            if cf.incomeSources.isEmpty && incomeValue > 0 {
+                cf.incomeSources = [.init(name: "Salary/Income", amount: incomeValue)]
+            }
+            if cf.expenseSources.isEmpty && expensesValue > 0 {
+                cf.expenseSources = [.init(name: "Total Expenses", amount: expensesValue)]
+            }
+            existingProfile.cashflowData = cf
+            existingProfile.monthlyCashflowSnapshots[monthKey] = cf
+            
             self.currentProfile = existingProfile
         } else {
             // NEW PROFILE
-            self.currentProfile = AstraUserProfile(
+            let df = DateFormatter()
+            df.dateFormat = "yyyy-MM"
+            let monthKey = df.string(from: Date())
+            
+            var cf = CashflowEntry()
+            if incomeValue > 0 {
+                cf.incomeSources = [.init(name: "Salary/Income", amount: incomeValue)]
+            }
+            if expensesValue > 0 {
+                cf.expenseSources = [.init(name: "Total Expenses", amount: expensesValue)]
+            }
+            
+            var newProfile = AstraUserProfile(
                 signUp: signUp,
                 basicDetails: basic,
                 assets: assets,
@@ -1119,9 +1159,12 @@ final class AppStateManager {
                 insurances: profileInsurances,
                 goals: [],
                 financialHealthReport: report,
+                cashflowData: cf,
                 monthlyHealthAssessments: [firstAssessment],
                 isSetuConnected: false
             )
+            newProfile.monthlyCashflowSnapshots[monthKey] = cf
+            self.currentProfile = newProfile
         }
         
         recalculateFinancials() // Ensure all scores are updated with merged data
@@ -1278,11 +1321,13 @@ final class AppStateManager {
                 profile.basicDetails.monthlyIncomeAfterTax = detailedIncome
             }
             
-            currentProfile = profile
-            recalculateFinancials()
             let df = DateFormatter()
             df.dateFormat = "yyyy-MM"
             let monthKey = df.string(from: Date())
+            profile.monthlyCashflowSnapshots[monthKey] = cashflow
+            
+            currentProfile = profile
+            recalculateFinancials()
             Task {
                 if let session = try? await supabase.auth.session {
                     do {
