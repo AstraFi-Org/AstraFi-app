@@ -35,7 +35,7 @@ struct EnhancedGoalCard: View {
     let percentage: Int
     let targetAmount: String
     let gradient: [Color]
-    var cardWidth: CGFloat? = 230
+    var cardWidth: CGFloat? = 260
     
     private var goalSymbol: String {
         let lower = title.lowercased()
@@ -62,6 +62,8 @@ struct EnhancedGoalCard: View {
                 Text("Achieved: \(percentage)%")
                     .font(.system(size: 12, weight: .bold))
                     .foregroundColor(gradient.first)
+                    .lineLimit(1)
+                    .fixedSize(horizontal: true, vertical: false)
             }
 
             // RIGHT SIDE (TEXT)

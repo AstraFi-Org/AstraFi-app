@@ -114,6 +114,7 @@ struct SignUpView: View {
     @State private var agreedToTerms: Bool = true
     @State private var showSuccessPrompt: Bool = false
     @State private var showTermsSheet: Bool = false
+    @State private var showPasswordRules: Bool = false
 
     var body: some View {
         NavigationStack{
@@ -162,8 +163,8 @@ struct SignUpView: View {
 
                     HStack {
                         Spacer()
-                        Button("Need Help?") {}
-                            .font(.system(size: 14)).foregroundColor(.blue  )
+                        Button("Need Help?") { showPasswordRules = true }
+                            .font(.system(size: 14)).foregroundColor(.blue)
                     }
                     .padding(.bottom, 16)
 
@@ -199,6 +200,10 @@ struct SignUpView: View {
                     .padding(.bottom, 28)
 
                     AuthPrimaryButton(title: "Create Account", isLoading: appState.isAuthLoading, isDisabled: !agreedToTerms) {
+                        if let error = validateInput() {
+                            appState.authError = error
+                            return
+                        }
                         Task {
                             let success = await appState.signUp(name: name, email: email, password: password)
                             if success {
@@ -253,5 +258,41 @@ struct SignUpView: View {
         .sheet(isPresented: $showTermsSheet) {
             TermsAndConditionsView(agreedToTerms: $agreedToTerms)
         }
+        .alert("Password Requirements", isPresented: $showPasswordRules) {
+            Button("Got it", role: .cancel) { }
+        } message: {
+            Text("Your password must have:\n• At least 8 characters\n• One uppercase letter\n• One lowercase letter\n• One number\n• One special character")
+        }
+    }
+    
+    private func validateInput() -> String? {
+        var errors: [String] = []
+
+        if name.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty { 
+            errors.append("• Please enter your name.") 
+        }
+        
+        let emailRegex = "^[A-Z0-9a-z._%+-]+@[A-Za-z0-9.-]+\\.[A-Za-z]{2,64}$"
+        let emailPredicate = NSPredicate(format:"SELF MATCHES %@", emailRegex)
+        if !emailPredicate.evaluate(with: email) { 
+            errors.append("• Please enter a valid email address.") 
+        }
+        
+        var passwordErrors: [String] = []
+        if password.count < 8 { passwordErrors.append("at least 8 characters") }
+        if password.rangeOfCharacter(from: .uppercaseLetters) == nil { passwordErrors.append("one uppercase letter") }
+        if password.rangeOfCharacter(from: .lowercaseLetters) == nil { passwordErrors.append("one lowercase letter") }
+        if password.rangeOfCharacter(from: .decimalDigits) == nil { passwordErrors.append("one number") }
+        if password.range(of: ".*[^A-Za-z0-9].*", options: .regularExpression) == nil { passwordErrors.append("one special character") }
+        
+        if !passwordErrors.isEmpty {
+            errors.append("• Password must contain " + passwordErrors.joined(separator: ", ") + ".")
+        } else if password != confirmPassword { 
+            errors.append("• Passwords do not match.") 
+        }
+        
+        return errors.isEmpty ? nil : errors.joined(separator: "\n")
     }
 }
+
+
