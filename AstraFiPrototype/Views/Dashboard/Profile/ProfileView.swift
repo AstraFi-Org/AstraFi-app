@@ -102,7 +102,7 @@ struct ProfileView: View {
                     Label("Security", systemImage: "lock.shield")
                 }
 
-                NavigationLink(destination: ProfilePlaceholderView(title: "Change Password", icon: "key", message: "Connect this screen to Supabase password reset or secure password update.")) {
+                NavigationLink(destination: ChangePasswordView()) {
                     Label("Change Password", systemImage: "key")
                 }
 
