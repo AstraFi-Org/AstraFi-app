@@ -122,8 +122,8 @@ final class AppStateManager {
         return mgr
     }
     
-    func setupEmptyProfile(name: String = "User") {
-        let signUp = AstraSignUp(signUpName: name, email: "", password: "")
+    func setupEmptyProfile(name: String = "User", email: String = "") {
+        let signUp = AstraSignUp(signUpName: name, email: email, password: "")
         
         let basic = AstraBasicDetails(
             name: name, age: 0, gender: .male, maritalStatus: .single,
@@ -293,7 +293,11 @@ final class AppStateManager {
                         await MainActor.run {
                             self.mfaFactorId = factor.id
                             self.requiresMFAChallenge = true
-                            self.currentProfile = profile
+                            var sanitizedProfile = profile
+                            if sanitizedProfile.signUp.email.isEmpty, let email = session.user.email, !email.isEmpty {
+                                sanitizedProfile.signUp.email = email
+                            }
+                            self.currentProfile = sanitizedProfile
                             self.isAuthenticated = true
                             self.hasCompletedOnboarding = true
                             self.showDashboard = true
@@ -309,7 +313,11 @@ final class AppStateManager {
                 }
                 
                 await MainActor.run {
-                    self.currentProfile = profile
+                    var sanitizedProfile = profile
+                    if sanitizedProfile.signUp.email.isEmpty, let email = session.user.email, !email.isEmpty {
+                        sanitizedProfile.signUp.email = email
+                    }
+                    self.currentProfile = sanitizedProfile
                     self.isAuthenticated = true
                     self.hasCompletedOnboarding = true
                     self.showDashboard = true
@@ -359,11 +367,15 @@ final class AppStateManager {
             tempName = name
             tempEmail = email
             tempPassword = password
-            setupEmptyProfile(name: name)
+            setupEmptyProfile(name: name, email: email)
             
             // After successful sign up — load existing data if any
             if let profile = try? await SupabaseRepository.shared.fetchFullProfile(userId: session.user.id) {
-                self.currentProfile = profile
+                var sanitizedProfile = profile
+                if sanitizedProfile.signUp.email.isEmpty, let sessionEmail = session.user.email, !sessionEmail.isEmpty {
+                    sanitizedProfile.signUp.email = sessionEmail
+                }
+                self.currentProfile = sanitizedProfile
                 recalculateFinancials()
             }
             
@@ -476,7 +488,11 @@ final class AppStateManager {
                 // Load existing profile or create new one
                 if let profile = try? await SupabaseRepository.shared.fetchFullProfile(userId: session.user.id) {
                     print("AppStateManager: Found existing profile for user")
-                    self.currentProfile = profile
+                    var sanitizedProfile = profile
+                    if sanitizedProfile.signUp.email.isEmpty, let email = session.user.email, !email.isEmpty {
+                        sanitizedProfile.signUp.email = email
+                    }
+                    self.currentProfile = sanitizedProfile
                     recalculateFinancials()
                     isAuthenticated = true
                     showPostAuthOnboarding = false
@@ -490,7 +506,7 @@ final class AppStateManager {
                         .joined(separator: " ")
                     let displayName = fullName.isEmpty ? (session.user.email ?? "User") : fullName
                     
-                    setupEmptyProfile(name: displayName)
+                    setupEmptyProfile(name: displayName, email: session.user.email ?? "")
                     isAuthenticated = true
                     showPostAuthOnboarding = true
                     hasCompletedOnboarding = true
@@ -543,7 +559,11 @@ final class AppStateManager {
             
             if let profile = try? await SupabaseRepository.shared.fetchFullProfile(userId: session.user.id) {
                 
-                self.currentProfile = profile
+                var sanitizedProfile = profile
+                if sanitizedProfile.signUp.email.isEmpty, let email = session.user.email, !email.isEmpty {
+                    sanitizedProfile.signUp.email = email
+                }
+                self.currentProfile = sanitizedProfile
                 recalculateFinancials()
                 isAuthenticated = true
                 showPostAuthOnboarding = false
@@ -551,7 +571,7 @@ final class AppStateManager {
                 showDashboard = true
             } else {
                
-                setupEmptyProfile(name: session.user.email ?? "User")
+                setupEmptyProfile(name: session.user.email ?? "User", email: session.user.email ?? "")
                 isAuthenticated = true
                 showPostAuthOnboarding = true
                 hasCompletedOnboarding = true
@@ -577,14 +597,18 @@ final class AppStateManager {
             
             let session = try await supabase.auth.session
             if let profile = try? await SupabaseRepository.shared.fetchFullProfile(userId: session.user.id) {
-                self.currentProfile = profile
+                var sanitizedProfile = profile
+                if sanitizedProfile.signUp.email.isEmpty, let email = session.user.email, !email.isEmpty {
+                    sanitizedProfile.signUp.email = email
+                }
+                self.currentProfile = sanitizedProfile
                 recalculateFinancials()
                 isAuthenticated = true
                 showPostAuthOnboarding = false
                 hasCompletedOnboarding = true
                 showDashboard = true
             } else {
-                setupEmptyProfile(name: session.user.email ?? "User")
+                setupEmptyProfile(name: session.user.email ?? "User", email: session.user.email ?? "")
                 isAuthenticated = true
                 showPostAuthOnboarding = true
                 hasCompletedOnboarding = true
@@ -637,14 +661,18 @@ final class AppStateManager {
             
             let session = try await supabase.auth.session
             if let profile = try? await SupabaseRepository.shared.fetchFullProfile(userId: session.user.id) {
-                self.currentProfile = profile
+                var sanitizedProfile = profile
+                if sanitizedProfile.signUp.email.isEmpty, let email = session.user.email, !email.isEmpty {
+                    sanitizedProfile.signUp.email = email
+                }
+                self.currentProfile = sanitizedProfile
                 recalculateFinancials()
                 isAuthenticated = true
                 showPostAuthOnboarding = false
                 hasCompletedOnboarding = true
                 showDashboard = true
             } else {
-                setupEmptyProfile(name: session.user.email ?? "User")
+                setupEmptyProfile(name: session.user.email ?? "User", email: session.user.email ?? "")
                 isAuthenticated = true
                 showPostAuthOnboarding = true
                 hasCompletedOnboarding = true
@@ -663,7 +691,6 @@ final class AppStateManager {
             try await supabase.auth.signOut(scope: .local)
             isAuthenticated = false
             
-            hasCompletedOnboarding = false
             showDashboard = false
             showPostAuthOnboarding = false
             currentProfile = nil
