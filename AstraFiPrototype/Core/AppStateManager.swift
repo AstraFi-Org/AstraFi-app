@@ -1336,9 +1336,13 @@ final class AppStateManager {
                             monthKey: monthKey,
                             userId: session.user.id
                         )
-                        print("Cashflow saved to Supabase")
+                        try await SupabaseRepository.shared.saveUserProfile(
+                            profile,
+                            userId: session.user.id
+                        )
+                        print("Cashflow and UserProfile saved to Supabase")
                     } catch {
-                        print("Cashflow save failed: \(error)")
+                        print("Cashflow/UserProfile save failed: \(error)")
                     }
                 }
             }

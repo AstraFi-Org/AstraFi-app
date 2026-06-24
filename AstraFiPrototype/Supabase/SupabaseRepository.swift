@@ -1184,7 +1184,7 @@ ins.maturityDate = row.maturityDate.flatMap { parseDate($0) }
             investments: investments, loans: loans,
             insurances: insurances, goals: goals,
             financialHealthReport: nil,
-            cashflowData: snapshots.values.first,
+            cashflowData: snapshots.keys.sorted().last.flatMap { snapshots[$0] },
             monthlyHealthAssessments: assessments,
             isSetuConnected: profileRow.isSetuConnected ?? false
         )
