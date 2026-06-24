@@ -75,7 +75,9 @@ struct MonthlyHealthReportsView: View {
                 Button {
                     showingAssessment = true
                 } label: {
-                    Label("New Assessment", systemImage: "plus.circle.fill")
+                    Image(systemName: "plus")
+                        .font(.system(size: 16, weight: .bold))
+                        .foregroundColor(.blue)
                 }
             }
         }
