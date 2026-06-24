@@ -9,6 +9,7 @@ import SwiftUI
 
 struct SignInView: View {
     @Environment(AppStateManager.self) var appState
+    @Environment(\.dismiss) private var dismiss
     @Binding var showSignUp: Bool
 
     @State private var email = ""
@@ -83,10 +84,20 @@ struct SignInView: View {
         .navigationBarTitleDisplayMode(.inline)
         .navigationBarBackButtonHidden(true)
         .toolbar {
-            ToolbarItem(placement: .topBarTrailing) {
-                Button("Skip") {
-                    appState.isAuthenticated = true
-                    appState.showPostAuthOnboarding = true
+            if appState.pendingGuestAssessment != nil {
+                ToolbarItem(placement: .topBarLeading) {
+                    Button("Cancel") {
+                        appState.pendingGuestAssessment = nil
+                        dismiss()
+                    }
+                }
+            } else {
+                ToolbarItem(placement: .topBarTrailing) {
+                    Button("Skip") {
+                        appState.isGuest = true
+                        appState.isAuthenticated = true
+                        appState.showPostAuthOnboarding = true
+                    }
                 }
             }
         }
@@ -104,6 +115,7 @@ struct SignInView: View {
 
 struct SignUpView: View {
     @Environment(AppStateManager.self) var appState
+    @Environment(\.dismiss) private var dismiss
     @Binding var showSignUp: Bool
 
     @State private var name: String = ""
@@ -229,10 +241,20 @@ struct SignUpView: View {
             .navigationBarTitleDisplayMode(.inline)
             .navigationBarBackButtonHidden(true)
             .toolbar {
-                ToolbarItem(placement: .topBarTrailing) {
-                    Button("Skip") {
-                        appState.isAuthenticated = true
-                        appState.showPostAuthOnboarding = true
+                if appState.pendingGuestAssessment != nil {
+                    ToolbarItem(placement: .topBarLeading) {
+                        Button("Cancel") {
+                            appState.pendingGuestAssessment = nil
+                            dismiss()
+                        }
+                    }
+                } else {
+                    ToolbarItem(placement: .topBarTrailing) {
+                        Button("Skip") {
+                            appState.isGuest = true
+                            appState.isAuthenticated = true
+                            appState.showPostAuthOnboarding = true
+                        }
                     }
                 }
             }

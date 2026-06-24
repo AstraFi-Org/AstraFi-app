@@ -15,6 +15,17 @@ final class AppStateManager {
     var isAssessmentSkipped: Bool = false
     var isLockedByBiometric: Bool = false
     
+    struct PendingGuestAssessment {
+        let data: CompleteAssessmentData
+        let score: Int
+        let status: String
+        let insights: [String]
+        let assessmentInsights: FinancialAssessmentInsights
+    }
+    
+    var isGuest: Bool = false
+    var pendingGuestAssessment: PendingGuestAssessment?
+    
     static func withSampleData() -> AppStateManager {
         let mgr = AppStateManager()
         let cal = Calendar.current
@@ -248,6 +259,14 @@ final class AppStateManager {
         }
     }
 
+    func linkGuestAssessmentAndSave(data: CompleteAssessmentData, score: Int, status: String, insights: [String], assessmentInsights: FinancialAssessmentInsights) {
+        updateProfile(from: data)
+        saveAssessmentToHistory(score: score, status: status, insights: insights, assessmentInsights: assessmentInsights)
+        isAssessmentSkipped = false
+        isGuest = false
+        showDashboard = true
+    }
+
     func deleteAssessmentFromHistory(_ assessment: AstraHealthAssessment) {
         guard var profile = currentProfile else { return }
         profile.monthlyHealthAssessments.removeAll { $0.id == assessment.id }
@@ -326,6 +345,7 @@ final class AppStateManager {
                     self.hasCompletedOnboarding = true
                     self.showDashboard = true
                     self.isLoading = false
+                    self.isGuest = false
                     
                     if biometricEnabled && requireOnLaunch {
                         self.isLockedByBiometric = true
@@ -395,8 +415,21 @@ final class AppStateManager {
     
     func completeSignUp() {
         isAuthenticated = true
-        showPostAuthOnboarding = true
         hasCompletedOnboarding = true
+        isGuest = false
+        
+        if let pending = pendingGuestAssessment {
+            linkGuestAssessmentAndSave(
+                data: pending.data,
+                score: pending.score,
+                status: pending.status,
+                insights: pending.insights,
+                assessmentInsights: pending.assessmentInsights
+            )
+            pendingGuestAssessment = nil
+        } else {
+            showPostAuthOnboarding = true
+        }
     }
     
     // MARK: - Sign in with Apple
@@ -499,9 +532,22 @@ final class AppStateManager {
                     self.currentProfile = sanitizedProfile
                     recalculateFinancials()
                     isAuthenticated = true
-                    showPostAuthOnboarding = false
                     hasCompletedOnboarding = true
-                    showDashboard = true
+                    isGuest = false
+                    
+                    if let pending = self.pendingGuestAssessment {
+                        self.linkGuestAssessmentAndSave(
+                            data: pending.data,
+                            score: pending.score,
+                            status: pending.status,
+                            insights: pending.insights,
+                            assessmentInsights: pending.assessmentInsights
+                        )
+                        self.pendingGuestAssessment = nil
+                    } else {
+                        showPostAuthOnboarding = false
+                        showDashboard = true
+                    }
                 } else {
                     print("AppStateManager: No existing profile found, setting up empty profile")
                     // Build display name from Apple credential if available
@@ -512,8 +558,21 @@ final class AppStateManager {
                     
                     setupEmptyProfile(name: displayName, email: session.user.email ?? "")
                     isAuthenticated = true
-                    showPostAuthOnboarding = true
                     hasCompletedOnboarding = true
+                    isGuest = false
+                    
+                    if let pending = self.pendingGuestAssessment {
+                        self.linkGuestAssessmentAndSave(
+                            data: pending.data,
+                            score: pending.score,
+                            status: pending.status,
+                            insights: pending.insights,
+                            assessmentInsights: pending.assessmentInsights
+                        )
+                        self.pendingGuestAssessment = nil
+                    } else {
+                        showPostAuthOnboarding = true
+                    }
                 }
                 
                 if let plans = try? await SupabaseRepository.shared.fetchSavedPlans(userId: session.user.id) {
@@ -561,24 +620,45 @@ final class AppStateManager {
                 }
             }
             
+            isAuthenticated = true
+            hasCompletedOnboarding = true
+            isGuest = false
+            
             if let profile = try? await SupabaseRepository.shared.fetchFullProfile(userId: session.user.id) {
-                
                 var sanitizedProfile = profile
                 if sanitizedProfile.signUp.email.isEmpty, let email = session.user.email, !email.isEmpty {
                     sanitizedProfile.signUp.email = email
                 }
                 self.currentProfile = sanitizedProfile
                 recalculateFinancials()
-                isAuthenticated = true
-                showPostAuthOnboarding = false
-                hasCompletedOnboarding = true
-                showDashboard = true
+                
+                if let pending = pendingGuestAssessment {
+                    linkGuestAssessmentAndSave(
+                        data: pending.data,
+                        score: pending.score,
+                        status: pending.status,
+                        insights: pending.insights,
+                        assessmentInsights: pending.assessmentInsights
+                    )
+                    pendingGuestAssessment = nil
+                } else {
+                    showPostAuthOnboarding = false
+                    showDashboard = true
+                }
             } else {
-               
                 setupEmptyProfile(name: session.user.email ?? "User", email: session.user.email ?? "")
-                isAuthenticated = true
-                showPostAuthOnboarding = true
-                hasCompletedOnboarding = true
+                if let pending = pendingGuestAssessment {
+                    linkGuestAssessmentAndSave(
+                        data: pending.data,
+                        score: pending.score,
+                        status: pending.status,
+                        insights: pending.insights,
+                        assessmentInsights: pending.assessmentInsights
+                    )
+                    pendingGuestAssessment = nil
+                } else {
+                    showPostAuthOnboarding = true
+                }
             }
             
             if let plans = try? await SupabaseRepository.shared.fetchSavedPlans(userId: session.user.id) {
@@ -600,6 +680,10 @@ final class AppStateManager {
             _ = try await supabase.auth.mfa.verify(params: MFAVerifyParams(factorId: factorId, challengeId: challenge.id, code: code))
             
             let session = try await supabase.auth.session
+            isAuthenticated = true
+            hasCompletedOnboarding = true
+            isGuest = false
+            
             if let profile = try? await SupabaseRepository.shared.fetchFullProfile(userId: session.user.id) {
                 var sanitizedProfile = profile
                 if sanitizedProfile.signUp.email.isEmpty, let email = session.user.email, !email.isEmpty {
@@ -607,15 +691,34 @@ final class AppStateManager {
                 }
                 self.currentProfile = sanitizedProfile
                 recalculateFinancials()
-                isAuthenticated = true
-                showPostAuthOnboarding = false
-                hasCompletedOnboarding = true
-                showDashboard = true
+                
+                if let pending = pendingGuestAssessment {
+                    linkGuestAssessmentAndSave(
+                        data: pending.data,
+                        score: pending.score,
+                        status: pending.status,
+                        insights: pending.insights,
+                        assessmentInsights: pending.assessmentInsights
+                    )
+                    pendingGuestAssessment = nil
+                } else {
+                    showPostAuthOnboarding = false
+                    showDashboard = true
+                }
             } else {
                 setupEmptyProfile(name: session.user.email ?? "User", email: session.user.email ?? "")
-                isAuthenticated = true
-                showPostAuthOnboarding = true
-                hasCompletedOnboarding = true
+                if let pending = pendingGuestAssessment {
+                    linkGuestAssessmentAndSave(
+                        data: pending.data,
+                        score: pending.score,
+                        status: pending.status,
+                        insights: pending.insights,
+                        assessmentInsights: pending.assessmentInsights
+                    )
+                    pendingGuestAssessment = nil
+                } else {
+                    showPostAuthOnboarding = true
+                }
             }
             requiresMFAChallenge = false
             mfaFactorId = nil
@@ -664,6 +767,10 @@ final class AppStateManager {
             _ = try await supabase.auth.update(user: UserAttributes(password: newPassword))
             
             let session = try await supabase.auth.session
+            isAuthenticated = true
+            hasCompletedOnboarding = true
+            isGuest = false
+            
             if let profile = try? await SupabaseRepository.shared.fetchFullProfile(userId: session.user.id) {
                 var sanitizedProfile = profile
                 if sanitizedProfile.signUp.email.isEmpty, let email = session.user.email, !email.isEmpty {
@@ -671,15 +778,34 @@ final class AppStateManager {
                 }
                 self.currentProfile = sanitizedProfile
                 recalculateFinancials()
-                isAuthenticated = true
-                showPostAuthOnboarding = false
-                hasCompletedOnboarding = true
-                showDashboard = true
+                
+                if let pending = pendingGuestAssessment {
+                    linkGuestAssessmentAndSave(
+                        data: pending.data,
+                        score: pending.score,
+                        status: pending.status,
+                        insights: pending.insights,
+                        assessmentInsights: pending.assessmentInsights
+                    )
+                    pendingGuestAssessment = nil
+                } else {
+                    showPostAuthOnboarding = false
+                    showDashboard = true
+                }
             } else {
                 setupEmptyProfile(name: session.user.email ?? "User", email: session.user.email ?? "")
-                isAuthenticated = true
-                showPostAuthOnboarding = true
-                hasCompletedOnboarding = true
+                if let pending = pendingGuestAssessment {
+                    linkGuestAssessmentAndSave(
+                        data: pending.data,
+                        score: pending.score,
+                        status: pending.status,
+                        insights: pending.insights,
+                        assessmentInsights: pending.assessmentInsights
+                    )
+                    pendingGuestAssessment = nil
+                } else {
+                    showPostAuthOnboarding = true
+                }
             }
             isAuthLoading = false
             return true
@@ -694,6 +820,8 @@ final class AppStateManager {
         do {
             try await supabase.auth.signOut(scope: .local)
             isAuthenticated = false
+            isGuest = false
+            pendingGuestAssessment = nil
             
             showDashboard = false
             showPostAuthOnboarding = false
