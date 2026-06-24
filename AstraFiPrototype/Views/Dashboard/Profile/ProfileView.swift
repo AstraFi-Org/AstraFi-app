@@ -22,6 +22,16 @@ struct ProfileView: View {
         return email
     }
 
+    private var latestHealthScore: String {
+        let savedReports = (profile?.monthlyHealthAssessments ?? [])
+            .filter { (0...100).contains($0.score) }
+            .sorted { $0.date > $1.date }
+        if let latest = savedReports.first {
+            return "\(latest.score)"
+        }
+        return "--"
+    }
+
     var body: some View {
         Form {
             Section {
@@ -30,14 +40,19 @@ struct ProfileView: View {
                     email: email,
                     initials: initials,
                     imageData: profileImageData,
-                    completion: completion,
-                    healthScore: report.map { "\($0.investmentScore)" } ?? "--",
-                    netWorth: (report?.netWorth ?? calculatedNetWorth).toCurrency(compact: true),
-                    dti: String(format: "%.0f%%", (report?.debtToIncomeRatio ?? debtToIncomeRatio) * 100),
                     selectedPhotoItem: $selectedPhotoItem
                 )
-                .listRowBackground(Color.clear)
-                .listRowInsets(EdgeInsets())
+            }
+
+            Section {
+                HStack {
+                    ProfileMetric(title: "Health", value: latestHealthScore)
+                    Divider().frame(height: 40)
+                    ProfileMetric(title: "Net Worth", value: (report?.netWorth ?? calculatedNetWorth).toCurrency(compact: true))
+                    Divider().frame(height: 40)
+                    ProfileMetric(title: "DTI", value: String(format: "%.0f%%", (report?.debtToIncomeRatio ?? debtToIncomeRatio) * 100))
+                }
+                .padding(.vertical, 8)
             }
 
             Section("Account Details") {
@@ -94,10 +109,6 @@ struct ProfileView: View {
                 NavigationLink(destination: ProfilePlaceholderView(title: "Privacy Controls", icon: "hand.raised", message: "Show data consent, third-party sharing, and account deletion controls here.")) {
                     Label("Privacy Controls", systemImage: "hand.raised")
                 }
-
-                NavigationLink(destination: NotificationsView()) {
-                    Label("Notifications", systemImage: "bell")
-                }
             }
 
             Section("General") {
@@ -123,7 +134,6 @@ struct ProfileView: View {
             }
         }
         .navigationTitle("Profile")
-        .navigationBarTitleDisplayMode(.inline)
         .scrollContentBackground(.hidden)
         .background(Color(uiColor: .systemGroupedBackground))
         .onChange(of: selectedPhotoItem) { _, newItem in
@@ -197,32 +207,32 @@ private struct ProfileHeader: View {
     let email: String
     let initials: String
     let imageData: Data?
-    let completion: Double
-    let healthScore: String
-    let netWorth: String
-    let dti: String
     @Binding var selectedPhotoItem: PhotosPickerItem?
 
     var body: some View {
-        VStack(spacing: 16) {
+        HStack(spacing: 16) {
             ZStack(alignment: .bottomTrailing) {
                 avatar
+                    .frame(width: 72, height: 72)
+                    .clipShape(Circle())
 
                 PhotosPicker(selection: $selectedPhotoItem, matching: .images) {
                     Image(systemName: "camera.fill")
-                        .font(.system(size: 13, weight: .bold))
+                        .font(.system(size: 10, weight: .bold))
                         .foregroundStyle(.white)
-                        .frame(width: 32, height: 32)
+                        .frame(width: 22, height: 22)
                         .background(Color(hex: "#0A3558"), in: Circle())
-                        .overlay(Circle().stroke(Color(uiColor: .systemBackground), lineWidth: 3))
+                        .overlay(Circle().stroke(Color(uiColor: .systemBackground), lineWidth: 2))
                 }
                 .buttonStyle(.plain)
+                .offset(x: 2, y: 2)
             }
 
-            VStack(spacing: 4) {
+            VStack(alignment: .leading, spacing: 4) {
                 Text(name)
-                    .font(.title3.weight(.bold))
-                    .multilineTextAlignment(.center)
+                    .font(.title3.weight(.semibold))
+                    .lineLimit(1)
+                    .minimumScaleFactor(0.9)
 
                 Text(email)
                     .font(.subheadline)
@@ -230,19 +240,9 @@ private struct ProfileHeader: View {
                     .lineLimit(1)
                     .minimumScaleFactor(0.85)
             }
-
-            HStack {
-                ProfileMetric(title: "Health", value: healthScore)
-                Divider().frame(height: 34)
-                ProfileMetric(title: "Net Worth", value: netWorth)
-                Divider().frame(height: 34)
-                ProfileMetric(title: "DTI", value: dti)
-            }
-            .padding(.top, 2)
+            Spacer(minLength: 0)
         }
-        .padding(.horizontal, 20)
-        .padding(.vertical, 20)
-        .frame(maxWidth: .infinity)
+        .padding(.vertical, 6)
     }
 
     @ViewBuilder
@@ -251,15 +251,12 @@ private struct ProfileHeader: View {
             Image(uiImage: image)
                 .resizable()
                 .scaledToFill()
-                .frame(width: 96, height: 96)
-                .clipShape(Circle())
         } else {
             Circle()
                 .fill(LinearGradient(colors: [Color(hex: "#007AFF"), Color(hex: "#34C759")], startPoint: .topLeading, endPoint: .bottomTrailing))
-                .frame(width: 96, height: 96)
                 .overlay {
                     Text(initials)
-                        .font(.system(size: 32, weight: .bold))
+                        .font(.system(size: 26, weight: .semibold))
                         .foregroundStyle(.white)
                 }
         }
