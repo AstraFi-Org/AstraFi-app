@@ -38,16 +38,33 @@ struct DashboardView: View {
         .navigationBarTitleDisplayMode(.large)
         .background(AppTheme.appBackground(for: colorScheme))
         .toolbar {
-            ToolbarItem(placement: .navigationBarLeading) {
-                NavigationLink(destination: ProfileView()) {
-                    Image(systemName: "person.circle")
+            ToolbarItem(placement: .topBarTrailing) {
+                HStack(spacing: 10) {
+                    NavigationLink(destination: NotificationsView()) {
+                        DashboardToolbarButton(systemName: "bell.fill")
+                    }
+                    .buttonStyle(.plain)
+
+                    NavigationLink(destination: ProfileView()) {
+                        DashboardToolbarButton(systemName: "person.circle")
+                    }
+                    .buttonStyle(.plain)
                 }
             }
-            ToolbarItem(placement: .navigationBarTrailing) {
-                NavigationLink(destination: NotificationsView()) {
-                    Image(systemName: "bell.fill")
-                }
-            }
+        }
+    }
+
+    private struct DashboardToolbarButton: View {
+        let systemName: String
+
+        var body: some View {
+            Image(systemName: systemName)
+                .font(.system(size: 20, weight: .semibold))
+                .foregroundStyle(Color(hex: "#007AFF"))
+                .frame(width: 44, height: 44)
+                .background(.ultraThinMaterial)
+                .clipShape(Circle())
+                .shadow(color: AppTheme.adaptiveShadow, radius: 8, x: 0, y: 4)
         }
     }
     
