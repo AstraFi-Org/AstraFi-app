@@ -4,6 +4,10 @@ struct DashboardView: View {
     @Environment(\.colorScheme) var colorScheme
     @Environment(AppStateManager.self) var appState
     
+    @State private var showNotifications = false
+    @State private var navigateToProfile = false
+    @State private var showAuthPrompt = false
+    
     private var profile: AstraUserProfile? { appState.currentProfile }
     private var investments: [AstraInvestment] { profile?.investments ?? [] }
     private var goals: [AstraGoal] { profile?.goals ?? [] }
@@ -39,34 +43,40 @@ struct DashboardView: View {
         .background(AppTheme.appBackground(for: colorScheme))
         .toolbar {
             ToolbarItem(placement: .topBarTrailing) {
-                HStack(spacing: 10) {
+                HStack(spacing: 16) {
                     NavigationLink(destination: NotificationsView()) {
-                        DashboardToolbarButton(systemName: "bell.fill")
+                        Image(systemName: "bell")
+                            .font(.system(size: 18, weight: .semibold))
                     }
-                    .buttonStyle(.plain)
 
-                    NavigationLink(destination: ProfileView()) {
-                        DashboardToolbarButton(systemName: "person.circle")
+                    Button {
+                        if appState.isAuthenticated {
+                            navigateToProfile = true
+                        } else {
+                            showAuthPrompt = true
+                        }
+                    } label: {
+                        Image(systemName: "person.crop.circle")
+                            .font(.system(size: 20, weight: .regular))
                     }
-                    .buttonStyle(.plain)
                 }
+            }
+        }
+        .navigationDestination(isPresented: $navigateToProfile) {
+            ProfileView()
+        }
+        .fullScreenCover(isPresented: $showAuthPrompt, onDismiss: {
+            if appState.isAuthenticated {
+                navigateToProfile = true
+            }
+        }) {
+            NavigationStack {
+                AuthenticationFlowView()
             }
         }
     }
 
-    private struct DashboardToolbarButton: View {
-        let systemName: String
 
-        var body: some View {
-            Image(systemName: systemName)
-                .font(.system(size: 20, weight: .semibold))
-                .foregroundStyle(Color(hex: "#007AFF"))
-                .frame(width: 44, height: 44)
-                .background(.ultraThinMaterial)
-                .clipShape(Circle())
-                .shadow(color: AppTheme.adaptiveShadow, radius: 8, x: 0, y: 4)
-        }
-    }
     
     
     // MARK: Portfolio Hero Card

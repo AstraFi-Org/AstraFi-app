@@ -6,6 +6,7 @@ import PhotosUI
 struct FinancialHealthReportView: View {
     @Environment(\.colorScheme) var colorScheme
     @Environment(AppStateManager.self) var appState
+    @ObservedObject private var upstoxViewModel = UpstoxViewModel.shared
     var data: CompleteAssessmentData?
 
     private var profile: AstraUserProfile? { appState.currentProfile }
@@ -159,6 +160,14 @@ struct FinancialHealthReportView: View {
         .navigationTitle("Financial Health Report")
         .navigationBarTitleDisplayMode(.inline)
         .onAppear { withAnimation(.easeOut(duration: 1.4)) { animatedScore = score } }
+        .task { await syncUpstoxInvestments() }
+        .onChange(of: upstoxViewModel.isConnected) { _, isConnected in
+            if isConnected {
+                Task { await syncUpstoxInvestments() }
+            } else {
+                appState.removeUpstoxHoldings()
+            }
+        }
         .navigationDestination(isPresented: $navigateToVitals) {
             VitalsDetailSheet(income: insights.monthlyIncome,
                               expenses: insights.monthlyExpenses,
@@ -190,6 +199,17 @@ struct FinancialHealthReportView: View {
                                  concerns: insights.activeConcerns.filter { $0.parameter == .liabilities })
         }
         .sheet(isPresented: $showingAddGoal) { AddGoalView() }
+    }
+
+    private func syncUpstoxInvestments() async {
+        guard upstoxViewModel.isConnected else { return }
+        let investments = await upstoxViewModel.fetchConnectedInvestments()
+        appState.syncUpstoxHoldings(
+            investments.equity,
+            mutualFunds: investments.mutualFunds,
+            mutualFundOrders: investments.mutualFundOrders,
+            mutualFundSIPs: investments.mutualFundSIPs
+        )
     }
 }
 

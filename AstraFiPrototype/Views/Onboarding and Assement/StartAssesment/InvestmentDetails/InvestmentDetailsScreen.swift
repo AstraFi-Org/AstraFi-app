@@ -4,6 +4,7 @@ internal import UniformTypeIdentifiers
 struct InvestmentDetailsScreen: View {
     @Bindable var data: CompleteAssessmentData
     var onComplete: (() -> Void)? = nil
+    @Environment(AppStateManager.self) private var appState
     @Environment(\.dismiss) private var dismiss
     @State private var goNext        = false
     @State private var selectedFile: String?
@@ -17,6 +18,10 @@ struct InvestmentDetailsScreen: View {
     
     @State private var showingBreakdown = false
     @State private var breakdownEntry: AssessmentInvestmentEntry? = nil
+
+    private var connectedUpstoxInvestments: [AstraInvestment] {
+        appState.currentProfile?.investments.filter { $0.brokerSource == "Upstox" } ?? []
+    }
     
     var body: some View {
         ZStack {
@@ -61,6 +66,18 @@ struct InvestmentDetailsScreen: View {
                         .padding(.vertical, 4)
                     } header: {
                         Text("Broker Connection")
+                    }
+
+                    if !connectedUpstoxInvestments.isEmpty {
+                        Section {
+                            ForEach(connectedUpstoxInvestments) { investment in
+                                ConnectedInvestmentCard(investment: investment)
+                            }
+                        } header: {
+                            Text("Connected Investments")
+                        } footer: {
+                            Text("These holdings are synced from Upstox and are not editable here. Manual investments can be added below.")
+                        }
                     }
                     
                     Section {
@@ -504,6 +521,92 @@ struct InvestmentDetailsScreen: View {
             .background(Color(.systemGray6))
             .cornerRadius(8)
             .shadow(radius: 2)
+        }
+    }
+}
+
+private struct ConnectedInvestmentCard: View {
+    let investment: AstraInvestment
+
+    private var currentValue: Double {
+        max(investment.currentValue, investment.investmentAmount, investment.totalInvestedAmount)
+    }
+
+    private var investedAmount: Double {
+        max(investment.totalInvestedAmount, investment.investmentAmount)
+    }
+
+    private var quantityText: String? {
+        let value = investment.quantity ?? investment.units ?? 0
+        guard value > 0 else { return nil }
+        return String(format: value.rounded() == value ? "%.0f" : "%.3f", value)
+    }
+
+    private var sourceText: String {
+        investment.brokerSource ?? "Connected"
+    }
+
+    var body: some View {
+        VStack(alignment: .leading, spacing: 12) {
+            HStack(alignment: .top, spacing: 12) {
+                ZStack {
+                    RoundedRectangle(cornerRadius: 10, style: .continuous)
+                        .fill(Color.green.opacity(0.12))
+                        .frame(width: 42, height: 42)
+                    Image(systemName: investment.investmentType == .stocks ? "chart.line.uptrend.xyaxis" : "building.columns.fill")
+                        .font(.system(size: 18, weight: .semibold))
+                        .foregroundStyle(Color.green)
+                }
+
+                VStack(alignment: .leading, spacing: 4) {
+                    Text(investment.investmentName)
+                        .font(.headline)
+                        .lineLimit(2)
+                    Text(investment.investmentType.rawValue)
+                        .font(.caption)
+                        .foregroundStyle(.secondary)
+                }
+
+                Spacer()
+
+                Text(sourceText)
+                    .font(.caption.weight(.semibold))
+                    .foregroundStyle(Color.green)
+                    .padding(.horizontal, 8)
+                    .padding(.vertical, 4)
+                    .background(Color.green.opacity(0.12))
+                    .clipShape(Capsule())
+            }
+
+            Divider()
+
+            HStack {
+                metric("Current Value", value: currentValue.toCurrency(compact: true))
+                Spacer()
+                metric("Invested", value: investedAmount.toCurrency(compact: true), alignment: .trailing)
+            }
+
+            if let quantityText {
+                HStack {
+                    Text("Quantity")
+                        .font(.caption)
+                        .foregroundStyle(.secondary)
+                    Spacer()
+                    Text(quantityText)
+                        .font(.subheadline.weight(.semibold))
+                }
+            }
+        }
+        .padding(.vertical, 8)
+    }
+
+    private func metric(_ title: String, value: String, alignment: HorizontalAlignment = .leading) -> some View {
+        VStack(alignment: alignment, spacing: 3) {
+            Text(title)
+                .font(.caption)
+                .foregroundStyle(.secondary)
+            Text(value)
+                .font(.subheadline.weight(.semibold))
         }
     }
 }

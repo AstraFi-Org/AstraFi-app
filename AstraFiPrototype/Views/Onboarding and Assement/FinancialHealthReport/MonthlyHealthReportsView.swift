@@ -6,12 +6,40 @@ struct MonthlyHealthReportsView: View {
     @State private var showingAssessment = false
 
     private var reports: [AstraHealthAssessment] {
-        (appState.currentProfile?.monthlyHealthAssessments ?? [])
+        let savedReports = (appState.currentProfile?.monthlyHealthAssessments ?? [])
+            .filter { (0...100).contains($0.score) }
+        let sourceReports = savedReports.isEmpty ? currentProfileReport.map { [$0] } ?? [] : savedReports
+        return sourceReports
             .sorted { $0.date > $1.date }
     }
 
     private var hasCompletedAssessment: Bool {
-        appState.currentProfile?.financialHealthReport != nil
+        !reports.isEmpty
+    }
+
+    private var shouldShowMonthlyReminder: Bool {
+        let calendar = Calendar.current
+        guard calendar.component(.day, from: Date()) == 1 else { return false }
+        return !reports.contains { calendar.isDate($0.date, equalTo: Date(), toGranularity: .month) }
+    }
+
+    private var currentProfileReport: AstraHealthAssessment? {
+        guard let profile = appState.currentProfile,
+              profile.financialHealthReport != nil else { return nil }
+
+        let insights = FinancialAssessmentInsights.build(profile: profile, data: nil)
+        let values = insights.radarValues.map { $0.1 }
+        let score = min(100, (values.reduce(0.0, +) / Double(values.count)) * 100).safeInt
+        let status = Self.status(for: score)
+        let keyInsights = insights.activeConcerns.map(\.title)
+
+        return AstraHealthAssessment(
+            date: Date(),
+            score: score,
+            status: status,
+            keyInsights: keyInsights.isEmpty ? ["Financial health looks stable based on your saved profile."] : keyInsights,
+            insights: insights
+        )
     }
 
     private var groupedByYear: [(String, [AstraHealthAssessment])] {
@@ -27,6 +55,9 @@ struct MonthlyHealthReportsView: View {
     var body: some View {
         ScrollView {
             VStack(alignment: .leading, spacing: 24) {
+                if shouldShowMonthlyReminder {
+                    monthlyReminderCard
+                }
                 headerCard
                 if !hasCompletedAssessment || reports.isEmpty {
                     noAssessmentCard
@@ -39,12 +70,53 @@ struct MonthlyHealthReportsView: View {
         }
         .navigationTitle("Health Reports")
         .background(AppTheme.appBackground(for: colorScheme))
-        .sheet(isPresented: $showingAssessment) {
-            AssessmentPromptView()
+        .toolbar {
+            ToolbarItem(placement: .primaryAction) {
+                Button {
+                    showingAssessment = true
+                } label: {
+                    Image(systemName: "plus")
+                        .font(.system(size: 16, weight: .bold))
+                        .foregroundColor(.blue)
+                }
+            }
         }
-        .onAppear {
-            addSampleReportsIfNeeded()
+        .fullScreenCover(isPresented: $showingAssessment) {
+            StartAssesmentView(
+                mode: .update,
+                prefilledData: appState.currentProfile.map(CompleteAssessmentData.prefilled(from:))
+            )
         }
+    }
+
+    private var monthlyReminderCard: some View {
+        HStack(alignment: .top, spacing: 12) {
+            Image(systemName: "calendar.badge.clock")
+                .font(.title3)
+                .foregroundColor(.blue)
+                .frame(width: 34, height: 34)
+                .background(Color.blue.opacity(0.12))
+                .clipShape(RoundedRectangle(cornerRadius: 10, style: .continuous))
+
+            VStack(alignment: .leading, spacing: 4) {
+                Text("Update monthly assessment")
+                    .font(.headline)
+                Text("It is the 1st of the month. Refresh your income, expenses, investments, loans, and insurance so this report stays current.")
+                    .font(.subheadline)
+                    .foregroundColor(.secondary)
+                    .fixedSize(horizontal: false, vertical: true)
+            }
+
+            Spacer()
+
+            Button("Start") {
+                showingAssessment = true
+            }
+            .font(.subheadline.weight(.semibold))
+        }
+        .padding()
+        .background(Color.blue.opacity(0.08))
+        .clipShape(RoundedRectangle(cornerRadius: 16, style: .continuous))
     }
 
     private var headerCard: some View {
@@ -132,10 +204,24 @@ struct MonthlyHealthReportsView: View {
 
                     ForEach(Array(yearReports.enumerated()), id: \.element.id) { idx, report in
                         let prevScore = findPreviousScore(for: report)
-                        NavigationLink(destination: HealthReportDetailView(report: report)) {
-                            HealthReportRow(report: report, previousScore: prevScore)
+                        HStack(spacing: 0) {
+                            NavigationLink(destination: HealthReportDetailView(report: report)) {
+                                HealthReportRow(report: report, previousScore: prevScore)
+                            }
+                            .buttonStyle(.plain)
+
+                            Button(role: .destructive) {
+                                appState.deleteAssessmentFromHistory(report)
+                            } label: {
+                                Image(systemName: "trash")
+                                    .font(.system(size: 17, weight: .semibold))
+                                    .foregroundStyle(Color.red)
+                                    .frame(width: 52, height: 52)
+                                    .contentShape(Rectangle())
+                            }
+                            .buttonStyle(.plain)
+                            .accessibilityLabel("Delete \(report.date.formatted(.dateTime.month(.wide).year())) report")
                         }
-                        .buttonStyle(.plain)
                         if idx < yearReports.count - 1 {
                             Divider().padding(.leading, 72)
                         }
@@ -171,24 +257,12 @@ struct MonthlyHealthReportsView: View {
         return nil
     }
 
-    private func addSampleReportsIfNeeded() {
-        guard let profile = appState.currentProfile, profile.monthlyHealthAssessments.isEmpty,
-              profile.financialHealthReport != nil else { return }
-        let cal = Calendar.current
-        let samples: [(Int, Int, String, [String])] = [
-            (0,  696, "Good",        ["High saving ratio", "Proper insurance coverage", "Emergency fund healthy"]),
-            (-1, 670, "Good",        ["Increased emergency fund", "High credit card usage"]),
-            (-2, 650, "Good",        ["Started new SIP", "Low liquid assets"]),
-        ]
-        let reports = samples.compactMap { offset, score, status, insights -> AstraHealthAssessment? in
-            guard let d = cal.date(byAdding: .month, value: offset, to: Date()) else { return nil }
-            return AstraHealthAssessment(date: d, score: score, status: status, keyInsights: insights)
-        }
-        appState.currentProfile?.monthlyHealthAssessments = reports
+    private func scoreColor(_ score: Int) -> Color {
+        score >= 80 ? .green : score >= 70 ? .orange : .red
     }
 
-    private func scoreColor(_ score: Int) -> Color {
-        score >= 800 ? .green : score >= 700 ? .orange : .red
+    private static func status(for score: Int) -> String {
+        score >= 80 ? "Excellent" : score >= 70 ? "Good" : "Needs Work"
     }
 }
 
@@ -196,7 +270,7 @@ struct HealthReportRow: View {
     let report: AstraHealthAssessment
     var previousScore: Int? = nil
 
-    private func scoreColor(_ s: Int) -> Color { s >= 800 ? .green : s >= 700 ? .orange : .red }
+    private func scoreColor(_ s: Int) -> Color { s >= 80 ? .green : s >= 70 ? .orange : .red }
 
     var body: some View {
         HStack(spacing: 16) {
@@ -227,27 +301,36 @@ struct HealthReportRow: View {
             Image(systemName: "chevron.right").font(.caption2).foregroundColor(.secondary)
         }
         .padding()
+        .contentShape(Rectangle())
     }
 }
 
 struct HealthReportDetailView: View {
     @Environment(AppStateManager.self) var appState
     let report: AstraHealthAssessment
-    private func scoreColor(_ s: Int) -> Color { s >= 80 ? .blue : s >= 70 ? .orange : .red }
+    @State private var navigateToVitals = false
+    @State private var navigateToRisk = false
+    @State private var navigateToLiability = false
+    @State private var navigateToInsurance = false
+    @State private var navigateToEmergency = false
+
+    private func scoreColor(_ s: Int) -> Color { s >= 80 ? .green : s >= 70 ? .orange : .red }
 
     var body: some View {
         ScrollView {
-            VStack(spacing: 24) {
+            VStack(spacing: 0) {
                 if let insights = report.insights {
-                    // Detailed Report from Snapshot
                     HeroCard(
                         name: appState.currentProfile?.basicDetails.name ?? "User",
                         score: Double(report.score),
                         radarValues: insights.radarValues,
-                        insights: insights                          // ← added
+                        insights: insights
                     )
+                    .padding(.horizontal, 20)
+                    .padding(.top, 20)
+                    .padding(.bottom, 24)
 
-                    ParameterSection(summaries: insights.parameterSummaries, onTap: { _ in })
+                    ParameterSection(summaries: insights.parameterSummaries, onTap: navigate(to:))
 
                     ReportSectionTitle("Key Insights")
                     VStack(spacing: 12) {
@@ -264,6 +347,8 @@ struct HealthReportDetailView: View {
                             .shadow(color: AppTheme.adaptiveShadow, radius: 4, x: 0, y: 2)
                         }
                     }
+                    .padding(.horizontal, 20)
+                    .padding(.bottom, 24)
                 } else {
                     // Legacy/Fallback Simple View
                     VStack(spacing: 16) {
@@ -305,20 +390,69 @@ struct HealthReportDetailView: View {
                     }
                 }
             }
-            .padding()
         }
         .navigationTitle(report.date.formatted(.dateTime.month(.wide).year()))
         .navigationBarTitleDisplayMode(.inline)
         .background(AppTheme.appBackground(for: .light))
+        .navigationDestination(isPresented: $navigateToVitals) {
+            if let insights = report.insights {
+                VitalsDetailSheet(
+                    income: insights.monthlyIncome,
+                    expenses: insights.monthlyExpenses,
+                    savings: insights.monthlySavings,
+                    ratio: insights.savingsRate,
+                    concerns: insights.activeConcerns.filter { $0.parameter == .vitals }
+                )
+            }
+        }
+        .navigationDestination(isPresented: $navigateToRisk) {
+            if let insights = report.insights {
+                RiskSheet(
+                    insights: insights,
+                    concerns: insights.activeConcerns.filter { $0.parameter == .investment }
+                )
+            }
+        }
+        .navigationDestination(isPresented: $navigateToLiability) {
+            if let insights = report.insights {
+                LiabilityDetailSheet(
+                    insights: insights,
+                    concerns: insights.activeConcerns.filter { $0.parameter == .liabilities }
+                )
+            }
+        }
+        .navigationDestination(isPresented: $navigateToInsurance) {
+            if let insights = report.insights {
+                InsuranceAdviceSheet(
+                    adultDependents: appState.currentProfile?.basicDetails.adultDependents ?? 1,
+                    concerns: insights.activeConcerns.filter { $0.parameter == .insurance }
+                )
+            }
+        }
+        .navigationDestination(isPresented: $navigateToEmergency) {
+            if let insights = report.insights {
+                EmergencyFundInsightSheet(insights: insights)
+            }
+        }
+    }
+
+    private func navigate(to parameter: AssessmentParameter) {
+        switch parameter {
+        case .vitals: navigateToVitals = true
+        case .investment: navigateToRisk = true
+        case .liabilities: navigateToLiability = true
+        case .insurance: navigateToInsurance = true
+        case .emergencyFund: navigateToEmergency = true
+        }
     }
 
     private var scoreMeaningCard: some View {
         HStack(spacing: 16) {
-            scoreRange(label: "Excellent", range: "800+", color: .green)
+            scoreRange(label: "Excellent", range: "80+", color: .green)
             Divider().frame(height: 40)
-            scoreRange(label: "Good", range: "700-799", color: .orange)
+            scoreRange(label: "Good", range: "70-79", color: .orange)
             Divider().frame(height: 40)
-            scoreRange(label: "Needs Work", range: "<700", color: .red)
+            scoreRange(label: "Needs Work", range: "<70", color: .red)
         }
         .padding()
         .background(Color(uiColor: .systemBackground)).cornerRadius(16)
