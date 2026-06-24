@@ -39,34 +39,22 @@ struct DashboardView: View {
         .background(AppTheme.appBackground(for: colorScheme))
         .toolbar {
             ToolbarItem(placement: .topBarTrailing) {
-                HStack(spacing: 10) {
+                HStack(spacing: 16) {
                     NavigationLink(destination: NotificationsView()) {
-                        DashboardToolbarButton(systemName: "bell.fill")
+                        Image(systemName: "bell")
+                            .font(.system(size: 18, weight: .semibold))
                     }
-                    .buttonStyle(.plain)
 
                     NavigationLink(destination: ProfileView()) {
-                        DashboardToolbarButton(systemName: "person.circle")
+                        Image(systemName: "person.crop.circle")
+                            .font(.system(size: 20, weight: .regular))
                     }
-                    .buttonStyle(.plain)
                 }
             }
         }
     }
 
-    private struct DashboardToolbarButton: View {
-        let systemName: String
 
-        var body: some View {
-            Image(systemName: systemName)
-                .font(.system(size: 20, weight: .semibold))
-                .foregroundStyle(Color(hex: "#007AFF"))
-                .frame(width: 44, height: 44)
-                .background(.ultraThinMaterial)
-                .clipShape(Circle())
-                .shadow(color: AppTheme.adaptiveShadow, radius: 8, x: 0, y: 4)
-        }
-    }
     
     
     // MARK: Portfolio Hero Card
