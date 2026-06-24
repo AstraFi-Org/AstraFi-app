@@ -1033,6 +1033,14 @@ ins.maturityDate = row.maturityDate.flatMap { parseDate($0) }
         }
     }
 
+    func deleteHealthAssessment(_ assessmentId: UUID) async throws {
+        try await supabase
+            .from("health_assessments")
+            .delete()
+            .eq("id", value: assessmentId.uuidString)
+            .execute()
+    }
+
     // MARK: - Emergency Fund Allocation
 
     func saveEmergencyFundAllocation(_ allocation: AstraEmergencyFundAllocation, userId: UUID) async throws {
