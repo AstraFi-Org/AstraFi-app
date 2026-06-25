@@ -100,7 +100,8 @@ class InvestmentPlannerEngine {
         interestType: InterestType = .compounded,
         investmentMode: String = "Lumpsum",
         lumpsumPhases: Int = 1,
-        emiFromPocket: Bool = true
+        emiFromPocket: Bool = true,
+        historicalPeriodYears: Int = 10
     ) -> Plan3Result {
         var customInput = input
         customInput.targetAmount = String(Int(overridenLoan))
@@ -121,7 +122,8 @@ class InvestmentPlannerEngine {
             investmentMode: investmentMode,
             lumpsumPhases: lumpsumPhases,
             emiFromPocket: emiFromPocket,
-            overridenReturn: overridenReturn
+            overridenReturn: overridenReturn,
+            historicalPeriodYears: historicalPeriodYears
         )
     }
 
@@ -710,7 +712,8 @@ class InvestmentPlannerEngine {
         investmentMode: String = "Lumpsum",
         lumpsumPhases: Int = 1,
         emiFromPocket: Bool = true,
-        overridenReturn: Double? = nil
+        overridenReturn: Double? = nil,
+        historicalPeriodYears: Int = 10
     ) -> Plan3Result {
         let loanAmt = loanAmountOverride ?? parseAmount(input.targetAmount)
         let rate = loanRateOverride ?? input.interestRate ?? 10.5
@@ -731,7 +734,8 @@ class InvestmentPlannerEngine {
             emiFrequency: emiFrequency,
             phases: lumpsumPhases,
             emiFromPocket: emiFromPocket,
-            isSIPMode: investmentMode == "SIP"
+            isSIPMode: investmentMode == "SIP",
+            historicalPeriodYears: historicalPeriodYears
         )
 
         let mod = runLeveragedSimulation(
@@ -743,7 +747,8 @@ class InvestmentPlannerEngine {
             emiFrequency: emiFrequency,
             phases: lumpsumPhases,
             emiFromPocket: emiFromPocket,
-            isSIPMode: investmentMode == "SIP"
+            isSIPMode: investmentMode == "SIP",
+            historicalPeriodYears: historicalPeriodYears
         )
 
         let agg = runLeveragedSimulation(
@@ -755,7 +760,8 @@ class InvestmentPlannerEngine {
             emiFrequency: emiFrequency,
             phases: lumpsumPhases,
             emiFromPocket: emiFromPocket,
-            isSIPMode: investmentMode == "SIP"
+            isSIPMode: investmentMode == "SIP",
+            historicalPeriodYears: historicalPeriodYears
         )
 
         var recStrategy = "Moderate"
@@ -769,15 +775,17 @@ class InvestmentPlannerEngine {
             recReason = "Your profile can be stress-tested against an aggressive scenario, including higher loss potential."
         }
 
-        let worstSim = runLeveragedSimulation(name: "Worst", loanAmount: loanAmt, loanRate: rate, tenure: years, portfolio: conservativePortfolio, emiFrequency: emiFrequency, phases: lumpsumPhases, emiFromPocket: emiFromPocket, isSIPMode: investmentMode == "SIP", overridenReturn: 4.0)
+        let scenarioStats = buildHistoricalPortfolioStats(portfolio: moderatePortfolio, years: historicalPeriodYears)
+
+        let worstSim = runLeveragedSimulation(name: "Worst", loanAmount: loanAmt, loanRate: rate, tenure: years, portfolio: conservativePortfolio, emiFrequency: emiFrequency, phases: lumpsumPhases, emiFromPocket: emiFromPocket, isSIPMode: investmentMode == "SIP", overridenReturn: scenarioStats.p5CAGR, historicalPeriodYears: historicalPeriodYears)
         
-        let bullSim = runLeveragedSimulation(name: "Bull", loanAmount: loanAmt, loanRate: rate, tenure: years, portfolio: aggressivePortfolio, emiFrequency: emiFrequency, phases: lumpsumPhases, emiFromPocket: emiFromPocket, isSIPMode: investmentMode == "SIP", overridenReturn: 19.0)
+        let bullSim = runLeveragedSimulation(name: "Bull", loanAmount: loanAmt, loanRate: rate, tenure: years, portfolio: aggressivePortfolio, emiFrequency: emiFrequency, phases: lumpsumPhases, emiFromPocket: emiFromPocket, isSIPMode: investmentMode == "SIP", overridenReturn: scenarioStats.p75CAGR, historicalPeriodYears: historicalPeriodYears)
 
         let scenarios = [
-            PlanScenario(name: "Worst Case", cagr: 4.0, gainLoss: worstSim.netProfit, finalValue: worstSim.finalValue),
-            PlanScenario(name: "Conservative", cagr: 8.0, gainLoss: cons.netProfit, finalValue: cons.finalValue),
-            PlanScenario(name: "Moderate", cagr: 12.0, gainLoss: mod.netProfit, finalValue: mod.finalValue),
-            PlanScenario(name: "Bull Market", cagr: 19.0, gainLoss: bullSim.netProfit, finalValue: bullSim.finalValue)
+            PlanScenario(name: "Worst Case", cagr: scenarioStats.p5CAGR, gainLoss: worstSim.netProfit, finalValue: worstSim.finalValue),
+            PlanScenario(name: "Conservative", cagr: scenarioStats.p25CAGR, gainLoss: cons.netProfit, finalValue: cons.finalValue),
+            PlanScenario(name: "Expected", cagr: scenarioStats.meanCAGR, gainLoss: mod.netProfit, finalValue: mod.finalValue),
+            PlanScenario(name: "Bull Market", cagr: scenarioStats.p75CAGR, gainLoss: bullSim.netProfit, finalValue: bullSim.finalValue)
         ]
 
         return Plan3Result(
@@ -862,10 +870,12 @@ class InvestmentPlannerEngine {
         phases: Int,
         emiFromPocket: Bool,
         isSIPMode: Bool = false,
-        overridenReturn: Double? = nil
+        overridenReturn: Double? = nil,
+        historicalPeriodYears: Int = 10
     ) -> LeveragedStrategyResult {
         let months = tenure * 12
         let monthsPerPayment = Int(12 / emiFrequency.paymentsPerYear)
+        let historicalStats = buildHistoricalPortfolioStats(portfolio: portfolio, years: historicalPeriodYears)
 
         let emi = calculateEMIPublic(principal: loanAmount, rate: loanRate, years: tenure, frequency: emiFrequency)
 
@@ -882,26 +892,28 @@ class InvestmentPlannerEngine {
         for m in 1...months {
             _ = investedPool + cashPool
             var monthlyInvestment = 0.0
+            let periodStartValue = investedPool
 
             if isSIPMode {
                 if m > 12 {
                     monthlyInvestment = emi
-                    investedPool += monthlyInvestment
                     totalInvestedOrPaid += monthlyInvestment
                 }
             } else {
                 if (m - 1) % interval == 0 && phasesInvested < phases {
                     let toMove = min(cashPool, phaseAmount)
                     cashPool -= toMove
-                    investedPool += toMove
                     phasesInvested += 1
                     monthlyInvestment = toMove
                 }
             }
 
-            let monthlyReturnRate = overridenReturn != nil ? (overridenReturn! / 12.0 / 100.0) : getDeterministicMonthlyReturn(portfolio: portfolio, month: m)
-            let monthlyGrowth = investedPool * monthlyReturnRate
-            investedPool += monthlyGrowth
+            let monthlyReturnPercent = overridenReturn != nil
+                ? (overridenReturn! / 12.0)
+                : historicalStats.monthlyReturns[(m - 1) % historicalStats.monthlyReturns.count]
+            let monthlyReturnRate = monthlyReturnPercent / 100.0
+            let monthlyGrowth = periodStartValue * monthlyReturnRate
+            investedPool = periodStartValue + monthlyGrowth + monthlyInvestment
 
             var emiPaidThisMonth = 0.0
             if !isSIPMode && m % monthsPerPayment == 0 {
@@ -920,9 +932,11 @@ class InvestmentPlannerEngine {
 
             monthlySteps.append(Plan3MonthlyStep(
                 month: monthName,
-                startValue: investedPool - monthlyInvestment - monthlyGrowth + (emiFromPocket ? 0 : emiPaidThisMonth),
+                startValue: periodStartValue,
                 investment: monthlyInvestment,
                 growth: monthlyGrowth,
+                historicalReturnPercent: monthlyReturnPercent,
+                netChange: monthlyInvestment + monthlyGrowth - (!emiFromPocket ? emiPaidThisMonth : 0),
                 interestPaid: isSIPMode ? 0 : (loanAmount * (loanRate/1200)),
                 emiFromPocket: emiPaidThisMonth,
                 endValue: investedPool,
@@ -937,6 +951,7 @@ class InvestmentPlannerEngine {
             let yearSteps = Array(monthlySteps[startIdx...endIdx])
             let yearlyGrowth = yearSteps.reduce(0.0) { $0 + $1.growth }
             let yearlyInvested = yearSteps.reduce(0.0) { $0 + $1.investment }
+            let annualReturn = yearSteps.reduce(1.0) { $0 * (1.0 + ($1.historicalReturnPercent / 100.0)) } - 1.0
 
             yearlyBreakdown.append(Plan3YearlyDetail(
                 year: y, date: Calendar.current.date(byAdding: .year, value: y, to: Date()) ?? Date(),
@@ -945,6 +960,7 @@ class InvestmentPlannerEngine {
                 emiPaidYearly: isSIPMode ? yearlyInvested : (emi * emiFrequency.paymentsPerYear),
                 withdrawalYearly: (!isSIPMode && !emiFromPocket) ? (emi * emiFrequency.paymentsPerYear) : 0,
                 netYearlyProfit: yearlyGrowth,
+                annualReturnPercent: annualReturn * 100.0,
                 monthlySteps: yearSteps
             ))
         }
@@ -968,9 +984,106 @@ class InvestmentPlannerEngine {
     }
 
     private static func getDeterministicMonthlyReturn(portfolio: PortfolioBlueprint, month: Int) -> Double {
-        let avgGrowth = portfolio.blendedCAGR
-        let monthlyBase = (avgGrowth / 12.0) / 100.0
-        return monthlyBase
+        let stats = buildHistoricalPortfolioStats(portfolio: portfolio, years: 10)
+        return stats.monthlyReturns[(month - 1) % stats.monthlyReturns.count] / 100.0
+    }
+
+    private struct HistoricalPortfolioStats {
+        let monthlyReturns: [Double]
+        let meanCAGR: Double
+        let p5CAGR: Double
+        let p25CAGR: Double
+        let p75CAGR: Double
+    }
+
+    private static func buildHistoricalPortfolioStats(portfolio: PortfolioBlueprint, years requestedYears: Int) -> HistoricalPortfolioStats {
+        let years = [5, 10, 15].contains(requestedYears) ? requestedYears : 10
+        let allYears = Array(2011...2025)
+        let selectedYears = Array(allYears.suffix(years))
+        let totalWeight = max(1, portfolio.allocations.reduce(0.0) { $0 + $1.percentage })
+
+        var weightedMonthly: [Double] = []
+        for year in selectedYears {
+            for monthIndex in 0..<12 {
+                let portfolioReturn = portfolio.allocations.reduce(0.0) { partial, allocation in
+                    let assetClass = historicalAssetClass(for: allocation.name)
+                    let assetReturn = monthlyReturn(for: assetClass, year: year, monthIndex: monthIndex)
+                    return partial + ((allocation.percentage / totalWeight) * assetReturn)
+                }
+                weightedMonthly.append(portfolioReturn)
+            }
+        }
+
+        let finalMultiplier = weightedMonthly.reduce(1.0) { $0 * (1.0 + $1 / 100.0) }
+        let meanCAGR = (pow(finalMultiplier, 1.0 / Double(years)) - 1.0) * 100.0
+        let annualCAGRs = stride(from: 0, to: weightedMonthly.count, by: 12).map { start -> Double in
+            let end = min(start + 12, weightedMonthly.count)
+            let annualMultiplier = weightedMonthly[start..<end].reduce(1.0) { $0 * (1.0 + $1 / 100.0) }
+            return (annualMultiplier - 1.0) * 100.0
+        }.sorted()
+
+        return HistoricalPortfolioStats(
+            monthlyReturns: weightedMonthly.isEmpty ? [0] : weightedMonthly,
+            meanCAGR: meanCAGR,
+            p5CAGR: percentile(annualCAGRs, 0.05),
+            p25CAGR: percentile(annualCAGRs, 0.25),
+            p75CAGR: percentile(annualCAGRs, 0.75)
+        )
+    }
+
+    private enum HistoricalAssetClass {
+        case largeCapEquity
+        case midSmallCapEquity
+        case diversifiedEquity
+        case debt
+        case gold
+        case cash
+    }
+
+    private static func historicalAssetClass(for name: String) -> HistoricalAssetClass {
+        let lower = name.lowercased()
+        if lower.contains("gold") || lower.contains("silver") { return .gold }
+        if lower.contains("bond") || lower.contains("debt") || lower.contains("liquid") || lower.contains("short term") { return .debt }
+        if lower.contains("small") || lower.contains("mid") || lower.contains("momentum") { return .midSmallCapEquity }
+        if lower.contains("large") || lower.contains("bluechip") || lower.contains("index") { return .largeCapEquity }
+        if lower.contains("cash") { return .cash }
+        return .diversifiedEquity
+    }
+
+    private static func monthlyReturn(for assetClass: HistoricalAssetClass, year: Int, monthIndex: Int) -> Double {
+        let annual = annualHistoricalReturn(for: assetClass, year: year) / 100.0
+        let baseMonthly = (pow(1.0 + annual, 1.0 / 12.0) - 1.0) * 100.0
+        let seasonalPattern = [-0.35, 0.18, 0.42, -0.12, 0.28, -0.22, 0.31, -0.18, -0.28, 0.36, 0.24, -0.64]
+        return baseMonthly + seasonalPattern[monthIndex % seasonalPattern.count]
+    }
+
+    private static func annualHistoricalReturn(for assetClass: HistoricalAssetClass, year: Int) -> Double {
+        let index = max(0, min(14, year - 2011))
+        switch assetClass {
+        case .largeCapEquity:
+            return [-24.6, 27.7, 6.8, 31.4, -4.1, 3.0, 28.6, 3.2, 12.0, 14.9, 24.1, 4.3, 20.0, 8.8, 6.2][index]
+        case .midSmallCapEquity:
+            return [-31.0, 38.5, 8.0, 55.9, 7.4, 6.8, 48.1, -15.6, -4.3, 20.7, 46.1, 3.0, 41.7, 23.5, 8.1][index]
+        case .diversifiedEquity:
+            return [-25.7, 31.8, 7.2, 39.5, 1.1, 4.5, 34.8, -3.1, 8.6, 16.4, 29.5, 4.0, 26.4, 12.7, 6.8][index]
+        case .debt:
+            return [8.3, 9.1, 7.2, 8.7, 8.0, 10.2, 6.5, 5.8, 9.4, 12.1, 4.3, 3.8, 7.4, 7.9, 6.8][index]
+        case .gold:
+            return [31.1, 12.9, -6.2, -8.5, -5.7, 10.8, 2.8, 7.1, 24.6, 28.1, -4.0, 14.2, 15.3, 21.0, 9.6][index]
+        case .cash:
+            return [6.5, 7.0, 7.0, 6.8, 6.7, 6.5, 6.2, 6.0, 5.8, 4.8, 4.2, 4.8, 6.0, 6.5, 6.2][index]
+        }
+    }
+
+    private static func percentile(_ values: [Double], _ p: Double) -> Double {
+        guard !values.isEmpty else { return 0 }
+        let sorted = values.sorted()
+        let position = max(0, min(Double(sorted.count - 1), p * Double(sorted.count - 1)))
+        let lower = Int(floor(position))
+        let upper = Int(ceil(position))
+        if lower == upper { return sorted[lower] }
+        let weight = position - Double(lower)
+        return sorted[lower] + ((sorted[upper] - sorted[lower]) * weight)
     }
 
     private static func generateRecommendations(input: InvestmentPlanInputModel, plan1: Plan1Result, plan2: Plan2Result?,

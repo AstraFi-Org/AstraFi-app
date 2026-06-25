@@ -19,6 +19,7 @@ struct DashboardView: View {
                 investmentSummaryCard
                 
                 if investments.isEmpty {
+                    
                     emptyStateCard(
                         icon: "sparkles",
                         title: "Begin Your AstraFi Journey",
