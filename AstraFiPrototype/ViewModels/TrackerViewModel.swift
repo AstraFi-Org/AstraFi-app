@@ -211,52 +211,52 @@ class TrackerViewModel {
     private func calculateMoneyFlowChartData(_ profile: AstraUserProfile, df: DateFormatter) -> [MoneyFlowChartItem] {
         var items: [MoneyFlowChartItem] = []
         
-        // Add current month from cashflowData
         let calendar = Calendar.current
-        let currentMonth = df.shortMonthSymbols[calendar.component(.month, from: Date()) - 1]
+        let currentMonthComponent = calendar.component(.month, from: Date())
+        let currentYearComponent = calendar.component(.year, from: Date())
+        let currentMonthKey = String(format: "%04d-%02d", currentYearComponent, currentMonthComponent)
+        let currentMonthName = df.shortMonthSymbols[currentMonthComponent - 1]
         
-        if let cashflow = profile.cashflowData {
+        func addCashflowItems(_ cashflow: CashflowEntry, monthName: String) {
             if cashflow.incomeSources.isEmpty {
                 // Fallback to assessment income
-                items.append(MoneyFlowChartItem(month: currentMonth, type: "Income", category: "Fixed Salary", amount: profile.basicDetails.monthlyIncome.safeFinite))
+                items.append(MoneyFlowChartItem(month: monthName, type: "Income", category: "Fixed Salary", amount: profile.basicDetails.monthlyIncome.safeFinite))
             } else {
                 for source in cashflow.incomeSources {
-                    items.append(MoneyFlowChartItem(month: currentMonth, type: "Income", category: source.name, amount: source.amount.safeFinite))
+                    items.append(MoneyFlowChartItem(month: monthName, type: "Income", category: source.name, amount: source.amount.safeFinite))
                 }
             }
             
             if cashflow.expenseSources.isEmpty {
                 // Fallback to flat expenses
-                items.append(MoneyFlowChartItem(month: currentMonth, type: "Expense", category: "Rent/EMI", amount: cashflow.rent.safeFinite))
-                items.append(MoneyFlowChartItem(month: currentMonth, type: "Expense", category: "Groceries", amount: cashflow.groceries.safeFinite))
-                items.append(MoneyFlowChartItem(month: currentMonth, type: "Expense", category: "Utilities", amount: cashflow.utilities.safeFinite))
-                items.append(MoneyFlowChartItem(month: currentMonth, type: "Expense", category: "Entertainment", amount: cashflow.entertainment.safeFinite))
+                items.append(MoneyFlowChartItem(month: monthName, type: "Expense", category: "Rent/EMI", amount: cashflow.rent.safeFinite))
+                items.append(MoneyFlowChartItem(month: monthName, type: "Expense", category: "Groceries", amount: cashflow.groceries.safeFinite))
+                items.append(MoneyFlowChartItem(month: monthName, type: "Expense", category: "Utilities", amount: cashflow.utilities.safeFinite))
+                items.append(MoneyFlowChartItem(month: monthName, type: "Expense", category: "Entertainment", amount: cashflow.entertainment.safeFinite))
                 let others = (cashflow.transport + cashflow.shopping + cashflow.dining + cashflow.misc).safeFinite
                 if others > 0 {
-                    items.append(MoneyFlowChartItem(month: currentMonth, type: "Expense", category: "Others", amount: others))
+                    items.append(MoneyFlowChartItem(month: monthName, type: "Expense", category: "Others", amount: others))
                 }
             } else {
                 for exp in cashflow.expenseSources {
-                    items.append(MoneyFlowChartItem(month: currentMonth, type: "Expense", category: exp.name, amount: exp.amount.safeFinite))
+                    items.append(MoneyFlowChartItem(month: monthName, type: "Expense", category: exp.name, amount: exp.amount.safeFinite))
                 }
             }
         }
         
-        // Add historical snapshots (up to last 3 months for simplicity in chart)
-        let sortedKeys = profile.monthlyCashflowSnapshots.keys.sorted().suffix(3)
+        // Add current month from cashflowData
+        if let cashflow = profile.cashflowData {
+            addCashflowItems(cashflow, monthName: currentMonthName)
+        }
+        
+        // Add historical snapshots (up to last 3 months for simplicity in chart), excluding current month
+        let sortedKeys = profile.monthlyCashflowSnapshots.keys.filter { $0 != currentMonthKey }.sorted().suffix(3)
         for key in sortedKeys {
             guard let snap = profile.monthlyCashflowSnapshots[key] else { continue }
-            // Extract month from "yyyy-MM"
             let components = key.split(separator: "-")
             if components.count == 2, let m = Int(components[1]) {
                 let mName = df.shortMonthSymbols[max(0, min(11, m - 1))]
-                
-                for src in snap.incomeSources {
-                    items.append(MoneyFlowChartItem(month: mName, type: "Income", category: src.name, amount: src.amount.safeFinite))
-                }
-                for exp in snap.expenseSources {
-                    items.append(MoneyFlowChartItem(month: mName, type: "Expense", category: exp.name, amount: exp.amount.safeFinite))
-                }
+                addCashflowItems(snap, monthName: mName)
             }
         }
         

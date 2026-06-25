@@ -18,10 +18,11 @@ struct TrackerMoneyFlowSection: View {
                 Button {
                     showingDetailSheet = true
                 } label: {
-                    Image(systemName: "pencil.circle.fill")
+                    Image(systemName: "pencil.circle")
                         .font(.system(size: 26))
-                        .symbolRenderingMode(.hierarchical)
+                        //.symbolRenderingMode(.hierarchical)
                         .foregroundStyle(AppTheme.auraIndigo)
+                        
                 }
                                 
             }

@@ -20,11 +20,16 @@ struct SpendingInsightsView: View {
     @State private var uploadedFileName: String? = nil
 
     private var draftCashflow: CashflowEntry {
-        CashflowEntry(
-            rent: rent, groceries: groceries, utilities: utilities,
-            dining: dining, transport: transport, shopping: shopping,
-            entertainment: entertainment, misc: misc
-        )
+        var cf = appState.currentProfile?.cashflowData ?? CashflowEntry()
+        cf.rent = rent
+        cf.groceries = groceries
+        cf.utilities = utilities
+        cf.dining = dining
+        cf.transport = transport
+        cf.shopping = shopping
+        cf.entertainment = entertainment
+        cf.misc = misc
+        return cf
     }
 
     var body: some View {

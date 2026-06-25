@@ -102,11 +102,11 @@ struct ProfileView: View {
                     Label("Security", systemImage: "lock.shield")
                 }
 
-                NavigationLink(destination: ProfilePlaceholderView(title: "Change Password", icon: "key", message: "Connect this screen to Supabase password reset or secure password update.")) {
+                NavigationLink(destination: ChangePasswordView()) {
                     Label("Change Password", systemImage: "key")
                 }
 
-                NavigationLink(destination: ProfilePlaceholderView(title: "Privacy Controls", icon: "hand.raised", message: "Show data consent, third-party sharing, and account deletion controls here.")) {
+                NavigationLink(destination: PrivacyControlsView()) {
                     Label("Privacy Controls", systemImage: "hand.raised")
                 }
             }
