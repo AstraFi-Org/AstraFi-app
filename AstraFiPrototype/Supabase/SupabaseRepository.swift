@@ -955,7 +955,10 @@ ins.maturityDate = row.maturityDate.flatMap { parseDate($0) }
                 dateSaved: row.dateSaved ?? "",
                 targetGoal: row.targetGoal ?? "",
                 input: input,
-                isFollowed: row.isFollowed ?? false
+                isFollowed: row.isFollowed ?? false,
+                selectedScenario: input.followedScenario,
+                linkedInvestmentNames: input.followedLinkedInvestmentNames ?? [],
+                linkedLoanNames: input.followedLinkedLoanNames ?? []
             )
             plan.id = row.id
             return plan
@@ -1073,7 +1076,7 @@ ins.maturityDate = row.maturityDate.flatMap { parseDate($0) }
             dateSaved: fmt.string(from: Date()),
             targetGoal: plan.targetGoal,
             input: inputJSON,
-            isFollowed: false
+            isFollowed: plan.isFollowed
         )).execute()
     }
 

@@ -144,6 +144,10 @@ struct InvestmentPlanInputModel: Codable, Hashable {
     var goalFDFrequency: String?
     var goalFDAmount: String?
 
+    var followedScenario: String?
+    var followedLinkedInvestmentNames: [String]?
+    var followedLinkedLoanNames: [String]?
+
     // MARK: - Previews
     static var sampleRetirement: InvestmentPlanInputModel {
         InvestmentPlanInputModel(
@@ -187,6 +191,39 @@ struct InvestmentPlanModel: Identifiable, Hashable {
     let name: String
     let dateSaved: String
     let targetGoal: String
-    let input: InvestmentPlanInputModel
+    var input: InvestmentPlanInputModel
     var isFollowed: Bool = false
+    var dateFollowed: String? = nil
+    var selectedScenario: String? = nil
+    var linkedInvestmentNames: [String] = []
+    var linkedLoanNames: [String] = []
+}
+
+struct FollowedPlanSnapshot: Identifiable {
+    let id: UUID
+    let plan: InvestmentPlanModel
+    let dateFollowed: String
+    let targetAmount: Double
+    let targetYear: Int
+    let expectedCAGR: Double
+    let monthlyInvestment: Double
+    let currentValue: Double
+    let plannedCurrentValue: Double
+    let riskProfile: String
+    let scenario: String
+    let allocation: [AssetAllocation]
+
+    var progress: Double {
+        guard targetAmount > 0 else { return 0 }
+        return min(max(currentValue / targetAmount, 0), 1)
+    }
+
+    var remainingAmount: Double { max(0, targetAmount - currentValue) }
+
+    var healthStatus: String {
+        if currentValue >= plannedCurrentValue * 1.05 { return "Ahead of Plan" }
+        if currentValue >= plannedCurrentValue * 0.95 { return "On Track" }
+        if currentValue >= plannedCurrentValue * 0.8 { return "Slightly Behind" }
+        return "Needs Attention"
+    }
 }

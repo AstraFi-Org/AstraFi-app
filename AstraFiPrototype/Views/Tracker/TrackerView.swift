@@ -32,8 +32,13 @@ struct TrackerView: View {
 
                 TrackerInvestmentsSection(investments: viewModel.investments)
 
-                if !viewModel.yourPlans.isEmpty {
-                    TrackerYourPlansSection(plans: viewModel.yourPlans)
+                if !viewModel.followedPlans.isEmpty {
+                    TrackerFollowedPlansSection(plans: viewModel.followedPlans)
+                }
+
+                let savedIllustrations = viewModel.yourPlans.filter { !$0.isFollowed }
+                if !savedIllustrations.isEmpty {
+                    TrackerYourPlansSection(plans: savedIllustrations)
                 }
 
                 TrackerGoalsSection(goals: viewModel.goals)

@@ -239,6 +239,20 @@ final class AppStateManager {
             }
         }
     }
+
+    func updatePlan(_ plan: InvestmentPlanModel) {
+        if let index = savedPlans.firstIndex(where: { $0.id == plan.id }) {
+            savedPlans[index] = plan
+        } else {
+            savedPlans.append(plan)
+        }
+
+        Task {
+            if let session = try? await supabase.auth.session {
+                _ = try? await SupabaseRepository.shared.savePlan(plan, userId: session.user.id)
+            }
+        }
+    }
     
     func saveAssessmentToHistory(score: Int, status: String, insights: [String], assessmentInsights: FinancialAssessmentInsights? = nil) {
         if var profile = currentProfile {

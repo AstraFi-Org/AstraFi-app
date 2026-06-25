@@ -44,6 +44,9 @@ class TrackerViewModel {
     var yourPlans: [InvestmentPlanModel] = []
     var savedPlanNames: Set<String> = []
     var followedPlanNames: Set<String> = []
+    var followedPlans: [InvestmentPlanModel] {
+        yourPlans.filter { $0.isFollowed }
+    }
    
 
     func savePlan(planName: String, input: InvestmentPlanInputModel) {
@@ -75,27 +78,115 @@ class TrackerViewModel {
 
     func followPlan(planName: String, input: InvestmentPlanInputModel) {
         guard !followedPlanNames.contains(planName) else { return }
-        let targetAmount = input.targetAmount
-        let targetString = targetAmount.contains("₹") ? targetAmount : "₹" + targetAmount
-        let goalName = input.purposeOfInvestment
-        let newGoal = Goal(name: goalName.isEmpty ? "New Goal" : goalName,
-                           associatedFund: planName, targetAmount: targetString,
-                           collectedAmount: "₹0", timePeriod: input.timePeriod + " Years", progress: 0)
-        goals.append(newGoal)
-        followedPlanNames.insert(planName)
-        // Persist follow status to Supabase
-        if let plan = yourPlans.first(where: { $0.name == planName }) {
-            appState?.followPlan(plan)   // ← ADD THIS LINE
+
+        let df = DateFormatter()
+        df.dateStyle = .medium
+
+        if let index = yourPlans.firstIndex(where: { $0.name == planName }) {
+            yourPlans[index].isFollowed = true
+            yourPlans[index].dateFollowed = df.string(from: Date())
+            appState?.followPlan(yourPlans[index])
+        } else {
+            var newPlan = InvestmentPlanModel(
+                name: planName,
+                dateSaved: df.string(from: Date()),
+                targetGoal: input.purposeOfInvestment,
+                input: input,
+                isFollowed: true,
+                dateFollowed: df.string(from: Date())
+            )
+            yourPlans.append(newPlan)
+            appState?.savePlan(newPlan)
+            appState?.followPlan(newPlan)
+            newPlan.isFollowed = true
         }
+
+        followedPlanNames.insert(planName)
     }
 
 
     func unfollowPlan(planName: String) {
-        goals.removeAll { $0.associatedFund == planName }
         followedPlanNames.remove(planName)
-        if let plan = yourPlans.first(where: { $0.name == planName }) {
-            appState?.unfollowPlan(plan)   // ← ADD THIS LINE
+        if let index = yourPlans.firstIndex(where: { $0.name == planName }) {
+            yourPlans[index].isFollowed = false
+            yourPlans[index].dateFollowed = nil
+            appState?.unfollowPlan(yourPlans[index])
         }
+    }
+
+    func updateFollowedPlan(
+        _ plan: InvestmentPlanModel,
+        input: InvestmentPlanInputModel,
+        scenario: String,
+        linkedInvestmentNames: [String],
+        linkedLoanNames: [String]
+    ) {
+        guard let index = yourPlans.firstIndex(where: { $0.id == plan.id }) else { return }
+        var updatedInput = input
+        updatedInput.followedScenario = scenario
+        updatedInput.followedLinkedInvestmentNames = linkedInvestmentNames
+        updatedInput.followedLinkedLoanNames = linkedLoanNames
+        yourPlans[index].input = updatedInput
+        yourPlans[index].selectedScenario = scenario
+        yourPlans[index].linkedInvestmentNames = linkedInvestmentNames
+        yourPlans[index].linkedLoanNames = linkedLoanNames
+        appState?.updatePlan(yourPlans[index])
+    }
+
+    func followedPlanSnapshot(for plan: InvestmentPlanModel) -> FollowedPlanSnapshot {
+        let full = InvestmentPlannerEngine.generateFullPlan(input: plan.input, profile: appState?.currentProfile)
+        let target = InvestmentPlannerEngine.parseAmount(plan.input.targetAmount)
+        let years = max(1, Int(plan.input.timePeriod) ?? 1)
+        let currentYear = Calendar.current.component(.year, from: Date())
+        let linkedInvestmentNames = Set(plan.linkedInvestmentNames)
+        let currentValue = linkedInvestmentNames.isEmpty ? 0 : investments
+            .filter { linkedInvestmentNames.contains($0.name) }
+            .reduce(0) { $0 + Double($1.amount) }
+        let saved = InvestmentPlannerEngine.parseAmount(plan.input.savedAmount)
+        let monthly = InvestmentPlannerEngine.parseAmount(plan.input.amount)
+        let expectedCAGR: Double
+        let plannedCurrentValue: Double
+        let allocation: [AssetAllocation]
+        let selectedScenario = plan.selectedScenario ?? plan.input.followedScenario ?? (plan.name.contains("Loan Stress Test") ? "Moderate" : "Expected")
+
+        if plan.name.contains("Loan Strategy"), let p2 = full.plan2 {
+            expectedCAGR = p2.roi
+            plannedCurrentValue = max(0, p2.netWealthGain)
+            allocation = []
+        } else if plan.name.contains("Loan Stress Test"), let p3 = full.plan3 {
+            let selectedResult: LeveragedStrategyResult
+            switch selectedScenario {
+            case "Conservative":
+                selectedResult = p3.conservative
+            case "Aggressive":
+                selectedResult = p3.aggressive
+            default:
+                selectedResult = p3.moderate
+            }
+            expectedCAGR = p3.scenarios.first { $0.name == selectedScenario }?.cagr ?? p3.portfolio?.blendedCAGR ?? 0
+            plannedCurrentValue = selectedResult.yearlyBreakdown.first?.investmentValue ?? selectedResult.finalValue
+            allocation = p3.portfolio?.allocations ?? []
+        } else {
+            expectedCAGR = full.plan1.portfolio.blendedCAGR
+            plannedCurrentValue = InvestmentPlannerEngine.lumpsumFutureValue(amount: saved, rateCAGR: expectedCAGR, years: 1) +
+                InvestmentPlannerEngine.sipFutureValue(monthly: monthly, rateCAGR: expectedCAGR, years: 1)
+            allocation = full.plan1.portfolio.allocations
+        }
+
+        return FollowedPlanSnapshot(
+            id: plan.id,
+            plan: plan,
+            dateFollowed: plan.dateFollowed ?? plan.dateSaved,
+            targetAmount: target,
+            targetYear: currentYear + years,
+            expectedCAGR: expectedCAGR,
+            monthlyInvestment: monthly,
+            currentValue: currentValue,
+            plannedCurrentValue: plannedCurrentValue,
+            riskProfile: plan.input.riskType,
+            scenario: selectedScenario,
+            allocation: allocation
+        )
     }
     func syncWithProfile(_ profile: AstraUserProfile?) {
         guard let profile = profile else { return }
