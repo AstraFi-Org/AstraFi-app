@@ -50,21 +50,29 @@ struct BasicInformationDetailView: View {
         }
         .navigationTitle("Profile Information")
         .navigationBarTitleDisplayMode(.inline)
+        .navigationBarBackButtonHidden(isEditing)
         .toolbar {
             ToolbarItem(placement: .topBarLeading) {
                 if isEditing {
-                    Button("Cancel") {
+                    Button {
                         loadProfile()
                         isEditing = false
+                    } label: {
+                        Image(systemName: "xmark")
                     }
                 }
             }
 
             ToolbarItem(placement: .topBarTrailing) {
-                Button(isEditing ? "Done" : "Edit") {
+                Button {
                     isEditing ? saveProfile() : beginEditing()
+                } label: {
+                    if isEditing {
+                        Image(systemName: "checkmark").fontWeight(.semibold)
+                    } else {
+                        Image(systemName: "pencil")
+                    }
                 }
-                .fontWeight(isEditing ? .semibold : .regular)
                 .disabled(isEditing && !canSave)
             }
         }

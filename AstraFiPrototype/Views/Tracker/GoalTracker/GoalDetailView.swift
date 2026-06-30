@@ -96,37 +96,39 @@ struct GoalDetailView: View {
     }
 
     private var progressData: [ProgressDataPoint] {
-        let components = calendar.dateComponents([.month], from: firstDate, to: Date())
-        let monthsPassed = max(1, components.month ?? 0)
-
         var points: [ProgressDataPoint] = []
         let linked = goal.map { appState.investments(for: $0.id) } ?? []
         
         let totalInvestedNow = investedAmountUpTo(date: Date(), linked: linked)
         let manualSavings = goal?.manualSavingsContribution ?? 0
         let currentTotal = currentAmount
+        let goalStart = goal?.startDate ?? Date()
         
+        let components = calendar.dateComponents([.month], from: goalStart, to: Date())
+        let monthsPassed = max(5, components.month ?? 0)
+
         for i in (0...monthsPassed).reversed() {
             if let date = calendar.date(byAdding: .month, value: -i, to: Date()) {
                 let monthName = shortDF.string(from: date)
+                var amount: Double = 0
                 
-                let investedUpToDate = investedAmountUpTo(date: date, linked: linked)
-                let fraction = Double(monthsPassed - i) / Double(max(1, monthsPassed))
-                let savingsUpToDate = manualSavings * fraction
+                let startMonth = calendar.date(from: calendar.dateComponents([.year, .month], from: goalStart)) ?? Date()
+                let currentMonth = calendar.date(from: calendar.dateComponents([.year, .month], from: date)) ?? Date()
                 
-                let ratio = totalInvestedNow > 0 ? max(0, (currentTotal - manualSavings)) / totalInvestedNow : 1.0
+                if currentMonth >= startMonth {
+                    let investedUpToDate = investedAmountUpTo(date: date, linked: linked)
+                    let fraction = monthsPassed > 0 ? Double(monthsPassed - i) / Double(monthsPassed) : 1.0
+                    let savingsUpToDate = manualSavings * fraction
+                    
+                    let ratio = totalInvestedNow > 0 ? max(0, (currentTotal - manualSavings)) / totalInvestedNow : 1.0
+                    amount = savingsUpToDate + (investedUpToDate * ratio)
+                }
                 
-                let amount = savingsUpToDate + (investedUpToDate * ratio)
                 points.append(ProgressDataPoint(month: monthName, amount: max(0, amount)))
             }
         }
 
-        if points.count < 2 {
-            let prevDate = calendar.date(byAdding: .month, value: -1, to: Date()) ?? Date()
-            points.insert(ProgressDataPoint(month: shortDF.string(from: prevDate), amount: 0), at: 0)
-        }
-
-        return points
+        return Array(points.suffix(12))
     }
 
     private var dynamicSIPData: [SIPBarPoint] {
@@ -136,25 +138,31 @@ struct GoalDetailView: View {
         }
 
         var data: [SIPBarPoint] = []
-        let components = calendar.dateComponents([.month], from: firstDate, to: Date())
-        let monthsPassed = max(5, components.month ?? 0) 
+        let goalStart = goal?.startDate ?? Date()
+        let components = calendar.dateComponents([.month], from: goalStart, to: Date())
+        let monthsPassed = max(5, components.month ?? 0)
 
         for i in (0...monthsPassed).reversed() {
             if let date = calendar.date(byAdding: .month, value: -i, to: Date()) {
                 let monthName = shortDF.string(from: date)
                 var monthAmount = 0.0
                 
-                for inv in linked {
-                    if !inv.installments.isEmpty {
-                        let monthTx = inv.installments.filter { 
-                            calendar.isDate($0.date, equalTo: date, toGranularity: .month) && 
-                            calendar.isDate($0.date, equalTo: date, toGranularity: .year)
+                let startMonth = calendar.date(from: calendar.dateComponents([.year, .month], from: goalStart)) ?? Date()
+                let currentMonth = calendar.date(from: calendar.dateComponents([.year, .month], from: date)) ?? Date()
+                
+                if currentMonth >= startMonth {
+                    for inv in linked {
+                        if !inv.installments.isEmpty {
+                            let monthTx = inv.installments.filter { 
+                                calendar.isDate($0.date, equalTo: date, toGranularity: .month) && 
+                                calendar.isDate($0.date, equalTo: date, toGranularity: .year)
+                            }
+                            monthAmount += monthTx.reduce(0.0) { res, tx in
+                                tx.type == .buy ? res + tx.amount : res - tx.amount
+                            }
+                        } else if inv.mode == .sip && inv.startDate <= date {
+                            monthAmount += inv.investmentAmount
                         }
-                        monthAmount += monthTx.reduce(0.0) { res, tx in
-                            tx.type == .buy ? res + tx.amount : res - tx.amount
-                        }
-                    } else if inv.mode == .sip && inv.startDate <= date {
-                        monthAmount += inv.investmentAmount
                     }
                 }
 
@@ -162,7 +170,7 @@ struct GoalDetailView: View {
             }
         }
 
-        return data.suffix(12)
+        return Array(data.suffix(12))
     }
 
     private var shortDF: DateFormatter {
@@ -183,7 +191,9 @@ struct GoalDetailView: View {
         return "\(linked.count) Funds Attached"
     }
 
-    private let gradient: [Color] = [.orange, .red]
+    private var gradient: [Color] {
+        goal?.displayGradient ?? [.orange, .red]
+    }
 
     @State private var showingEditSheet = false
     @State private var showingDeleteAlert = false

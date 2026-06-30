@@ -90,6 +90,16 @@ struct FMPProfile: Decodable {
     let mktCap: Double?
     let fullTimeEmployees: String?
     let description: String?
+
+    enum CodingKeys: String, CodingKey {
+        case symbol
+        case companyName
+        case sector
+        case industry
+        case mktCap = "marketCap"
+        case fullTimeEmployees
+        case description
+    }
 }
 
 struct FMPKeyMetrics: Decodable {

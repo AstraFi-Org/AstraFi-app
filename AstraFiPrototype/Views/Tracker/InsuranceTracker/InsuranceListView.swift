@@ -31,19 +31,8 @@ struct InsuranceListView: View {
                 if insurances.isEmpty {
                     VStack(spacing: 12) {
                         Image(systemName: "shield.slash").font(.system(size: 36)).foregroundColor(.secondary)
-                        Text("No insurance policies recorded yet")
+                        Text("No policies added")
                             .font(.subheadline).foregroundColor(.secondary)
-
-                        Button(action: { showingAddPolicy = true }) {
-                            Text("Add Policy")
-                                .fontWeight(.semibold)
-                                .foregroundColor(.white)
-                                .padding(.horizontal, 24)
-                                .padding(.vertical, 10)
-                                .background(Color.blue)
-                                .cornerRadius(8)
-                        }
-                        .padding(.top, 8)
                     }
                     .frame(maxWidth: .infinity).padding(40)
                     .background(Color(uiColor: .secondarySystemGroupedBackground)).cornerRadius(16)
@@ -95,8 +84,11 @@ struct InsuranceListView: View {
                 }
             }
             HStack(spacing: 20) {
-                Text("Active Policies: \(activePoliciesCount)")
-                    .font(.subheadline).foregroundColor(.secondary)
+                VStack(alignment: .leading, spacing: 2) {
+                    Text("Active Policies").font(.subheadline).foregroundColor(.secondary)
+                    Text("\(activePoliciesCount)")
+                        .font(.subheadline).fontWeight(.semibold).foregroundColor(.primary)
+                }
                 Spacer()
                 VStack(alignment: .trailing, spacing: 2) {
                     Text("Total Sum Assured").font(.subheadline).foregroundColor(.secondary)

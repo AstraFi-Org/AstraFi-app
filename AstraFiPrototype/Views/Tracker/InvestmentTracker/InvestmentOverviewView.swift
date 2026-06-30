@@ -254,10 +254,18 @@ struct InvestmentOverviewView: View {
                     Spacer()
                 }
 
-                HStack(spacing: 12) {
-                    metricBox(label: "Invested", value: totalInvested.toCurrency(), valueColor: .primary)
-                    metricBox(label: totalGain >= 0 ? "Gain" : "Loss", value: totalGain.toCurrency(), valueColor: totalGain >= 0 ? .green : .red)
+                HStack {
+                    VStack(alignment: .leading, spacing: 4) {
+                        Text("Invested").font(.subheadline).foregroundColor(.secondary)
+                        Text(totalInvested.toCurrency()).font(.title2).fontWeight(.bold).foregroundColor(.primary)
+                    }
+                    Spacer()
+                    VStack(alignment: .trailing, spacing: 4) {
+                        Text(totalGain >= 0 ? "Gain" : "Loss").font(.subheadline).foregroundColor(.secondary)
+                        Text(totalGain.toCurrency()).font(.title2).fontWeight(.bold).foregroundColor(totalGain >= 0 ? .green : .red)
+                    }
                 }
+                .padding(.horizontal, 4)
 
                 if totalInvested > 0 {
                     HStack {
@@ -290,16 +298,7 @@ struct InvestmentOverviewView: View {
         .shadow(color: AppTheme.adaptiveShadow, radius: 8, x: 0, y: 2)
     }
 
-    private func metricBox(label: String, value: String, valueColor: Color) -> some View {
-        VStack(alignment: .leading, spacing: 8) {
-            Text(label).font(.subheadline).foregroundColor(.secondary)
-            Text(value).font(.title2).fontWeight(.bold).foregroundColor(valueColor)
-        }
-        .padding()
-        .frame(maxWidth: .infinity, alignment: .leading)
-        .background(Color(uiColor: .secondarySystemGroupedBackground))
-        .cornerRadius(12)
-    }
+
 
     private var portfolioBreakdown: some View {
         VStack(spacing: 0) {

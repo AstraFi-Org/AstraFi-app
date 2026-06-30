@@ -71,8 +71,8 @@ struct FundAllocationChart: View {
             .annotation(position: .overlay, alignment: .center) {
                 if alloc.percentage >= 5 {
                     VStack(spacing: 0) {
-                        Text(alloc.name)
-                            .font(.system(size: 9, weight: .bold))
+//                        Text(alloc.name)
+//                            .font(.system(size: 9, weight: .bold))
                         Text("\(alloc.percentage.safeInt)%")
                             .font(.system(size: 10, weight: .heavy))
                     }

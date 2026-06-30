@@ -54,7 +54,7 @@
       <EnvironmentVariables>
          <EnvironmentVariable
             key = "FINNHUB_API_KEY"
-            value = "d7aat81r01qn9i7k90h0d7aat81r01qn9i7k90hg"
+            value = "d8tll89r01qhcnk4jsb0d8tll89r01qhcnk4jsbg"
             isEnabled = "YES">
          </EnvironmentVariable>
          <EnvironmentVariable

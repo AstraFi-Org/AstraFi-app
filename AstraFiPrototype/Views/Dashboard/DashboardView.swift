@@ -4,6 +4,10 @@ struct DashboardView: View {
     @Environment(\.colorScheme) var colorScheme
     @Environment(AppStateManager.self) var appState
     
+    @State private var showNotifications = false
+    @State private var navigateToProfile = false
+    @State private var showAuthPrompt = false
+    
     private var profile: AstraUserProfile? { appState.currentProfile }
     private var investments: [AstraInvestment] { profile?.investments ?? [] }
     private var goals: [AstraGoal] { profile?.goals ?? [] }
@@ -38,18 +42,41 @@ struct DashboardView: View {
         .navigationBarTitleDisplayMode(.large)
         .background(AppTheme.appBackground(for: colorScheme))
         .toolbar {
-            ToolbarItem(placement: .navigationBarLeading) {
-                NavigationLink(destination: ProfileView()) {
-                    Image(systemName: "person.circle")
-                }
-            }
-            ToolbarItem(placement: .navigationBarTrailing) {
-                NavigationLink(destination: NotificationsView()) {
-                    Image(systemName: "bell.fill")
+            ToolbarItem(placement: .topBarTrailing) {
+                HStack(spacing: 16) {
+                    NavigationLink(destination: NotificationsView()) {
+                        Image(systemName: "bell")
+                            .font(.system(size: 18, weight: .semibold))
+                    }
+
+                    Button {
+                        if appState.isAuthenticated {
+                            navigateToProfile = true
+                        } else {
+                            showAuthPrompt = true
+                        }
+                    } label: {
+                        Image(systemName: "person.crop.circle")
+                            .font(.system(size: 20, weight: .regular))
+                    }
                 }
             }
         }
+        .navigationDestination(isPresented: $navigateToProfile) {
+            ProfileView()
+        }
+        .fullScreenCover(isPresented: $showAuthPrompt, onDismiss: {
+            if appState.isAuthenticated {
+                navigateToProfile = true
+            }
+        }) {
+            NavigationStack {
+                AuthenticationFlowView()
+            }
+        }
     }
+
+
     
     
     // MARK: Portfolio Hero Card
@@ -82,10 +109,10 @@ struct DashboardView: View {
                 }
                 .padding(.horizontal, 10)
                 .padding(.vertical, 5)
-                .background(.white.opacity(0.15))
+                .background(.black.opacity(0.3))
                 .clipShape(Capsule())
                 .foregroundStyle(
-                    returnsPositive ? .green : Color(hex: "#FF453A")
+                    returnsPositive ? Color(hex: "#4ADE80") : Color(hex: "#FF6B6B")
                 )
             }
             .frame(maxWidth: .infinity, alignment: .leading)
@@ -143,10 +170,10 @@ struct DashboardView: View {
         let icon: String
         
         var body: some View {
-            HStack(spacing: 6) {
+            HStack(spacing: 8) {
                 Image(systemName: icon)
-                    .font(.system(size: 11))
-                    .foregroundStyle(.white.opacity(0.7))
+                    .font(.system(size: 18, weight: .medium))
+                    .foregroundStyle(.white.opacity(0.85))
                 VStack(alignment: .leading, spacing: 1) {
                     Text(value)
                         .font(.system(size: 14, weight: .bold))
@@ -418,18 +445,32 @@ struct DashboardView: View {
                     message: "Plan your financial goals.",
                     accentColor: .orange
                 )
+            } else if goals.count == 1, let goal = goals.first {
+                let progress = min(max((goal.currentAmount / max(goal.targetAmount, 1)).safeFinite, 0), 1)
+                NavigationLink(destination: GoalDetailView(appState: appState, goalID: goal.id)) {
+                    EnhancedGoalCard(
+                        title: goal.goalName,
+                        percentage: (progress * 100).safeInt,
+                        targetAmount: goal.targetAmount.toCurrency(),
+                        gradient: goal.displayGradient,
+                        cardWidth: nil
+                    )
+                }
+                .buttonStyle(.plain)
             } else {
                 ScrollView(.horizontal, showsIndicators: false) {
                     HStack(spacing: 12) {
                         ForEach(goals) { goal in
-                            let grad = dashGoalGradient(for: goal.goalName)
                             let progress = min(max((goal.currentAmount / max(goal.targetAmount, 1)).safeFinite, 0), 1)
-                            EnhancedGoalCard(
-                                title: goal.goalName,
-                                percentage: (progress * 100).safeInt,
-                                targetAmount: goal.targetAmount.toCurrency(),
-                                gradient: grad
-                            )
+                            NavigationLink(destination: GoalDetailView(appState: appState, goalID: goal.id)) {
+                                EnhancedGoalCard(
+                                    title: goal.goalName,
+                                    percentage: (progress * 100).safeInt,
+                                    targetAmount: goal.targetAmount.toCurrency(),
+                                    gradient: goal.displayGradient
+                                )
+                            }
+                            .buttonStyle(.plain)
                         }
                     }
                     .padding(.horizontal, 2)
@@ -441,7 +482,7 @@ struct DashboardView: View {
     // MARK: EMI Section
     private var upcomingEMISection: some View {
         VStack(alignment: .leading, spacing: 14) {
-            SectionHeader(title: "Upcoming EMIs", destination: AnyView(LoanTrackerView()))
+            SectionHeader(title: "Upcoming EMIs", destination: AnyView(UpcomingEMIsListView(loans: loans)))
             
             if loans.isEmpty {
                 emptyStateCard(
@@ -453,13 +494,16 @@ struct DashboardView: View {
             } else {
                 VStack(spacing: 10) {
                     ForEach(loans.prefix(3)) { loan in
-                        EnhancedPaymentRow(
-                            title: loan.displayName,
-                            subtitle: loan.displayLender,
-                            amount: String(format: "%.0f", loan.calculatedEMI),
-                            iconColor: loan.loanType.displayColor,
-                            isDueSoon: isDueSoon(loan: loan)
-                        )
+                        NavigationLink(destination: LoanDetailView(loanID: loan.id)) {
+                            EnhancedPaymentRow(
+                                title: loan.displayName,
+                                subtitle: loan.displayLender,
+                                amount: String(format: "%.0f", loan.calculatedEMI),
+                                iconColor: loan.loanType.displayColor,
+                                isDueSoon: isDueSoon(loan: loan)
+                            )
+                        }
+                        .buttonStyle(.plain)
                     }
                 }
             }
@@ -467,13 +511,6 @@ struct DashboardView: View {
     }
     
     // MARK: Helpers
-    private func dashGoalGradient(for name: String) -> [Color] {
-        let lower = name.lowercased()
-        if lower.contains("home") { return [Color(hex: "#30D158"), Color(hex: "#25A244")] }
-        if lower.contains("car")  { return [Color(hex: "#32ADE6"), Color(hex: "#5E5CE6")] }
-        if lower.contains("edu")  { return [Color(hex: "#FF9F0A"), Color(hex: "#FF453A")] }
-        return [Color(hex: "#BF5AF2"), Color(hex: "#5E5CE6")]
-    }
     
     private func isDueSoon(loan: AstraLoan) -> Bool {
         let day = Calendar.current.component(.day, from: Date())
@@ -499,6 +536,8 @@ private struct SectionHeader: View {
         }
     }
 }
+
+
 
 // MARK: - Preview
 #Preview {

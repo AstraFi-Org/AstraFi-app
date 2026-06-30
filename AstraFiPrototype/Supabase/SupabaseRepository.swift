@@ -38,6 +38,7 @@ final class SupabaseRepository {
         let maritalStatus: String
         let adultDependents: Int
         let childDependents: Int
+        let phoneNumber: String?
         let incomeType: String
         let monthlyIncome: Double
         let monthlyIncomeAfterTax: Double
@@ -55,6 +56,7 @@ final class SupabaseRepository {
             case maritalStatus = "maritalStatus"
             case adultDependents = "adultDependents"
             case childDependents = "childDependents"
+            case phoneNumber = "phoneNumber"
             case incomeType = "incomeType"
             case monthlyIncome = "monthlyIncome"
             case monthlyIncomeAfterTax = "monthlyIncomeAfterTax"
@@ -346,8 +348,8 @@ final class SupabaseRepository {
         let shopping: Double
         let entertainment: Double
         let misc: Double
-        let incomeSources: String
-        let expenseSources: String
+        let incomeSources: [CashflowEntry.DetailedItem]
+        let expenseSources: [CashflowEntry.DetailedItem]
 
         enum CodingKeys: String, CodingKey {
             case user_id, rent, groceries, utilities, dining, transport, shopping, entertainment, misc
@@ -421,6 +423,7 @@ final class SupabaseRepository {
             maritalStatus: profile.basicDetails.maritalStatus.rawValue,
             adultDependents: profile.basicDetails.adultDependents,
             childDependents: profile.basicDetails.childDependents,
+            phoneNumber: profile.basicDetails.phoneNumber,
             incomeType: profile.basicDetails.incomeType.rawValue,
             monthlyIncome: profile.basicDetails.monthlyIncome,
             monthlyIncomeAfterTax: profile.basicDetails.monthlyIncomeAfterTax,
@@ -962,36 +965,41 @@ ins.maturityDate = row.maturityDate.flatMap { parseDate($0) }
     // MARK: - Cashflow Snapshots
 
     func saveCashflowSnapshot(_ entry: CashflowEntry, monthKey: String, userId: UUID) async throws {
-        let incomeJSON  = (try? String(data: encoder.encode(entry.incomeSources),  encoding: .utf8)) ?? "[]"
-        let expenseJSON = (try? String(data: encoder.encode(entry.expenseSources), encoding: .utf8)) ?? "[]"
-
         try await supabase.from("cashflow_snapshots").upsert(CashflowSnapshotRow(
             user_id: userId.uuidString, monthKey: monthKey,
             rent: entry.rent, groceries: entry.groceries, utilities: entry.utilities,
             dining: entry.dining, transport: entry.transport, shopping: entry.shopping,
             entertainment: entry.entertainment, misc: entry.misc,
-            incomeSources: incomeJSON, expenseSources: expenseJSON
-        )).execute()
+            incomeSources: entry.incomeSources, expenseSources: entry.expenseSources
+        ), onConflict: "user_id, \"monthKey\"").execute()
     }
 
     func fetchCashflowSnapshots(userId: UUID) async throws -> [String: CashflowEntry] {
         struct SnapFetchRow: Decodable {
-            let monthKey: String; let rent: Double; let groceries: Double
-            let utilities: Double; let dining: Double; let transport: Double
-            let shopping: Double; let entertainment: Double; let misc: Double
-            let incomeSources: String?; let expenseSources: String?
+            let monthKey: String; let rent: Double?; let groceries: Double?
+            let utilities: Double?; let dining: Double?; let transport: Double?
+            let shopping: Double?; let entertainment: Double?; let misc: Double?
+            let incomeSources: [CashflowEntry.DetailedItem]?
+            let expenseSources: [CashflowEntry.DetailedItem]?
+            
+            enum CodingKeys: String, CodingKey {
+                case rent, groceries, utilities, dining, transport, shopping, entertainment, misc
+                case monthKey = "monthKey"
+                case incomeSources = "incomeSources"
+                case expenseSources = "expenseSources"
+            }
         }
-        let rows: [SnapFetchRow] = try await supabase
+        let rows: [SnapFetchRow] = (try? await supabase
             .from("cashflow_snapshots").select()
-            .eq("user_id", value: userId.uuidString).execute().value
+            .eq("user_id", value: userId.uuidString).execute().value) ?? []
 
         var result: [String: CashflowEntry] = [:]
         for row in rows {
-            var entry = CashflowEntry(rent: row.rent, groceries: row.groceries,
-                utilities: row.utilities, dining: row.dining, transport: row.transport,
-                shopping: row.shopping, entertainment: row.entertainment, misc: row.misc)
-            entry.incomeSources  = row.incomeSources.flatMap  { try? decoder.decode([CashflowEntry.DetailedItem].self, from: Data($0.utf8)) } ?? []
-            entry.expenseSources = row.expenseSources.flatMap { try? decoder.decode([CashflowEntry.DetailedItem].self, from: Data($0.utf8)) } ?? []
+            var entry = CashflowEntry(rent: row.rent ?? 0, groceries: row.groceries ?? 0,
+                utilities: row.utilities ?? 0, dining: row.dining ?? 0, transport: row.transport ?? 0,
+                shopping: row.shopping ?? 0, entertainment: row.entertainment ?? 0, misc: row.misc ?? 0)
+            entry.incomeSources  = row.incomeSources ?? []
+            entry.expenseSources = row.expenseSources ?? []
             result[row.monthKey] = entry
         }
         return result
@@ -1031,6 +1039,14 @@ ins.maturityDate = row.maturityDate.flatMap { parseDate($0) }
                 insights: row.insights.flatMap { try? decoder.decode(FinancialAssessmentInsights.self, from: Data($0.utf8)) }
             )
         }
+    }
+
+    func deleteHealthAssessment(_ assessmentId: UUID) async throws {
+        try await supabase
+            .from("health_assessments")
+            .delete()
+            .eq("id", value: assessmentId.uuidString)
+            .execute()
     }
 
     // MARK: - Emergency Fund Allocation
@@ -1085,6 +1101,7 @@ ins.maturityDate = row.maturityDate.flatMap { parseDate($0) }
             let signUpName: String?; let name: String?; let age: Int?
             let gender: String?; let maritalStatus: String?
             let adultDependents: Int?; let childDependents: Int?
+            let phoneNumber: String?
             let incomeType: String?; let monthlyIncome: Double?
             let monthlyIncomeAfterTax: Double?; let monthlyExpenses: Double?
             let emergencyFundAmount: Double?; let activeInvestment: Bool?
@@ -1114,12 +1131,12 @@ ins.maturityDate = row.maturityDate.flatMap { parseDate($0) }
         let assetsRow: AssetsFetchRow?      = try? await supabase.from("assets").select().eq("user_id", value: userId.uuidString).single().execute().value
         let liabilitiesRow: LiabilitiesFetchRow? = try? await supabase.from("liabilities").select().eq("user_id", value: userId.uuidString).single().execute().value
 
-        let goals       = try await fetchGoals(userId: userId)
-        let investments = try await fetchInvestments(userId: userId)
-        let loans       = try await fetchLoans(userId: userId)
-        let insurances  = try await fetchInsurances(userId: userId)
-        let snapshots   = try await fetchCashflowSnapshots(userId: userId)
-        let assessments = try await fetchHealthAssessments(userId: userId)
+        let goals       = (try? await fetchGoals(userId: userId)) ?? []
+        let investments = (try? await fetchInvestments(userId: userId)) ?? []
+        let loans       = (try? await fetchLoans(userId: userId)) ?? []
+        let insurances  = (try? await fetchInsurances(userId: userId)) ?? []
+        let snapshots   = (try? await fetchCashflowSnapshots(userId: userId)) ?? [:]
+        let assessments = (try? await fetchHealthAssessments(userId: userId)) ?? []
 
         let signUp = AstraSignUp(signUpName: profileRow.signUpName ?? "", email: "", password: "")
         let basicDetails = AstraBasicDetails(
@@ -1136,7 +1153,8 @@ ins.maturityDate = row.maturityDate.flatMap { parseDate($0) }
             emergencyFundAmount: profileRow.emergencyFundAmount ?? 0,
             activeInvestment: profileRow.activeInvestment ?? false,
             riskTolerance: AstraRiskTolerance(rawValue: profileRow.riskTolerance ?? "Medium") ?? .medium,
-            investmentHorizon: AstraInvestmentHorizon(rawValue: profileRow.investmentHorizon ?? "Medium Term (3-7 yrs)") ?? .mediumTerm
+            investmentHorizon: AstraInvestmentHorizon(rawValue: profileRow.investmentHorizon ?? "Medium Term (3-7 yrs)") ?? .mediumTerm,
+            phoneNumber: profileRow.phoneNumber
         )
         let assets = AstraAssets(
             savingsAccountAmount: assetsRow?.savingsAccountAmount ?? 0,
@@ -1166,7 +1184,7 @@ ins.maturityDate = row.maturityDate.flatMap { parseDate($0) }
             investments: investments, loans: loans,
             insurances: insurances, goals: goals,
             financialHealthReport: nil,
-            cashflowData: snapshots.values.first,
+            cashflowData: snapshots.keys.sorted().last.flatMap { snapshots[$0] },
             monthlyHealthAssessments: assessments,
             isSetuConnected: profileRow.isSetuConnected ?? false
         )

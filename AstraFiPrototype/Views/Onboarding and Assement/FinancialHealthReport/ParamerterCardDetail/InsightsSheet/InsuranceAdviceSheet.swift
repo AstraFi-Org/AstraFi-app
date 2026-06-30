@@ -9,10 +9,6 @@ import SwiftUI
 
 struct InsuranceAdviceSheet: View {
     let adultDependents: Int; let concerns: [AssessmentConcern]
-    @State private var myAge = ""; @State private var myDisease = "None"
-    @State private var depAges: [String] = []; @State private var depDiseases: [String] = []
-    @State private var depRelations: [String] = []
-    private let diseases = ["None","Diabetes","Hypertension","Heart Condition","Thyroid","Other"]
 
     private let insuranceTypes: [InsuranceTypeInfo] = [
         InsuranceTypeInfo(
@@ -122,53 +118,6 @@ struct InsuranceAdviceSheet: View {
                     }
                 }
 
-                // Health credentials
-                Section(header: Text("Health Profile").font(.footnote).textCase(.uppercase)) {
-                    VStack(alignment: .leading, spacing: 12) {
-                        Text("Your Details").font(.caption).bold().foregroundStyle(.secondary)
-                        HStack(spacing: 12) {
-                            HStack {
-                                Image(systemName: "person.fill").foregroundStyle(.secondary)
-                                TextField("Your Age", text: $myAge).keyboardType(.numberPad).font(.subheadline)
-                            }
-                            .padding(10).background(Color(.secondarySystemBackground))
-                            .clipShape(RoundedRectangle(cornerRadius: 10))
-                            Picker("Condition", selection: $myDisease) {
-                                ForEach(diseases, id: \.self) { Text($0) }
-                            }.pickerStyle(.menu)
-                        }
-                    }
-                    .padding(.vertical, 4)
-
-                    if adultDependents > 0 {
-                        VStack(alignment: .leading, spacing: 12) {
-                            Text("Dependents").font(.caption).bold().foregroundStyle(.secondary)
-                            ForEach(0..<adultDependents, id: \.self) { i in
-                                HStack(spacing: 8) {
-                                    Text("Dep \(i+1)").font(.caption2).foregroundStyle(.secondary).frame(width: 36)
-                                    TextField("Age", text: Binding(
-                                        get: { depAges.indices.contains(i) ? depAges[i] : "" },
-                                        set: { if depAges.indices.contains(i) { depAges[i] = $0 } else { depAges.append($0) } }
-                                    )).keyboardType(.numberPad).font(.subheadline)
-                                        .padding(8).background(Color(.secondarySystemBackground))
-                                        .clipShape(RoundedRectangle(cornerRadius: 8)).frame(width: 60)
-                                    TextField("Relation", text: Binding(
-                                        get: { depRelations.indices.contains(i) ? depRelations[i] : "" },
-                                        set: { if depRelations.indices.contains(i) { depRelations[i] = $0 } else { depRelations.append($0) } }
-                                    )).font(.subheadline)
-                                        .padding(8).background(Color(.secondarySystemBackground))
-                                        .clipShape(RoundedRectangle(cornerRadius: 8))
-                                    Picker("", selection: Binding(
-                                        get: { depDiseases.indices.contains(i) ? depDiseases[i] : "None" },
-                                        set: { if depDiseases.indices.contains(i) { depDiseases[i] = $0 } else { depDiseases.append($0) } }
-                                    )) { ForEach(diseases, id: \.self) { Text($0) } }.pickerStyle(.menu)
-                                }
-                            }
-                        }
-                        .padding(.vertical, 4)
-                    }
-                }
-
                 Section(header: Text("Insurance Essentials").font(.footnote).textCase(.uppercase)) {
                     ForEach(insuranceTypes) { type in
                         InsuranceCardView(type: type) {
@@ -192,13 +141,6 @@ struct InsuranceAdviceSheet: View {
             .navigationBarTitleDisplayMode(.inline)
             .sheet(item: $selectedInsurance) { type in
                 InsuranceDetailModal(type: type)
-            }
-            .onAppear {
-                if depAges.count < adultDependents {
-                    depAges = Array(repeating: "", count: adultDependents)
-                    depDiseases = Array(repeating: "None", count: adultDependents)
-                    depRelations = Array(repeating: "", count: adultDependents)
-                }
             }
     }
 }

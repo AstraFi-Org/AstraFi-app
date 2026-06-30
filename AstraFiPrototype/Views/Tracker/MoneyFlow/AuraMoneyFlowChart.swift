@@ -55,19 +55,23 @@ struct AuraMoneyFlowChart: View {
                 }
                 let lbl = months[mIdx]
 
-                if snap.incomeSources.isEmpty && snap.expenseSources.isEmpty {
+                if snap.incomeSources.isEmpty {
                     data.append(.init(month: lbl, dateKey: key,
                                       category: "Income",
                                       amount: snap.totalIncome.safeFinite, isIncome: true))
-                    data.append(.init(month: lbl, dateKey: key,
-                                      category: "Expenses",
-                                      amount: -snap.totalExpenses.safeFinite, isIncome: false))
                 } else {
                     for item in snap.incomeSources {
                         data.append(.init(month: lbl, dateKey: key,
                                           category: item.name,
                                           amount: item.amount.safeFinite, isIncome: true))
                     }
+                }
+                
+                if snap.expenseSources.isEmpty {
+                    data.append(.init(month: lbl, dateKey: key,
+                                      category: "Expenses",
+                                      amount: -snap.totalExpenses.safeFinite, isIncome: false))
+                } else {
                     for item in snap.expenseSources {
                         data.append(.init(month: lbl, dateKey: key,
                                           category: item.name,
@@ -198,7 +202,7 @@ struct AuraMoneyFlowChart: View {
                 Image(systemName: "info.circle")
                     .font(.system(size: 14))
                     .foregroundStyle(AppTheme.auraIndigo)
-                Text("Click on any Month to see income and expense of that month")
+                Text("Press on any Month Bar to see income and expense of that month")
                     .font(.system(size: 13, design: .rounded))
                     .foregroundStyle(.secondary)
             }

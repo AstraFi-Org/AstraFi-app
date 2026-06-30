@@ -4,6 +4,7 @@ import SwiftUI
 
 struct BasicDetailView: View {
     @Bindable var data: CompleteAssessmentData
+    let mode: AssessmentFlowMode
     @Environment(AppStateManager.self) var appState
     @Environment(\.dismiss) private var dismiss
 
@@ -197,7 +198,11 @@ struct BasicDetailView: View {
         .toolbar {
             ToolbarItem(placement: .navigationBarLeading) {
                 Button {
-                    appState.showPostAuthOnboarding = true
+                    if mode == .update {
+                        dismiss()
+                    } else {
+                        appState.showPostAuthOnboarding = true
+                    }
                 } label: {
                     Image(systemName: "chevron.left")
                         .fontWeight(.semibold)
@@ -206,9 +211,13 @@ struct BasicDetailView: View {
             }
             ToolbarItem(placement: .navigationBarTrailing) {
                 Button("Skip") {
-                    appState.updateProfile(from: data)
-                    appState.isAssessmentSkipped = true
-                    appState.showDashboard = true
+                    if mode == .update {
+                        dismiss()
+                    } else {
+                        appState.updateProfile(from: data)
+                        appState.isAssessmentSkipped = true
+                        appState.showDashboard = true
+                    }
                 }
                 .font(.system(size: 15))
             }
@@ -223,11 +232,21 @@ struct BasicDetailView: View {
             InvestmentQuestionView(data: data)
         }
         .onAppear {
-            if data.name.isEmpty && !appState.tempName.isEmpty {
+            if mode == .onboarding, data.name.isEmpty, !appState.tempName.isEmpty {
                 data.name = appState.tempName
             }
-            data.email    = appState.tempEmail
-            data.password = appState.tempPassword
+            if mode == .onboarding {
+                data.email = appState.tempEmail
+                data.password = appState.tempPassword
+            }
+            if mode == .update {
+                if !data.emergencyFundAmount.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty {
+                    hasEmergencyFund = true
+                    wantsToShareEF = true
+                } else if income > 0 && expenses > 0 {
+                    hasEmergencyFund = false
+                }
+            }
         }
     }
 }
@@ -552,7 +571,7 @@ struct EFNecessityCard: View {
     let appState = AppStateManager.withSampleData()
 
     NavigationStack {
-        BasicDetailView(data: data)
+        BasicDetailView(data: data, mode: .onboarding)
             .environment(appState)
     }
 }

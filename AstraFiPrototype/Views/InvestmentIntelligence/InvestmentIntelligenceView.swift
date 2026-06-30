@@ -3,58 +3,58 @@ import SwiftUI
 
 struct InvestmentIntelligenceView: View {
     @Environment(\.colorScheme) private var colorScheme
-    @State private var viewModel = InvestmentIntelligenceHomeViewModel()
+    @State private var homeViewModel = InvestmentIntelligenceHomeViewModel()
+    @State private var searchViewModel = InvestmentSearchViewModel()
+    @Environment(\.isSearching) private var isSearching
+    @State private var isSearchPresented = false
     @Namespace private var cardNamespace
 
     var body: some View {
         ScrollView(showsIndicators: false) {
-            VStack(alignment: .leading, spacing: 26) {
-                header
-                assetSection(title: "Stocks", subtitle: "Popular companies with live prices when available", assets: viewModel.stocks)
-                assetSection(title: "Mutual Funds", subtitle: "Popular categories from AMFI data", assets: viewModel.mutualFunds)
-                assetSection(title: "Gold ETFs", subtitle: "Indian listed Gold ETFs", assets: viewModel.goldETFs)
-                educationFooter
+            if searchViewModel.query.isEmpty && !isSearching {
+                VStack(alignment: .leading, spacing: 26) {
+                    assetSection(title: "Stocks", subtitle: "Popular companies with live prices when available", assets: homeViewModel.stocks)
+                    assetSection(title: "Mutual Funds", subtitle: "Popular categories from AMFI data", assets: homeViewModel.mutualFunds)
+                    assetSection(title: "Gold ETFs", subtitle: "Indian listed Gold ETFs", assets: homeViewModel.goldETFs)
+                    educationFooter
+                }
+                .padding(.horizontal, AppTheme.auraPadding)
+                .padding(.bottom, 44)
+            } else {
+                VStack(alignment: .leading, spacing: 20) {
+                    if !searchViewModel.recentSearches.isEmpty && searchViewModel.query.isEmpty {
+                        searchSection(title: "Recent Searches", assets: searchViewModel.recentSearches)
+                    }
+
+                    if searchViewModel.query.trimmingCharacters(in: .whitespacesAndNewlines).count >= 2 {
+                        searchResults
+                    } else if searchViewModel.query.isEmpty {
+                        searchSection(title: "Provider Stocks", assets: searchViewModel.trendingStocks)
+                        searchSection(title: "AMFI Mutual Funds", assets: searchViewModel.popularFunds)
+                        searchSection(title: "Gold ETFs", assets: searchViewModel.topGoldETFs)
+                    }
+                }
+                .padding(.horizontal, AppTheme.auraPadding)
+                .padding(.bottom, 40)
             }
-            .padding(.horizontal, AppTheme.auraPadding)
-            .padding(.bottom, 44)
         }
         .background(AppTheme.appBackground(for: colorScheme))
         .navigationTitle("Investment Intelligence")
         .navigationBarTitleDisplayMode(.large)
-        .toolbar {
-            ToolbarItem(placement: .topBarTrailing) {
-                NavigationLink(destination: InvestmentSearchView()) {
-                    Image(systemName: "magnifyingglass")
-                }
-                .accessibilityLabel("Search investments")
-            }
+        .searchable(text: $searchViewModel.query, isPresented: $isSearchPresented, placement: .navigationBarDrawer(displayMode: .always), prompt: "Search stocks, mutual funds, Gold ETFs")
+        .task { 
+            await homeViewModel.load() 
+            await searchViewModel.loadDiscovery()
         }
-        .task { await viewModel.load() }
+        .onChange(of: searchViewModel.query) { _, _ in
+            Task { await searchViewModel.search() }
+        }
+        .onAppear {
+            UITextField.appearance(whenContainedInInstancesOf: [UISearchBar.self]).clearButtonMode = .never
+        }
     }
 
-    private var header: some View {
-        VStack(alignment: .leading, spacing: 10) {
-            HStack {
-                Label("Facts first", systemImage: "checkmark.seal.fill")
-                    .font(.system(size: 13, weight: .bold))
-                    .foregroundStyle(AppTheme.auraGreen)
-                Spacer()
-                if viewModel.isLoading {
-                    ProgressView()
-                        .controlSize(.small)
-                }
-            }
-
-            Text("Understand businesses, funds, and gold exposure before looking at returns.")
-                .font(.system(size: 17, weight: .semibold))
-                .foregroundStyle(.secondary)
-                .fixedSize(horizontal: false, vertical: true)
-        }
-        .padding(18)
-        .background(AppTheme.cardBackground)
-        .clipShape(RoundedRectangle(cornerRadius: 20, style: .continuous))
-        .shadow(color: AppTheme.adaptiveShadow, radius: 14, x: 0, y: 5)
-    }
+    // header removed
 
     private func assetSection(title: String, subtitle: String, assets: [InvestmentSummaryAsset]) -> some View {
         VStack(alignment: .leading, spacing: 14) {
@@ -67,12 +67,11 @@ struct InvestmentIntelligenceView: View {
                         .foregroundStyle(.secondary)
                 }
                 Spacer()
-                NavigationLink(destination: InvestmentSearchView()) {
-                    Image(systemName: "arrow.right.circle.fill")
-                        .font(.system(size: 22))
+                NavigationLink(destination: InvestmentCategoryListView(title: title, assets: assets)) {
+                    Image(systemName: "chevron.right")
+                        .font(.system(size: 14, weight: .semibold))
                         .foregroundStyle(AppTheme.auraIndigo)
                 }
-                .accessibilityLabel("Open investment search")
             }
 
             ScrollView(.horizontal, showsIndicators: false) {
@@ -94,7 +93,7 @@ struct InvestmentIntelligenceView: View {
                         .background(AppTheme.cardBackground)
                         .clipShape(RoundedRectangle(cornerRadius: 20, style: .continuous))
                     } else {
-                        ForEach(assets) { asset in
+                        ForEach(assets.prefix(6)) { asset in
                             NavigationLink(destination: InvestmentIntelligenceDetailView(asset: asset)) {
                                 InvestmentSummaryCard(asset: asset)
                                     .matchedGeometryEffect(id: asset.id, in: cardNamespace)
@@ -121,62 +120,28 @@ struct InvestmentIntelligenceView: View {
             .background(AppTheme.cardBackground)
             .clipShape(RoundedRectangle(cornerRadius: 16, style: .continuous))
     }
-}
-
-struct InvestmentSearchView: View {
-    @Environment(\.colorScheme) private var colorScheme
-    @State private var viewModel = InvestmentSearchViewModel()
-
-    var body: some View {
-        ScrollView(showsIndicators: false) {
-            VStack(alignment: .leading, spacing: 20) {
-                if !viewModel.recentSearches.isEmpty {
-                    searchSection(title: "Recent Searches", assets: viewModel.recentSearches)
-                }
-
-                if viewModel.query.trimmingCharacters(in: .whitespacesAndNewlines).count >= 2 {
-                    searchResults
-                } else {
-                    searchSection(title: "Provider Stocks", assets: viewModel.trendingStocks)
-                    searchSection(title: "AMFI Mutual Funds", assets: viewModel.popularFunds)
-                    searchSection(title: "Gold ETFs", assets: viewModel.topGoldETFs)
-                }
-            }
-            .padding(.horizontal, AppTheme.auraPadding)
-            .padding(.bottom, 40)
-        }
-        .navigationTitle("Search")
-        .navigationBarTitleDisplayMode(.large)
-        .searchable(text: $viewModel.query, prompt: "Search stocks, mutual funds, Gold ETFs")
-        .background(AppTheme.appBackground(for: colorScheme))
-        .task { await viewModel.loadDiscovery() }
-        .onChange(of: viewModel.query) { _, _ in
-            Task { await viewModel.search() }
-        }
-    }
-
     private var searchResults: some View {
         VStack(alignment: .leading, spacing: 12) {
             HStack {
                 Text("Results")
                     .font(.system(size: 21, weight: .bold))
                 Spacer()
-                if viewModel.isSearching {
+                if searchViewModel.isSearching {
                     ProgressView()
                         .controlSize(.small)
                 }
             }
 
-            if viewModel.results.isEmpty && !viewModel.isSearching {
+            if searchViewModel.results.isEmpty && !searchViewModel.isSearching {
                 ContentUnavailableView("No matches", systemImage: "magnifyingglass", description: Text("Try a company, fund house, sector, or ETF name."))
             } else {
                 VStack(spacing: 10) {
-                    ForEach(viewModel.results) { asset in
+                    ForEach(searchViewModel.results) { asset in
                         NavigationLink(destination: InvestmentIntelligenceDetailView(asset: asset)) {
                             SearchResultRow(asset: asset)
                         }
                         .buttonStyle(.plain)
-                        .simultaneousGesture(TapGesture().onEnded { viewModel.recordRecent(asset) })
+                        .simultaneousGesture(TapGesture().onEnded { searchViewModel.recordRecent(asset) })
                     }
                 }
             }
@@ -198,7 +163,7 @@ struct InvestmentSearchView: View {
                             SearchResultRow(asset: asset)
                         }
                         .buttonStyle(.plain)
-                        .simultaneousGesture(TapGesture().onEnded { viewModel.recordRecent(asset) })
+                        .simultaneousGesture(TapGesture().onEnded { searchViewModel.recordRecent(asset) })
                     }
                 }
             }
@@ -297,10 +262,7 @@ struct InvestmentIntelligenceDetailView: View {
                 recommendations: snapshot?.recommendations ?? []
             )
 
-            if viewModel.asset.kind == .stock {
-                CompetitionTab(competitors: snapshot?.competitors ?? [])
-                NewsTab(news: snapshot?.news ?? [])
-            }
+
 
             FAQTab(faqs: snapshot?.faqs ?? FAQService().faqs())
         }
@@ -327,11 +289,14 @@ private struct InvestmentSummaryCard: View {
                 }
                 Spacer(minLength: 8)
             }
+            
+            Spacer(minLength: 0)
 
             HStack(spacing: 8) {
                 InfoPill(title: asset.kind == .mutualFund ? "Current NAV" : "Current Price", value: valueText(for: asset), color: asset.kind.accent)
                 InfoPill(title: "Growth", value: growthText(for: asset), color: growthColor(for: asset))
             }
+            .frame(maxWidth: .infinity)
         }
         .padding(16)
         .frame(width: 248, height: 152, alignment: .topLeading)
@@ -361,14 +326,17 @@ struct InvestmentHomePreviewCard: View {
                 }
                 Spacer(minLength: 8)
             }
+            
+            Spacer(minLength: 0)
 
             HStack(spacing: 8) {
                 InfoPill(title: asset.kind == .mutualFund ? "Current NAV" : "Current Price", value: valueText(for: asset), color: asset.kind.accent)
                 InfoPill(title: "Growth", value: growthText(for: asset), color: growthColor(for: asset))
             }
+            .frame(maxWidth: .infinity)
         }
         .padding(16)
-        .frame(width: 232, height: 152, alignment: .topLeading)
+        .frame(width: 248, height: 152, alignment: .topLeading)
         .background(AppTheme.cardBackground)
         .clipShape(RoundedRectangle(cornerRadius: 20, style: .continuous))
         .shadow(color: AppTheme.adaptiveShadow.opacity(0.7), radius: 10, x: 0, y: 3)
@@ -565,54 +533,6 @@ private struct FinancialsTab: View {
     }
 }
 
-private struct CompetitionTab: View {
-    let competitors: [InvestmentCompetitor]
-
-    var body: some View {
-        DetailCard(title: "Competitors", systemImage: "person.3.fill") {
-            if competitors.isEmpty {
-                EmptyDetailMessage(
-                    title: "Competitor data unavailable",
-                    message: "AstraFi asks Finnhub for peers first, then searches provider results by industry. No hardcoded peer list is used."
-                )
-            } else {
-                VStack(spacing: 10) {
-                    ForEach(competitors) { competitor in
-                        NavigationLink(destination: InvestmentIntelligenceDetailView(asset: competitor.asset)) {
-                            SearchResultRow(asset: competitor.asset)
-                        }
-                        .buttonStyle(.plain)
-                    }
-                }
-            }
-        }
-    }
-}
-
-private struct NewsTab: View {
-    let news: [InvestmentNewsItem]
-
-    var body: some View {
-        DetailCard(title: "Latest News", systemImage: "newspaper.fill") {
-            if news.isEmpty {
-                EmptyDetailMessage(title: "No news loaded", message: "Latest Finnhub company news appears here when available.")
-            } else {
-                VStack(spacing: 10) {
-                    ForEach(news) { item in
-                        if let url = item.url {
-                            Link(destination: url) {
-                                NewsRow(item: item)
-                            }
-                            .buttonStyle(.plain)
-                        } else {
-                            NewsRow(item: item)
-                        }
-                    }
-                }
-            }
-        }
-    }
-}
 
 private struct InsightsTab: View {
     let asset: InvestmentSummaryAsset
@@ -763,15 +683,16 @@ private struct InfoPill: View {
                 .font(.system(size: 10, weight: .bold))
                 .foregroundStyle(.secondary)
                 .textCase(.uppercase)
+                .frame(maxWidth: .infinity, alignment: .leading)
             Text(value)
                 .font(.system(size: 12, weight: .bold))
                 .foregroundStyle(.primary)
                 .lineLimit(1)
                 .minimumScaleFactor(0.68)
+                .frame(maxWidth: .infinity, alignment: .leading)
         }
         .padding(.horizontal, 10)
         .padding(.vertical, 8)
-        .frame(maxWidth: .infinity, alignment: .leading)
         .background(color.opacity(0.10))
         .clipShape(RoundedRectangle(cornerRadius: 12, style: .continuous))
     }
@@ -818,6 +739,47 @@ private struct ChartSummaryRow: View {
     private var trendColor: Color {
         guard let first = points.first?.value, let latest else { return .secondary }
         return latest >= first ? AppTheme.auraGreen : AppTheme.vibrantRed
+    }
+}
+
+struct InvestmentCategoryListView: View {
+    @Environment(\.colorScheme) private var colorScheme
+    let title: String
+    let assets: [InvestmentSummaryAsset]
+    @State private var searchText = ""
+
+    private var filteredAssets: [InvestmentSummaryAsset] {
+        if searchText.isEmpty {
+            return assets
+        }
+        return assets.filter {
+            $0.name.localizedCaseInsensitiveContains(searchText) ||
+            $0.symbol.localizedCaseInsensitiveContains(searchText)
+        }
+    }
+
+    var body: some View {
+        ScrollView(showsIndicators: false) {
+            LazyVStack(spacing: 10) {
+                if filteredAssets.isEmpty {
+                    ContentUnavailableView("No matches", systemImage: "magnifyingglass", description: Text("Could not find any \(title.lowercased()) matching your search."))
+                        .padding(.top, 40)
+                } else {
+                    ForEach(filteredAssets) { asset in
+                        NavigationLink(destination: InvestmentIntelligenceDetailView(asset: asset)) {
+                            SearchResultRow(asset: asset)
+                        }
+                        .buttonStyle(.plain)
+                    }
+                }
+            }
+            .padding(.horizontal, AppTheme.auraPadding)
+            .padding(.vertical, 20)
+        }
+        .background(AppTheme.appBackground(for: colorScheme))
+        .navigationTitle(title)
+        .navigationBarTitleDisplayMode(.inline)
+        .searchable(text: $searchText, placement: .navigationBarDrawer(displayMode: .always), prompt: "Search \(title.lowercased())")
     }
 }
 
@@ -1069,7 +1031,7 @@ private func shortChangeText(for asset: InvestmentSummaryAsset) -> String {
     if let oneYear = asset.oneYearReturn {
         return "\(oneYear >= 0 ? "+" : "")\(oneYear.percentText)"
     }
-    return "Loading"
+    return "N/A"
 }
 
 private func growthText(for asset: InvestmentSummaryAsset) -> String {
@@ -1079,7 +1041,7 @@ private func growthText(for asset: InvestmentSummaryAsset) -> String {
     if let oneYear = asset.oneYearReturn {
         return "\(oneYear >= 0 ? "+" : "")\(oneYear.percentText)"
     }
-    return "Loading"
+    return "N/A"
 }
 
 private func growthColor(for asset: InvestmentSummaryAsset) -> Color {

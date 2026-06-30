@@ -1,4 +1,5 @@
 import Foundation
+import SwiftUI
 
 struct AstraUserProfile: Codable, Identifiable, Equatable {
     var id: UUID = UUID()
@@ -574,6 +575,16 @@ struct AstraGoal: Codable, Identifiable, Equatable {
         self.manualSavingsContribution = manualSavingsContribution
         self.startDate = startDate
         self.targetDate = targetDate
+    }
+}
+
+extension AstraGoal {
+    var displayGradient: [Color] {
+        let lower = goalName.lowercased()
+        if lower.contains("home") { return [Color(hex: "#30D158"), Color(hex: "#25A244")] }
+        if lower.contains("car")  { return [Color(hex: "#32ADE6"), Color(hex: "#5E5CE6")] }
+        if lower.contains("edu")  { return [Color(hex: "#FF9F0A"), Color(hex: "#FF453A")] }
+        return [Color(hex: "#BF5AF2"), Color(hex: "#5E5CE6")]
     }
 }
 

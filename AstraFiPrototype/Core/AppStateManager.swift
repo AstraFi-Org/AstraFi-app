@@ -15,6 +15,17 @@ final class AppStateManager {
     var isAssessmentSkipped: Bool = false
     var isLockedByBiometric: Bool = false
     
+    struct PendingGuestAssessment {
+        let data: CompleteAssessmentData
+        let score: Int
+        let status: String
+        let insights: [String]
+        let assessmentInsights: FinancialAssessmentInsights
+    }
+    
+    var isGuest: Bool = false
+    var pendingGuestAssessment: PendingGuestAssessment?
+    
     static func withSampleData() -> AppStateManager {
         let mgr = AppStateManager()
         let cal = Calendar.current
@@ -122,8 +133,8 @@ final class AppStateManager {
         return mgr
     }
     
-    func setupEmptyProfile(name: String = "User") {
-        let signUp = AstraSignUp(signUpName: name, email: "", password: "")
+    func setupEmptyProfile(name: String = "User", email: String = "") {
+        let signUp = AstraSignUp(signUpName: name, email: email, password: "")
         
         let basic = AstraBasicDetails(
             name: name, age: 0, gender: .male, maritalStatus: .single,
@@ -238,20 +249,32 @@ final class AppStateManager {
                 keyInsights: insights,
                 insights: assessmentInsights
             )
-            let cal = Calendar.current
-            if let index = profile.monthlyHealthAssessments.firstIndex(where: {
-                cal.isDate($0.date, equalTo: Date(), toGranularity: .month) &&
-                cal.isDate($0.date, equalTo: Date(), toGranularity: .year)
-            }) {
-                profile.monthlyHealthAssessments[index] = newAssessment
-            } else {
-                profile.monthlyHealthAssessments.append(newAssessment)
-            }
+            profile.monthlyHealthAssessments.append(newAssessment)
             currentProfile = profile
             Task {
                 if let session = try? await supabase.auth.session {
                     _ = try? await SupabaseRepository.shared.saveHealthAssessment(newAssessment, userId: session.user.id)
                 }
+            }
+        }
+    }
+
+    func linkGuestAssessmentAndSave(data: CompleteAssessmentData, score: Int, status: String, insights: [String], assessmentInsights: FinancialAssessmentInsights) {
+        updateProfile(from: data)
+        saveAssessmentToHistory(score: score, status: status, insights: insights, assessmentInsights: assessmentInsights)
+        isAssessmentSkipped = false
+        isGuest = false
+        showDashboard = true
+    }
+
+    func deleteAssessmentFromHistory(_ assessment: AstraHealthAssessment) {
+        guard var profile = currentProfile else { return }
+        profile.monthlyHealthAssessments.removeAll { $0.id == assessment.id }
+        currentProfile = profile
+
+        Task {
+            if (try? await supabase.auth.session) != nil {
+                try? await SupabaseRepository.shared.deleteHealthAssessment(assessment.id)
             }
         }
     }
@@ -293,7 +316,11 @@ final class AppStateManager {
                         await MainActor.run {
                             self.mfaFactorId = factor.id
                             self.requiresMFAChallenge = true
-                            self.currentProfile = profile
+                            var sanitizedProfile = profile
+                            if sanitizedProfile.signUp.email.isEmpty, let email = session.user.email, !email.isEmpty {
+                                sanitizedProfile.signUp.email = email
+                            }
+                            self.currentProfile = sanitizedProfile
                             self.isAuthenticated = true
                             self.hasCompletedOnboarding = true
                             self.showDashboard = true
@@ -309,11 +336,16 @@ final class AppStateManager {
                 }
                 
                 await MainActor.run {
-                    self.currentProfile = profile
+                    var sanitizedProfile = profile
+                    if sanitizedProfile.signUp.email.isEmpty, let email = session.user.email, !email.isEmpty {
+                        sanitizedProfile.signUp.email = email
+                    }
+                    self.currentProfile = sanitizedProfile
                     self.isAuthenticated = true
                     self.hasCompletedOnboarding = true
                     self.showDashboard = true
                     self.isLoading = false
+                    self.isGuest = false
                     
                     if biometricEnabled && requireOnLaunch {
                         self.isLockedByBiometric = true
@@ -359,11 +391,15 @@ final class AppStateManager {
             tempName = name
             tempEmail = email
             tempPassword = password
-            setupEmptyProfile(name: name)
+            setupEmptyProfile(name: name, email: email)
             
             // After successful sign up — load existing data if any
             if let profile = try? await SupabaseRepository.shared.fetchFullProfile(userId: session.user.id) {
-                self.currentProfile = profile
+                var sanitizedProfile = profile
+                if sanitizedProfile.signUp.email.isEmpty, let sessionEmail = session.user.email, !sessionEmail.isEmpty {
+                    sanitizedProfile.signUp.email = sessionEmail
+                }
+                self.currentProfile = sanitizedProfile
                 recalculateFinancials()
             }
             
@@ -379,8 +415,21 @@ final class AppStateManager {
     
     func completeSignUp() {
         isAuthenticated = true
-        showPostAuthOnboarding = true
         hasCompletedOnboarding = true
+        isGuest = false
+        
+        if let pending = pendingGuestAssessment {
+            linkGuestAssessmentAndSave(
+                data: pending.data,
+                score: pending.score,
+                status: pending.status,
+                insights: pending.insights,
+                assessmentInsights: pending.assessmentInsights
+            )
+            pendingGuestAssessment = nil
+        } else {
+            showPostAuthOnboarding = true
+        }
     }
     
     // MARK: - Sign in with Apple
@@ -409,6 +458,7 @@ final class AppStateManager {
     
     /// Initiates the Sign in with Apple flow.
     func signInWithApple() {
+        print("AppStateManager: signInWithApple() triggered")
         let nonce = Self.randomNonce()
         currentNonce = nonce
         
@@ -419,6 +469,7 @@ final class AppStateManager {
         
         let delegate = AppleSignInDelegate { result in
             Task { @MainActor in
+                print("AppStateManager: delegate callback received with result: \(result)")
                 await self.handleAppleSignInResult(result)
             }
         }
@@ -427,7 +478,9 @@ final class AppStateManager {
         
         let controller = ASAuthorizationController(authorizationRequests: [request])
         controller.delegate = delegate
+        controller.presentationContextProvider = delegate
         controller.performRequests()
+        print("AppStateManager: controller.performRequests() executed")
     }
     
     /// Stored reference to the delegate so it isn't deallocated.
@@ -435,21 +488,25 @@ final class AppStateManager {
     
     /// Handles the result from Apple Sign-In and authenticates with Supabase.
     private func handleAppleSignInResult(_ result: Result<ASAuthorization, Error>) async {
+        print("AppStateManager: handleAppleSignInResult starting")
         isAuthLoading = true
         authError = nil
         
         switch result {
         case .success(let authorization):
+            print("AppStateManager: Apple authorization succeeded, extracting token")
             guard let appleIDCredential = authorization.credential as? ASAuthorizationAppleIDCredential,
                   let identityTokenData = appleIDCredential.identityToken,
                   let identityToken = String(data: identityTokenData, encoding: .utf8),
                   let nonce = currentNonce else {
+                print("AppStateManager: Error - Failed to get Apple ID credentials or missing nonce")
                 authError = "Failed to get Apple ID credentials."
                 isAuthLoading = false
                 return
             }
             
             do {
+                print("AppStateManager: Attempting Supabase signInWithIdToken")
                 let session = try await supabase.auth.signInWithIdToken(
                     credentials: .init(
                         provider: .apple,
@@ -457,6 +514,7 @@ final class AppStateManager {
                         nonce: nonce
                     )
                 )
+                print("AppStateManager: Supabase sign in succeeded for user: \(session.user.id)")
                 
                 // Try to insert user record (will silently fail if already exists)
                 try? await supabase.from("users").insert([
@@ -466,23 +524,55 @@ final class AppStateManager {
                 
                 // Load existing profile or create new one
                 if let profile = try? await SupabaseRepository.shared.fetchFullProfile(userId: session.user.id) {
-                    self.currentProfile = profile
+                    print("AppStateManager: Found existing profile for user")
+                    var sanitizedProfile = profile
+                    if sanitizedProfile.signUp.email.isEmpty, let email = session.user.email, !email.isEmpty {
+                        sanitizedProfile.signUp.email = email
+                    }
+                    self.currentProfile = sanitizedProfile
                     recalculateFinancials()
                     isAuthenticated = true
-                    showPostAuthOnboarding = false
                     hasCompletedOnboarding = true
-                    showDashboard = true
+                    isGuest = false
+                    
+                    if let pending = self.pendingGuestAssessment {
+                        self.linkGuestAssessmentAndSave(
+                            data: pending.data,
+                            score: pending.score,
+                            status: pending.status,
+                            insights: pending.insights,
+                            assessmentInsights: pending.assessmentInsights
+                        )
+                        self.pendingGuestAssessment = nil
+                    } else {
+                        showPostAuthOnboarding = false
+                        showDashboard = true
+                    }
                 } else {
+                    print("AppStateManager: No existing profile found, setting up empty profile")
                     // Build display name from Apple credential if available
                     let fullName = [appleIDCredential.fullName?.givenName, appleIDCredential.fullName?.familyName]
                         .compactMap { $0 }
                         .joined(separator: " ")
                     let displayName = fullName.isEmpty ? (session.user.email ?? "User") : fullName
                     
-                    setupEmptyProfile(name: displayName)
+                    setupEmptyProfile(name: displayName, email: session.user.email ?? "")
                     isAuthenticated = true
-                    showPostAuthOnboarding = true
                     hasCompletedOnboarding = true
+                    isGuest = false
+                    
+                    if let pending = self.pendingGuestAssessment {
+                        self.linkGuestAssessmentAndSave(
+                            data: pending.data,
+                            score: pending.score,
+                            status: pending.status,
+                            insights: pending.insights,
+                            assessmentInsights: pending.assessmentInsights
+                        )
+                        self.pendingGuestAssessment = nil
+                    } else {
+                        showPostAuthOnboarding = true
+                    }
                 }
                 
                 if let plans = try? await SupabaseRepository.shared.fetchSavedPlans(userId: session.user.id) {
@@ -490,10 +580,12 @@ final class AppStateManager {
                 }
                 
             } catch {
+                print("AppStateManager: Supabase auth error: \(error.localizedDescription)")
                 authError = error.localizedDescription
             }
             
         case .failure(let error):
+            print("AppStateManager: Apple authorization failed with error: \(error.localizedDescription) (code: \((error as NSError).code))")
             // User cancelled — don't show an error
             if (error as NSError).code == ASAuthorizationError.canceled.rawValue {
                 // Do nothing
@@ -529,19 +621,49 @@ final class AppStateManager {
             }
             
             if let profile = try? await SupabaseRepository.shared.fetchFullProfile(userId: session.user.id) {
-                
-                self.currentProfile = profile
+                var sanitizedProfile = profile
+                if sanitizedProfile.signUp.email.isEmpty, let email = session.user.email, !email.isEmpty {
+                    sanitizedProfile.signUp.email = email
+                }
+                self.currentProfile = sanitizedProfile
                 recalculateFinancials()
+                
                 isAuthenticated = true
-                showPostAuthOnboarding = false
                 hasCompletedOnboarding = true
-                showDashboard = true
+                isGuest = false
+                
+                if let pending = pendingGuestAssessment {
+                    linkGuestAssessmentAndSave(
+                        data: pending.data,
+                        score: pending.score,
+                        status: pending.status,
+                        insights: pending.insights,
+                        assessmentInsights: pending.assessmentInsights
+                    )
+                    pendingGuestAssessment = nil
+                } else {
+                    showPostAuthOnboarding = false
+                    showDashboard = true
+                }
             } else {
-               
-                setupEmptyProfile(name: session.user.email ?? "User")
+                setupEmptyProfile(name: session.user.email ?? "User", email: session.user.email ?? "")
+                
                 isAuthenticated = true
-                showPostAuthOnboarding = true
                 hasCompletedOnboarding = true
+                isGuest = false
+                
+                if let pending = pendingGuestAssessment {
+                    linkGuestAssessmentAndSave(
+                        data: pending.data,
+                        score: pending.score,
+                        status: pending.status,
+                        insights: pending.insights,
+                        assessmentInsights: pending.assessmentInsights
+                    )
+                    pendingGuestAssessment = nil
+                } else {
+                    showPostAuthOnboarding = true
+                }
             }
             
             if let plans = try? await SupabaseRepository.shared.fetchSavedPlans(userId: session.user.id) {
@@ -564,17 +686,49 @@ final class AppStateManager {
             
             let session = try await supabase.auth.session
             if let profile = try? await SupabaseRepository.shared.fetchFullProfile(userId: session.user.id) {
-                self.currentProfile = profile
+                var sanitizedProfile = profile
+                if sanitizedProfile.signUp.email.isEmpty, let email = session.user.email, !email.isEmpty {
+                    sanitizedProfile.signUp.email = email
+                }
+                self.currentProfile = sanitizedProfile
                 recalculateFinancials()
+                
                 isAuthenticated = true
-                showPostAuthOnboarding = false
                 hasCompletedOnboarding = true
-                showDashboard = true
+                isGuest = false
+                
+                if let pending = pendingGuestAssessment {
+                    linkGuestAssessmentAndSave(
+                        data: pending.data,
+                        score: pending.score,
+                        status: pending.status,
+                        insights: pending.insights,
+                        assessmentInsights: pending.assessmentInsights
+                    )
+                    pendingGuestAssessment = nil
+                } else {
+                    showPostAuthOnboarding = false
+                    showDashboard = true
+                }
             } else {
-                setupEmptyProfile(name: session.user.email ?? "User")
+                setupEmptyProfile(name: session.user.email ?? "User", email: session.user.email ?? "")
+                
                 isAuthenticated = true
-                showPostAuthOnboarding = true
                 hasCompletedOnboarding = true
+                isGuest = false
+                
+                if let pending = pendingGuestAssessment {
+                    linkGuestAssessmentAndSave(
+                        data: pending.data,
+                        score: pending.score,
+                        status: pending.status,
+                        insights: pending.insights,
+                        assessmentInsights: pending.assessmentInsights
+                    )
+                    pendingGuestAssessment = nil
+                } else {
+                    showPostAuthOnboarding = true
+                }
             }
             requiresMFAChallenge = false
             mfaFactorId = nil
@@ -624,17 +778,49 @@ final class AppStateManager {
             
             let session = try await supabase.auth.session
             if let profile = try? await SupabaseRepository.shared.fetchFullProfile(userId: session.user.id) {
-                self.currentProfile = profile
+                var sanitizedProfile = profile
+                if sanitizedProfile.signUp.email.isEmpty, let email = session.user.email, !email.isEmpty {
+                    sanitizedProfile.signUp.email = email
+                }
+                self.currentProfile = sanitizedProfile
                 recalculateFinancials()
+                
                 isAuthenticated = true
-                showPostAuthOnboarding = false
                 hasCompletedOnboarding = true
-                showDashboard = true
+                isGuest = false
+                
+                if let pending = pendingGuestAssessment {
+                    linkGuestAssessmentAndSave(
+                        data: pending.data,
+                        score: pending.score,
+                        status: pending.status,
+                        insights: pending.insights,
+                        assessmentInsights: pending.assessmentInsights
+                    )
+                    pendingGuestAssessment = nil
+                } else {
+                    showPostAuthOnboarding = false
+                    showDashboard = true
+                }
             } else {
-                setupEmptyProfile(name: session.user.email ?? "User")
+                setupEmptyProfile(name: session.user.email ?? "User", email: session.user.email ?? "")
+                
                 isAuthenticated = true
-                showPostAuthOnboarding = true
                 hasCompletedOnboarding = true
+                isGuest = false
+                
+                if let pending = pendingGuestAssessment {
+                    linkGuestAssessmentAndSave(
+                        data: pending.data,
+                        score: pending.score,
+                        status: pending.status,
+                        insights: pending.insights,
+                        assessmentInsights: pending.assessmentInsights
+                    )
+                    pendingGuestAssessment = nil
+                } else {
+                    showPostAuthOnboarding = true
+                }
             }
             isAuthLoading = false
             return true
@@ -649,8 +835,9 @@ final class AppStateManager {
         do {
             try await supabase.auth.signOut(scope: .local)
             isAuthenticated = false
+            isGuest = false
+            pendingGuestAssessment = nil
             
-            hasCompletedOnboarding = false
             showDashboard = false
             showPostAuthOnboarding = false
             currentProfile = nil
@@ -863,8 +1050,8 @@ final class AppStateManager {
             emergencyFundMonths: efMonths
         )
         
-        let initialScore = 400 + report.investmentScore * 4
-        let status = initialScore >= 750 ? "Excellent" : initialScore >= 650 ? "Good" : "Needs Work"
+        let initialScore = report.investmentScore
+        let status = initialScore >= 80 ? "Excellent" : initialScore >= 70 ? "Good" : "Needs Work"
         let firstAssessment = AstraHealthAssessment(
             date: Date(),
             score: initialScore,
@@ -913,7 +1100,6 @@ final class AppStateManager {
                 }
             }
             
-            // Update basic details only if assessment data is non-empty
             if !assessmentData.income.isEmpty {
                 existingProfile.basicDetails.monthlyIncome = incomeValue
                 existingProfile.basicDetails.monthlyIncomeAfterTax = incomeValue
@@ -934,10 +1120,36 @@ final class AppStateManager {
             existingProfile.basicDetails.gender = assessmentData.gender == .male ? .male : .female
             existingProfile.basicDetails.incomeType = assessmentData.incomeType == .fixed ? .fixed : .variable
             
+            let df = DateFormatter()
+            df.dateFormat = "yyyy-MM"
+            let monthKey = df.string(from: Date())
+            
+            var cf = existingProfile.cashflowData ?? CashflowEntry()
+            if cf.incomeSources.isEmpty && incomeValue > 0 {
+                cf.incomeSources = [.init(name: "Salary/Income", amount: incomeValue)]
+            }
+            if cf.expenseSources.isEmpty && expensesValue > 0 {
+                cf.expenseSources = [.init(name: "Total Expenses", amount: expensesValue)]
+            }
+            existingProfile.cashflowData = cf
+            existingProfile.monthlyCashflowSnapshots[monthKey] = cf
+            
             self.currentProfile = existingProfile
         } else {
             // NEW PROFILE
-            self.currentProfile = AstraUserProfile(
+            let df = DateFormatter()
+            df.dateFormat = "yyyy-MM"
+            let monthKey = df.string(from: Date())
+            
+            var cf = CashflowEntry()
+            if incomeValue > 0 {
+                cf.incomeSources = [.init(name: "Salary/Income", amount: incomeValue)]
+            }
+            if expensesValue > 0 {
+                cf.expenseSources = [.init(name: "Total Expenses", amount: expensesValue)]
+            }
+            
+            var newProfile = AstraUserProfile(
                 signUp: signUp,
                 basicDetails: basic,
                 assets: assets,
@@ -947,9 +1159,12 @@ final class AppStateManager {
                 insurances: profileInsurances,
                 goals: [],
                 financialHealthReport: report,
+                cashflowData: cf,
                 monthlyHealthAssessments: [firstAssessment],
                 isSetuConnected: false
             )
+            newProfile.monthlyCashflowSnapshots[monthKey] = cf
+            self.currentProfile = newProfile
         }
         
         recalculateFinancials() // Ensure all scores are updated with merged data
@@ -1106,11 +1321,13 @@ final class AppStateManager {
                 profile.basicDetails.monthlyIncomeAfterTax = detailedIncome
             }
             
-            currentProfile = profile
-            recalculateFinancials()
             let df = DateFormatter()
             df.dateFormat = "yyyy-MM"
             let monthKey = df.string(from: Date())
+            profile.monthlyCashflowSnapshots[monthKey] = cashflow
+            
+            currentProfile = profile
+            recalculateFinancials()
             Task {
                 if let session = try? await supabase.auth.session {
                     do {
@@ -1119,9 +1336,13 @@ final class AppStateManager {
                             monthKey: monthKey,
                             userId: session.user.id
                         )
-                        print("Cashflow saved to Supabase")
+                        try await SupabaseRepository.shared.saveUserProfile(
+                            profile,
+                            userId: session.user.id
+                        )
+                        print("Cashflow and UserProfile saved to Supabase")
                     } catch {
-                        print("Cashflow save failed: \(error)")
+                        print("Cashflow/UserProfile save failed: \(error)")
                     }
                 }
             }

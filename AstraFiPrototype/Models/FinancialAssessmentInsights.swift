@@ -138,9 +138,11 @@ struct FinancialAssessmentInsights: Hashable, Codable {
         
         let profileSnapshots = profile?.investments.map { InvestmentSnapshot(from: $0) } ?? []
         let assessmentSnapshots = data?.investmentEntries.map { InvestmentSnapshot(from: $0) } ?? []
-        
-        // If assessment has data, use it. Otherwise fallback to profile.
-        let sourceSnapshots = (data != nil && !assessmentSnapshots.isEmpty) ? assessmentSnapshots : profileSnapshots
+
+        var sourceSnapshots = profileSnapshots
+        for snapshot in assessmentSnapshots where !sourceSnapshots.contains(where: { $0.matches(snapshot) }) {
+            sourceSnapshots.append(snapshot)
+        }
 
         let investmentCount = sourceSnapshots.count
         let investmentBreakdown = buildInvestmentBreakdown(from: sourceSnapshots)
@@ -514,22 +516,32 @@ struct FinancialAssessmentInsights: Hashable, Codable {
     }
 
     private struct InvestmentSnapshot {
+        let name: String
+        let typeName: String
         let amount: Double
         let risk: InvestmentRisk
         let isLowRiskLiquid: Bool
 
         init(from investment: AstraInvestment) {
-            amount = max(0, investment.currentValue)
-            let name = investment.investmentName.lowercased()
+            name = investment.investmentName.trimmingCharacters(in: .whitespacesAndNewlines).lowercased()
+            typeName = investment.investmentType.rawValue.lowercased()
+            amount = max(0, investment.currentValue, investment.totalInvestedAmount, investment.investmentAmount)
             risk = Self.risk(for: investment.investmentType, name: name)
             isLowRiskLiquid = Self.isLowRiskLiquid(type: investment.investmentType, name: name)
         }
 
         init(from entry: AssessmentInvestmentEntry) {
+            name = entry.fundName.trimmingCharacters(in: .whitespacesAndNewlines).lowercased()
+            typeName = entry.type.rawValue.lowercased()
             amount = max(0, FinancialAssessmentInsights.parseNumber(entry.amount))
-            let name = entry.fundName.lowercased()
             risk = Self.risk(for: entry.type, name: name)
             isLowRiskLiquid = Self.isLowRiskLiquid(type: entry.type, name: name)
+        }
+
+        func matches(_ other: InvestmentSnapshot) -> Bool {
+            name == other.name &&
+            typeName == other.typeName &&
+            abs(amount - other.amount) < 1
         }
 
         private static let highRiskKeywords = [

@@ -44,8 +44,6 @@ struct PlanSliderStepper: View {
                     .font(.system(size: 20, weight: .bold, design: .rounded))
                     .foregroundColor(.blue)
                 Spacer()
-                Stepper("", value: $value, in: range)
-                    .labelsHidden()
             }
             
             Slider(value: Binding(

@@ -28,6 +28,7 @@ struct EmergencyFundInsightSheet: View {
     private var target: Double { insights.emergencyFundTarget }
     private var current: Double { insights.emergencyFundAmount }
     private var progress: Double { target > 0 ? min(1, current / target) : 0 }
+    private var projectionAmount: Double { max(current, target) }
 
     private var liquidityScore: String {
         let liq = (Double(liquidMF.filter { $0.isNumber }) ?? 0) +
@@ -207,17 +208,93 @@ struct EmergencyFundInsightSheet: View {
     }
 
     private var actionItemsSection: some View {
-        Group {
-            if !insights.activeConcerns.filter({ $0.parameter == .emergencyFund }).isEmpty {
-                Section(header: Text("Action Items").font(.footnote).textCase(.uppercase)) {
-                    ForEach(insights.activeConcerns.filter { $0.parameter == .emergencyFund }) { concern in
-                        ConcernCard(concern: concern)
-                            .listRowInsets(EdgeInsets(top: 6, leading: 16, bottom: 6, trailing: 16))
-                            .listRowBackground(Color.clear).listRowSeparator(.hidden)
-                    }
+        Section(header: Text("Growth Projection Analysis").font(.footnote).textCase(.uppercase)) {
+            emergencyGrowthProjectionCard
+                .listRowInsets(EdgeInsets(top: 8, leading: 16, bottom: 8, trailing: 16))
+                .listRowBackground(Color.clear)
+                .listRowSeparator(.hidden)
+        }
+    }
+
+    private var emergencyGrowthProjectionCard: some View {
+        VStack(alignment: .leading, spacing: 16) {
+            HStack(alignment: .top, spacing: 12) {
+                Image(systemName: "chart.line.uptrend.xyaxis")
+                    .font(.title3)
+                    .foregroundStyle(Color(hex: "#007AFF"))
+                    .frame(width: 44, height: 44)
+                    .background(Color(hex: "#007AFF").opacity(0.1))
+                    .clipShape(RoundedRectangle(cornerRadius: 12, style: .continuous))
+
+                VStack(alignment: .leading, spacing: 4) {
+                    Text("Emergency Corpus Growth")
+                        .font(.headline)
+                    Text("Projected on \(projectionAmount.toCurrency(compact: true)) using a liquid-first allocation.")
+                        .font(.subheadline)
+                        .foregroundStyle(.secondary)
                 }
             }
+
+            Divider()
+
+            VStack(spacing: 12) {
+                EmergencyProjectionRow(
+                    title: "Savings / Liquid MF",
+                    subtitle: "50% allocation, instant access",
+                    amount: projectionAmount * 0.50,
+                    annualReturn: 0.04,
+                    color: Color(hex: "#007AFF")
+                )
+                EmergencyProjectionRow(
+                    title: "Sweep-in FD",
+                    subtitle: "30% allocation, same-day access",
+                    amount: projectionAmount * 0.30,
+                    annualReturn: 0.065,
+                    color: Color(hex: "#30D158")
+                )
+                EmergencyProjectionRow(
+                    title: "Short Duration Debt",
+                    subtitle: "20% allocation, T+1 redemption",
+                    amount: projectionAmount * 0.20,
+                    annualReturn: 0.075,
+                    color: Color(hex: "#FF9F0A")
+                )
+            }
+
+            let projectedThreeYear = emergencyProjectionValue(years: 3)
+            HStack {
+                VStack(alignment: .leading, spacing: 3) {
+                    Text("Projected value in 3 years")
+                        .font(.caption)
+                        .foregroundStyle(.secondary)
+                    Text(projectedThreeYear.toCurrency(compact: true))
+                        .font(.headline)
+                }
+                Spacer()
+                Text("+\((projectedThreeYear - projectionAmount).toCurrency(compact: true))")
+                    .font(.subheadline)
+                    .bold()
+                    .foregroundStyle(Color(hex: "#30D158"))
+                    .padding(.horizontal, 10)
+                    .padding(.vertical, 5)
+                    .background(Color(hex: "#30D158").opacity(0.1))
+                    .clipShape(Capsule())
+            }
+            .padding(12)
+            .background(Color(hex: "#30D158").opacity(0.06))
+            .clipShape(RoundedRectangle(cornerRadius: 14, style: .continuous))
         }
+        .padding(16)
+        .background(Color(.secondarySystemGroupedBackground))
+        .clipShape(RoundedRectangle(cornerRadius: 20, style: .continuous))
+        .shadow(color: Color.black.opacity(0.05), radius: 10, x: 0, y: 5)
+    }
+
+    private func emergencyProjectionValue(years: Double) -> Double {
+        let savings = projectionAmount * 0.50 * pow(1.04, years)
+        let fd = projectionAmount * 0.30 * pow(1.065, years)
+        let debt = projectionAmount * 0.20 * pow(1.075, years)
+        return savings + fd + debt
     }
 
     private var updateButtonSection: some View {
@@ -247,5 +324,45 @@ struct EmergencyFundInsightSheet: View {
             .listStyle(.insetGrouped)
             .navigationTitle("Emergency Fund")
             .navigationBarTitleDisplayMode(.inline)
+    }
+}
+
+private struct EmergencyProjectionRow: View {
+    let title: String
+    let subtitle: String
+    let amount: Double
+    let annualReturn: Double
+    let color: Color
+
+    private var threeYearValue: Double {
+        amount * pow(1 + annualReturn, 3)
+    }
+
+    var body: some View {
+        HStack(alignment: .center, spacing: 12) {
+            Circle()
+                .fill(color)
+                .frame(width: 9, height: 9)
+
+            VStack(alignment: .leading, spacing: 3) {
+                Text(title)
+                    .font(.subheadline)
+                    .bold()
+                Text(subtitle)
+                    .font(.caption)
+                    .foregroundStyle(.secondary)
+            }
+
+            Spacer()
+
+            VStack(alignment: .trailing, spacing: 3) {
+                Text(threeYearValue.toCurrency(compact: true))
+                    .font(.subheadline)
+                    .bold()
+                Text("\(String(format: "%.1f", annualReturn * 100))% p.a.")
+                    .font(.caption2)
+                    .foregroundStyle(color)
+            }
+        }
     }
 }

@@ -14,8 +14,13 @@ struct FullInvestmentListView: View {
         let f = DateFormatter(); f.dateStyle = .medium; return f
     }
 
+    @State private var showingAddInvestment = false
+
     var body: some View {
-        NavigationStack {
+        ZStack {
+            AppTheme.appBackground(for: colorScheme)
+                .ignoresSafeArea()
+            
             ScrollView {
                 VStack(spacing: 16) {
                     if investments.isEmpty {
@@ -40,18 +45,23 @@ struct FullInvestmentListView: View {
                         }
                     }
                 }
+                .frame(maxWidth: .infinity)
                 .padding()
             }
-            .navigationTitle("All Investments")
-            .navigationBarTitleDisplayMode(.inline)
-            .background(AppTheme.appBackground(for: colorScheme))
-//            .toolbar {
-//                ToolbarItem(placement: .topBarLeading) {
-//                    Button { dismiss() } label: {
-//                        Image(systemName: "chevron.left").fontWeight(.semibold)
-//                    }
-//                }
-//            }
+        }
+        .navigationTitle("All Investments")
+        .navigationBarTitleDisplayMode(.inline)
+        .sheet(isPresented: $showingAddInvestment) {
+            AddInvestmentView()
+        }
+        .toolbar {
+            ToolbarItem(placement: .topBarTrailing) {
+                Button {
+                    showingAddInvestment = true
+                } label: {
+                    Image(systemName: "plus")
+                }
+            }
         }
     }
     

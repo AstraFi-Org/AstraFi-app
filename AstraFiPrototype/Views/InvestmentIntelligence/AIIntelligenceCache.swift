@@ -3,6 +3,7 @@ import Foundation
 actor AIIntelligenceCache {
     static let shared = AIIntelligenceCache()
 
+    private let version = 2
     private let defaults: UserDefaults
     private let ttl: TimeInterval = 7 * 24 * 60 * 60
 
@@ -30,7 +31,7 @@ actor AIIntelligenceCache {
     }
 
     private func cacheKey(for symbol: String) -> String {
-        "ai-stock-intelligence-\(symbol.uppercased())"
+        "ai-stock-intelligence-v\(version)-\(symbol.uppercased())"
     }
 
     private struct CacheEntry: Codable {
