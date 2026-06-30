@@ -265,6 +265,8 @@ struct Plan3MonthlyStep: Identifiable, Codable, Equatable {
     let startValue: Double
     let investment: Double
     let growth: Double
+    var historicalReturnPercent: Double = 0
+    var netChange: Double = 0
     let interestPaid: Double
     let emiFromPocket: Double
     let endValue: Double
@@ -280,6 +282,7 @@ struct Plan3YearlyDetail: Identifiable, Codable, Equatable {
     let emiPaidYearly: Double
     let withdrawalYearly: Double
     let netYearlyProfit: Double
+    var annualReturnPercent: Double = 0
     var monthlySteps: [Plan3MonthlyStep] = []
 }
 

@@ -31,16 +31,16 @@
 	<string>$(CURRENT_PROJECT_VERSION)</string>
 	<key>LSApplicationCategoryType</key>
 	<string>public.app-category.finance</string>
-	<key>NSFaceIDUsageDescription</key>
-	<string>AstraFi uses Face ID to protect access to your financial profile and app security settings.</string>
 	<key>NSCameraUsageDescription</key>
 	<string>AstraFi uses your camera to scan financial documents, verify identity, and capture profile images.</string>
+	<key>NSContactsUsageDescription</key>
+	<string>AstraFi uses your contacts to help you split expenses and invite trusted contacts to your budget.</string>
+	<key>NSFaceIDUsageDescription</key>
+	<string>AstraFi uses Face ID to protect access to your financial profile and app security settings.</string>
 	<key>NSMicrophoneUsageDescription</key>
 	<string>AstraFi uses your microphone to enable voice search and interact with our AI finance assistant.</string>
 	<key>NSPhotoLibraryUsageDescription</key>
 	<string>AstraFi uses your photo library to let you upload document screenshots and profile pictures.</string>
-	<key>NSContactsUsageDescription</key>
-	<string>AstraFi uses your contacts to help you split expenses and invite trusted contacts to your budget.</string>
 	<key>NSUserTrackingUsageDescription</key>
 	<string>AstraFi uses your data to provide personalized financial insights and improve security.</string>
 	<key>UIApplicationSceneManifest</key>
