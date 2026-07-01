@@ -3,6 +3,7 @@ import SwiftUI
 
 struct AstraUserProfile: Codable, Identifiable, Equatable {
     var id: UUID = UUID()
+    var createdAt: Date? = nil
     var signUp: AstraSignUp
     var basicDetails: AstraBasicDetails
     var assets: AstraAssets
