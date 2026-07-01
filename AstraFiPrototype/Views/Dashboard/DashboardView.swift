@@ -1,4 +1,5 @@
 import SwiftUI
+import Charts
 
 struct DashboardView: View {
     @Environment(\.colorScheme) var colorScheme
@@ -90,33 +91,48 @@ struct DashboardView: View {
         
         return VStack(spacing: 0) {
             // ── Top section: Portfolio value
-            VStack(alignment: .leading, spacing: 4) {
-                Text("Total Portfolio")
-                    .font(.system(size: 13, weight: .semibold))
-                    .foregroundStyle(.white.opacity(0.75))
-                
-                Text(currentVal.toCurrency())
-                    .font(.system(size: 38, weight: .bold))
-                    .foregroundStyle(.white)
-                
-                HStack(spacing: 6) {
-                    Image(systemName: returnsPositive ? "arrow.up.right" : "arrow.down.right")
-                        .font(.system(size: 11, weight: .bold))
-                    Text(totalReturns.toCurrency())
+            HStack(spacing: 16) {
+                VStack(alignment: .leading, spacing: 4) {
+                    Text("Total Portfolio")
                         .font(.system(size: 13, weight: .semibold))
-                    Text(returnsPositive ? "total returns" : "total loss")
-                        .font(.system(size: 13))
-                        .opacity(0.8)
+                        .foregroundStyle(.white.opacity(0.75))
+                    
+                    Text(currentVal.toCurrency())
+                        .font(.system(size: 38, weight: .bold))
+                        .foregroundStyle(.white)
+                        .minimumScaleFactor(0.5)
+                        .lineLimit(1)
+                    
+                    HStack(spacing: 6) {
+                        Image(systemName: returnsPositive ? "arrow.up.right" : "arrow.down.right")
+                            .font(.system(size: 11, weight: .bold))
+                        Text(totalReturns.toCurrency())
+                            .font(.system(size: 13, weight: .semibold))
+                        Text(returnsPositive ? "total returns" : "total loss")
+                            .font(.system(size: 13))
+                            .opacity(0.8)
+                    }
+                    .padding(.horizontal, 10)
+                    .padding(.vertical, 5)
+                    .background(.black.opacity(0.3))
+                    .clipShape(Capsule())
+                    .foregroundStyle(
+                        returnsPositive ? Color(hex: "#4ADE80") : Color(hex: "#FF6B6B")
+                    )
                 }
-                .padding(.horizontal, 10)
-                .padding(.vertical, 5)
-                .background(.black.opacity(0.3))
-                .clipShape(Capsule())
-                .foregroundStyle(
-                    returnsPositive ? Color(hex: "#4ADE80") : Color(hex: "#FF6B6B")
-                )
+                
+                Spacer()
+                
+                if let assets = profile?.assets, assets.totalAssets > 0 {
+                    LargePortfolioAllocationChart(assets: assets)
+                        .frame(width: 100, height: 100)
+                        .shadow(color: .black.opacity(0.15), radius: 8)
+                } else {
+                    Circle()
+                        .stroke(.white.opacity(0.15), lineWidth: 2)
+                        .frame(width: 100, height: 100)
+                }
             }
-            .frame(maxWidth: .infinity, alignment: .leading)
             .padding(24)
             
             // ── Divider
@@ -602,3 +618,70 @@ private extension Double {
         return "\(sign)\(symbol)\(reducedString)\(suffix)"
     }
 }
+
+// MARK: - Large Portfolio Allocation Donut Chart Helper
+private struct LargePortfolioAllocationChart: View {
+    let assets: AstraAssets
+    
+    var chartData: [DashboardAllocationData] {
+        let total = assets.totalAssets.safeFinite
+        guard total > 0 else { return [] }
+        
+        var list: [DashboardAllocationData] = []
+        
+        let mf = assets.mutualFundHoldingAmount.safeFinite
+        if mf > 0 {
+            list.append(DashboardAllocationData(name: "MF", value: mf, color: .blue))
+        }
+        
+        let stocks = assets.stocksHoldingAmount.safeFinite
+        if stocks > 0 {
+            list.append(DashboardAllocationData(name: "Stocks", value: stocks, color: .purple))
+        }
+        
+        let deposits = assets.depositsAmount.safeFinite
+        if deposits > 0 {
+            list.append(DashboardAllocationData(name: "Deposits", value: deposits, color: .orange))
+        }
+        
+        let others = (total - (mf + stocks + deposits)).safeFinite
+        if others > 0 {
+            list.append(DashboardAllocationData(name: "Others", value: others, color: .gray))
+        }
+        
+        return list.sorted { $0.value > $1.value }
+    }
+    
+    var body: some View {
+        Chart(chartData) { item in
+            SectorMark(
+                angle: .value("Value", item.value),
+                innerRadius: .ratio(0.58),
+                angularInset: 2.0
+            )
+            .foregroundStyle(item.color.gradient)
+            .cornerRadius(4)
+        }
+        .chartLegend(.hidden)
+        .background(Color.clear)
+        .chartBackground { chartProxy in
+            GeometryReader { geometry in
+                if let plotFrame = chartProxy.plotFrame {
+                    let frame = geometry[plotFrame]
+                    Text("₹")
+                        .font(.system(size: 18, weight: .semibold))
+                        .foregroundColor(.white)
+                        .position(x: frame.midX, y: frame.midY)
+                }
+            }
+        }
+    }
+}
+
+private struct DashboardAllocationData: Identifiable {
+    let name: String
+    let value: Double
+    let color: Color
+    var id: String { name }
+}
+
