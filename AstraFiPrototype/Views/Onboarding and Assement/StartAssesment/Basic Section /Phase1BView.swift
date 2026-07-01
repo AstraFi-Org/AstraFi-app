@@ -9,6 +9,7 @@ import SwiftUI
 
 struct Phase1BView: View {
     @Bindable var data: CompleteAssessmentData
+    let onSaveComplete: () -> Void
     @Environment(AppStateManager.self) var appState
     @Environment(\.dismiss) private var dismiss
 
@@ -41,6 +42,11 @@ struct Phase1BView: View {
     // Show the bottom CTA only when user picks "Not yet"
     private var showContinueButton: Bool {
         doesInvest == false
+    }
+
+    init(data: CompleteAssessmentData, onSaveComplete: @escaping () -> Void = {}) {
+        self.data = data
+        self.onSaveComplete = onSaveComplete
     }
 
     var body: some View {
@@ -151,10 +157,10 @@ struct Phase1BView: View {
             }
         }
         .navigationDestination(isPresented: $goReport) {
-            FinancialHealthReportView(data: data)
+            FinancialHealthReportView(data: data, onSaveComplete: onSaveComplete)
         }
         .navigationDestination(isPresented: $goInvestments) {
-            InvestmentDetailsScreen(data: data)
+            InvestmentDetailsScreen(data: data, onSaveComplete: onSaveComplete)
         }
     }
 }

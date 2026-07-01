@@ -64,13 +64,16 @@ struct TrackerView: View {
                 showingMonthlyAssessmentPrompt = false
                 showingMonthlyAssessment = true
             }
-            .presentationDetents([.height(320)])
+            .presentationDetents([.height(380)])
             .presentationDragIndicator(.visible)
         }
         .fullScreenCover(isPresented: $showingMonthlyAssessment) {
             StartAssesmentView(
                 mode: .update,
-                prefilledData: appState.currentProfile.map(CompleteAssessmentData.prefilled(from:))
+                prefilledData: appState.currentProfile.map(CompleteAssessmentData.prefilled(from:)),
+                onSaveComplete: {
+                    showingMonthlyAssessment = false
+                }
             )
         }
         .onAppear {
