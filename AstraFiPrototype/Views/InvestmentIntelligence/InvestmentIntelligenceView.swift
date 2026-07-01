@@ -690,6 +690,7 @@ private struct InfoPill: View {
         }
         .padding(.horizontal, 10)
         .padding(.vertical, 8)
+        .frame(maxWidth: .infinity, alignment: .leading)
         .background(color.opacity(0.10))
         .clipShape(RoundedRectangle(cornerRadius: 12, style: .continuous))
     }
