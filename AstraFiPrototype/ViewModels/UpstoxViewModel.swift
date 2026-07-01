@@ -11,7 +11,7 @@ struct UpstoxInvestmentSnapshot {
 
 @MainActor
 final class UpstoxViewModel: ObservableObject {
-    nonisolated(unsafe) static let shared = UpstoxViewModel()
+    nonisolated static let shared = UpstoxViewModel()
 
     @Published var isConnected = false
     @Published var isLoading = false
@@ -25,11 +25,9 @@ final class UpstoxViewModel: ObservableObject {
     private let service: UpstoxService
     private let profileStorageKey = "upstox.profile"
 
-    nonisolated private init(service: UpstoxService = .shared) {
+    private init(service: UpstoxService = .shared) {
         self.service = service
-        Task { @MainActor in
-            UpstoxViewModel.shared.loadStoredConnection()
-        }
+        loadStoredConnection()
     }
 
     func connect() {

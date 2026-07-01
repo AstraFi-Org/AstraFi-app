@@ -305,7 +305,7 @@ final class AppStateManager {
 
         Task {
             if (try? await supabase.auth.session) != nil {
-                try? await SupabaseRepository.shared.deleteHealthAssessment(assessment.id)
+                _ = try? await SupabaseRepository.shared.deleteHealthAssessment(assessment.id)
             }
         }
     }
@@ -332,7 +332,7 @@ final class AppStateManager {
                         self.savedPlans = plans
                     }
                 }
-                try? await minimumDelay
+                _ = try? await minimumDelay
                 
                 // Check if biometric lock should be shown
                 // Note: requireUnlockOnLaunch defaults to true in @AppStorage,
@@ -386,8 +386,8 @@ final class AppStateManager {
                 }
                 recalculateFinancials()
             } else {
-                try? await supabase.auth.signOut(scope: .local)
-                try? await minimumDelay
+                _ = try? await supabase.auth.signOut(scope: .local)
+                _ = try? await minimumDelay
                 await MainActor.run {
                     self.hasCompletedOnboarding = false
                     self.isLoading = false
@@ -396,7 +396,7 @@ final class AppStateManager {
             }
 
         } catch {
-            try? await minimumDelay
+            _ = try? await minimumDelay
             await MainActor.run {
                 self.hasCompletedOnboarding = false
                 isLoading = false
@@ -1394,7 +1394,7 @@ final class AppStateManager {
             recalculateFinancials()
             Task {
                 if let session = try? await supabase.auth.session {
-                    try? await SupabaseRepository.shared.saveGoal(goal, userId: session.user.id)
+                    _ = try? await SupabaseRepository.shared.saveGoal(goal, userId: session.user.id)
                 }
             }
         }
@@ -1408,7 +1408,7 @@ final class AppStateManager {
             recalculateFinancials()
             Task {
                 if let session = try? await supabase.auth.session {
-                    try? await SupabaseRepository.shared.saveGoal(goal, userId: session.user.id)
+                    _ = try? await SupabaseRepository.shared.saveGoal(goal, userId: session.user.id)
                 }
             }
         }
@@ -1422,7 +1422,7 @@ final class AppStateManager {
             recalculateFinancials()
             Task {
                 for goal in toDelete {
-                    try? await SupabaseRepository.shared.deleteGoal(goal.id)
+                    _ = try? await SupabaseRepository.shared.deleteGoal(goal.id)
                 }
             }
         }
@@ -1435,7 +1435,7 @@ final class AppStateManager {
             currentProfile = profile
             recalculateFinancials()
             Task {
-                try? await SupabaseRepository.shared.deleteGoal(goal.id)
+                _ = try? await SupabaseRepository.shared.deleteGoal(goal.id)
             }
         }
     }
@@ -1448,7 +1448,7 @@ final class AppStateManager {
             Task {
                 await syncMutualFundNAVs()
                 if let session = try? await supabase.auth.session {
-                    try? await SupabaseRepository.shared.saveInvestment(investment, userId: session.user.id)
+                    _ = try? await SupabaseRepository.shared.saveInvestment(investment, userId: session.user.id)
                 }
             }
         }
@@ -1463,7 +1463,7 @@ final class AppStateManager {
             Task {
                 await syncMutualFundNAVs(force: true)
                 if let session = try? await supabase.auth.session {
-                    try? await SupabaseRepository.shared.saveInvestment(investment, userId: session.user.id)
+                    _ = try? await SupabaseRepository.shared.saveInvestment(investment, userId: session.user.id)
                 }
             }
         }
@@ -1603,7 +1603,7 @@ final class AppStateManager {
             recalculateFinancials()
             Task {
                 for inv in toDelete {
-                    try? await SupabaseRepository.shared.deleteInvestment(inv.id)
+                    _ = try? await SupabaseRepository.shared.deleteInvestment(inv.id)
                 }
             }
         }
@@ -1616,7 +1616,7 @@ final class AppStateManager {
             currentProfile = profile
             recalculateFinancials()
             Task {
-                try? await SupabaseRepository.shared.deleteInvestment(investment.id)
+                _ = try? await SupabaseRepository.shared.deleteInvestment(investment.id)
             }
         }
     }
@@ -1627,7 +1627,7 @@ final class AppStateManager {
             currentProfile = profile
             Task {
                 if let session = try? await supabase.auth.session {
-                    try? await SupabaseRepository.shared.saveEmergencyFundAllocation(allocation, userId: session.user.id)
+                    _ = try? await SupabaseRepository.shared.saveEmergencyFundAllocation(allocation, userId: session.user.id)
                 }
             }
         }
@@ -1639,7 +1639,7 @@ final class AppStateManager {
             recalculateFinancials()
             Task {
                 if let session = try? await supabase.auth.session {
-                    try? await SupabaseRepository.shared.saveLoan(loan, userId: session.user.id)
+                    _ = try? await SupabaseRepository.shared.saveLoan(loan, userId: session.user.id)
                 }
             }
         }
@@ -1653,7 +1653,7 @@ final class AppStateManager {
             recalculateFinancials()
             Task {
                 if let session = try? await supabase.auth.session {
-                    try? await SupabaseRepository.shared.saveLoan(loan, userId: session.user.id)
+                    _ = try? await SupabaseRepository.shared.saveLoan(loan, userId: session.user.id)
                 }
             }
         }
@@ -1667,7 +1667,7 @@ final class AppStateManager {
             recalculateFinancials()
             Task {
                 for loan in toDelete {
-                    try? await SupabaseRepository.shared.deleteLoan(loan.id)
+                    _ = try? await SupabaseRepository.shared.deleteLoan(loan.id)
                 }
             }
         }
@@ -1680,7 +1680,7 @@ final class AppStateManager {
             currentProfile = profile
             recalculateFinancials()
             Task {
-                try? await SupabaseRepository.shared.deleteLoan(loan.id)
+                _ = try? await SupabaseRepository.shared.deleteLoan(loan.id)
             }
         }
     }
@@ -1693,7 +1693,7 @@ final class AppStateManager {
             recalculateFinancials()
             Task {
                 if let session = try? await supabase.auth.session {
-                    try? await SupabaseRepository.shared.saveInsurance(insurance, userId: session.user.id)
+                    _ = try? await SupabaseRepository.shared.saveInsurance(insurance, userId: session.user.id)
                 }
             }
         }
@@ -1707,7 +1707,7 @@ final class AppStateManager {
             recalculateFinancials()
             Task {
                 if let session = try? await supabase.auth.session {
-                    try? await SupabaseRepository.shared.saveInsurance(insurance, userId: session.user.id)
+                    _ = try? await SupabaseRepository.shared.saveInsurance(insurance, userId: session.user.id)
                 }
             }
         }
@@ -1721,7 +1721,7 @@ final class AppStateManager {
             recalculateFinancials()
             Task {
                 for ins in toDelete {
-                    try? await SupabaseRepository.shared.deleteInsurance(ins.id)
+                    _ = try? await SupabaseRepository.shared.deleteInsurance(ins.id)
                 }
             }
         }
