@@ -11,7 +11,7 @@ struct UpstoxInvestmentSnapshot {
 
 @MainActor
 final class UpstoxViewModel: ObservableObject {
-    nonisolated static let shared = UpstoxViewModel()
+     static let shared = UpstoxViewModel()
 
     @Published var isConnected = false
     @Published var isLoading = false
