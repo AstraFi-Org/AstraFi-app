@@ -3,6 +3,7 @@ internal import UniformTypeIdentifiers
 
 struct InsuranceDetailsScreen: View {
     @Bindable var data: CompleteAssessmentData
+    var onSaveComplete: () -> Void
     @Environment(\.dismiss) private var dismiss
     @Environment(AppStateManager.self) private var appState
     @State private var goNext           = false
@@ -10,6 +11,11 @@ struct InsuranceDetailsScreen: View {
     @State private var uploadedFileName: String? = nil
 
     private var income: Double { Double(data.income) ?? 0 }
+
+    init(data: CompleteAssessmentData, onSaveComplete: @escaping () -> Void = {}) {
+        self.data = data
+        self.onSaveComplete = onSaveComplete
+    }
 
     var body: some View {
         ZStack {
@@ -238,7 +244,7 @@ struct InsuranceDetailsScreen: View {
             }
         }
         .navigationDestination(isPresented: $goNext) {
-            FinancialHealthReportView(data: data)
+            FinancialHealthReportView(data: data, onSaveComplete: onSaveComplete)
         }
         .fileImporter(
             isPresented: $showFilePicker,

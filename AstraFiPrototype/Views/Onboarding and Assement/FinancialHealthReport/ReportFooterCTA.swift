@@ -13,6 +13,7 @@ struct ReportFooterCTA: View {
     var data: CompleteAssessmentData?
     var score: Int; var status: String; var insights: [String]
     var assessmentInsights: FinancialAssessmentInsights?
+    var onSaveComplete: () -> Void = {}
 
     @State private var showAuthModal = false
     @State private var showSaveAlert = false
@@ -38,6 +39,7 @@ struct ReportFooterCTA: View {
                         appState.isAssessmentSkipped = false
                     }
                     appState.showDashboard = true
+                    onSaveComplete()
                     dismiss()
                 }
             } label: {

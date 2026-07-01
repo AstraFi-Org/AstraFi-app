@@ -6,6 +6,7 @@ internal import UniformTypeIdentifiers
 struct LoanDetailsScreen: View {
     @Bindable var data: CompleteAssessmentData
     var onComplete: (() -> Void)? = nil
+    var onSaveComplete: () -> Void
     @Environment(\.dismiss) private var dismiss
     @State private var goNext = false
     @State private var showRBIInfo = false
@@ -14,6 +15,16 @@ struct LoanDetailsScreen: View {
     @State private var uploadedFileName: String? = nil
     @State private var importViewModel = LoanImportViewModel()
     @State private var selectedItem: PhotosPickerItem? = nil
+
+    init(
+        data: CompleteAssessmentData,
+        onComplete: (() -> Void)? = nil,
+        onSaveComplete: @escaping () -> Void = {}
+    ) {
+        self.data = data
+        self.onComplete = onComplete
+        self.onSaveComplete = onSaveComplete
+    }
 
     var body: some View {
         ZStack {
@@ -214,7 +225,7 @@ struct LoanDetailsScreen: View {
             }
         }
         .navigationDestination(isPresented: $goNext) {
-            InsuranceDetailsScreen(data: data)
+            InsuranceDetailsScreen(data: data, onSaveComplete: onSaveComplete)
         }
         .sheet(isPresented: $showRBIInfo) {
             _RBISheet()

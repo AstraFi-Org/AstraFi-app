@@ -417,10 +417,7 @@ private struct OverviewTab: View {
                                 InvestmentMetric(title: "Country", value: profile.country, systemImage: "globe.asia.australia.fill", color: AppTheme.vibrantCyan),
                                 InvestmentMetric(title: "Exchange", value: profile.exchange, systemImage: "building.columns.fill", color: AppTheme.auraPurple)
                             ])
-                            Text(profile.description)
-                                .font(.system(size: 13))
-                                .foregroundStyle(.secondary)
-                                .fixedSize(horizontal: false, vertical: true)
+                            CompanyProfileSummary(profile: profile, accent: asset.kind.accent)
                         }
                     }
                 }
@@ -695,6 +692,205 @@ private struct InfoPill: View {
         .padding(.vertical, 8)
         .background(color.opacity(0.10))
         .clipShape(RoundedRectangle(cornerRadius: 12, style: .continuous))
+    }
+}
+
+private struct CompanyProfileSummary: View {
+    let profile: CompanyProfileSnapshot
+    let accent: Color
+
+    @State private var showFullProfile = false
+
+    private var sections: [ProfileTextSection] {
+        ProfileTextSection.build(from: profile.description)
+    }
+
+    private var previewSections: [ProfileTextSection] {
+        sections.prefix(3).map { section in
+            ProfileTextSection(title: section.title, points: Array(section.points.prefix(2)))
+        }
+    }
+
+    var body: some View {
+        VStack(alignment: .leading, spacing: 12) {
+            LazyVGrid(columns: [GridItem(.flexible()), GridItem(.flexible())], alignment: .leading, spacing: 8) {
+                HighlightPill(title: "Sector", value: profile.sector, color: accent)
+                HighlightPill(title: "Market", value: profile.exchange, color: AppTheme.auraPurple)
+                HighlightPill(title: "Industry", value: profile.industry, color: AppTheme.auraMint)
+                HighlightPill(title: "Country", value: profile.country, color: AppTheme.vibrantCyan)
+            }
+
+            ForEach(previewSections) { section in
+                ProfileBulletSection(section: section)
+            }
+
+            Button {
+                showFullProfile = true
+            } label: {
+                HStack(spacing: 6) {
+                    Text("See all")
+                    Image(systemName: "chevron.right")
+                        .font(.system(size: 11, weight: .bold))
+                }
+                .font(.system(size: 13, weight: .bold))
+                .foregroundStyle(accent)
+                .frame(maxWidth: .infinity, alignment: .trailing)
+            }
+            .buttonStyle(.plain)
+        }
+        .sheet(isPresented: $showFullProfile) {
+            NavigationStack {
+                ScrollView {
+                    VStack(alignment: .leading, spacing: 16) {
+                        LazyVGrid(columns: [GridItem(.flexible()), GridItem(.flexible())], alignment: .leading, spacing: 10) {
+                            HighlightPill(title: "Sector", value: profile.sector, color: accent)
+                            HighlightPill(title: "Industry", value: profile.industry, color: AppTheme.auraMint)
+                            HighlightPill(title: "Country", value: profile.country, color: AppTheme.vibrantCyan)
+                            HighlightPill(title: "Exchange", value: profile.exchange, color: AppTheme.auraPurple)
+                        }
+
+                        ForEach(sections) { section in
+                            ProfileBulletSection(section: section)
+                        }
+
+                        VStack(alignment: .leading, spacing: 8) {
+                            Text("Full Provider Text")
+                                .font(.system(size: 15, weight: .bold))
+                            Text(profile.description)
+                                .font(.system(size: 13))
+                                .foregroundStyle(.secondary)
+                                .lineSpacing(3)
+                                .fixedSize(horizontal: false, vertical: true)
+                        }
+                        .padding(14)
+                        .background(AppTheme.elevatedCardBackground)
+                        .clipShape(RoundedRectangle(cornerRadius: 16, style: .continuous))
+                    }
+                    .padding(16)
+                }
+                .navigationTitle("Company profile")
+                .navigationBarTitleDisplayMode(.inline)
+                .toolbar {
+                    ToolbarItem(placement: .topBarTrailing) {
+                        Button("Done") { showFullProfile = false }
+                    }
+                }
+            }
+        }
+    }
+}
+
+private struct HighlightPill: View {
+    let title: String
+    let value: String
+    let color: Color
+
+    var body: some View {
+        VStack(alignment: .leading, spacing: 3) {
+            Text(title)
+                .font(.system(size: 9, weight: .bold))
+                .foregroundStyle(.secondary)
+                .textCase(.uppercase)
+            Text(value.isEmpty ? "Unknown" : value)
+                .font(.system(size: 12, weight: .bold))
+                .foregroundStyle(.primary)
+                .lineLimit(2)
+                .minimumScaleFactor(0.72)
+        }
+        .frame(maxWidth: .infinity, alignment: .leading)
+        .padding(.horizontal, 10)
+        .padding(.vertical, 8)
+        .background(color.opacity(0.10))
+        .clipShape(RoundedRectangle(cornerRadius: 12, style: .continuous))
+    }
+}
+
+private struct ProfileBulletSection: View {
+    let section: ProfileTextSection
+
+    var body: some View {
+        VStack(alignment: .leading, spacing: 8) {
+            Text(section.title)
+                .font(.system(size: 14, weight: .bold))
+
+            ForEach(section.points, id: \.self) { point in
+                HStack(alignment: .top, spacing: 8) {
+                    Circle()
+                        .fill(AppTheme.auraIndigo.opacity(0.75))
+                        .frame(width: 5, height: 5)
+                        .padding(.top, 6)
+
+                    Text(point)
+                        .font(.system(size: 13))
+                        .foregroundStyle(.secondary)
+                        .lineSpacing(2)
+                        .fixedSize(horizontal: false, vertical: true)
+                }
+            }
+        }
+        .padding(12)
+        .background(AppTheme.elevatedCardBackground)
+        .clipShape(RoundedRectangle(cornerRadius: 14, style: .continuous))
+    }
+}
+
+private struct ProfileTextSection: Identifiable {
+    let id = UUID()
+    let title: String
+    let points: [String]
+
+    static func build(from text: String) -> [ProfileTextSection] {
+        let sentences = text
+            .replacingOccurrences(of: "\n", with: " ")
+            .components(separatedBy: CharacterSet(charactersIn: ".!?"))
+            .map { $0.trimmingCharacters(in: .whitespacesAndNewlines) }
+            .filter { $0.count > 18 }
+            .map { sentence in
+                sentence.hasSuffix(".") ? sentence : "\(sentence)."
+            }
+
+        guard !sentences.isEmpty else {
+            return [ProfileTextSection(title: "Overview", points: ["Provider profile text is unavailable for this company."])]
+        }
+
+        let overview = Array(sentences.prefix(2))
+        let segmentKeywords = ["segment", "banking", "manufacturing", "retail", "consumer", "communication", "healthcare", "services"]
+        let productKeywords = ["platform", "software", "solution", "product", "automation", "cloud", "AI", "blockchain", "analytics"]
+
+        let segments = sentences
+            .dropFirst(2)
+            .filter { containsAny($0, keywords: segmentKeywords) }
+            .prefix(3)
+            .map { $0 }
+
+        let products = sentences
+            .dropFirst(2)
+            .filter { containsAny($0, keywords: productKeywords) }
+            .prefix(3)
+            .map { $0 }
+
+        var sections = [ProfileTextSection(title: "What It Does", points: overview)]
+
+        if !segments.isEmpty {
+            sections.append(ProfileTextSection(title: "Business Areas", points: Array(segments)))
+        }
+
+        if !products.isEmpty {
+            sections.append(ProfileTextSection(title: "Platforms & Solutions", points: Array(products)))
+        }
+
+        let used = Set(sections.flatMap(\.points))
+        let remaining = sentences.filter { !used.contains($0) }.prefix(4).map { $0 }
+        if !remaining.isEmpty {
+            sections.append(ProfileTextSection(title: "More Highlights", points: remaining))
+        }
+
+        return sections
+    }
+
+    private static func containsAny(_ sentence: String, keywords: [String]) -> Bool {
+        let lower = sentence.lowercased()
+        return keywords.contains { lower.contains($0.lowercased()) }
     }
 }
 

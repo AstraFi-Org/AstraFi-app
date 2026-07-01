@@ -2,6 +2,7 @@ import SwiftUI
 
 struct TrackerActionRequiredSection: View {
     @Environment(AppStateManager.self) var appState
+    var onStartMonthlyAssessment: (() -> Void)? = nil
     
     var activeConcerns: [String] {
         // In a real app, we'd store these in the profile. 
@@ -9,28 +10,67 @@ struct TrackerActionRequiredSection: View {
         appState.currentProfile?.monthlyHealthAssessments.last?.keyInsights ?? []
     }
 
+    private var actionItems: [TrackerActionItem] {
+        var items: [TrackerActionItem] = []
+
+        if appState.isMonthlyAssessmentDue() {
+            items.append(.init(
+                icon: "calendar.badge.exclamationmark",
+                title: "Update monthly assessment",
+                subtitle: "Refresh this month's income, expenses, investments, loans, and insurance.",
+                isMonthlyAssessment: true
+            ))
+        }
+
+        items.append(contentsOf: activeConcerns.prefix(3).map {
+            .init(
+                icon: "exclamationmark.circle.fill",
+                title: $0,
+                subtitle: nil,
+                isMonthlyAssessment: false
+            )
+        })
+
+        return items
+    }
+
     var body: some View {
-        if !activeConcerns.isEmpty {
+        if !actionItems.isEmpty {
             VStack(alignment: .leading, spacing: 12) {
                 Text("Action Required")
                     .font(.system(size: 22, weight: .bold))
                 
                 VStack(spacing: 12) {
-                    ForEach(activeConcerns.prefix(3), id: \.self) { insight in
-                        HStack(spacing: 12) {
-                            Image(systemName: "exclamationmark.circle.fill")
-                                .foregroundColor(.orange)
-                            Text(insight)
-                                .font(.subheadline)
-                                .foregroundColor(.primary)
-                            Spacer()
-                            Image(systemName: "chevron.right")
-                                .font(.caption2)
-                                .foregroundColor(.secondary)
+                    ForEach(actionItems) { item in
+                        Button {
+                            if item.isMonthlyAssessment {
+                                onStartMonthlyAssessment?()
+                            }
+                        } label: {
+                            HStack(spacing: 12) {
+                                Image(systemName: item.icon)
+                                    .foregroundColor(.orange)
+                                VStack(alignment: .leading, spacing: 2) {
+                                    Text(item.title)
+                                        .font(.subheadline)
+                                        .foregroundColor(.primary)
+                                    if let subtitle = item.subtitle {
+                                        Text(subtitle)
+                                            .font(.caption)
+                                            .foregroundColor(.secondary)
+                                            .multilineTextAlignment(.leading)
+                                    }
+                                }
+                                Spacer()
+                                Image(systemName: "chevron.right")
+                                    .font(.caption2)
+                                    .foregroundColor(.secondary)
+                            }
+                            .padding()
+                            .background(Color.orange.opacity(0.1))
+                            .cornerRadius(12)
                         }
-                        .padding()
-                        .background(Color.orange.opacity(0.1))
-                        .cornerRadius(12)
+                        .buttonStyle(.plain)
                     }
                 }
                 .padding(16)
@@ -40,6 +80,14 @@ struct TrackerActionRequiredSection: View {
             }
         }
     }
+}
+
+private struct TrackerActionItem: Identifiable {
+    let id = UUID()
+    let icon: String
+    let title: String
+    let subtitle: String?
+    let isMonthlyAssessment: Bool
 }
 //#Preview {
 //    let sampleState = AppStateManager.withSampleData()

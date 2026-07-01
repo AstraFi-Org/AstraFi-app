@@ -1,4 +1,5 @@
 import SwiftUI
+import Charts
 
 extension AstraLoanType {
     var displayIcon: String {
@@ -354,6 +355,8 @@ struct LoanDetailView: View {
                         .cornerRadius(20)
                         .shadow(color: color.opacity(0.12), radius: 10, x: 0, y: 4)
 
+                        LoanAmortizationChartCard(loan: loan, color: color)
+
                         LoanInfoSection(title: "EMI & Interest") {
                             LoanInfoRow(label: "Monthly EMI",    value: loan.calculatedEMI.toCurrency())
                             LoanInfoRow(label: "Interest Rate",  value: String(format: "%.2f%% (\(loan.interestType.rawValue))", loan.interestRate))
@@ -569,6 +572,253 @@ struct AmortizationCard: View {
     }
 }
 
+// MARK: - EMI Breakdown Stacked Bar Chart
+
+private struct StackedBarEntry: Identifiable {
+    let id = UUID()
+    let label: String
+    let year: Int
+    let type: String
+    let amount: Double
+}
+
+struct LoanAmortizationChartCard: View {
+    let loan: AstraLoan
+    let color: Color
+    @Environment(\.colorScheme) private var colorScheme
+
+    @State private var selectedYearLabel: String? = nil
+
+    // ── Use loan.calculatedEMI so the schedule matches the rest of the app
+    private var schedule: [LoanCalculationEngine.AmortizationRow] {
+        let emi = loan.calculatedEMI
+        guard emi > 0, loan.loanTenureMonths > 0 else { return [] }
+        return LoanCalculationEngine.generateAmortizationSchedule(
+            principal: loan.loanAmount,
+            annualRate: loan.interestRate,
+            months: loan.loanTenureMonths,
+            emi: emi
+        )
+    }
+
+    // ── Aggregate monthly rows into yearly buckets
+    private var stackedEntries: [StackedBarEntry] {
+        let rows = schedule
+        guard !rows.isEmpty else { return [] }
+        let totalYears = (loan.loanTenureMonths + 11) / 12
+        var entries: [StackedBarEntry] = []
+
+        for yr in 1...totalYears {
+            let lo = (yr - 1) * 12 + 1
+            let hi = min(yr * 12, loan.loanTenureMonths)
+            var p = 0.0, i = 0.0
+            for row in rows where row.month >= lo && row.month <= hi {
+                p += row.principalPaid
+                i += row.interest
+            }
+            let label = "Y\(yr)"
+            // Interest at bottom, principal on top
+            entries.append(StackedBarEntry(label: label, year: yr, type: "Interest", amount: i))
+            entries.append(StackedBarEntry(label: label, year: yr, type: "Principal", amount: p))
+        }
+        return entries
+    }
+
+    private var currentYear: Int {
+        loan.installmentsPaid > 0 ? ((loan.installmentsPaid - 1) / 12) + 1 : 0
+    }
+
+    private var totalInterest: Double {
+        schedule.reduce(0) { $0 + $1.interest }
+    }
+
+    private var totalPayable: Double {
+        loan.loanAmount + totalInterest
+    }
+
+    private var interestPercentage: Double {
+        guard loan.loanAmount > 0 else { return 0 }
+        return (totalInterest / loan.loanAmount) * 100
+    }
+
+    /// Cumulative principal and interest paid so far based on installmentsPaid
+    private var paidBreakdown: (principal: Double, interest: Double) {
+        let rows = schedule
+        let limit = loan.installmentsPaid
+        var p = 0.0
+        var i = 0.0
+        for row in rows where row.month <= limit {
+            p += row.principalPaid
+            i += row.interest
+        }
+        return (p, i)
+    }
+
+    /// Interest share for the first year (used in the default insight text)
+    private var firstYearInterestShare: Int {
+        let rows = schedule
+        guard !rows.isEmpty else { return 0 }
+        let hi = min(12, loan.loanTenureMonths)
+        var p = 0.0, i = 0.0
+        for row in rows where row.month >= 1 && row.month <= hi {
+            p += row.principalPaid
+            i += row.interest
+        }
+        let total = p + i
+        guard total > 0 else { return 0 }
+        return Int(round((i / total) * 100))
+    }
+
+    var body: some View {
+        VStack(alignment: .leading, spacing: 16) {
+            // ── Header
+            VStack(alignment: .leading, spacing: 4) {
+                Text("EMI Breakdown")
+                    .font(.system(size: 15, weight: .bold))
+                    .foregroundColor(.primary)
+                Text("Each bar shows how your annual payments split between principal & interest")
+                    .font(.system(size: 12))
+                    .foregroundColor(.secondary)
+            }
+
+            // ── Stacked bar chart
+            if !stackedEntries.isEmpty {
+                Chart {
+                    ForEach(stackedEntries) { entry in
+                        BarMark(
+                            x: .value("Year", entry.label),
+                            y: .value("Amount", entry.amount)
+                        )
+                        .foregroundStyle(by: .value("Type", entry.type))
+                        .cornerRadius(3)
+                    }
+
+                    // Interactive RuleMark showing only when a specific bar is tapped/selected
+                    if let selected = selectedYearLabel {
+                        let yearNum = Int(selected.replacingOccurrences(of: "Y", with: "")) ?? 1
+                        RuleMark(x: .value("Selected", selected))
+                            .foregroundStyle(Color.orange.opacity(0.8))
+                            .lineStyle(StrokeStyle(lineWidth: 1.5, dash: [4, 3]))
+                            .annotation(position: .top, alignment: .center) {
+                                Text("Year \(yearNum)")
+                                    .font(.system(size: 8, weight: .bold))
+                                    .foregroundColor(.white)
+                                    .padding(.horizontal, 6).padding(.vertical, 3)
+                                    .background(Color.orange)
+                                    .cornerRadius(4)
+                            }
+                    }
+                }
+                .chartForegroundStyleScale([
+                    "Principal": AppTheme.auraGreen,
+                    "Interest": Color(hex: "#FF6B6B")
+                ])
+                .chartLegend(.visible)
+                .chartLegend(position: .bottom, spacing: 12)
+                .chartXSelection(value: $selectedYearLabel)
+                .chartYAxis {
+                    AxisMarks(position: .leading, values: .automatic(desiredCount: 4)) { value in
+                        AxisGridLine(stroke: StrokeStyle(lineWidth: 0.3))
+                        AxisValueLabel {
+                            if let v = value.as(Double.self) {
+                                Text(v.toCurrency(compact: true))
+                                    .font(.system(size: 9))
+                            }
+                        }
+                    }
+                }
+                .chartXAxis {
+                    AxisMarks { value in
+                        AxisValueLabel {
+                            if let v = value.as(String.self) {
+                                Text(v)
+                                    .font(.system(size: 8))
+                            }
+                        }
+                    }
+                }
+                .frame(height: 220)
+            }
+
+            // ── Dynamic Insight Callout
+            HStack(spacing: 8) {
+                Image(systemName: "lightbulb.fill")
+                    .font(.system(size: 12))
+                    .foregroundColor(AppTheme.vibrantOrange)
+                
+                Group {
+                    if let selected = selectedYearLabel {
+                        let yearNum = Int(selected.replacingOccurrences(of: "Y", with: "")) ?? 1
+                        let yearEntries = stackedEntries.filter { $0.label == selected }
+                        let interest = yearEntries.first(where: { $0.type == "Interest" })?.amount ?? 0
+                        let principal = yearEntries.first(where: { $0.type == "Principal" })?.amount ?? 0
+                        let total = interest + principal
+                        let pct = total > 0 ? Int(round((interest / total) * 100)) : 0
+                        Text("Year \(yearNum): **\(principal.toCurrency(compact: true))** principal and **\(interest.toCurrency(compact: true))** interest paid (**\(pct)%** interest share).")
+                    } else if loan.installmentsPaid > 0 {
+                        Text("You've paid **\(paidBreakdown.principal.toCurrency(compact: true))** principal and **\(paidBreakdown.interest.toCurrency(compact: true))** interest so far (Year \(currentYear) in progress). Tap any bar to inspect.")
+                    } else {
+                        Text("In Year 1, **\(firstYearInterestShare)%** of your EMI goes to interest. This reduces each year as you pay off more principal. Tap any bar to inspect.")
+                    }
+                }
+                .font(.system(size: 12))
+                .foregroundColor(.secondary)
+            }
+            .padding(12)
+            .background(AppTheme.vibrantOrange.opacity(0.08))
+            .cornerRadius(12)
+
+            // ── Summary stat tiles
+            HStack(spacing: 10) {
+                LoanMetricTile(
+                    title: "Total Interest",
+                    value: totalInterest.toCurrency(compact: true),
+                    color: Color(hex: "#FF6B6B")
+                )
+                LoanMetricTile(
+                    title: "Total Payable",
+                    value: totalPayable.toCurrency(compact: true),
+                    color: AppTheme.auraIndigo
+                )
+                LoanMetricTile(
+                    title: "Interest / Principal",
+                    value: String(format: "%.1f%%", interestPercentage),
+                    color: AppTheme.vibrantOrange
+                )
+            }
+        }
+        .padding(16)
+        .background(AppTheme.cardBackground)
+        .cornerRadius(16)
+        .shadow(color: AppTheme.adaptiveShadow, radius: 8)
+    }
+}
+
+private struct LoanMetricTile: View {
+    let title: String
+    let value: String
+    let color: Color
+
+    var body: some View {
+        VStack(alignment: .leading, spacing: 6) {
+            Text(title)
+                .font(.auraCaption(size: 11, weight: .medium))
+                .foregroundStyle(.secondary)
+                .lineLimit(1)
+                .minimumScaleFactor(0.8)
+            Text(value)
+                .font(.auraDigital(size: 18))
+                .foregroundStyle(color)
+                .lineLimit(1)
+                .minimumScaleFactor(0.75)
+        }
+        .frame(maxWidth: .infinity, alignment: .leading)
+        .padding(12)
+        .background(color.opacity(0.1))
+        .clipShape(RoundedRectangle(cornerRadius: 14, style: .continuous))
+    }
+}
+
 #Preview {
     let appState = AppStateManager()
     appState.currentProfile = AstraUserProfile(
@@ -606,4 +856,3 @@ struct AmortizationCard: View {
             .environment(appState)
     }
 }
-
