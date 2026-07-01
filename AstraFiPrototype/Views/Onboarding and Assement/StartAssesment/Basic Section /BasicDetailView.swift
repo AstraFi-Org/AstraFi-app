@@ -5,6 +5,7 @@ import SwiftUI
 struct BasicDetailView: View {
     @Bindable var data: CompleteAssessmentData
     let mode: AssessmentFlowMode
+    let onSaveComplete: () -> Void
     @Environment(AppStateManager.self) var appState
     @Environment(\.dismiss) private var dismiss
 
@@ -37,6 +38,16 @@ struct BasicDetailView: View {
         && age > 0
         && hasEmergencyFund != nil
         && (hasEmergencyFund == false || wantsToShareEF != nil)
+    }
+
+    init(
+        data: CompleteAssessmentData,
+        mode: AssessmentFlowMode,
+        onSaveComplete: @escaping () -> Void = {}
+    ) {
+        self.data = data
+        self.mode = mode
+        self.onSaveComplete = onSaveComplete
     }
 
     var body: some View {
@@ -223,13 +234,13 @@ struct BasicDetailView: View {
             }
         }
         .navigationDestination(isPresented: $goNext) {
-            Phase1BView(data: data)
+            Phase1BView(data: data, onSaveComplete: onSaveComplete)
         }
         .navigationDestination(isPresented: $goSkipToInvestment) {
-            InvestmentQuestionView(data: data)
+            InvestmentQuestionView(data: data, onSaveComplete: onSaveComplete)
         }
         .navigationDestination(isPresented: $goToInvestmentQuestion) {
-            InvestmentQuestionView(data: data)
+            InvestmentQuestionView(data: data, onSaveComplete: onSaveComplete)
         }
         .onAppear {
             if mode == .onboarding, data.name.isEmpty, !appState.tempName.isEmpty {

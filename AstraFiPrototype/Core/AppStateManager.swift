@@ -5,10 +5,10 @@ import CryptoKit
 
 @Observable @MainActor
 final class AppStateManager {
-
+    
     // MARK: - Financial Constants
     static let defaultTaxRate: Double = 0.0
-
+    
     private var isSyncing = false
     
     var isLoading: Bool = true
@@ -133,7 +133,7 @@ final class AppStateManager {
         return mgr
     }
     
-    func setupEmptyProfile(name: String = "User", email: String = "") {
+    func setupEmptyProfile(name: String = "User", email: String = "", createdAt: Date? = nil) {
         let signUp = AstraSignUp(signUpName: name, email: email, password: "")
         
         let basic = AstraBasicDetails(
@@ -165,6 +165,7 @@ final class AppStateManager {
         )
         
         self.currentProfile = AstraUserProfile(
+            createdAt: createdAt,
             signUp: signUp,
             basicDetails: basic,
             assets: assets,
@@ -179,7 +180,7 @@ final class AppStateManager {
             isSetuConnected: false
         )
     }
-
+    
     var hasCompletedOnboarding: Bool = UserDefaults.standard.bool(forKey: "hasCompletedOnboarding") {
         didSet {
             UserDefaults.standard.set(hasCompletedOnboarding, forKey: "hasCompletedOnboarding")
@@ -204,6 +205,22 @@ final class AppStateManager {
     
     var currentProfile: AstraUserProfile?
     var savedPlans: [InvestmentPlanModel] = []
+
+    func hasCompletedMonthlyAssessment(asOf date: Date = Date()) -> Bool {
+        guard let profile = currentProfile else { return false }
+        let calendar = Calendar.current
+        return profile.monthlyHealthAssessments.contains {
+            calendar.isDate($0.date, equalTo: date, toGranularity: .month)
+        }
+    }
+
+    func isMonthlyAssessmentDue(asOf date: Date = Date()) -> Bool {
+        currentProfile != nil && !hasCompletedMonthlyAssessment(asOf: date)
+    }
+
+    func shouldPresentMonthlyAssessmentOnLaunch(asOf date: Date = Date()) -> Bool {
+        Calendar.current.component(.day, from: date) == 1 && isMonthlyAssessmentDue(asOf: date)
+    }
     
     func savePlan(_ plan: InvestmentPlanModel) {
         savedPlans.append(plan)
@@ -226,7 +243,7 @@ final class AppStateManager {
             }
         }
     }
-
+    
     func unfollowPlan(_ plan: InvestmentPlanModel) {
         if let index = savedPlans.firstIndex(where: { $0.id == plan.id }) {
             savedPlans[index].isFollowed = false
@@ -272,7 +289,7 @@ final class AppStateManager {
             }
         }
     }
-
+    
     func linkGuestAssessmentAndSave(data: CompleteAssessmentData, score: Int, status: String, insights: [String], assessmentInsights: FinancialAssessmentInsights) {
         updateProfile(from: data)
         saveAssessmentToHistory(score: score, status: status, insights: insights, assessmentInsights: assessmentInsights)
@@ -280,12 +297,12 @@ final class AppStateManager {
         isGuest = false
         showDashboard = true
     }
-
+    
     func deleteAssessmentFromHistory(_ assessment: AstraHealthAssessment) {
         guard var profile = currentProfile else { return }
         profile.monthlyHealthAssessments.removeAll { $0.id == assessment.id }
         currentProfile = profile
-
+        
         Task {
             if (try? await supabase.auth.session) != nil {
                 try? await SupabaseRepository.shared.deleteHealthAssessment(assessment.id)
@@ -302,13 +319,13 @@ final class AppStateManager {
             await syncMutualFundNAVs()
         }
     }
-
+    
     func restoreSession() async {
         await MainActor.run { isLoading = true }
         async let minimumDelay: () = Task.sleep(nanoseconds: 1_500_000_000)
         do {
             let session = try await supabase.auth.session
-
+            
             if let profile = try? await SupabaseRepository.shared.fetchFullProfile(userId: session.user.id) {
                 if let plans = try? await SupabaseRepository.shared.fetchSavedPlans(userId: session.user.id) {
                     await MainActor.run {
@@ -331,6 +348,7 @@ final class AppStateManager {
                             self.mfaFactorId = factor.id
                             self.requiresMFAChallenge = true
                             var sanitizedProfile = profile
+                            sanitizedProfile.createdAt = session.user.createdAt
                             if sanitizedProfile.signUp.email.isEmpty, let email = session.user.email, !email.isEmpty {
                                 sanitizedProfile.signUp.email = email
                             }
@@ -351,6 +369,7 @@ final class AppStateManager {
                 
                 await MainActor.run {
                     var sanitizedProfile = profile
+                    sanitizedProfile.createdAt = session.user.createdAt
                     if sanitizedProfile.signUp.email.isEmpty, let email = session.user.email, !email.isEmpty {
                         sanitizedProfile.signUp.email = email
                     }
@@ -375,7 +394,7 @@ final class AppStateManager {
                     
                 }
             }
-
+            
         } catch {
             try? await minimumDelay
             await MainActor.run {
@@ -388,7 +407,7 @@ final class AppStateManager {
     func unlockApp() {
         isLockedByBiometric = false
     }
-
+    
     func signUp(name: String, email: String, password: String) async -> Bool {
         isAuthLoading = true
         authError = nil
@@ -405,11 +424,12 @@ final class AppStateManager {
             tempName = name
             tempEmail = email
             tempPassword = password
-            setupEmptyProfile(name: name, email: email)
+            setupEmptyProfile(name: name, email: email, createdAt: session.user.createdAt)
             
             // After successful sign up — load existing data if any
             if let profile = try? await SupabaseRepository.shared.fetchFullProfile(userId: session.user.id) {
                 var sanitizedProfile = profile
+                sanitizedProfile.createdAt = session.user.createdAt
                 if sanitizedProfile.signUp.email.isEmpty, let sessionEmail = session.user.email, !sessionEmail.isEmpty {
                     sanitizedProfile.signUp.email = sessionEmail
                 }
@@ -540,6 +560,7 @@ final class AppStateManager {
                 if let profile = try? await SupabaseRepository.shared.fetchFullProfile(userId: session.user.id) {
                     print("AppStateManager: Found existing profile for user")
                     var sanitizedProfile = profile
+                    sanitizedProfile.createdAt = session.user.createdAt
                     if sanitizedProfile.signUp.email.isEmpty, let email = session.user.email, !email.isEmpty {
                         sanitizedProfile.signUp.email = email
                     }
@@ -570,7 +591,7 @@ final class AppStateManager {
                         .joined(separator: " ")
                     let displayName = fullName.isEmpty ? (session.user.email ?? "User") : fullName
                     
-                    setupEmptyProfile(name: displayName, email: session.user.email ?? "")
+                    setupEmptyProfile(name: displayName, email: session.user.email ?? "", createdAt: session.user.createdAt)
                     isAuthenticated = true
                     hasCompletedOnboarding = true
                     isGuest = false
@@ -612,7 +633,7 @@ final class AppStateManager {
         appleSignInDelegate = nil
         currentNonce = nil
     }
-
+    
     func signIn(email: String, password: String) async {
         isAuthLoading = true
         authError = nil
@@ -636,6 +657,7 @@ final class AppStateManager {
             
             if let profile = try? await SupabaseRepository.shared.fetchFullProfile(userId: session.user.id) {
                 var sanitizedProfile = profile
+                sanitizedProfile.createdAt = session.user.createdAt
                 if sanitizedProfile.signUp.email.isEmpty, let email = session.user.email, !email.isEmpty {
                     sanitizedProfile.signUp.email = email
                 }
@@ -660,7 +682,7 @@ final class AppStateManager {
                     showDashboard = true
                 }
             } else {
-                setupEmptyProfile(name: session.user.email ?? "User", email: session.user.email ?? "")
+                setupEmptyProfile(name: session.user.email ?? "User", email: session.user.email ?? "", createdAt: session.user.createdAt)
                 
                 isAuthenticated = true
                 hasCompletedOnboarding = true
@@ -701,6 +723,7 @@ final class AppStateManager {
             let session = try await supabase.auth.session
             if let profile = try? await SupabaseRepository.shared.fetchFullProfile(userId: session.user.id) {
                 var sanitizedProfile = profile
+                sanitizedProfile.createdAt = session.user.createdAt
                 if sanitizedProfile.signUp.email.isEmpty, let email = session.user.email, !email.isEmpty {
                     sanitizedProfile.signUp.email = email
                 }
@@ -725,7 +748,7 @@ final class AppStateManager {
                     showDashboard = true
                 }
             } else {
-                setupEmptyProfile(name: session.user.email ?? "User", email: session.user.email ?? "")
+                setupEmptyProfile(name: session.user.email ?? "User", email: session.user.email ?? "", createdAt: session.user.createdAt)
                 
                 isAuthenticated = true
                 hasCompletedOnboarding = true
@@ -793,6 +816,7 @@ final class AppStateManager {
             let session = try await supabase.auth.session
             if let profile = try? await SupabaseRepository.shared.fetchFullProfile(userId: session.user.id) {
                 var sanitizedProfile = profile
+                sanitizedProfile.createdAt = session.user.createdAt
                 if sanitizedProfile.signUp.email.isEmpty, let email = session.user.email, !email.isEmpty {
                     sanitizedProfile.signUp.email = email
                 }
@@ -817,7 +841,7 @@ final class AppStateManager {
                     showDashboard = true
                 }
             } else {
-                setupEmptyProfile(name: session.user.email ?? "User", email: session.user.email ?? "")
+                setupEmptyProfile(name: session.user.email ?? "User", email: session.user.email ?? "", createdAt: session.user.createdAt)
                 
                 isAuthenticated = true
                 hasCompletedOnboarding = true
@@ -844,7 +868,7 @@ final class AppStateManager {
             return false
         }
     }
-
+    
     func signOut() async {
         do {
             try await supabase.auth.signOut(scope: .local)
@@ -938,7 +962,7 @@ final class AppStateManager {
             // The assessment field is labelled "Tenure (Months)" — store as-is.
             // Do NOT multiply by 12; that would turn 15 months into 180 months.
             let tenureMonths = Int(entry.tenure) ?? 0
-
+            
             var loan = AstraLoan(
                 loanType: mapLoanType(entry.type),
                 lender: .other,
@@ -1082,7 +1106,7 @@ final class AppStateManager {
         if var existingProfile = self.currentProfile {
             // MERGE LOGIC
             existingProfile.signUp.email = assessmentData.email.isEmpty
-                    ? existingProfile.signUp.email : assessmentData.email
+            ? existingProfile.signUp.email : assessmentData.email
             
             // Merge Investments
             for newInv in newInvestments {
@@ -1199,665 +1223,679 @@ final class AppStateManager {
         }
     }
     
-    private func mapInvestmentType(_ type: AssessmentInvestmentEntry.InvestmentType) -> AstraInvestmentType {
-        switch type {
-        case .mutualFund: return .mutualFund
-        case .stocks: return .stocks
-        case .bonds: return .bonds
-        case .realEstate: return .realEstate
-        case .gold: return .physicalGold
-        case .crypto: return .cryptocurrency
-        case .ppf: return .ppf
-        case .nps: return .nps
-        }
-    }
-    
-    private func mapLoanType(_ type: AssessmentLoanEntry.LoanType) -> AstraLoanType {
-        switch type {
-        case .homeLoan: return .homeLoan
-        case .carLoan: return .carLoan
-        case .educationLoan: return .educationLoan
-        case .businessLoan: return .businessLoan
-        case .personalLoan: return .personalLoan
-        case .creditCard: return .other
-        }
-    }
-    
-    private func mapLender(_ name: String) -> AstraLoanLender {
-        switch name {
-        case "SBI": return .stateBankOfIndia
-        case "HDFC Bank": return .hdfcBank
-        case "ICICI Bank": return .iciciBank
-        case "Axis Bank": return .axisBank
-        case "Kotak Mahindra": return .kotakMahindra
-        case "Other": return .other
-        default: return .other
-        }
-    }
-    
-    private func mapInsuranceType(_ type: AssessmentInsuranceEntry.InsuranceType) -> AstraInsuranceType {
-        switch type {
-        case .health: return .health
-        case .life: return .life
-        case .criticalIllness: return .criticalIllness
-        case .term: return .termLifeInsurance
-        case .motor: return .motor
-        case .travel: return .travel
-        case .ulip: return .ulip
-        }
-    }
-    
-    // MARK: - Derived profile attributes from assessment data
-
-    /// Derives risk tolerance from savings behaviour and investment activity.
-    /// No hardcoded "medium" default — inferred from real data.
-    private static func deriveRiskTolerance(savingsRate: Double, investmentCount: Int) -> AstraRiskTolerance {
-        switch (savingsRate, investmentCount) {
-        case (let s, let c) where s >= 0.35 && c >= 3: return .high
-        case (let s, _)     where s >= 0.20:            return .medium
-        default:                                         return .low
-        }
-    }
-
-    /// Derives investment horizon from age and number of dependents.
-    /// Younger users with few dependents → long-term; older or more dependents → shorter.
-    private static func deriveInvestmentHorizon(age: Int, dependents: Int) -> AstraInvestmentHorizon {
-        switch (age, dependents) {
-        case (let a, _) where a < 35: return .longTerm
-        case (let a, let d) where a < 50 && d <= 2: return .mediumTerm
-        default: return .shortTerm
-        }
-    }
-
-    func recalculateFinancials() {
-        guard var profile = currentProfile else { return }
-        
-        var newAssets = profile.assets
-        newAssets.stocksHoldingAmount = profile.investments.filter { $0.investmentType == .stocks }.map { $0.currentValue.safeFinite }.reduce(0, +)
-        newAssets.mutualFundHoldingAmount = profile.investments.filter { $0.investmentType == .mutualFund }.map { $0.currentValue.safeFinite }.reduce(0, +)
-        newAssets.depositsAmount = profile.investments.filter { $0.investmentType == .deposits }.map { $0.currentValue.safeFinite }.reduce(0, +)
-        newAssets.propertyAmount = profile.investments.filter { $0.investmentType == .realEstate }.map { $0.currentValue.safeFinite }.reduce(0, +)
-        newAssets.jewelleryAmount = profile.investments.filter { $0.investmentType == .physicalGold }.map { $0.currentValue.safeFinite }.reduce(0, +)
-        newAssets.otherInvestmentAmount = profile.investments.filter { [.cryptocurrency, .other, .nps, .ppf, .bonds, .cashSavings, .emergencyFund].contains($0.investmentType) }.map { $0.currentValue.safeFinite }.reduce(0, +)
-        profile.assets = newAssets
-        
-        var newLiabilities = profile.liabilities
-        newLiabilities.homeLoanAmount = profile.loans.filter { $0.loanType == .homeLoan }.map { $0.loanAmount }.reduce(0, +)
-        newLiabilities.vehicleLoanAmount = profile.loans.filter { $0.loanType == .carLoan }.map { $0.loanAmount }.reduce(0, +)
-        newLiabilities.educationLoanAmount = profile.loans.filter { $0.loanType == .educationLoan }.map { $0.loanAmount }.reduce(0, +)
-        newLiabilities.otherLoanAmount = profile.loans.filter { ![.homeLoan, .carLoan, .educationLoan].contains($0.loanType) }.map { $0.loanAmount }.reduce(0, +)
-        profile.liabilities = newLiabilities
-        
-        let totalAs = profile.assets.totalAssets
-        let totalLi = profile.liabilities.totalLiabilities
-        let netWorth = totalAs - totalLi
-        
-        let incomeAfterTax = profile.basicDetails.monthlyIncomeAfterTax
-        let expenses = profile.basicDetails.monthlyExpenses
-        let savingsRate = incomeAfterTax > 0 ? (((incomeAfterTax - expenses) / incomeAfterTax) * 100).safeFinite : 0
-        
-        let totalEMIs = profile.loans.reduce(0.0) { $0 + $1.calculatedEMI }
-        let dti = profile.basicDetails.monthlyIncome > 0 ? (totalEMIs / profile.basicDetails.monthlyIncome).safeFinite : 0
-        
-        let efTarget = profile.basicDetails.monthlyIncome * 6.0
-        let efMonths = efTarget > 0 ? ((profile.basicDetails.emergencyFundAmount / efTarget) * 6.0).safeFinite : 0
-        let investmentScore = min(100, max(0, (savingsRate * 0.5) + (efMonths * 10))).safeInt
-        
-        profile.financialHealthReport = AstraFinancialHealthReport(
-            netWorth: netWorth,
-            savingsRate: savingsRate,
-            debtToIncomeRatio: dti,
-            investmentScore: investmentScore,
-            emergencyFundMonths: efMonths
-        )
-        
-        // Sync goal currentAmount with dynamic total
-        for i in 0..<profile.goals.count {
-            let gid = profile.goals[i].id
-            let linked = profile.investments.filter { $0.associatedGoalID == gid }
-            let linkedTotal = linked.reduce(0.0) { $0 + $1.currentValue }
-            profile.goals[i].currentAmount = linkedTotal + profile.goals[i].manualSavingsContribution
-        }
-        
-        self.currentProfile = profile
-    }
-    
-    func updateCashflow(_ cashflow: CashflowEntry) {
-        if var profile = currentProfile {
-            profile.cashflowData = cashflow
-            
-            // Sync totals with basic details
-            profile.basicDetails.monthlyExpenses = cashflow.totalExpenses
-            
-            let detailedIncome = cashflow.totalIncome
-            if detailedIncome > 0 {
-                profile.basicDetails.monthlyIncome = detailedIncome
-                profile.basicDetails.monthlyIncomeAfterTax = detailedIncome
-            }
-            
-            let df = DateFormatter()
-            df.dateFormat = "yyyy-MM"
-            let monthKey = df.string(from: Date())
-            profile.monthlyCashflowSnapshots[monthKey] = cashflow
-            
-            currentProfile = profile
-            recalculateFinancials()
+    func syncProfile() {
+            guard let profile = currentProfile else { return }
             Task {
                 if let session = try? await supabase.auth.session {
                     do {
-                        try await SupabaseRepository.shared.saveCashflowSnapshot(
-                            cashflow,
-                            monthKey: monthKey,
-                            userId: session.user.id
-                        )
-                        try await SupabaseRepository.shared.saveUserProfile(
-                            profile,
-                            userId: session.user.id
-                        )
-                        print("Cashflow and UserProfile saved to Supabase")
+                        try await SupabaseRepository.shared.syncFullProfile(profile, userId: session.user.id)
+                        print("Supabase sync successful for user: \(session.user.id)")
                     } catch {
-                        print("Cashflow/UserProfile save failed: \(error)")
+                        print("Supabase sync failed: \(error)")
                     }
                 }
             }
         }
-    }
-    
-    func addGoal(_ goal: AstraGoal) {
-        if var profile = currentProfile {
-            profile.goals.append(goal)
-            currentProfile = profile
-            recalculateFinancials()
-            Task {
-                if let session = try? await supabase.auth.session {
-                    try? await SupabaseRepository.shared.saveGoal(goal, userId: session.user.id)
+        
+        private func mapInvestmentType(_ type: AssessmentInvestmentEntry.InvestmentType) -> AstraInvestmentType {
+            switch type {
+            case .mutualFund: return .mutualFund
+            case .stocks: return .stocks
+            case .bonds: return .bonds
+            case .realEstate: return .realEstate
+            case .gold: return .physicalGold
+            case .crypto: return .cryptocurrency
+            case .ppf: return .ppf
+            case .nps: return .nps
+            }
+        }
+        
+        private func mapLoanType(_ type: AssessmentLoanEntry.LoanType) -> AstraLoanType {
+            switch type {
+            case .homeLoan: return .homeLoan
+            case .carLoan: return .carLoan
+            case .educationLoan: return .educationLoan
+            case .businessLoan: return .businessLoan
+            case .personalLoan: return .personalLoan
+            case .creditCard: return .other
+            }
+        }
+        
+        private func mapLender(_ name: String) -> AstraLoanLender {
+            switch name {
+            case "SBI": return .stateBankOfIndia
+            case "HDFC Bank": return .hdfcBank
+            case "ICICI Bank": return .iciciBank
+            case "Axis Bank": return .axisBank
+            case "Kotak Mahindra": return .kotakMahindra
+            case "Other": return .other
+            default: return .other
+            }
+        }
+        
+        private func mapInsuranceType(_ type: AssessmentInsuranceEntry.InsuranceType) -> AstraInsuranceType {
+            switch type {
+            case .health: return .health
+            case .life: return .life
+            case .criticalIllness: return .criticalIllness
+            case .term: return .termLifeInsurance
+            case .motor: return .motor
+            case .travel: return .travel
+            case .ulip: return .ulip
+            }
+        }
+        
+        // MARK: - Derived profile attributes from assessment data
+        
+        /// Derives risk tolerance from savings behaviour and investment activity.
+        /// No hardcoded "medium" default — inferred from real data.
+        private static func deriveRiskTolerance(savingsRate: Double, investmentCount: Int) -> AstraRiskTolerance {
+            switch (savingsRate, investmentCount) {
+            case (let s, let c) where s >= 0.35 && c >= 3: return .high
+            case (let s, _)     where s >= 0.20:            return .medium
+            default:                                         return .low
+            }
+        }
+        
+        /// Derives investment horizon from age and number of dependents.
+        /// Younger users with few dependents → long-term; older or more dependents → shorter.
+        private static func deriveInvestmentHorizon(age: Int, dependents: Int) -> AstraInvestmentHorizon {
+            switch (age, dependents) {
+            case (let a, _) where a < 35: return .longTerm
+            case (let a, let d) where a < 50 && d <= 2: return .mediumTerm
+            default: return .shortTerm
+            }
+        }
+        
+        func recalculateFinancials() {
+            guard var profile = currentProfile else { return }
+            
+            var newAssets = profile.assets
+            newAssets.stocksHoldingAmount = profile.investments.filter { $0.investmentType == .stocks }.map { $0.currentValue.safeFinite }.reduce(0, +)
+            newAssets.mutualFundHoldingAmount = profile.investments.filter { $0.investmentType == .mutualFund }.map { $0.currentValue.safeFinite }.reduce(0, +)
+            newAssets.depositsAmount = profile.investments.filter { $0.investmentType == .deposits }.map { $0.currentValue.safeFinite }.reduce(0, +)
+            newAssets.propertyAmount = profile.investments.filter { $0.investmentType == .realEstate }.map { $0.currentValue.safeFinite }.reduce(0, +)
+            newAssets.jewelleryAmount = profile.investments.filter { $0.investmentType == .physicalGold }.map { $0.currentValue.safeFinite }.reduce(0, +)
+            newAssets.otherInvestmentAmount = profile.investments.filter { [.cryptocurrency, .other, .nps, .ppf, .bonds, .cashSavings, .emergencyFund].contains($0.investmentType) }.map { $0.currentValue.safeFinite }.reduce(0, +)
+            profile.assets = newAssets
+            
+            var newLiabilities = profile.liabilities
+            newLiabilities.homeLoanAmount = profile.loans.filter { $0.loanType == .homeLoan }.map { $0.loanAmount }.reduce(0, +)
+            newLiabilities.vehicleLoanAmount = profile.loans.filter { $0.loanType == .carLoan }.map { $0.loanAmount }.reduce(0, +)
+            newLiabilities.educationLoanAmount = profile.loans.filter { $0.loanType == .educationLoan }.map { $0.loanAmount }.reduce(0, +)
+            newLiabilities.otherLoanAmount = profile.loans.filter { ![.homeLoan, .carLoan, .educationLoan].contains($0.loanType) }.map { $0.loanAmount }.reduce(0, +)
+            profile.liabilities = newLiabilities
+            
+            let totalAs = profile.assets.totalAssets
+            let totalLi = profile.liabilities.totalLiabilities
+            let netWorth = totalAs - totalLi
+            
+            let incomeAfterTax = profile.basicDetails.monthlyIncomeAfterTax
+            let expenses = profile.basicDetails.monthlyExpenses
+            let savingsRate = incomeAfterTax > 0 ? (((incomeAfterTax - expenses) / incomeAfterTax) * 100).safeFinite : 0
+            
+            let totalEMIs = profile.loans.reduce(0.0) { $0 + $1.calculatedEMI }
+            let dti = profile.basicDetails.monthlyIncome > 0 ? (totalEMIs / profile.basicDetails.monthlyIncome).safeFinite : 0
+            
+            let efTarget = profile.basicDetails.monthlyIncome * 6.0
+            let efMonths = efTarget > 0 ? ((profile.basicDetails.emergencyFundAmount / efTarget) * 6.0).safeFinite : 0
+            let investmentScore = min(100, max(0, (savingsRate * 0.5) + (efMonths * 10))).safeInt
+            
+            profile.financialHealthReport = AstraFinancialHealthReport(
+                netWorth: netWorth,
+                savingsRate: savingsRate,
+                debtToIncomeRatio: dti,
+                investmentScore: investmentScore,
+                emergencyFundMonths: efMonths
+            )
+            
+            // Sync goal currentAmount with dynamic total
+            for i in 0..<profile.goals.count {
+                let gid = profile.goals[i].id
+                let linked = profile.investments.filter { $0.associatedGoalID == gid }
+                let linkedTotal = linked.reduce(0.0) { $0 + $1.currentValue }
+                profile.goals[i].currentAmount = linkedTotal + profile.goals[i].manualSavingsContribution
+            }
+            
+            self.currentProfile = profile
+        }
+        
+        func updateCashflow(_ cashflow: CashflowEntry) {
+            if var profile = currentProfile {
+                profile.cashflowData = cashflow
+                
+                // Sync totals with basic details
+                profile.basicDetails.monthlyExpenses = cashflow.totalExpenses
+                
+                let detailedIncome = cashflow.totalIncome
+                if detailedIncome > 0 {
+                    profile.basicDetails.monthlyIncome = detailedIncome
+                    profile.basicDetails.monthlyIncomeAfterTax = detailedIncome
+                }
+                
+                let df = DateFormatter()
+                df.dateFormat = "yyyy-MM"
+                let monthKey = df.string(from: Date())
+                profile.monthlyCashflowSnapshots[monthKey] = cashflow
+                
+                currentProfile = profile
+                recalculateFinancials()
+                Task {
+                    if let session = try? await supabase.auth.session {
+                        do {
+                            try await SupabaseRepository.shared.saveCashflowSnapshot(
+                                cashflow,
+                                monthKey: monthKey,
+                                userId: session.user.id
+                            )
+                            try await SupabaseRepository.shared.saveUserProfile(
+                                profile,
+                                userId: session.user.id
+                            )
+                            print("Cashflow and UserProfile saved to Supabase")
+                        } catch {
+                            print("Cashflow/UserProfile save failed: \(error)")
+                        }
+                    }
                 }
             }
         }
-    }
-    
-    func updateGoal(_ goal: AstraGoal) {
-        if var profile = currentProfile,
-           let index = profile.goals.firstIndex(where: { $0.id == goal.id }) {
-            profile.goals[index] = goal
-            currentProfile = profile
-            recalculateFinancials()
-            Task {
-                if let session = try? await supabase.auth.session {
-                    try? await SupabaseRepository.shared.saveGoal(goal, userId: session.user.id)
+        
+        func addGoal(_ goal: AstraGoal) {
+            if var profile = currentProfile {
+                profile.goals.append(goal)
+                currentProfile = profile
+                recalculateFinancials()
+                Task {
+                    if let session = try? await supabase.auth.session {
+                        try? await SupabaseRepository.shared.saveGoal(goal, userId: session.user.id)
+                    }
                 }
             }
         }
-    }
-    
-    func deleteGoal(at indexSet: IndexSet) {
-        if var profile = currentProfile {
-            let toDelete = indexSet.map { profile.goals[$0] }
-            profile.goals.remove(atOffsets: indexSet)
-            currentProfile = profile
-            recalculateFinancials()
-            Task {
-                for goal in toDelete {
+        
+        func updateGoal(_ goal: AstraGoal) {
+            if var profile = currentProfile,
+               let index = profile.goals.firstIndex(where: { $0.id == goal.id }) {
+                profile.goals[index] = goal
+                currentProfile = profile
+                recalculateFinancials()
+                Task {
+                    if let session = try? await supabase.auth.session {
+                        try? await SupabaseRepository.shared.saveGoal(goal, userId: session.user.id)
+                    }
+                }
+            }
+        }
+        
+        func deleteGoal(at indexSet: IndexSet) {
+            if var profile = currentProfile {
+                let toDelete = indexSet.map { profile.goals[$0] }
+                profile.goals.remove(atOffsets: indexSet)
+                currentProfile = profile
+                recalculateFinancials()
+                Task {
+                    for goal in toDelete {
+                        try? await SupabaseRepository.shared.deleteGoal(goal.id)
+                    }
+                }
+            }
+        }
+        
+        func deleteGoal(_ goal: AstraGoal) {
+            if var profile = currentProfile,
+               let index = profile.goals.firstIndex(where: { $0.id == goal.id }) {
+                profile.goals.remove(at: index)
+                currentProfile = profile
+                recalculateFinancials()
+                Task {
                     try? await SupabaseRepository.shared.deleteGoal(goal.id)
                 }
             }
         }
-    }
-    
-    func deleteGoal(_ goal: AstraGoal) {
-        if var profile = currentProfile,
-           let index = profile.goals.firstIndex(where: { $0.id == goal.id }) {
-            profile.goals.remove(at: index)
-            currentProfile = profile
-            recalculateFinancials()
-            Task {
-                try? await SupabaseRepository.shared.deleteGoal(goal.id)
-            }
-        }
-    }
-    
-    func addInvestment(_ investment: AstraInvestment) {
-        if var profile = currentProfile {
-            profile.investments.append(investment)
-            currentProfile = profile
-            recalculateFinancials()
-            Task {
-                await syncMutualFundNAVs()
-                if let session = try? await supabase.auth.session {
-                    try? await SupabaseRepository.shared.saveInvestment(investment, userId: session.user.id)
-                }
-            }
-        }
-    }
-    
-    func updateInvestment(_ investment: AstraInvestment) {
-        if var profile = currentProfile,
-           let index = profile.investments.firstIndex(where: { $0.id == investment.id }) {
-            profile.investments[index] = investment
-            currentProfile = profile
-            recalculateFinancials()
-            Task {
-                await syncMutualFundNAVs(force: true)
-                if let session = try? await supabase.auth.session {
-                    try? await SupabaseRepository.shared.saveInvestment(investment, userId: session.user.id)
-                }
-            }
-        }
-    }
-
-    func syncUpstoxHoldings(
-        _ holdings: [UpstoxHolding],
-        mutualFunds: [UpstoxMutualFundHolding] = [],
-        mutualFundOrders: [UpstoxMutualFundOrder] = [],
-        mutualFundSIPs: [UpstoxMutualFundSIP] = []
-    ) {
-        guard var profile = currentProfile else { return }
-
-        let manualInvestments = profile.investments.filter { $0.brokerSource != "Upstox" }
-        let existingUpstoxInvestments = Dictionary(
-            profile.investments
-                .filter { $0.brokerSource == "Upstox" }
-                .compactMap { investment in
-                    investment.brokerInstrumentID.map { ($0, investment) }
-                },
-            uniquingKeysWith: { first, _ in first }
-        )
-        let connectedStockInvestments = holdings
-            .filter { $0.quantity > 0 }
-            .map { holding in
-                return AstraInvestment(
-                    id: existingUpstoxInvestments[holding.id]?.id ?? UUID(),
-                    investmentType: .stocks,
-                    subtype: .largeCap,
-                    investmentName: holding.displayName,
-                    investmentAmount: holding.investedAmount.safeFinite,
-                    startDate: existingUpstoxInvestments[holding.id]?.startDate ?? Date(),
-                    mode: .lumpsum,
-                    isin: holding.isin,
-                    symbol: holding.tradingSymbol,
-                    quantity: holding.quantity.safeFinite,
-                    livePrice: holding.currentPrice.safeFinite,
-                    priceChange: holding.dayChange.safeFinite,
-                    priceChangePercentage: holding.dayChangePercentage.safeFinite,
-                    brokerSource: "Upstox",
-                    brokerInstrumentID: holding.id
-                )
-            }
-        let connectedMutualFundInvestments = mutualFunds
-            .filter { $0.quantity > 0 }
-            .map { holding in
-                let matchedOrders = mutualFundOrders
-                    .filter { order in
-                        order.isCompleted && mutualFundRecord(
-                            instrumentKey: order.instrumentKey,
-                            folio: order.folio,
-                            matches: holding
-                        )
+        
+        func addInvestment(_ investment: AstraInvestment) {
+            if var profile = currentProfile {
+                profile.investments.append(investment)
+                currentProfile = profile
+                recalculateFinancials()
+                Task {
+                    await syncMutualFundNAVs()
+                    if let session = try? await supabase.auth.session {
+                        try? await SupabaseRepository.shared.saveInvestment(investment, userId: session.user.id)
                     }
-                    .sorted { ($0.transactionDate ?? .distantPast) < ($1.transactionDate ?? .distantPast) }
-                let matchedSIP = mutualFundSIPs.first { sip in
-                    normalizedUpstoxKey(sip.instrumentKey) == normalizedUpstoxKey(holding.instrumentKey)
                 }
-                let isSIP = matchedSIP != nil || matchedOrders.contains(where: \.isSIP)
-                let installments = matchedOrders.compactMap { order -> AstraInvestmentTransaction? in
-                    guard let date = order.transactionDate else { return nil }
-                    let nav = order.executedNAV.safeFinite
-                    let amount = order.amount > 0 ? order.amount.safeFinite : (order.quantity * nav).safeFinite
-                    return AstraInvestmentTransaction(
-                        date: date,
-                        type: order.transactionType?.uppercased() == "SELL" ? .sell : .buy,
-                        amount: amount,
-                        nav: nav,
-                        units: order.quantity.safeFinite
+            }
+        }
+        
+        func updateInvestment(_ investment: AstraInvestment) {
+            if var profile = currentProfile,
+               let index = profile.investments.firstIndex(where: { $0.id == investment.id }) {
+                profile.investments[index] = investment
+                currentProfile = profile
+                recalculateFinancials()
+                Task {
+                    await syncMutualFundNAVs(force: true)
+                    if let session = try? await supabase.auth.session {
+                        try? await SupabaseRepository.shared.saveInvestment(investment, userId: session.user.id)
+                    }
+                }
+            }
+        }
+        
+        func syncUpstoxHoldings(
+            _ holdings: [UpstoxHolding],
+            mutualFunds: [UpstoxMutualFundHolding] = [],
+            mutualFundOrders: [UpstoxMutualFundOrder] = [],
+            mutualFundSIPs: [UpstoxMutualFundSIP] = []
+        ) {
+            guard var profile = currentProfile else { return }
+            
+            let manualInvestments = profile.investments.filter { $0.brokerSource != "Upstox" }
+            let existingUpstoxInvestments = Dictionary(
+                profile.investments
+                    .filter { $0.brokerSource == "Upstox" }
+                    .compactMap { investment in
+                        investment.brokerInstrumentID.map { ($0, investment) }
+                    },
+                uniquingKeysWith: { first, _ in first }
+            )
+            let connectedStockInvestments = holdings
+                .filter { $0.quantity > 0 }
+                .map { holding in
+                    return AstraInvestment(
+                        id: existingUpstoxInvestments[holding.id]?.id ?? UUID(),
+                        investmentType: .stocks,
+                        subtype: .largeCap,
+                        investmentName: holding.displayName,
+                        investmentAmount: holding.investedAmount.safeFinite,
+                        startDate: existingUpstoxInvestments[holding.id]?.startDate ?? Date(),
+                        mode: .lumpsum,
+                        isin: holding.isin,
+                        symbol: holding.tradingSymbol,
+                        quantity: holding.quantity.safeFinite,
+                        livePrice: holding.currentPrice.safeFinite,
+                        priceChange: holding.dayChange.safeFinite,
+                        priceChangePercentage: holding.dayChangePercentage.safeFinite,
+                        brokerSource: "Upstox",
+                        brokerInstrumentID: holding.id
                     )
                 }
-                let startDate = matchedSIP?.createdDate
+            let connectedMutualFundInvestments = mutualFunds
+                .filter { $0.quantity > 0 }
+                .map { holding in
+                    let matchedOrders = mutualFundOrders
+                        .filter { order in
+                            order.isCompleted && mutualFundRecord(
+                                instrumentKey: order.instrumentKey,
+                                folio: order.folio,
+                                matches: holding
+                            )
+                        }
+                        .sorted { ($0.transactionDate ?? .distantPast) < ($1.transactionDate ?? .distantPast) }
+                    let matchedSIP = mutualFundSIPs.first { sip in
+                        normalizedUpstoxKey(sip.instrumentKey) == normalizedUpstoxKey(holding.instrumentKey)
+                    }
+                    let isSIP = matchedSIP != nil || matchedOrders.contains(where: \.isSIP)
+                    let installments = matchedOrders.compactMap { order -> AstraInvestmentTransaction? in
+                        guard let date = order.transactionDate else { return nil }
+                        let nav = order.executedNAV.safeFinite
+                        let amount = order.amount > 0 ? order.amount.safeFinite : (order.quantity * nav).safeFinite
+                        return AstraInvestmentTransaction(
+                            date: date,
+                            type: order.transactionType?.uppercased() == "SELL" ? .sell : .buy,
+                            amount: amount,
+                            nav: nav,
+                            units: order.quantity.safeFinite
+                        )
+                    }
+                    let startDate = matchedSIP?.createdDate
                     ?? installments.first?.date
                     ?? existingUpstoxInvestments[holding.id]?.startDate
                     ?? Date()
-                let recurringAmount = matchedSIP?.instalmentAmount
+                    let recurringAmount = matchedSIP?.instalmentAmount
                     ?? matchedOrders.last(where: { $0.isSIP && $0.transactionType?.uppercased() == "BUY" })?.amount
-
-                return AstraInvestment(
-                    id: existingUpstoxInvestments[holding.id]?.id ?? UUID(),
-                    investmentType: .mutualFund,
-                    subtype: .equityFund,
-                    investmentName: holding.displayName,
-                    investmentAmount: (isSIP ? (recurringAmount ?? holding.investedAmount) : holding.investedAmount).safeFinite,
-                    startDate: startDate,
-                    mode: isSIP ? .sip : .lumpsum,
-                    isin: holding.instrumentKey,
-                    lastNAV: holding.lastPrice.safeFinite,
-                    lastUpdated: Date(),
-                    units: holding.quantity.safeFinite,
-                    purchaseNAV: holding.averagePrice.safeFinite,
-                    livePrice: holding.lastPrice.safeFinite,
-                    priceChange: holding.pnl.safeFinite,
-                    brokerSource: "Upstox",
-                    brokerInstrumentID: holding.id,
-                    installments: installments
-                )
-            }
-
-        profile.investments = manualInvestments + connectedStockInvestments + connectedMutualFundInvestments
-        currentProfile = profile
-        recalculateFinancials()
-    }
-
-    private func normalizedUpstoxKey(_ value: String?) -> String {
-        value?
-            .trimmingCharacters(in: .whitespacesAndNewlines)
-            .uppercased() ?? ""
-    }
-
-    private func mutualFundRecord(
-        instrumentKey: String?,
-        folio: String?,
-        matches holding: UpstoxMutualFundHolding
-    ) -> Bool {
-        guard normalizedUpstoxKey(instrumentKey) == normalizedUpstoxKey(holding.instrumentKey) else {
-            return false
-        }
-
-        let orderFolio = normalizedUpstoxKey(folio)
-        let holdingFolio = normalizedUpstoxKey(holding.folio)
-        return orderFolio.isEmpty || holdingFolio.isEmpty || orderFolio == holdingFolio
-    }
-
-    func removeUpstoxHoldings() {
-        guard var profile = currentProfile else { return }
-        profile.investments.removeAll { $0.brokerSource == "Upstox" }
-        currentProfile = profile
-        recalculateFinancials()
-    }
-    
-    func deleteInvestment(at indexSet: IndexSet) {
-        if var profile = currentProfile {
-            let toDelete = indexSet.map { profile.investments[$0] }
-            profile.investments.remove(atOffsets: indexSet)
+                    
+                    return AstraInvestment(
+                        id: existingUpstoxInvestments[holding.id]?.id ?? UUID(),
+                        investmentType: .mutualFund,
+                        subtype: .equityFund,
+                        investmentName: holding.displayName,
+                        investmentAmount: (isSIP ? (recurringAmount ?? holding.investedAmount) : holding.investedAmount).safeFinite,
+                        startDate: startDate,
+                        mode: isSIP ? .sip : .lumpsum,
+                        isin: holding.instrumentKey,
+                        lastNAV: holding.lastPrice.safeFinite,
+                        lastUpdated: Date(),
+                        units: holding.quantity.safeFinite,
+                        purchaseNAV: holding.averagePrice.safeFinite,
+                        livePrice: holding.lastPrice.safeFinite,
+                        priceChange: holding.pnl.safeFinite,
+                        brokerSource: "Upstox",
+                        brokerInstrumentID: holding.id,
+                        installments: installments
+                    )
+                }
+            
+            profile.investments = manualInvestments + connectedStockInvestments + connectedMutualFundInvestments
             currentProfile = profile
             recalculateFinancials()
-            Task {
-                for inv in toDelete {
-                    try? await SupabaseRepository.shared.deleteInvestment(inv.id)
+        }
+        
+        private func normalizedUpstoxKey(_ value: String?) -> String {
+            value?
+                .trimmingCharacters(in: .whitespacesAndNewlines)
+                .uppercased() ?? ""
+        }
+        
+        private func mutualFundRecord(
+            instrumentKey: String?,
+            folio: String?,
+            matches holding: UpstoxMutualFundHolding
+        ) -> Bool {
+            guard normalizedUpstoxKey(instrumentKey) == normalizedUpstoxKey(holding.instrumentKey) else {
+                return false
+            }
+            
+            let orderFolio = normalizedUpstoxKey(folio)
+            let holdingFolio = normalizedUpstoxKey(holding.folio)
+            return orderFolio.isEmpty || holdingFolio.isEmpty || orderFolio == holdingFolio
+        }
+        
+        func removeUpstoxHoldings() {
+            guard var profile = currentProfile else { return }
+            profile.investments.removeAll { $0.brokerSource == "Upstox" }
+            currentProfile = profile
+            recalculateFinancials()
+        }
+        
+        func deleteInvestment(at indexSet: IndexSet) {
+            if var profile = currentProfile {
+                let toDelete = indexSet.map { profile.investments[$0] }
+                profile.investments.remove(atOffsets: indexSet)
+                currentProfile = profile
+                recalculateFinancials()
+                Task {
+                    for inv in toDelete {
+                        try? await SupabaseRepository.shared.deleteInvestment(inv.id)
+                    }
                 }
             }
         }
-    }
-    
-    func deleteInvestment(_ investment: AstraInvestment) {
-        if var profile = currentProfile,
-           let index = profile.investments.firstIndex(where: { $0.id == investment.id }) {
-            profile.investments.remove(at: index)
-            currentProfile = profile
-            recalculateFinancials()
-            Task {
-                try? await SupabaseRepository.shared.deleteInvestment(investment.id)
-            }
-        }
-    }
-    
-    func updateEmergencyFundAllocation(_ allocation: AstraEmergencyFundAllocation) {
-        if var profile = currentProfile {
-            profile.emergencyFundAllocation = allocation
-            currentProfile = profile
-            Task {
-                if let session = try? await supabase.auth.session {
-                    try? await SupabaseRepository.shared.saveEmergencyFundAllocation(allocation, userId: session.user.id)
+        
+        func deleteInvestment(_ investment: AstraInvestment) {
+            if var profile = currentProfile,
+               let index = profile.investments.firstIndex(where: { $0.id == investment.id }) {
+                profile.investments.remove(at: index)
+                currentProfile = profile
+                recalculateFinancials()
+                Task {
+                    try? await SupabaseRepository.shared.deleteInvestment(investment.id)
                 }
             }
         }
-    }
-    func addLoan(_ loan: AstraLoan) {
-        if var profile = currentProfile {
-            profile.loans.append(loan)
-            currentProfile = profile
-            recalculateFinancials()
-            Task {
-                if let session = try? await supabase.auth.session {
-                    try? await SupabaseRepository.shared.saveLoan(loan, userId: session.user.id)
+        
+        func updateEmergencyFundAllocation(_ allocation: AstraEmergencyFundAllocation) {
+            if var profile = currentProfile {
+                profile.emergencyFundAllocation = allocation
+                currentProfile = profile
+                Task {
+                    if let session = try? await supabase.auth.session {
+                        try? await SupabaseRepository.shared.saveEmergencyFundAllocation(allocation, userId: session.user.id)
+                    }
                 }
             }
         }
-    }
-    
-    func updateLoan(_ loan: AstraLoan) {
-        if var profile = currentProfile,
-           let index = profile.loans.firstIndex(where: { $0.id == loan.id }) {
-            profile.loans[index] = loan
-            currentProfile = profile
-            recalculateFinancials()
-            Task {
-                if let session = try? await supabase.auth.session {
-                    try? await SupabaseRepository.shared.saveLoan(loan, userId: session.user.id)
+        func addLoan(_ loan: AstraLoan) {
+            if var profile = currentProfile {
+                profile.loans.append(loan)
+                currentProfile = profile
+                recalculateFinancials()
+                Task {
+                    if let session = try? await supabase.auth.session {
+                        try? await SupabaseRepository.shared.saveLoan(loan, userId: session.user.id)
+                    }
                 }
             }
         }
-    }
-    
-    func deleteLoan(at indexSet: IndexSet) {
-        if var profile = currentProfile {
-            let toDelete = indexSet.map { profile.loans[$0] }
-            profile.loans.remove(atOffsets: indexSet)
-            currentProfile = profile
-            recalculateFinancials()
-            Task {
-                for loan in toDelete {
+        
+        func updateLoan(_ loan: AstraLoan) {
+            if var profile = currentProfile,
+               let index = profile.loans.firstIndex(where: { $0.id == loan.id }) {
+                profile.loans[index] = loan
+                currentProfile = profile
+                recalculateFinancials()
+                Task {
+                    if let session = try? await supabase.auth.session {
+                        try? await SupabaseRepository.shared.saveLoan(loan, userId: session.user.id)
+                    }
+                }
+            }
+        }
+        
+        func deleteLoan(at indexSet: IndexSet) {
+            if var profile = currentProfile {
+                let toDelete = indexSet.map { profile.loans[$0] }
+                profile.loans.remove(atOffsets: indexSet)
+                currentProfile = profile
+                recalculateFinancials()
+                Task {
+                    for loan in toDelete {
+                        try? await SupabaseRepository.shared.deleteLoan(loan.id)
+                    }
+                }
+            }
+        }
+        
+        func deleteLoan(_ loan: AstraLoan) {
+            if var profile = currentProfile,
+               let index = profile.loans.firstIndex(where: { $0.id == loan.id }) {
+                profile.loans.remove(at: index)
+                currentProfile = profile
+                recalculateFinancials()
+                Task {
                     try? await SupabaseRepository.shared.deleteLoan(loan.id)
                 }
             }
         }
-    }
-    
-    func deleteLoan(_ loan: AstraLoan) {
-        if var profile = currentProfile,
-           let index = profile.loans.firstIndex(where: { $0.id == loan.id }) {
-            profile.loans.remove(at: index)
-            currentProfile = profile
-            recalculateFinancials()
-            Task {
-                try? await SupabaseRepository.shared.deleteLoan(loan.id)
-            }
-        }
-    }
-    
-    
-    func addInsurance(_ insurance: AstraInsurance) {
-        if var profile = currentProfile {
-            profile.insurances.append(insurance)
-            currentProfile = profile
-            recalculateFinancials()
-            Task {
-                if let session = try? await supabase.auth.session {
-                    try? await SupabaseRepository.shared.saveInsurance(insurance, userId: session.user.id)
-                }
-            }
-        }
-    }
-    
-    func updateInsurance(_ insurance: AstraInsurance) {
-        if var profile = currentProfile,
-           let index = profile.insurances.firstIndex(where: { $0.id == insurance.id }) {
-            profile.insurances[index] = insurance
-            currentProfile = profile
-            recalculateFinancials()
-            Task {
-                if let session = try? await supabase.auth.session {
-                    try? await SupabaseRepository.shared.saveInsurance(insurance, userId: session.user.id)
-                }
-            }
-        }
-    }
-    
-    func deleteInsurance(at indexSet: IndexSet) {
-        if var profile = currentProfile {
-            let toDelete = indexSet.map { profile.insurances[$0] }
-            profile.insurances.remove(atOffsets: indexSet)
-            currentProfile = profile
-            recalculateFinancials()
-            Task {
-                for ins in toDelete {
-                    try? await SupabaseRepository.shared.deleteInsurance(ins.id)
-                }
-            }
-        }
-    }
-    func investments(for goalID: UUID) -> [AstraInvestment] {
-        currentProfile?.investments.filter { $0.associatedGoalID == goalID } ?? []
-    }
-    
-    func totalCollected(for goalID: UUID) -> Double {
-        guard let goal = currentProfile?.goals.first(where: { $0.id == goalID }) else { return 0 }
-        let linked = investments(for: goalID)
-        let linkedTotal = linked.reduce(0.0) { $0 + $1.currentValue }
-        return linkedTotal + goal.manualSavingsContribution
-    }
-    
-    func syncMutualFundNAVs(force: Bool = false) async {
-        guard !isSyncing else { return }
-        isSyncing = true
         
-        defer { isSyncing = false }
         
-        await mfService.fetchMFData(force: force)
-        
-        guard var profile = currentProfile else { return }
-        var updated = false
-        
-        // Update Stock Prices
-        let marketTypes: Set<AstraInvestmentType> = [.stocks, .goldETF, .cryptocurrency]
-        let stockSymbols = profile.investments.compactMap { marketTypes.contains($0.investmentType) ? $0.symbol : nil }
-        if !stockSymbols.isEmpty {
-            let stockPrices = await StockService.shared.fetchLivePrices(symbols: stockSymbols)
-            for i in 0..<profile.investments.count {
-                if marketTypes.contains(profile.investments[i].investmentType),
-                   let symbol = profile.investments[i].symbol,
-                   let price = stockPrices[symbol] {
-                    profile.investments[i].livePrice = price
-                    profile.investments[i].lastNAV = price
-                    profile.investments[i].lastUpdated = Date()
-                    updated = true
+        func addInsurance(_ insurance: AstraInsurance) {
+            if var profile = currentProfile {
+                profile.insurances.append(insurance)
+                currentProfile = profile
+                recalculateFinancials()
+                Task {
+                    if let session = try? await supabase.auth.session {
+                        try? await SupabaseRepository.shared.saveInsurance(insurance, userId: session.user.id)
+                    }
                 }
             }
         }
         
-        for i in 0..<profile.investments.count {
-            let inv = profile.investments[i]
+        func updateInsurance(_ insurance: AstraInsurance) {
+            if var profile = currentProfile,
+               let index = profile.insurances.firstIndex(where: { $0.id == insurance.id }) {
+                profile.insurances[index] = insurance
+                currentProfile = profile
+                recalculateFinancials()
+                Task {
+                    if let session = try? await supabase.auth.session {
+                        try? await SupabaseRepository.shared.saveInsurance(insurance, userId: session.user.id)
+                    }
+                }
+            }
+        }
+        
+        func deleteInsurance(at indexSet: IndexSet) {
+            if var profile = currentProfile {
+                let toDelete = indexSet.map { profile.insurances[$0] }
+                profile.insurances.remove(atOffsets: indexSet)
+                currentProfile = profile
+                recalculateFinancials()
+                Task {
+                    for ins in toDelete {
+                        try? await SupabaseRepository.shared.deleteInsurance(ins.id)
+                    }
+                }
+            }
+        }
+        func investments(for goalID: UUID) -> [AstraInvestment] {
+            currentProfile?.investments.filter { $0.associatedGoalID == goalID } ?? []
+        }
+        
+        func totalCollected(for goalID: UUID) -> Double {
+            guard let goal = currentProfile?.goals.first(where: { $0.id == goalID }) else { return 0 }
+            let linked = investments(for: goalID)
+            let linkedTotal = linked.reduce(0.0) { $0 + $1.currentValue }
+            return linkedTotal + goal.manualSavingsContribution
+        }
+        
+        func syncMutualFundNAVs(force: Bool = false) async {
+            guard !isSyncing else { return }
+            isSyncing = true
             
-            // 1. Update Market Price/NAV
-            if inv.investmentType == .mutualFund {
-                if inv.schemeCode == nil {
-                    if let code = mfService.findSchemeCode(for: inv.investmentName) {
-                        profile.investments[i].schemeCode = code
-                    }
-                }
-                
-                guard let code = profile.investments[i].schemeCode else { continue }
-                
-                if let liveScheme = mfService.getScheme(by: code) {
-                    profile.investments[i].lastNAV = liveScheme.nav
-                    profile.investments[i].lastUpdated = Date()
-                    updated = true
-                }
-                
-                let expectedCount: Int = {
-                    let cal = Calendar.current
-                    var count = 0
-                    var d = inv.startDate
-                    let today = Date()
-                    while d <= today {
-                        count += 1
-                        guard let next = cal.date(byAdding: .month, value: 1, to: d) else { break }
-                        d = next
-                    }
-                    return count
-                }()
-                let actualCount = profile.investments[i].installments.count
-                let needsRecalc = profile.investments[i].installments.isEmpty || (inv.mode == .sip && actualCount < expectedCount)
-
-                if needsRecalc {
-                    if inv.mode == .sip {
-                        let (sipUnits, _, simulatedInstallments) = await mfService.calculateHistoricalSIPUnits(
-                            schemeCode: code,
-                            monthlyAmount: inv.investmentAmount,
-                            startDate: inv.startDate
-                        )
-                        profile.investments[i].installments = simulatedInstallments
-                        profile.investments[i].units = sipUnits
-                        // Recalculate weighted-average purchase NAV
-                        let totalPaid = simulatedInstallments.reduce(0.0) { $0 + $1.amount }
-                        let totalUnits2 = simulatedInstallments.reduce(0.0) { $0 + $1.units }
-                        if totalUnits2 > 0 {
-                            profile.investments[i].purchaseNAV = totalPaid / totalUnits2
-                        }
+            defer { isSyncing = false }
+            
+            await mfService.fetchMFData(force: force)
+            
+            guard var profile = currentProfile else { return }
+            var updated = false
+            
+            // Update Stock Prices
+            let marketTypes: Set<AstraInvestmentType> = [.stocks, .goldETF, .cryptocurrency]
+            let stockSymbols = profile.investments.compactMap { marketTypes.contains($0.investmentType) ? $0.symbol : nil }
+            if !stockSymbols.isEmpty {
+                let stockPrices = await StockService.shared.fetchLivePrices(symbols: stockSymbols)
+                for i in 0..<profile.investments.count {
+                    if marketTypes.contains(profile.investments[i].investmentType),
+                       let symbol = profile.investments[i].symbol,
+                       let price = stockPrices[symbol] {
+                        profile.investments[i].livePrice = price
+                        profile.investments[i].lastNAV = price
+                        profile.investments[i].lastUpdated = Date()
                         updated = true
-                    } else {
-                        // Lumpsum
-                        if let histNAV = await mfService.fetchHistoricalNAV(schemeCode: code, date: inv.startDate) {
-                            let units = inv.investmentAmount / histNAV
-                            profile.investments[i].installments = [
-                                AstraInvestmentTransaction(date: inv.startDate, type: .buy, amount: inv.investmentAmount, nav: histNAV, units: units)
-                            ]
-                            profile.investments[i].units = units
-                            profile.investments[i].purchaseNAV = histNAV
+                    }
+                }
+            }
+            
+            for i in 0..<profile.investments.count {
+                let inv = profile.investments[i]
+                
+                // 1. Update Market Price/NAV
+                if inv.investmentType == .mutualFund {
+                    if inv.schemeCode == nil {
+                        if let code = mfService.findSchemeCode(for: inv.investmentName) {
+                            profile.investments[i].schemeCode = code
+                        }
+                    }
+                    
+                    guard let code = profile.investments[i].schemeCode else { continue }
+                    
+                    if let liveScheme = mfService.getScheme(by: code) {
+                        profile.investments[i].lastNAV = liveScheme.nav
+                        profile.investments[i].lastUpdated = Date()
+                        updated = true
+                    }
+                    
+                    let expectedCount: Int = {
+                        let cal = Calendar.current
+                        var count = 0
+                        var d = inv.startDate
+                        let today = Date()
+                        while d <= today {
+                            count += 1
+                            guard let next = cal.date(byAdding: .month, value: 1, to: d) else { break }
+                            d = next
+                        }
+                        return count
+                    }()
+                    let actualCount = profile.investments[i].installments.count
+                    let needsRecalc = profile.investments[i].installments.isEmpty || (inv.mode == .sip && actualCount < expectedCount)
+                    
+                    if needsRecalc {
+                        if inv.mode == .sip {
+                            let (sipUnits, _, simulatedInstallments) = await mfService.calculateHistoricalSIPUnits(
+                                schemeCode: code,
+                                monthlyAmount: inv.investmentAmount,
+                                startDate: inv.startDate
+                            )
+                            profile.investments[i].installments = simulatedInstallments
+                            profile.investments[i].units = sipUnits
+                            // Recalculate weighted-average purchase NAV
+                            let totalPaid = simulatedInstallments.reduce(0.0) { $0 + $1.amount }
+                            let totalUnits2 = simulatedInstallments.reduce(0.0) { $0 + $1.units }
+                            if totalUnits2 > 0 {
+                                profile.investments[i].purchaseNAV = totalPaid / totalUnits2
+                            }
+                            updated = true
+                        } else {
+                            // Lumpsum
+                            if let histNAV = await mfService.fetchHistoricalNAV(schemeCode: code, date: inv.startDate) {
+                                let units = inv.investmentAmount / histNAV
+                                profile.investments[i].installments = [
+                                    AstraInvestmentTransaction(date: inv.startDate, type: .buy, amount: inv.investmentAmount, nav: histNAV, units: units)
+                                ]
+                                profile.investments[i].units = units
+                                profile.investments[i].purchaseNAV = histNAV
+                                updated = true
+                            }
+                        }
+                    }
+                } else if marketTypes.contains(inv.investmentType) {
+                    guard let symbol = inv.symbol else { continue }
+                    
+                    let expectedCount: Int = {
+                        guard inv.mode == .sip else { return 1 }
+                        let cal = Calendar.current
+                        var count = 0
+                        var d = inv.startDate
+                        let today = Date()
+                        while d <= today {
+                            count += 1
+                            guard let next = cal.date(byAdding: .month, value: 1, to: d) else { break }
+                            d = next
+                        }
+                        return max(count, 1)
+                    }()
+                    let needsRecalc = profile.investments[i].installments.isEmpty || (inv.mode == .sip && profile.investments[i].installments.count < expectedCount)
+                    
+                    // Populate Missing Installments for Stocks, Gold ETFs, and Crypto
+                    if needsRecalc {
+                        if inv.mode == .sip {
+                            let (sipUnits, _, simulatedInstallments) = await StockService.shared.calculateHistoricalSIPUnits(
+                                symbol: symbol,
+                                monthlyAmount: inv.investmentAmount,
+                                startDate: inv.startDate
+                            )
+                            profile.investments[i].installments = simulatedInstallments
+                            profile.investments[i].quantity = sipUnits
+                            
+                            let totalPaid = simulatedInstallments.reduce(0.0) { $0 + $1.amount }
+                            let totalUnits = simulatedInstallments.reduce(0.0) { $0 + $1.units }
+                            if totalUnits > 0 {
+                                profile.investments[i].purchaseNAV = totalPaid / totalUnits
+                            }
+                            updated = true
+                        } else {
+                            // Lumpsum
+                            let (units, _, simulatedInstallments) = await StockService.shared.calculateLumpsumUnits(
+                                symbol: symbol,
+                                amount: inv.investmentAmount,
+                                startDate: inv.startDate
+                            )
+                            profile.investments[i].installments = simulatedInstallments
+                            profile.investments[i].quantity = units
+                            
+                            if let tx = simulatedInstallments.first {
+                                profile.investments[i].purchaseNAV = tx.nav
+                            }
                             updated = true
                         }
                     }
                 }
-            } else if marketTypes.contains(inv.investmentType) {
-                guard let symbol = inv.symbol else { continue }
-
-                let expectedCount: Int = {
-                    guard inv.mode == .sip else { return 1 }
-                    let cal = Calendar.current
-                    var count = 0
-                    var d = inv.startDate
-                    let today = Date()
-                    while d <= today {
-                        count += 1
-                        guard let next = cal.date(byAdding: .month, value: 1, to: d) else { break }
-                        d = next
-                    }
-                    return max(count, 1)
-                }()
-                let needsRecalc = profile.investments[i].installments.isEmpty || (inv.mode == .sip && profile.investments[i].installments.count < expectedCount)
-
-                // Populate Missing Installments for Stocks, Gold ETFs, and Crypto
-                if needsRecalc {
-                    if inv.mode == .sip {
-                        let (sipUnits, _, simulatedInstallments) = await StockService.shared.calculateHistoricalSIPUnits(
-                            symbol: symbol,
-                            monthlyAmount: inv.investmentAmount,
-                            startDate: inv.startDate
-                        )
-                        profile.investments[i].installments = simulatedInstallments
-                        profile.investments[i].quantity = sipUnits
-
-                        let totalPaid = simulatedInstallments.reduce(0.0) { $0 + $1.amount }
-                        let totalUnits = simulatedInstallments.reduce(0.0) { $0 + $1.units }
-                        if totalUnits > 0 {
-                            profile.investments[i].purchaseNAV = totalPaid / totalUnits
-                        }
-                        updated = true
-                    } else {
-                        // Lumpsum
-                        let (units, _, simulatedInstallments) = await StockService.shared.calculateLumpsumUnits(
-                            symbol: symbol,
-                            amount: inv.investmentAmount,
-                            startDate: inv.startDate
-                        )
-                        profile.investments[i].installments = simulatedInstallments
-                        profile.investments[i].quantity = units
-
-                        if let tx = simulatedInstallments.first {
-                            profile.investments[i].purchaseNAV = tx.nav
-                        }
-                        updated = true
-                    }
-                }
             }
-        }
-    
+            
             if updated {
                 await MainActor.run {
                     self.currentProfile = profile
@@ -1865,5 +1903,4 @@ final class AppStateManager {
                 }
             }
         }
-    
 }

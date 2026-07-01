@@ -357,16 +357,59 @@ struct AddNetWorthView: View {
 
     private func saveAndDismiss() {
         if var profile = appState.currentProfile {
-            profile.assets.savingsAccountAmount = Double(savingsAccount) ?? 0
-            profile.assets.currentAccountAmount = Double(currentAccount) ?? 0
-            profile.assets.stocksHoldingAmount = Double(stocks) ?? 0
-            profile.assets.mutualFundHoldingAmount = Double(mutualFunds) ?? 0
-            profile.assets.propertyAmount = Double(propertyRealEstate) ?? 0
-            profile.liabilities.homeLoanAmount = Double(homeLoan) ?? 0
-            profile.liabilities.vehicleLoanAmount = Double(carLoan) ?? 0
-            profile.liabilities.creditCardBills = Double(creditCardDues) ?? 0
-            profile.liabilities.educationLoanAmount = Double(educationLoan) ?? 0
+            let newSavings = Double(savingsAccount) ?? 0
+            let newCurrent = Double(currentAccount) ?? 0
+            let newStocks = Double(stocks) ?? 0
+            let newMutualFunds = Double(mutualFunds) ?? 0
+            let newProperty = Double(propertyRealEstate) ?? 0
+            let newHomeLoan = Double(homeLoan) ?? 0
+            let newCarLoan = Double(carLoan) ?? 0
+            let newCreditCard = Double(creditCardDues) ?? 0
+            let newEducation = Double(educationLoan) ?? 0
+
+            profile.assets.savingsAccountAmount = newSavings
+            profile.assets.currentAccountAmount = newCurrent
+            profile.liabilities.creditCardBills = newCreditCard
+
+            profile.updateManualAdjustment(for: .stocks, targetAmount: newStocks)
+            profile.updateManualAdjustment(for: .mutualFund, targetAmount: newMutualFunds)
+            profile.updateManualAdjustment(for: .realEstate, targetAmount: newProperty)
+            
+            profile.updateManualLoanAdjustment(for: .homeLoan, targetAmount: newHomeLoan)
+            profile.updateManualLoanAdjustment(for: .carLoan, targetAmount: newCarLoan)
+            profile.updateManualLoanAdjustment(for: .educationLoan, targetAmount: newEducation)
+            
+            profile.investments.removeAll { $0.investmentType == .other && $0.investmentName.starts(with: "Custom Asset:") }
+            for asset in customAssets {
+                if let val = Double(asset.value) {
+                    profile.investments.append(AstraInvestment(
+                        investmentType: .other,
+                        investmentName: "Custom Asset: \(asset.name)",
+                        investmentAmount: val,
+                        startDate: Date(),
+                        mode: .lumpsum
+                    ))
+                }
+            }
+            
+            profile.loans.removeAll { $0.loanType == .other && $0.loanName.starts(with: "Custom Liability:") }
+            for liability in customLiabilities {
+                if let val = Double(liability.value) {
+                    profile.loans.append(AstraLoan(
+                        loanName: "Custom Liability: \(liability.name)",
+                        loanType: .other,
+                        lender: .other,
+                        loanAmount: val,
+                        interestRate: 0,
+                        loanStartDate: Date(),
+                        loanTenureMonths: 1
+                    ))
+                }
+            }
+            
             appState.currentProfile = profile
+            appState.recalculateFinancials()
+            appState.syncProfile()
         }
         dismiss()
     }
@@ -382,6 +425,14 @@ struct AddNetWorthView: View {
         carLoan = String(profile.liabilities.vehicleLoanAmount.safeInt)
         creditCardDues = String(profile.liabilities.creditCardBills.safeInt)
         educationLoan = String(profile.liabilities.educationLoanAmount.safeInt)
+        
+        customAssets = profile.investments
+            .filter { $0.investmentType == .other && $0.investmentName.starts(with: "Custom Asset:") }
+            .map { CustomEntry(name: $0.investmentName.replacingOccurrences(of: "Custom Asset: ", with: ""), value: String($0.currentValue.safeInt)) }
+            
+        customLiabilities = profile.loans
+            .filter { $0.loanType == .other && $0.loanName.starts(with: "Custom Liability:") }
+            .map { CustomEntry(name: $0.loanName.replacingOccurrences(of: "Custom Liability: ", with: ""), value: String($0.loanAmount.safeInt)) }
     }
 }
 

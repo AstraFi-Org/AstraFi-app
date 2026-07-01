@@ -13,11 +13,17 @@ import SwiftUI
 
 struct InvestmentQuestionView: View {
     @Bindable var data: CompleteAssessmentData
+    let onSaveComplete: () -> Void
     @Environment(\.dismiss) private var dismiss
 
     @State private var doesInvest: Bool?    = nil
     @State private var goInvestments        = false   // → InvestmentDetailsScreen
     @State private var goReport             = false
+
+    init(data: CompleteAssessmentData, onSaveComplete: @escaping () -> Void = {}) {
+        self.data = data
+        self.onSaveComplete = onSaveComplete
+    }
 
     var body: some View {
         ZStack {
@@ -96,10 +102,10 @@ struct InvestmentQuestionView: View {
             }
         }
         .navigationDestination(isPresented: $goInvestments) {
-            InvestmentDetailsScreen(data: data)
+            InvestmentDetailsScreen(data: data, onSaveComplete: onSaveComplete)
         }
         .navigationDestination(isPresented: $goReport) {
-            FinancialHealthReportView(data: data)
+            FinancialHealthReportView(data: data, onSaveComplete: onSaveComplete)
         }
     }
 }

@@ -12,7 +12,7 @@ class MFService {
 
     @ObservationIgnored private var historyCache: [String: [MFHistoryPoint]] = [:]
 
-    private let amfiURL = URL(string: "https://www.amfiindia.com/spages/NAVAll.txt")!
+    private let amfiURL = URL(string: "https://portal.amfiindia.com/spages/NAVAll.txt")!
 
     func fetchMFData(force: Bool = false) async {
         guard !isFetching else { return }
@@ -25,10 +25,25 @@ class MFService {
         defer { isFetching = false }
 
         do {
-            let (data, _) = try await URLSession.shared.data(from: amfiURL)
+            var request = URLRequest(url: amfiURL)
+            request.timeoutInterval = 20
+            request.setValue("text/plain,*/*", forHTTPHeaderField: "Accept")
+            request.setValue("AstraFi/1.0 iOS", forHTTPHeaderField: "User-Agent")
+
+            let (data, response) = try await URLSession.shared.data(for: request)
+            guard let httpResponse = response as? HTTPURLResponse,
+                  200..<300 ~= httpResponse.statusCode else {
+                print("Error fetching AMFI data: invalid HTTP response")
+                return
+            }
+
             guard let content = String(data: data, encoding: .utf8) else { return }
 
             let parsed = parseAMFIData(content)
+            guard !parsed.isEmpty else {
+                print("Error fetching AMFI data: no schemes parsed")
+                return
+            }
 
             await MainActor.run {
                 self.allSchemes = parsed
@@ -53,6 +68,7 @@ class MFService {
             guard Int(schemeCode) != nil else { continue }
 
             let isin = components[1].trimmingCharacters(in: .whitespaces)
+            let alternateISIN = components[2].trimmingCharacters(in: .whitespaces)
             let name = components[3].trimmingCharacters(in: .whitespaces)
             let navString = components[4].trimmingCharacters(in: .whitespaces)
             let date = components[5].trimmingCharacters(in: .whitespaces)
@@ -61,6 +77,7 @@ class MFService {
                 let scheme = MFScheme(
                     schemeCode: schemeCode,
                     isin: isin,
+                    alternateISIN: alternateISIN.isEmpty ? nil : alternateISIN,
                     name: name,
                     nav: navValue,
                     date: date
@@ -122,7 +139,11 @@ class MFService {
     }
 
     func getSchemeByISIN(_ isin: String) -> MFScheme? {
-        allSchemes.first { $0.isin == isin }
+        let normalizedISIN = isin.trimmingCharacters(in: .whitespacesAndNewlines).uppercased()
+        return allSchemes.first {
+            $0.isin.uppercased() == normalizedISIN ||
+            $0.alternateISIN?.uppercased() == normalizedISIN
+        }
     }
 
     func findSchemeCode(for name: String) -> String? {
@@ -141,9 +162,19 @@ class MFService {
         let urlString = "https://api.mfapi.in/mf/\(schemeCode)"
         guard let url = URL(string: urlString) else { return [] }
 
-        let (data, _) = try await URLSession.shared.data(from: url)
-        let response = try JSONDecoder().decode(MFHistoryResponse.self, from: data)
-        let points = response.data
+        var request = URLRequest(url: url)
+        request.timeoutInterval = 20
+        request.setValue("application/json", forHTTPHeaderField: "Accept")
+        request.setValue("AstraFi/1.0 iOS", forHTTPHeaderField: "User-Agent")
+
+        let (data, response) = try await URLSession.shared.data(for: request)
+        guard let httpResponse = response as? HTTPURLResponse,
+              200..<300 ~= httpResponse.statusCode else {
+            throw URLError(.badServerResponse)
+        }
+
+        let historyResponse = try JSONDecoder().decode(MFHistoryResponse.self, from: data)
+        let points = historyResponse.data
         historyCache[schemeCode] = points
         return points
     }

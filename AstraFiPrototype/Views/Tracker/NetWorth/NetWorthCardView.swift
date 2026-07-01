@@ -15,9 +15,6 @@ struct NetWorthCard: View {
     @State private var inflationRate: Double = 0.06
     @State private var showAddNetWorth = false
     
-    // Viewport zoom state
-    @State private var isZoomedOut = false
-
     @Environment(\.colorScheme) private var colorScheme
 
     private let defaultLoanRate = 0.10
@@ -53,22 +50,20 @@ struct NetWorthCard: View {
 
     // MARK: - Historical data (fixed, never changes with sliders)
 
-    /// Back-project ~3 years of historical net worth using CAGR so the chart
-    /// has a meaningful "past" section even without persisted snapshots.
+    /// Back-project ~1 year of historical net worth so the chart stays focused on projection.
     private var historicalChartPoints: [NetWorthChartPoint] {
-        let historyYears = 3
+        let historyYears = 1
         let rate = max(normalizedGrowthRate, 0.01)
-        return (0...historyYears).map { yearsAgo in
-            let offset = -(historyYears - yearsAgo) // -3, -2, -1, 0
-            let value = (netWorth / pow(1 + rate, Double(historyYears - yearsAgo))).safeFinite
-            return NetWorthChartPoint(year: offset, value: value, series: .baseline)
+        return stride(from: -Double(historyYears), through: 0, by: 0.5).map { year in
+            let value = (netWorth / pow(1 + rate, abs(year))).safeFinite
+            return NetWorthChartPoint(year: year, value: value, series: .baseline)
         }
     }
 
     // MARK: - Baseline projection (continue as-is, no slider changes)
 
     private var baselineChartPoints: [NetWorthChartPoint] {
-        (0...projectionYears).map { year in
+        projectionYearSteps.map { year in
             let summary = baselineProjectionSummary(for: year)
             return NetWorthChartPoint(year: year, value: summary.nominalNetWorth, series: .baseline)
         }
@@ -77,13 +72,31 @@ struct NetWorthCard: View {
     // MARK: - Adjusted projection (reactive to sliders)
 
     private var adjustedChartPoints: [NetWorthChartPoint] {
-        (0...projectionYears).map { year in
+        projectionYearSteps.map { year in
             let summary = adjustedProjectionSummary(for: year)
             return NetWorthChartPoint(year: year, value: summary.nominalNetWorth, series: .adjusted)
         }
     }
 
-    /// Combined blue points (history -3 to 0 + baseline 0 to N, avoiding duplicate Year 0)
+    private var inflationChartPoints: [NetWorthChartPoint] {
+        projectionYearSteps.map { year in
+            let summary = hasSliderChanges ? adjustedProjectionSummary(for: year) : baselineProjectionSummary(for: year)
+            return NetWorthChartPoint(year: year, value: summary.realPurchasingPower, series: .inflation)
+        }
+    }
+
+    private var baselineInflationChartPoints: [NetWorthChartPoint] {
+        projectionYearSteps.map { year in
+            let summary = baselineProjectionSummary(for: year, inflationRate: inflationRate)
+            return NetWorthChartPoint(year: year, value: summary.realPurchasingPower, series: .baselineInflation)
+        }
+    }
+
+    private var projectionYearSteps: [Double] {
+        Array(stride(from: 0.0, through: Double(projectionYears), by: 0.5))
+    }
+
+    /// Combined blue points (history -1 to 0 + baseline 0 to N, avoiding duplicate Year 0)
     private var bluePoints: [NetWorthChartPoint] {
         let history = historicalChartPoints.filter { $0.year < 0 }
         return history + baselineChartPoints
@@ -94,6 +107,8 @@ struct NetWorthCard: View {
         var points = bluePoints
         if hasSliderChanges {
             points += adjustedChartPoints
+            points += inflationChartPoints
+            points += baselineInflationChartPoints
         }
         return points
     }
@@ -110,26 +125,6 @@ struct NetWorthCard: View {
 
     private var selectedYearLabel: String {
         "\(projectionYears)Y"
-    }
-
-    // MARK: - Viewport Bounds calculations
-
-    private var baselineMax: Double {
-        let values = bluePoints.map(\.value)
-        guard let maxValue = values.max(), let minValue = values.min() else { return 100_000 }
-        let padding = Swift.max((maxValue - minValue) * 0.16, abs(maxValue) * 0.04)
-        return maxValue + padding
-    }
-
-    private var adjustedMax: Double {
-        let values = adjustedChartPoints.map(\.value)
-        guard let maxValue = values.max(), let minValue = values.min() else { return 100_000 }
-        let padding = Swift.max((maxValue - minValue) * 0.16, abs(maxValue) * 0.04)
-        return maxValue + padding
-    }
-
-    private var isProjectionTooBig: Bool {
-        hasSliderChanges && adjustedMax > baselineMax
     }
 
     var body: some View {
@@ -162,45 +157,31 @@ struct NetWorthCard: View {
 
             ProjectionSelector(selectedYears: $projectionYears)
 
-            // Chart area with context-aware Zoom Out button
-            ZStack(alignment: .topTrailing) {
-                NetWorthProjectionChart(
-                    points: allChartPoints,
-                    projectionYears: projectionYears,
-                    showAdjusted: hasSliderChanges,
-                    isZoomedOut: isZoomedOut,
-                    baselineMax: baselineMax,
-                    adjustedMax: adjustedMax
-                )
-                .frame(height: 250)
+            NetWorthProjectionChart(
+                points: allChartPoints,
+                projectionYears: projectionYears,
+                showAdjusted: hasSliderChanges
+            )
+            .frame(height: 304)
+            .padding(.horizontal, -18)
+            .animation(.easeOut(duration: 0.18), value: extraMonthlyInvestment)
+            .animation(.easeOut(duration: 0.18), value: extraLoanRepayment)
+            .animation(.easeOut(duration: 0.18), value: inflationRate)
 
-                if isProjectionTooBig {
-                    Button(action: { isZoomedOut.toggle() }) {
-                        HStack(spacing: 4) {
-                            Image(systemName: isZoomedOut ? "minus.magnifyingglass" : "plus.magnifyingglass")
-                            Text(isZoomedOut ? "Reset Zoom" : "Zoom Out to Fit")
-                        }
-                        .font(.auraCaption(size: 10, weight: .bold))
-                        .foregroundColor(AppTheme.auraIndigo)
-                        .padding(.horizontal, 10)
-                        .padding(.vertical, 6)
-                        .background(
-                            RoundedRectangle(cornerRadius: 8, style: .continuous)
-                                .fill(colorScheme == .dark ? Color.black.opacity(0.6) : Color.white.opacity(0.8))
-                        )
-                        .shadow(color: Color.black.opacity(0.1), radius: 3)
-                    }
-                    .padding(8)
-                    .transition(.opacity.combined(with: .scale))
+            ViewThatFits(in: .horizontal) {
+                HStack(spacing: 14) {
+                    chartLegendItems
                 }
-            }
-            .animation(.easeInOut(duration: 0.3), value: isProjectionTooBig)
 
-            // Chart legend
-            HStack(spacing: 20) {
-                ChartLegendDot(color: NetWorthProjectionChart.baselineColor, label: "Current Plan")
-                if hasSliderChanges {
-                    ChartLegendDot(color: NetWorthProjectionChart.adjustedColor, label: "After Changes")
+                LazyVGrid(
+                    columns: [
+                        GridItem(.flexible(), alignment: .leading),
+                        GridItem(.flexible(), alignment: .leading)
+                    ],
+                    alignment: .leading,
+                    spacing: 8
+                ) {
+                    chartLegendItems
                 }
             }
             .frame(maxWidth: .infinity, alignment: .center)
@@ -290,9 +271,27 @@ struct NetWorthCard: View {
         }
     }
 
+    @ViewBuilder
+    private var chartLegendItems: some View {
+        ChartLegendDot(color: NetWorthProjectionChart.baselineColor, label: "Current Plan")
+        if hasSliderChanges {
+            ChartLegendDot(color: NetWorthProjectionChart.adjustedColor, label: "After Changes")
+            ChartLegendDot(color: NetWorthProjectionChart.inflationColor, label: "After Inflation")
+            ChartLegendDot(color: NetWorthProjectionChart.baselineInflationColor, label: "Current Inflation")
+        }
+    }
+
     // MARK: - Baseline projection (no slider changes, default assumptions)
 
     private func baselineProjectionSummary(for years: Int) -> NetWorthProjectionSummary {
+        baselineProjectionSummary(for: Double(years))
+    }
+
+    private func baselineProjectionSummary(for years: Double) -> NetWorthProjectionSummary {
+        baselineProjectionSummary(for: years, inflationRate: defaultInflationRate)
+    }
+
+    private func baselineProjectionSummary(for years: Double, inflationRate: Double) -> NetWorthProjectionSummary {
         let appreciatingItems = projectionItems.filter { $0.group == .appreciating }
         let depreciatingItems = projectionItems.filter { $0.group == .depreciating }
         let liabilityItems = projectionItems.filter { $0.group == .liability }
@@ -301,10 +300,10 @@ struct NetWorthCard: View {
         let depreciatingValue = depreciatingItems.reduce(0.0) { $0 + $1.projectedValue(after: years, monthlyPayment: 0) }.safeFinite
         let outstandingLiabilities = baselineLiabilityValue(for: liabilityItems, years: years)
         let nominal = (appreciatingBase + depreciatingValue - outstandingLiabilities).safeFinite
-        let real = years > 0 ? (nominal / pow(1 + defaultInflationRate, Double(years))).safeFinite : nominal
+        let real = years > 0 ? (nominal / pow(1 + inflationRate, years)).safeFinite : nominal
 
         return NetWorthProjectionSummary(
-            year: years,
+            year: Int(years.rounded()),
             appreciatingAssets: appreciatingBase,
             depreciatingAssets: depreciatingValue,
             liabilities: outstandingLiabilities,
@@ -313,7 +312,7 @@ struct NetWorthCard: View {
         )
     }
 
-    private func baselineLiabilityValue(for items: [NetWorthProjectionItem], years: Int) -> Double {
+    private func baselineLiabilityValue(for items: [NetWorthProjectionItem], years: Double) -> Double {
         let totalLiability = items.reduce(0.0) { $0 + abs($1.currentValue) }.safeFinite
         guard totalLiability > 0 else { return 0 }
 
@@ -327,6 +326,10 @@ struct NetWorthCard: View {
     // MARK: - Adjusted projection (with slider changes)
 
     private func adjustedProjectionSummary(for years: Int) -> NetWorthProjectionSummary {
+        adjustedProjectionSummary(for: Double(years))
+    }
+
+    private func adjustedProjectionSummary(for years: Double) -> NetWorthProjectionSummary {
         let appreciatingItems = projectionItems.filter { $0.group == .appreciating }
         let depreciatingItems = projectionItems.filter { $0.group == .depreciating }
         let liabilityItems = projectionItems.filter { $0.group == .liability }
@@ -337,10 +340,10 @@ struct NetWorthCard: View {
         let depreciatingValue = depreciatingItems.reduce(0.0) { $0 + $1.projectedValue(after: years, monthlyPayment: 0) }.safeFinite
         let outstandingLiabilities = adjustedLiabilityValue(for: liabilityItems, years: years)
         let nominal = (appreciatingValue + depreciatingValue - outstandingLiabilities).safeFinite
-        let real = years > 0 ? (nominal / pow(1 + inflationRate, Double(years))).safeFinite : nominal
+        let real = years > 0 ? (nominal / pow(1 + inflationRate, years)).safeFinite : nominal
 
         return NetWorthProjectionSummary(
-            year: years,
+            year: Int(years.rounded()),
             appreciatingAssets: appreciatingValue,
             depreciatingAssets: depreciatingValue,
             liabilities: outstandingLiabilities,
@@ -349,17 +352,17 @@ struct NetWorthCard: View {
         )
     }
 
-    private func projectedMonthlyInvestmentValue(for items: [NetWorthProjectionItem], years: Int) -> Double {
+    private func projectedMonthlyInvestmentValue(for items: [NetWorthProjectionItem], years: Double) -> Double {
         guard years > 0, extraMonthlyInvestment > 0 else { return 0 }
         let weightedRate = weightedAnnualRate(for: items)
         let monthlyRate = weightedRate / 12
         let months = years * 12
 
         guard monthlyRate != 0 else {
-            return extraMonthlyInvestment * Double(months)
+            return extraMonthlyInvestment * months
         }
 
-        return (extraMonthlyInvestment * ((pow(1 + monthlyRate, Double(months)) - 1) / monthlyRate)).safeFinite
+        return (extraMonthlyInvestment * ((pow(1 + monthlyRate, months) - 1) / monthlyRate)).safeFinite
     }
 
     private func weightedAnnualRate(for items: [NetWorthProjectionItem]) -> Double {
@@ -370,7 +373,7 @@ struct NetWorthCard: View {
         }.safeFinite
     }
 
-    private func adjustedLiabilityValue(for items: [NetWorthProjectionItem], years: Int) -> Double {
+    private func adjustedLiabilityValue(for items: [NetWorthProjectionItem], years: Double) -> Double {
         let totalLiability = items.reduce(0.0) { $0 + abs($1.currentValue) }.safeFinite
         guard totalLiability > 0 else { return 0 }
 
@@ -408,11 +411,13 @@ struct AccountRow: View {
 private enum NetWorthSeries {
     case baseline
     case adjusted
+    case inflation
+    case baselineInflation
 }
 
 private struct NetWorthChartPoint: Identifiable {
     let id = UUID()
-    let year: Int
+    let year: Double
     let value: Double
     let series: NetWorthSeries
 }
@@ -492,23 +497,23 @@ private struct NetWorthProjectionItem: Identifiable {
         }
     }
 
-    func projectedValue(after years: Int, monthlyPayment: Double) -> Double {
+    func projectedValue(after years: Double, monthlyPayment: Double) -> Double {
         guard years > 0 else { return abs(currentValue).safeFinite }
 
         switch group {
         case .appreciating:
-            return (max(0, currentValue) * pow(1 + rate, Double(years))).safeFinite
+            return (max(0, currentValue) * pow(1 + rate, years)).safeFinite
         case .depreciating:
-            return (max(0, currentValue) * pow(max(0, 1 - rate), Double(years))).safeFinite
+            return (max(0, currentValue) * pow(max(0, 1 - rate), years)).safeFinite
         case .liability:
             return projectedOutstandingLoan(after: years, monthlyPayment: monthlyPayment)
         }
     }
 
-    private func projectedOutstandingLoan(after years: Int, monthlyPayment: Double) -> Double {
+    private func projectedOutstandingLoan(after years: Double, monthlyPayment: Double) -> Double {
         var outstanding = abs(currentValue).safeFinite
         let monthlyRate = rate / 12
-        let months = years * 12
+        let months = Int((years * 12).rounded())
 
         for _ in 0..<months {
             outstanding = (outstanding * (1 + monthlyRate) - max(0, monthlyPayment)).safeFinite
@@ -617,9 +622,11 @@ private struct NetWorthProjectionChart: View {
     let points: [NetWorthChartPoint]
     let projectionYears: Int
     let showAdjusted: Bool
-    let isZoomedOut: Bool
-    let baselineMax: Double
-    let adjustedMax: Double
+    @State private var zoomScale: Double = 2.0
+    @State private var gestureStartZoom: Double = 2.0
+
+    private let minZoomScale = 0.65
+    private let maxZoomScale = 2.2
 
     private var baselinePoints: [NetWorthChartPoint] {
         points.filter { $0.series == .baseline }
@@ -629,12 +636,24 @@ private struct NetWorthProjectionChart: View {
         points.filter { $0.series == .adjusted }
     }
 
+    private var inflationPoints: [NetWorthChartPoint] {
+        points.filter { $0.series == .inflation }
+    }
+
+    private var baselineInflationPoints: [NetWorthChartPoint] {
+        points.filter { $0.series == .baselineInflation }
+    }
+
     // Exposed theme colors
     static let baselineColor = AppTheme.auraIndigo  // Blue line
     static let adjustedColor = AppTheme.auraGreen    // Green line
+    static let inflationColor = AppTheme.vibrantOrange
+    static let baselineInflationColor = Color.yellow
 
     var body: some View {
-        Chart {
+        VStack(spacing: 8) {
+            ZStack(alignment: .trailing) {
+            Chart {
             // ── 1. Baseline Area (Subtle Blue shading)
             ForEach(baselinePoints) { point in
                 AreaMark(
@@ -643,7 +662,7 @@ private struct NetWorthProjectionChart: View {
                     yEnd: .value("Net Worth", point.value)
                 )
                 .foregroundStyle(by: .value("Series", "baselineArea"))
-                .interpolationMethod(.catmullRom)
+                .interpolationMethod(.monotone)
             }
 
             // ── 2. Baseline Line (Solid Blue)
@@ -653,7 +672,7 @@ private struct NetWorthProjectionChart: View {
                     y: .value("Net Worth", point.value)
                 )
                 .foregroundStyle(by: .value("Series", "baseline"))
-                .interpolationMethod(.catmullRom)
+                .interpolationMethod(.monotone)
                 .lineStyle(StrokeStyle(lineWidth: 3, lineCap: .round, lineJoin: .round))
             }
 
@@ -663,27 +682,49 @@ private struct NetWorthProjectionChart: View {
                     AreaMark(
                         x: .value("Year", point.year),
                         yStart: .value("Baseline", chartDomain.lowerBound),
-                        yEnd: .value("Net Worth", point.value)
+                        yEnd: .value("Net Worth", displayValue(for: point))
                     )
                     .foregroundStyle(by: .value("Series", "adjustedArea"))
-                    .interpolationMethod(.catmullRom)
+                    .interpolationMethod(.monotone)
                 }
 
                 // ── 4. Adjusted Line (Solid Green)
                 ForEach(adjustedPoints) { point in
                     LineMark(
                         x: .value("Year", point.year),
-                        y: .value("Net Worth", point.value)
+                        y: .value("Net Worth", displayValue(for: point))
                     )
                     .foregroundStyle(by: .value("Series", "adjusted"))
-                    .interpolationMethod(.catmullRom)
+                    .interpolationMethod(.monotone)
                     .lineStyle(StrokeStyle(lineWidth: 3, lineCap: .round, lineJoin: .round))
+                }
+            }
+
+            if showAdjusted {
+                ForEach(baselineInflationPoints) { point in
+                    LineMark(
+                        x: .value("Year", point.year),
+                        y: .value("Net Worth", displayValue(for: point))
+                    )
+                    .foregroundStyle(by: .value("Series", "baselineInflation"))
+                    .interpolationMethod(.monotone)
+                    .lineStyle(StrokeStyle(lineWidth: 2.3, lineCap: .round, lineJoin: .round, dash: [3, 5]))
+                }
+
+                ForEach(inflationPoints) { point in
+                    LineMark(
+                        x: .value("Year", point.year),
+                        y: .value("Net Worth", displayValue(for: point))
+                    )
+                    .foregroundStyle(by: .value("Series", "inflation"))
+                    .interpolationMethod(.monotone)
+                    .lineStyle(StrokeStyle(lineWidth: 2.5, lineCap: .round, lineJoin: .round, dash: [6, 5]))
                 }
             }
 
             // ── 5. Point Marks for Baseline
             ForEach(baselinePoints) { point in
-                if point.year == -3 || point.year == 0 || (!showAdjusted && point.year == projectionYears) {
+                if point.year == -3 || point.year == 0 || (!showAdjusted && point.year == Double(projectionYears)) {
                     PointMark(
                         x: .value("Year", point.year),
                         y: .value("Net Worth", point.value)
@@ -696,10 +737,10 @@ private struct NetWorthProjectionChart: View {
             // ── 6. Point Marks for Adjusted (only if changes exist)
             if showAdjusted {
                 ForEach(adjustedPoints) { point in
-                    if point.year == 0 || point.year == projectionYears {
+                    if point.year == 0 || point.year == Double(projectionYears) {
                         PointMark(
                             x: .value("Year", point.year),
-                            y: .value("Net Worth", point.value)
+                            y: .value("Net Worth", displayValue(for: point))
                         )
                         .foregroundStyle(by: .value("Series", "adjusted"))
                         .symbolSize(point.year == 0 ? 70 : 38)
@@ -707,127 +748,405 @@ private struct NetWorthProjectionChart: View {
                 }
             }
 
-            // ── 7. Baseline endpoint annotation (only if adjusted is NOT shown)
-            if !showAdjusted, let lastBaseline = baselinePoints.last {
+            // ── 7. Baseline endpoint annotation
+            if let lastBaseline = baselinePoints.last {
                 PointMark(
                     x: .value("Year", lastBaseline.year),
                     y: .value("Net Worth", lastBaseline.value)
                 )
                 .foregroundStyle(.white)
                 .symbolSize(24)
-                .annotation(position: .top, alignment: .trailing, spacing: 6) {
-                    Text(lastBaseline.value.toCurrency(compact: true))
-                        .font(.auraCaption(size: 9, weight: .bold))
-                        .foregroundStyle(Self.baselineColor)
-                        .padding(.horizontal, 6)
-                        .padding(.vertical, 4)
-                        .background(Self.baselineColor.opacity(0.12))
-                        .clipShape(Capsule())
-                }
             }
 
             // ── 8. Adjusted endpoint annotation (only if adjusted IS shown)
             if showAdjusted, let lastAdjusted = adjustedPoints.last {
                 PointMark(
                     x: .value("Year", lastAdjusted.year),
-                    y: .value("Net Worth", lastAdjusted.value)
+                    y: .value("Net Worth", displayValue(for: lastAdjusted))
                 )
                 .foregroundStyle(.white)
                 .symbolSize(28)
-                .annotation(position: .top, alignment: .trailing, spacing: 6) {
-                    Text(lastAdjusted.value.toCurrency(compact: true))
-                        .font(.auraCaption(size: 9, weight: .bold))
-                        .foregroundStyle(Self.adjustedColor)
-                        .padding(.horizontal, 6)
-                        .padding(.vertical, 4)
-                        .background(Self.adjustedColor.opacity(0.12))
-                        .clipShape(Capsule())
-                }
             }
-        }
-        .chartXScale(domain: -3...projectionYears)
-        .chartYScale(domain: chartDomain)
-        .chartXAxis {
-            AxisMarks(values: xAxisValues) { value in
-                AxisGridLine(stroke: StrokeStyle(lineWidth: 0.5, dash: [3, 4]))
-                    .foregroundStyle(AppTheme.auraIndigo.opacity(0.16))
-                AxisValueLabel {
-                    if let year = value.as(Int.self) {
-                        Text(xAxisLabel(for: year))
-                            .font(.auraCaption(size: 10))
-                            .foregroundStyle(.secondary.opacity(0.8))
+
+            if showAdjusted, let lastInflation = inflationPoints.last {
+                PointMark(
+                    x: .value("Year", lastInflation.year),
+                    y: .value("Net Worth", displayValue(for: lastInflation))
+                )
+                .foregroundStyle(by: .value("Series", "inflation"))
+                .symbolSize(24)
+            }
+
+            if showAdjusted, let lastBaselineInflation = baselineInflationPoints.last {
+                PointMark(
+                    x: .value("Year", lastBaselineInflation.year),
+                    y: .value("Net Worth", displayValue(for: lastBaselineInflation))
+                )
+                .foregroundStyle(by: .value("Series", "baselineInflation"))
+                .symbolSize(22)
+            }
+            }
+            .chartXScale(domain: -1.0...Double(projectionYears))
+            .chartYScale(domain: chartDomain)
+            .chartXAxis {
+                AxisMarks(values: xAxisValues) { value in
+                    AxisGridLine(stroke: StrokeStyle(lineWidth: 0.5, dash: [3, 4]))
+                        .foregroundStyle(AppTheme.auraIndigo.opacity(0.16))
+                    AxisValueLabel {
+                        if let year = value.as(Double.self) {
+                            Text(xAxisLabel(for: year))
+                                .font(.auraCaption(size: 9))
+                                .foregroundStyle(.secondary.opacity(0.9))
+                                .frame(width: 28)
+                                .lineLimit(1)
+                                .minimumScaleFactor(0.75)
+                        }
                     }
                 }
             }
-        }
-        .chartYAxis {
-            AxisMarks(position: .leading) { value in
-                AxisGridLine(stroke: StrokeStyle(lineWidth: 0.5))
-                    .foregroundStyle(AppTheme.auraIndigo.opacity(0.08))
-                AxisValueLabel {
-                    if let amount = value.as(Double.self) {
-                        Text(amount.toCurrency(compact: true))
-                            .font(.auraCaption(size: 10))
-                            .foregroundStyle(.secondary.opacity(0.8))
+            .chartYAxis {
+                AxisMarks(position: .leading, values: yAxisValues) { value in
+                    AxisGridLine(stroke: StrokeStyle(lineWidth: 0.5))
+                        .foregroundStyle(AppTheme.auraIndigo.opacity(0.12))
+                    AxisValueLabel {
+                        if let amount = value.as(Double.self) {
+                            Text(amount.toCurrency(compact: true))
+                                .font(.auraCaption(size: 8))
+                                .foregroundStyle(.secondary.opacity(0.95))
+                                .frame(width: 24, alignment: .trailing)
+                                .lineLimit(1)
+                                .minimumScaleFactor(0.55)
+                        }
                     }
                 }
             }
-        }
-        .chartPlotStyle { plotArea in
-            plotArea
-                .background(
-                    RoundedRectangle(cornerRadius: 16, style: .continuous)
-                        .fill(AppTheme.auraIndigo.opacity(0.025))
+            .chartPlotStyle { plotArea in
+                plotArea
+                    .padding(.top, 12)
+                    .padding(.trailing, showAdjusted ? 72 : 48)
+                    .background(
+                        RoundedRectangle(cornerRadius: 16, style: .continuous)
+                            .fill(AppTheme.auraIndigo.opacity(0.025))
+                    )
+            }
+            .chartForegroundStyleScale([
+                "baseline": AnyShapeStyle(Self.baselineColor),
+                "adjusted": AnyShapeStyle(Self.adjustedColor),
+                "inflation": AnyShapeStyle(Self.inflationColor),
+                "baselineInflation": AnyShapeStyle(Self.baselineInflationColor),
+                "baselineArea": AnyShapeStyle(
+                    LinearGradient(
+                        colors: [
+                            Self.baselineColor.opacity(0.18),
+                            Self.baselineColor.opacity(0.02)
+                        ],
+                        startPoint: .top,
+                        endPoint: .bottom
+                    )
+                ),
+                "adjustedArea": AnyShapeStyle(
+                    LinearGradient(
+                        colors: [
+                            Self.adjustedColor.opacity(0.16),
+                            Self.adjustedColor.opacity(0.02)
+                        ],
+                        startPoint: .top,
+                        endPoint: .bottom
+                    )
                 )
-        }
-        .chartForegroundStyleScale([
-            "baseline": AnyShapeStyle(Self.baselineColor),
-            "adjusted": AnyShapeStyle(Self.adjustedColor),
-            "baselineArea": AnyShapeStyle(
-                LinearGradient(
-                    colors: [
-                        Self.baselineColor.opacity(0.18),
-                        Self.baselineColor.opacity(0.02)
-                    ],
-                    startPoint: .top,
-                    endPoint: .bottom
-                )
-            ),
-            "adjustedArea": AnyShapeStyle(
-                LinearGradient(
-                    colors: [
-                        Self.adjustedColor.opacity(0.16),
-                        Self.adjustedColor.opacity(0.02)
-                    ],
-                    startPoint: .top,
-                    endPoint: .bottom
-                )
+            ])
+            .chartLegend(.hidden)
+            .clipped()
+            .contentShape(Rectangle())
+            .gesture(zoomGesture)
+            .simultaneousGesture(
+                TapGesture(count: 2).onEnded {
+                    withAnimation(.easeOut(duration: 0.18)) {
+                        zoomScale = 1.0
+                        gestureStartZoom = 1.0
+                    }
+                }
             )
-        ])
-        .chartLegend(.hidden)
-        .clipped()
-        .accessibilityLabel("Net worth baseline and projection chart")
+
+                endpointValueRail
+                    .padding(.trailing, 2)
+                    .padding(.top, 30)
+                    .padding(.bottom, 38)
+            }
+
+            HStack {
+                Spacer()
+                chartZoomControls
+            }
+        }
+        .accessibilityLabel("Net worth baseline, adjusted, and inflation projection chart")
     }
 
-    private var xAxisValues: [Int] {
-        let allYears = Set(points.map(\.year)).sorted()
-        return allYears
+    private var xAxisValues: [Double] {
+        if projectionYears <= 5 {
+            return [-1.0, 0.0, 1.0, 3.0, Double(projectionYears)]
+                .reduce(into: [Double]()) { values, year in
+                    if !values.contains(year) { values.append(year) }
+                }
+                .sorted()
+        }
+
+        var values = [-1.0, 0.0]
+        let step = projectionYears > 7 ? 2.0 : 1.0
+        values += stride(from: step, through: Double(projectionYears), by: step)
+        if values.last != Double(projectionYears) {
+            values.append(Double(projectionYears))
+        }
+        return values
     }
 
-    private func xAxisLabel(for year: Int) -> String {
-        if year == 0 { return "Now" }
-        if year < 0 { return "\(abs(year))Y ago" }
-        return "\(year)Y"
+    @ViewBuilder
+    private var endpointValueRail: some View {
+        let labels = endpointLabels
+        if !labels.isEmpty {
+            GeometryReader { proxy in
+                let positionedLabels = positionedEndpointLabels(in: proxy.size.height)
+
+                ZStack(alignment: .trailing) {
+                    ForEach(positionedLabels) { positioned in
+                        Text(positioned.label.value.toCurrency(compact: true))
+                            .font(.auraCaption(size: 9, weight: .bold))
+                            .foregroundStyle(positioned.label.color)
+                            .lineLimit(1)
+                            .minimumScaleFactor(0.75)
+                            .padding(.horizontal, 7)
+                            .padding(.vertical, 5)
+                            .background(positioned.label.color.opacity(0.14))
+                            .clipShape(Capsule())
+                            .position(x: proxy.size.width / 2, y: positioned.y)
+                    }
+                }
+            }
+            .frame(width: 62)
+            .frame(maxHeight: .infinity, alignment: .center)
+        }
+    }
+
+    private var endpointLabels: [EndpointValueLabel] {
+        var labels: [EndpointValueLabel] = []
+
+        if let adjusted = adjustedPoints.last, showAdjusted {
+            labels.append(EndpointValueLabel(value: adjusted.value, displayValue: displayValue(for: adjusted), color: Self.adjustedColor))
+        }
+        if let inflation = inflationPoints.last, showAdjusted {
+            labels.append(EndpointValueLabel(value: inflation.value, displayValue: displayValue(for: inflation), color: Self.inflationColor))
+        }
+        if let baseline = baselinePoints.last {
+            labels.append(EndpointValueLabel(value: baseline.value, displayValue: baseline.value, color: Self.baselineColor))
+        }
+        if let baselineInflation = baselineInflationPoints.last, showAdjusted {
+            labels.append(EndpointValueLabel(value: baselineInflation.value, displayValue: displayValue(for: baselineInflation), color: Self.baselineInflationColor))
+        }
+
+        return labels.sorted { $0.displayValue > $1.displayValue }
+    }
+
+    private func positionedEndpointLabels(in height: CGFloat) -> [PositionedEndpointValueLabel] {
+        let minSpacing: CGFloat = 34
+        let topPadding: CGFloat = 12
+        let bottomPadding: CGFloat = 12
+        let availableHeight = max(height, 1)
+        let domain = chartDomain
+        let span = max(domain.upperBound - domain.lowerBound, 1)
+
+        var positioned = endpointLabels.map { label in
+            let normalized = (domain.upperBound - label.displayValue) / span
+            let y = CGFloat(normalized) * availableHeight
+            return PositionedEndpointValueLabel(
+                label: label,
+                y: min(max(y, topPadding), availableHeight - bottomPadding)
+            )
+        }
+        .sorted { $0.y < $1.y }
+
+        for index in positioned.indices {
+            if index == positioned.startIndex {
+                positioned[index].y = max(positioned[index].y, topPadding)
+            } else {
+                positioned[index].y = max(positioned[index].y, positioned[index - 1].y + minSpacing)
+            }
+        }
+
+        if let lastY = positioned.last?.y, lastY > availableHeight - bottomPadding {
+            let overflow = lastY - (availableHeight - bottomPadding)
+            for index in positioned.indices {
+                positioned[index].y -= overflow
+            }
+        }
+
+        for index in positioned.indices {
+            positioned[index].y = min(max(positioned[index].y, topPadding), availableHeight - bottomPadding)
+        }
+
+        return positioned
+    }
+
+    private func xAxisLabel(for year: Double) -> String {
+        let currentYear = Calendar.current.component(.year, from: Date())
+        return "\(currentYear + Int(year.rounded()))"
+    }
+
+    private var zoomGesture: some Gesture {
+        MagnificationGesture()
+            .onChanged { value in
+                let nextScale = gestureStartZoom / max(value, 0.01)
+                zoomScale = limitedZoomScale(nextScale)
+            }
+            .onEnded { value in
+                let nextScale = gestureStartZoom / max(value, 0.01)
+                zoomScale = limitedZoomScale(nextScale)
+                gestureStartZoom = zoomScale
+            }
+    }
+
+    private var chartZoomControls: some View {
+        HStack(spacing: 8) {
+            Button {
+                withAnimation(.easeOut(duration: 0.18)) {
+                    zoomScale = 1.0
+                    gestureStartZoom = 1.0
+                }
+            } label: {
+                Image(systemName: "arrow.counterclockwise")
+            }
+            .disabled(abs(zoomScale - 1.0) < 0.01)
+
+            Button {
+                withAnimation(.easeOut(duration: 0.18)) {
+                    zoomScale = minZoomScale
+                    gestureStartZoom = minZoomScale
+                }
+            } label: {
+                HStack(spacing: 4) {
+                    Image(systemName: "minus.magnifyingglass")
+                    Text("Fit")
+                }
+            }
+
+            Text(String(format: "%.1fx", effectiveZoomScale))
+                .font(.auraCaption(size: 10, weight: .bold))
+                .foregroundStyle(.secondary)
+                .frame(width: 42)
+        }
+        .font(.auraCaption(size: 10, weight: .bold))
+        .foregroundStyle(AppTheme.auraIndigo)
+        .padding(.horizontal, 8)
+        .padding(.vertical, 6)
+        .background(.ultraThinMaterial)
+        .clipShape(Capsule())
     }
 
     private var chartDomain: ClosedRange<Double> {
-        let stableMin = points.filter { $0.series == .baseline }.map(\.value).min() ?? 0.0
-        let stableMaxVal = baselineMax
-        let adjustedMaxVal = adjustedMax
+        let visibleValues = domainReferenceValues
+        guard let rawMax = visibleValues.max(), let rawMin = visibleValues.min() else {
+            return 0...100_000
+        }
 
-        let targetMax = (showAdjusted && isZoomedOut && adjustedMaxVal > stableMaxVal) ? max(stableMaxVal, adjustedMaxVal) : stableMaxVal
-        let targetMin = stableMin >= 0 ? 0.0 : stableMin
-        return targetMin...targetMax
+        let valueSpan = max(rawMax - rawMin, abs(rawMax) * 0.08, 100_000)
+        let lowerCandidate = rawMin - valueSpan * 0.18
+        let negativeCushion = niceCeiling(max(valueSpan * 0.14, 50_000))
+        let lower = rawMin >= 0 ? -negativeCushion : niceFloor(lowerCandidate)
+        let span = max(rawMax - lower, valueSpan, 100_000)
+        let baseUpper = niceCeiling(rawMax + span * 0.16)
+        let upper = lower + ((max(baseUpper, lower + 100_000) - lower) / effectiveZoomScale)
+        return lower...max(upper, lower + 20_000)
+    }
+
+    private var effectiveZoomScale: Double {
+        limitedZoomScale(zoomScale)
+    }
+
+    private func limitedZoomScale(_ scale: Double) -> Double {
+        min(max(scale, minZoomScale), dynamicMaxZoomScale)
+    }
+
+    private var dynamicMaxZoomScale: Double {
+        let visibleValues = domainReferenceValues
+        guard let rawMax = visibleValues.max(), let rawMin = visibleValues.min() else {
+            return maxZoomScale
+        }
+
+        let valueSpan = max(rawMax - rawMin, abs(rawMax) * 0.08, 100_000)
+        let lowerCandidate = rawMin - valueSpan * 0.18
+        let negativeCushion = niceCeiling(max(valueSpan * 0.14, 50_000))
+        let lower = rawMin >= 0 ? -negativeCushion : niceFloor(lowerCandidate)
+        let span = max(rawMax - lower, valueSpan, 100_000)
+        let baseUpper = max(niceCeiling(rawMax + span * 0.16), lower + 100_000)
+        let minimumVisibleUpper = lower + ((rawMax - lower) * 1.12)
+        let allowed = (baseUpper - lower) / max(minimumVisibleUpper - lower, 1)
+        return min(maxZoomScale, max(1.0, allowed))
+    }
+
+    private var domainReferenceValues: [Double] {
+        let baselineValues = baselinePoints.map(\.value).filter(\.isFinite)
+        guard showAdjusted else { return baselineValues }
+
+        let scenarioValues = (adjustedPoints + inflationPoints + baselineInflationPoints).map(\.value).filter(\.isFinite)
+        return baselineValues + scenarioValues
+    }
+
+    private func displayValue(for point: NetWorthChartPoint) -> Double {
+        guard point.series == .adjusted || point.series == .inflation || point.series == .baselineInflation else { return point.value }
+        let domain = chartDomain
+        let topLimit = domain.lowerBound + ((domain.upperBound - domain.lowerBound) * 0.92)
+        return min(max(point.value, domain.lowerBound), topLimit)
+    }
+
+    private var yAxisValues: [Double] {
+        let domain = chartDomain
+        let step = (domain.upperBound - domain.lowerBound) / 4
+        var values = (0...4).map { domain.lowerBound + (Double($0) * step) }
+        if domain.lowerBound < 0, domain.upperBound > 0 {
+            values.append(0)
+        }
+        return values.sorted()
+    }
+
+    private func niceCeiling(_ value: Double) -> Double {
+        guard value > 0, value.isFinite else { return 100_000 }
+        let exponent = floor(log10(value))
+        let magnitude = pow(10, exponent)
+        let normalized = value / magnitude
+        let niceNormalized: Double
+
+        if normalized <= 1 { niceNormalized = 1 }
+        else if normalized <= 2 { niceNormalized = 2 }
+        else if normalized <= 3 { niceNormalized = 3 }
+        else if normalized <= 5 { niceNormalized = 5 }
+        else { niceNormalized = 10 }
+
+        return niceNormalized * magnitude
+    }
+
+    private func nicePositiveFloor(_ value: Double) -> Double {
+        guard value > 0, value.isFinite else { return 0 }
+        let magnitude = pow(10, floor(log10(value)))
+        return floor(value / magnitude) * magnitude
+    }
+
+    private func niceFloor(_ value: Double) -> Double {
+        guard value.isFinite else { return 0 }
+        if value >= 0 { return 0 }
+        let magnitude = pow(10, floor(log10(abs(value))))
+        return floor(value / magnitude) * magnitude
+    }
+
+    private struct EndpointValueLabel: Identifiable {
+        let id = UUID()
+        let value: Double
+        let displayValue: Double
+        let color: Color
+    }
+
+    private struct PositionedEndpointValueLabel: Identifiable {
+        var id: UUID { label.id }
+        let label: EndpointValueLabel
+        var y: CGFloat
     }
 }
 
@@ -1105,7 +1424,7 @@ private struct ProjectionBreakdownRow: View {
     let monthlyLoanPayment: Double
 
     private var projectedValue: Double {
-        let baseValue = item.projectedValue(after: years, monthlyPayment: monthlyLoanPayment)
+        let baseValue = item.projectedValue(after: Double(years), monthlyPayment: monthlyLoanPayment)
         guard item.group == .appreciating, monthlyInvestment > 0, years > 0 else {
             return baseValue
         }
