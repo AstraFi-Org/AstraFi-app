@@ -8,6 +8,7 @@ struct FinancialHealthReportView: View {
     @Environment(AppStateManager.self) var appState
     @ObservedObject private var upstoxViewModel = UpstoxViewModel.shared
     var data: CompleteAssessmentData?
+    var onSaveComplete: () -> Void = {}
 
     private var profile: AstraUserProfile? { appState.currentProfile }
     private var userName: String { profile?.basicDetails.name ?? data?.name ?? "User" }
@@ -140,7 +141,8 @@ struct FinancialHealthReportView: View {
     private var footerSection: some View {
         ReportFooterCTA(data: data, score: score.safeInt, status: status,
                         insights: insights.activeConcerns.map { $0.title },
-                        assessmentInsights: insights)
+                        assessmentInsights: insights,
+                        onSaveComplete: onSaveComplete)
             .padding(.horizontal, 20).padding(.bottom, 48)
     }
 

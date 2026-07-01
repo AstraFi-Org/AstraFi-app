@@ -41,13 +41,16 @@ struct AppRootView: View {
                 showingMonthlyAssessmentPrompt = false
                 showingMonthlyAssessment = true
             }
-            .presentationDetents([.height(320)])
+            .presentationDetents([.height(380)])
             .presentationDragIndicator(.visible)
         }
         .fullScreenCover(isPresented: $showingMonthlyAssessment) {
             StartAssesmentView(
                 mode: .update,
-                prefilledData: appState.currentProfile.map(CompleteAssessmentData.prefilled(from:))
+                prefilledData: appState.currentProfile.map(CompleteAssessmentData.prefilled(from:)),
+                onSaveComplete: {
+                    showingMonthlyAssessment = false
+                }
             )
         }
         .onAppear {
@@ -99,13 +102,13 @@ struct MonthlyAssessmentPromptSheet: View {
     @Environment(\.dismiss) private var dismiss
 
     var body: some View {
-        VStack(spacing: 20) {
+        VStack(spacing: 18) {
             ZStack {
                 Circle()
                     .fill(AppTheme.auraIndigo.opacity(0.12))
-                    .frame(width: 68, height: 68)
+                    .frame(width: 64, height: 64)
                 Image(systemName: "calendar.badge.clock")
-                    .font(.system(size: 30, weight: .semibold))
+                    .font(.system(size: 28, weight: .semibold))
                     .foregroundStyle(AppTheme.auraIndigo)
             }
 
@@ -127,7 +130,7 @@ struct MonthlyAssessmentPromptSheet: View {
                         .font(.system(size: 16, weight: .semibold))
                         .foregroundStyle(.primary)
                         .frame(maxWidth: .infinity)
-                        .padding(.vertical, 14)
+                        .frame(height: 54)
                         .background(Color(uiColor: .secondarySystemBackground))
                         .clipShape(Capsule())
                 }
@@ -139,12 +142,16 @@ struct MonthlyAssessmentPromptSheet: View {
                         .font(.system(size: 16, weight: .semibold))
                         .foregroundStyle(.white)
                         .frame(maxWidth: .infinity)
-                        .padding(.vertical, 14)
+                        .frame(height: 54)
                         .background(AppTheme.auraIndigo)
                         .clipShape(Capsule())
                 }
             }
+            .padding(.top, 6)
         }
-        .padding(24)
+        .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .top)
+        .padding(.horizontal, 24)
+        .padding(.top, 28)
+        .padding(.bottom, 20)
     }
 }

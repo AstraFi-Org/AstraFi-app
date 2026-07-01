@@ -993,9 +993,11 @@ private struct NetWorthProjectionChart: View {
             return 0...100_000
         }
 
-        let lower = rawMin >= 0 ? 0.0 : niceFloor(rawMin * 1.12)
-        let span = max(rawMax - lower, abs(rawMax) * 0.25, 100_000)
-        let baseUpper = niceCeiling(rawMax + span * 0.22)
+        let valueSpan = max(rawMax - rawMin, abs(rawMax) * 0.08, 100_000)
+        let lowerCandidate = rawMin - valueSpan * 0.18
+        let lower = rawMin >= 0 ? max(0, nicePositiveFloor(lowerCandidate)) : niceFloor(lowerCandidate)
+        let span = max(rawMax - lower, valueSpan, 100_000)
+        let baseUpper = niceCeiling(rawMax + span * 0.16)
         let upper = lower + ((max(baseUpper, lower + 100_000) - lower) / effectiveZoomScale)
         return lower...max(upper, lower + 20_000)
     }
@@ -1009,17 +1011,16 @@ private struct NetWorthProjectionChart: View {
     }
 
     private var dynamicMaxZoomScale: Double {
-        let baselineValues = baselinePoints.map(\.value).filter(\.isFinite)
-        guard
-            let rawMax = baselineValues.max(),
-            let rawMin = baselineValues.min()
-        else {
+        let visibleValues = domainReferenceValues
+        guard let rawMax = visibleValues.max(), let rawMin = visibleValues.min() else {
             return maxZoomScale
         }
 
-        let lower = rawMin >= 0 ? 0.0 : niceFloor(rawMin * 1.12)
-        let span = max(rawMax - lower, abs(rawMax) * 0.25, 100_000)
-        let baseUpper = max(niceCeiling(rawMax + span * 0.22), lower + 100_000)
+        let valueSpan = max(rawMax - rawMin, abs(rawMax) * 0.08, 100_000)
+        let lowerCandidate = rawMin - valueSpan * 0.18
+        let lower = rawMin >= 0 ? max(0, nicePositiveFloor(lowerCandidate)) : niceFloor(lowerCandidate)
+        let span = max(rawMax - lower, valueSpan, 100_000)
+        let baseUpper = max(niceCeiling(rawMax + span * 0.16), lower + 100_000)
         let minimumVisibleUpper = lower + ((rawMax - lower) * 1.12)
         let allowed = (baseUpper - lower) / max(minimumVisibleUpper - lower, 1)
         return min(maxZoomScale, max(1.0, allowed))
@@ -1027,7 +1028,7 @@ private struct NetWorthProjectionChart: View {
 
     private var domainReferenceValues: [Double] {
         let baselineValues = baselinePoints.map(\.value).filter(\.isFinite)
-        guard effectiveZoomScale <= 0.7 else { return baselineValues }
+        guard showAdjusted else { return baselineValues }
 
         let scenarioValues = (adjustedPoints + inflationPoints + baselineInflationPoints).map(\.value).filter(\.isFinite)
         return baselineValues + scenarioValues
@@ -1055,10 +1056,17 @@ private struct NetWorthProjectionChart: View {
 
         if normalized <= 1 { niceNormalized = 1 }
         else if normalized <= 2 { niceNormalized = 2 }
+        else if normalized <= 3 { niceNormalized = 3 }
         else if normalized <= 5 { niceNormalized = 5 }
         else { niceNormalized = 10 }
 
         return niceNormalized * magnitude
+    }
+
+    private func nicePositiveFloor(_ value: Double) -> Double {
+        guard value > 0, value.isFinite else { return 0 }
+        let magnitude = pow(10, floor(log10(value)))
+        return floor(value / magnitude) * magnitude
     }
 
     private func niceFloor(_ value: Double) -> Double {
