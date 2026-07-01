@@ -6,6 +6,9 @@ struct TrackerView: View {
     @Environment(AppStateManager.self) var appState
     @Environment(\.colorScheme) private var colorScheme
     @ObservedObject private var upstoxViewModel = UpstoxViewModel.shared
+    @State private var showingMonthlyAssessmentPrompt = false
+    @State private var showingMonthlyAssessment = false
+    private let trackerHorizontalPadding: CGFloat = 16
 
     var body: some View {
         ScrollView(showsIndicators: false) {
@@ -30,10 +33,19 @@ struct TrackerView: View {
                     )
                 }
 
+                TrackerActionRequiredSection {
+                    showingMonthlyAssessmentPrompt = true
+                }
+
                 TrackerInvestmentsSection(investments: viewModel.investments)
 
-                if !viewModel.yourPlans.isEmpty {
-                    TrackerYourPlansSection(plans: viewModel.yourPlans)
+                if !viewModel.followedPlans.isEmpty {
+                    TrackerFollowedPlansSection(plans: viewModel.followedPlans)
+                }
+
+                let savedIllustrations = viewModel.yourPlans.filter { !$0.isFollowed }
+                if !savedIllustrations.isEmpty {
+                    TrackerYourPlansSection(plans: savedIllustrations)
                 }
 
                 TrackerGoalsSection(goals: viewModel.goals)
@@ -41,12 +53,29 @@ struct TrackerView: View {
                 TrackerMoneyFlowSection()
                 TrackerFundAllocationSection(allocations: viewModel.fundAllocations)
             }
-            .padding(.horizontal, AppTheme.auraPadding)
+            .padding(.horizontal, trackerHorizontalPadding)
             .padding(.bottom, 40)
         }
         .navigationTitle("Tracker")
         .navigationBarTitleDisplayMode(.large)
         .background(AppTheme.appBackground(for: colorScheme))
+        .sheet(isPresented: $showingMonthlyAssessmentPrompt) {
+            MonthlyAssessmentPromptSheet {
+                showingMonthlyAssessmentPrompt = false
+                showingMonthlyAssessment = true
+            }
+            .presentationDetents([.height(380)])
+            .presentationDragIndicator(.visible)
+        }
+        .fullScreenCover(isPresented: $showingMonthlyAssessment) {
+            StartAssesmentView(
+                mode: .update,
+                prefilledData: appState.currentProfile.map { CompleteAssessmentData.prefilled(from: $0) },
+                onSaveComplete: {
+                    showingMonthlyAssessment = false
+                }
+            )
+        }
         .onAppear {
             viewModel.appState = appState
             viewModel.syncWithProfile(appState.currentProfile)

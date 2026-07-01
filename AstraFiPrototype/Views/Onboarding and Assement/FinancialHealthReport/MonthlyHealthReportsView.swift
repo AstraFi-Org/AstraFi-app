@@ -18,9 +18,7 @@ struct MonthlyHealthReportsView: View {
     }
 
     private var shouldShowMonthlyReminder: Bool {
-        let calendar = Calendar.current
-        guard calendar.component(.day, from: Date()) == 1 else { return false }
-        return !reports.contains { calendar.isDate($0.date, equalTo: Date(), toGranularity: .month) }
+        appState.shouldPresentMonthlyAssessmentOnLaunch()
     }
 
     private var currentProfileReport: AstraHealthAssessment? {
@@ -84,7 +82,10 @@ struct MonthlyHealthReportsView: View {
         .fullScreenCover(isPresented: $showingAssessment) {
             StartAssesmentView(
                 mode: .update,
-                prefilledData: appState.currentProfile.map(CompleteAssessmentData.prefilled(from:))
+                prefilledData: appState.currentProfile.map { CompleteAssessmentData.prefilled(from: $0) },
+                onSaveComplete: {
+                    showingAssessment = false
+                }
             )
         }
     }

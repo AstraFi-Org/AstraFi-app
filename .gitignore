@@ -63,3 +63,4 @@ fastlane/test_output
 AstraFiPrototype2.xcodeproj/project.pbxproj
 
 AstraFiPrototype2.xcodeproj/project.xcworkspace/xcshareddata/swiftpm/Package.resolved
+AstraFiPrototype/refactor.py

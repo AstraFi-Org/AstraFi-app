@@ -3,6 +3,7 @@ import SwiftUI
 
 struct AstraUserProfile: Codable, Identifiable, Equatable {
     var id: UUID = UUID()
+    var createdAt: Date? = nil
     var signUp: AstraSignUp
     var basicDetails: AstraBasicDetails
     var assets: AstraAssets
@@ -271,6 +272,7 @@ struct MFScheme: Identifiable, Codable, Equatable {
     var id: String { schemeCode }
     let schemeCode: String
     let isin: String
+    let alternateISIN: String?
     let name: String
     let nav: Double
     let date: String

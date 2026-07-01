@@ -4,6 +4,7 @@ internal import UniformTypeIdentifiers
 struct InvestmentDetailsScreen: View {
     @Bindable var data: CompleteAssessmentData
     var onComplete: (() -> Void)? = nil
+    var onSaveComplete: () -> Void
     @Environment(AppStateManager.self) private var appState
     @Environment(\.dismiss) private var dismiss
     @State private var goNext        = false
@@ -18,6 +19,16 @@ struct InvestmentDetailsScreen: View {
     
     @State private var showingBreakdown = false
     @State private var breakdownEntry: AssessmentInvestmentEntry? = nil
+
+    init(
+        data: CompleteAssessmentData,
+        onComplete: (() -> Void)? = nil,
+        onSaveComplete: @escaping () -> Void = {}
+    ) {
+        self.data = data
+        self.onComplete = onComplete
+        self.onSaveComplete = onSaveComplete
+    }
 
     private var connectedUpstoxInvestments: [AstraInvestment] {
         appState.currentProfile?.investments.filter { $0.brokerSource == "Upstox" } ?? []
@@ -344,7 +355,7 @@ struct InvestmentDetailsScreen: View {
             }
         }
         .navigationDestination(isPresented: $goNext) {
-            LoanDetailsScreen(data: data)
+            LoanDetailsScreen(data: data, onSaveComplete: onSaveComplete)
         }
         .fileImporter(
             isPresented: $showFilePicker,

@@ -146,15 +146,12 @@ struct Plan1DetailView: View {
                     trackerVM.unfollowPlan(planName: planName)
                     alertMessage = "You stopped following this plan."
                 } else {
-                    trackerVM.followPlan(planName: planName, input: input)
-
-                    let tAmount = result.projectedValue
-                    let tenure = Int(input.timePeriod) ?? 5
-                    let targetDate = Calendar.current.date(byAdding: .year, value: tenure, to: Date()) ?? Date()
-                    let goalName = input.purposeOfInvestment.isEmpty ? result.name : input.purposeOfInvestment
-                    appState.addGoal(AstraGoal(goalName: goalName, targetAmount: tAmount, currentAmount: 0, targetDate: targetDate))
-
-                    alertMessage = "Plan is now active! New goal added to your tracker."
+                    var inputToFollow = input
+                    inputToFollow.amount = String(Int(sipOverride))
+                    inputToFollow.timePeriod = String(tenureOverride)
+                    inputToFollow.riskType = selectedRisk.rawValue.capitalized
+                    trackerVM.followPlan(planName: planName, input: inputToFollow)
+                    alertMessage = "Plan added to Followed Plans."
                 }
                 showingSaveAlert = true
             }) {

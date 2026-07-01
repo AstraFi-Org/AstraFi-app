@@ -133,7 +133,7 @@ final class AppStateManager {
         return mgr
     }
     
-    func setupEmptyProfile(name: String = "User", email: String = "") {
+    func setupEmptyProfile(name: String = "User", email: String = "", createdAt: Date? = nil) {
         let signUp = AstraSignUp(signUpName: name, email: email, password: "")
         
         let basic = AstraBasicDetails(
@@ -165,6 +165,7 @@ final class AppStateManager {
         )
         
         self.currentProfile = AstraUserProfile(
+            createdAt: createdAt,
             signUp: signUp,
             basicDetails: basic,
             assets: assets,
@@ -204,6 +205,22 @@ final class AppStateManager {
     
     var currentProfile: AstraUserProfile?
     var savedPlans: [InvestmentPlanModel] = []
+
+    func hasCompletedMonthlyAssessment(asOf date: Date = Date()) -> Bool {
+        guard let profile = currentProfile else { return false }
+        let calendar = Calendar.current
+        return profile.monthlyHealthAssessments.contains {
+            calendar.isDate($0.date, equalTo: date, toGranularity: .month)
+        }
+    }
+
+    func isMonthlyAssessmentDue(asOf date: Date = Date()) -> Bool {
+        currentProfile != nil && !hasCompletedMonthlyAssessment(asOf: date)
+    }
+
+    func shouldPresentMonthlyAssessmentOnLaunch(asOf date: Date = Date()) -> Bool {
+        Calendar.current.component(.day, from: date) == 1 && isMonthlyAssessmentDue(asOf: date)
+    }
     
     func savePlan(_ plan: InvestmentPlanModel) {
         savedPlans.append(plan)
@@ -236,6 +253,20 @@ final class AppStateManager {
                         planId: plan.id, isFollowed: false
                     )
                 }
+            }
+        }
+    }
+
+    func updatePlan(_ plan: InvestmentPlanModel) {
+        if let index = savedPlans.firstIndex(where: { $0.id == plan.id }) {
+            savedPlans[index] = plan
+        } else {
+            savedPlans.append(plan)
+        }
+
+        Task {
+            if let session = try? await supabase.auth.session {
+                _ = try? await SupabaseRepository.shared.savePlan(plan, userId: session.user.id)
             }
         }
     }
@@ -274,7 +305,7 @@ final class AppStateManager {
 
         Task {
             if (try? await supabase.auth.session) != nil {
-                try? await SupabaseRepository.shared.deleteHealthAssessment(assessment.id)
+                _ = try? await SupabaseRepository.shared.deleteHealthAssessment(assessment.id)
             }
         }
     }
@@ -301,7 +332,7 @@ final class AppStateManager {
                         self.savedPlans = plans
                     }
                 }
-                try? await minimumDelay
+                _ = try? await minimumDelay
                 
                 // Check if biometric lock should be shown
                 // Note: requireUnlockOnLaunch defaults to true in @AppStorage,
@@ -317,6 +348,7 @@ final class AppStateManager {
                             self.mfaFactorId = factor.id
                             self.requiresMFAChallenge = true
                             var sanitizedProfile = profile
+                            sanitizedProfile.createdAt = session.user.createdAt
                             if sanitizedProfile.signUp.email.isEmpty, let email = session.user.email, !email.isEmpty {
                                 sanitizedProfile.signUp.email = email
                             }
@@ -337,6 +369,7 @@ final class AppStateManager {
                 
                 await MainActor.run {
                     var sanitizedProfile = profile
+                    sanitizedProfile.createdAt = session.user.createdAt
                     if sanitizedProfile.signUp.email.isEmpty, let email = session.user.email, !email.isEmpty {
                         sanitizedProfile.signUp.email = email
                     }
@@ -353,8 +386,8 @@ final class AppStateManager {
                 }
                 recalculateFinancials()
             } else {
-                try? await supabase.auth.signOut(scope: .local)
-                try? await minimumDelay
+                _ = try? await supabase.auth.signOut(scope: .local)
+                _ = try? await minimumDelay
                 await MainActor.run {
                     self.hasCompletedOnboarding = false
                     self.isLoading = false
@@ -363,7 +396,7 @@ final class AppStateManager {
             }
 
         } catch {
-            try? await minimumDelay
+            _ = try? await minimumDelay
             await MainActor.run {
                 self.hasCompletedOnboarding = false
                 isLoading = false
@@ -391,11 +424,12 @@ final class AppStateManager {
             tempName = name
             tempEmail = email
             tempPassword = password
-            setupEmptyProfile(name: name, email: email)
+            setupEmptyProfile(name: name, email: email, createdAt: session.user.createdAt)
             
             // After successful sign up — load existing data if any
             if let profile = try? await SupabaseRepository.shared.fetchFullProfile(userId: session.user.id) {
                 var sanitizedProfile = profile
+                sanitizedProfile.createdAt = session.user.createdAt
                 if sanitizedProfile.signUp.email.isEmpty, let sessionEmail = session.user.email, !sessionEmail.isEmpty {
                     sanitizedProfile.signUp.email = sessionEmail
                 }
@@ -526,6 +560,7 @@ final class AppStateManager {
                 if let profile = try? await SupabaseRepository.shared.fetchFullProfile(userId: session.user.id) {
                     print("AppStateManager: Found existing profile for user")
                     var sanitizedProfile = profile
+                    sanitizedProfile.createdAt = session.user.createdAt
                     if sanitizedProfile.signUp.email.isEmpty, let email = session.user.email, !email.isEmpty {
                         sanitizedProfile.signUp.email = email
                     }
@@ -556,7 +591,7 @@ final class AppStateManager {
                         .joined(separator: " ")
                     let displayName = fullName.isEmpty ? (session.user.email ?? "User") : fullName
                     
-                    setupEmptyProfile(name: displayName, email: session.user.email ?? "")
+                    setupEmptyProfile(name: displayName, email: session.user.email ?? "", createdAt: session.user.createdAt)
                     isAuthenticated = true
                     hasCompletedOnboarding = true
                     isGuest = false
@@ -622,6 +657,7 @@ final class AppStateManager {
             
             if let profile = try? await SupabaseRepository.shared.fetchFullProfile(userId: session.user.id) {
                 var sanitizedProfile = profile
+                sanitizedProfile.createdAt = session.user.createdAt
                 if sanitizedProfile.signUp.email.isEmpty, let email = session.user.email, !email.isEmpty {
                     sanitizedProfile.signUp.email = email
                 }
@@ -646,7 +682,7 @@ final class AppStateManager {
                     showDashboard = true
                 }
             } else {
-                setupEmptyProfile(name: session.user.email ?? "User", email: session.user.email ?? "")
+                setupEmptyProfile(name: session.user.email ?? "User", email: session.user.email ?? "", createdAt: session.user.createdAt)
                 
                 isAuthenticated = true
                 hasCompletedOnboarding = true
@@ -687,6 +723,7 @@ final class AppStateManager {
             let session = try await supabase.auth.session
             if let profile = try? await SupabaseRepository.shared.fetchFullProfile(userId: session.user.id) {
                 var sanitizedProfile = profile
+                sanitizedProfile.createdAt = session.user.createdAt
                 if sanitizedProfile.signUp.email.isEmpty, let email = session.user.email, !email.isEmpty {
                     sanitizedProfile.signUp.email = email
                 }
@@ -711,7 +748,7 @@ final class AppStateManager {
                     showDashboard = true
                 }
             } else {
-                setupEmptyProfile(name: session.user.email ?? "User", email: session.user.email ?? "")
+                setupEmptyProfile(name: session.user.email ?? "User", email: session.user.email ?? "", createdAt: session.user.createdAt)
                 
                 isAuthenticated = true
                 hasCompletedOnboarding = true
@@ -779,6 +816,7 @@ final class AppStateManager {
             let session = try await supabase.auth.session
             if let profile = try? await SupabaseRepository.shared.fetchFullProfile(userId: session.user.id) {
                 var sanitizedProfile = profile
+                sanitizedProfile.createdAt = session.user.createdAt
                 if sanitizedProfile.signUp.email.isEmpty, let email = session.user.email, !email.isEmpty {
                     sanitizedProfile.signUp.email = email
                 }
@@ -803,7 +841,7 @@ final class AppStateManager {
                     showDashboard = true
                 }
             } else {
-                setupEmptyProfile(name: session.user.email ?? "User", email: session.user.email ?? "")
+                setupEmptyProfile(name: session.user.email ?? "User", email: session.user.email ?? "", createdAt: session.user.createdAt)
                 
                 isAuthenticated = true
                 hasCompletedOnboarding = true
@@ -1356,7 +1394,7 @@ final class AppStateManager {
             recalculateFinancials()
             Task {
                 if let session = try? await supabase.auth.session {
-                    try? await SupabaseRepository.shared.saveGoal(goal, userId: session.user.id)
+                    _ = try? await SupabaseRepository.shared.saveGoal(goal, userId: session.user.id)
                 }
             }
         }
@@ -1370,7 +1408,7 @@ final class AppStateManager {
             recalculateFinancials()
             Task {
                 if let session = try? await supabase.auth.session {
-                    try? await SupabaseRepository.shared.saveGoal(goal, userId: session.user.id)
+                    _ = try? await SupabaseRepository.shared.saveGoal(goal, userId: session.user.id)
                 }
             }
         }
@@ -1384,7 +1422,7 @@ final class AppStateManager {
             recalculateFinancials()
             Task {
                 for goal in toDelete {
-                    try? await SupabaseRepository.shared.deleteGoal(goal.id)
+                    _ = try? await SupabaseRepository.shared.deleteGoal(goal.id)
                 }
             }
         }
@@ -1397,7 +1435,7 @@ final class AppStateManager {
             currentProfile = profile
             recalculateFinancials()
             Task {
-                try? await SupabaseRepository.shared.deleteGoal(goal.id)
+                _ = try? await SupabaseRepository.shared.deleteGoal(goal.id)
             }
         }
     }
@@ -1410,7 +1448,7 @@ final class AppStateManager {
             Task {
                 await syncMutualFundNAVs()
                 if let session = try? await supabase.auth.session {
-                    try? await SupabaseRepository.shared.saveInvestment(investment, userId: session.user.id)
+                    _ = try? await SupabaseRepository.shared.saveInvestment(investment, userId: session.user.id)
                 }
             }
         }
@@ -1425,7 +1463,7 @@ final class AppStateManager {
             Task {
                 await syncMutualFundNAVs(force: true)
                 if let session = try? await supabase.auth.session {
-                    try? await SupabaseRepository.shared.saveInvestment(investment, userId: session.user.id)
+                    _ = try? await SupabaseRepository.shared.saveInvestment(investment, userId: session.user.id)
                 }
             }
         }
@@ -1565,7 +1603,7 @@ final class AppStateManager {
             recalculateFinancials()
             Task {
                 for inv in toDelete {
-                    try? await SupabaseRepository.shared.deleteInvestment(inv.id)
+                    _ = try? await SupabaseRepository.shared.deleteInvestment(inv.id)
                 }
             }
         }
@@ -1578,7 +1616,7 @@ final class AppStateManager {
             currentProfile = profile
             recalculateFinancials()
             Task {
-                try? await SupabaseRepository.shared.deleteInvestment(investment.id)
+                _ = try? await SupabaseRepository.shared.deleteInvestment(investment.id)
             }
         }
     }
@@ -1589,7 +1627,7 @@ final class AppStateManager {
             currentProfile = profile
             Task {
                 if let session = try? await supabase.auth.session {
-                    try? await SupabaseRepository.shared.saveEmergencyFundAllocation(allocation, userId: session.user.id)
+                    _ = try? await SupabaseRepository.shared.saveEmergencyFundAllocation(allocation, userId: session.user.id)
                 }
             }
         }
@@ -1601,7 +1639,7 @@ final class AppStateManager {
             recalculateFinancials()
             Task {
                 if let session = try? await supabase.auth.session {
-                    try? await SupabaseRepository.shared.saveLoan(loan, userId: session.user.id)
+                    _ = try? await SupabaseRepository.shared.saveLoan(loan, userId: session.user.id)
                 }
             }
         }
@@ -1615,7 +1653,7 @@ final class AppStateManager {
             recalculateFinancials()
             Task {
                 if let session = try? await supabase.auth.session {
-                    try? await SupabaseRepository.shared.saveLoan(loan, userId: session.user.id)
+                    _ = try? await SupabaseRepository.shared.saveLoan(loan, userId: session.user.id)
                 }
             }
         }
@@ -1629,7 +1667,7 @@ final class AppStateManager {
             recalculateFinancials()
             Task {
                 for loan in toDelete {
-                    try? await SupabaseRepository.shared.deleteLoan(loan.id)
+                    _ = try? await SupabaseRepository.shared.deleteLoan(loan.id)
                 }
             }
         }
@@ -1642,7 +1680,7 @@ final class AppStateManager {
             currentProfile = profile
             recalculateFinancials()
             Task {
-                try? await SupabaseRepository.shared.deleteLoan(loan.id)
+                _ = try? await SupabaseRepository.shared.deleteLoan(loan.id)
             }
         }
     }
@@ -1655,7 +1693,7 @@ final class AppStateManager {
             recalculateFinancials()
             Task {
                 if let session = try? await supabase.auth.session {
-                    try? await SupabaseRepository.shared.saveInsurance(insurance, userId: session.user.id)
+                    _ = try? await SupabaseRepository.shared.saveInsurance(insurance, userId: session.user.id)
                 }
             }
         }
@@ -1669,7 +1707,7 @@ final class AppStateManager {
             recalculateFinancials()
             Task {
                 if let session = try? await supabase.auth.session {
-                    try? await SupabaseRepository.shared.saveInsurance(insurance, userId: session.user.id)
+                    _ = try? await SupabaseRepository.shared.saveInsurance(insurance, userId: session.user.id)
                 }
             }
         }
@@ -1683,7 +1721,7 @@ final class AppStateManager {
             recalculateFinancials()
             Task {
                 for ins in toDelete {
-                    try? await SupabaseRepository.shared.deleteInsurance(ins.id)
+                    _ = try? await SupabaseRepository.shared.deleteInsurance(ins.id)
                 }
             }
         }

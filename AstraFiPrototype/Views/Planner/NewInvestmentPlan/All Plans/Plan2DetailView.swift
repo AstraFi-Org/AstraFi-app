@@ -152,13 +152,11 @@ struct Plan2DetailView: View {
                     trackerVM.unfollowPlan(planName: planName)
                     alertMessage = "Unfollowed plan."
                 } else {
-                    trackerVM.followPlan(planName: planName, input: input)
-
-                    let targetDate = Calendar.current.date(byAdding: .year, value: tenureOverride, to: Date()) ?? Date()
-                    let goalName = input.purposeOfInvestment.isEmpty ? result.name : input.purposeOfInvestment
-                    appState.addGoal(AstraGoal(goalName: goalName, targetAmount: activeResult.netWealthGain, currentAmount: 0, targetDate: targetDate))
-
-                    alertMessage = "Scenario active! Debt goal added."
+                    var inputToFollow = input
+                    inputToFollow.targetAmount = String(Int(loanOverride))
+                    inputToFollow.timePeriod = String(tenureOverride)
+                    trackerVM.followPlan(planName: planName, input: inputToFollow)
+                    alertMessage = "Plan added to Followed Plans."
                 }
                 showingSaveAlert = true
             }) {
@@ -425,7 +423,6 @@ struct Plan2DetailView: View {
         let emi = InvestmentPlannerEngine.calculateEMIPublic(principal: principal, rate: rate, years: years, frequency: freq, interestType: type)
         let n = Int(Double(years) * freq.paymentsPerYear)
         let totalPaid = emi * Double(n)
-        let interest = totalPaid - principal
 
         let wTotal = CGFloat(totalPaid / maxTotal)
         let color = type == .compounded ? Color.blue : Color.green

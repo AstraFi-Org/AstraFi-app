@@ -23,60 +23,35 @@ struct AuraMoneyFlowChart: View {
     }
 
     var chartData: [ChartEntry] {
-        let months = ["Jan","Feb","Mar","Apr","May","Jun",
-                      "Jul","Aug","Sep","Oct","Nov","Dec"]
         var data: [ChartEntry] = []
         let snapshots = profile.monthlyCashflowSnapshots
+        let keys = visibleMonthKeys(snapshots: snapshots)
 
-        if snapshots.isEmpty {
-            let cal  = Calendar.current
-            let now  = Date()
-            let mIdx = cal.component(.month, from: now) - 1
-            let key  = String(format: "%d-%02d",
-                              cal.component(.year, from: now),
-                              mIdx + 1)
-            data.append(.init(month: months[mIdx], dateKey: key,
-                              category: "Total Income",
-                              amount: profile.basicDetails.monthlyIncome.safeFinite,
-                              isIncome: true))
-            data.append(.init(month: months[mIdx], dateKey: key,
-                              category: "Total Expenses",
-                              amount: -profile.basicDetails.monthlyExpenses.safeFinite,
-                              isIncome: false))
-        } else {
-            for key in snapshots.keys.sorted() {
-                guard let snap = snapshots[key] else { continue }
-                let parts = key.split(separator: "-")
-                let mIdx: Int
-                if parts.count >= 2, let parsedM = Int(parts[1]) {
-                    mIdx = max(0, min(11, parsedM - 1))
-                } else {
-                    mIdx = 0
-                }
-                let lbl = months[mIdx]
+        for key in keys {
+            let snap = cashflowSnapshot(for: key, in: snapshots)
+            let lbl = monthLabel(for: key)
 
-                if snap.incomeSources.isEmpty {
+            if snap.incomeSources.isEmpty {
+                data.append(.init(month: lbl, dateKey: key,
+                                  category: "Income",
+                                  amount: snap.totalIncome.safeFinite, isIncome: true))
+            } else {
+                for item in snap.incomeSources {
                     data.append(.init(month: lbl, dateKey: key,
-                                      category: "Income",
-                                      amount: snap.totalIncome.safeFinite, isIncome: true))
-                } else {
-                    for item in snap.incomeSources {
-                        data.append(.init(month: lbl, dateKey: key,
-                                          category: item.name,
-                                          amount: item.amount.safeFinite, isIncome: true))
-                    }
+                                      category: item.name,
+                                      amount: item.amount.safeFinite, isIncome: true))
                 }
-                
-                if snap.expenseSources.isEmpty {
+            }
+            
+            if snap.expenseSources.isEmpty {
+                data.append(.init(month: lbl, dateKey: key,
+                                  category: "Expenses",
+                                  amount: -snap.totalExpenses.safeFinite, isIncome: false))
+            } else {
+                for item in snap.expenseSources {
                     data.append(.init(month: lbl, dateKey: key,
-                                      category: "Expenses",
-                                      amount: -snap.totalExpenses.safeFinite, isIncome: false))
-                } else {
-                    for item in snap.expenseSources {
-                        data.append(.init(month: lbl, dateKey: key,
-                                          category: item.name,
-                                          amount: -item.amount.safeFinite, isIncome: false))
-                    }
+                                      category: item.name,
+                                      amount: -item.amount.safeFinite, isIncome: false))
                 }
             }
         }
@@ -102,6 +77,75 @@ struct AuraMoneyFlowChart: View {
     }
     private func netSaving(_ month: String) -> Double {
         totalIncome(month) - totalExpense(month)
+    }
+
+    private func visibleMonthKeys(snapshots: [String: CashflowEntry]) -> [String] {
+        let calendar = Calendar.current
+        let now = Date()
+        let currentYear = calendar.component(.year, from: now)
+        let currentMonth = calendar.component(.month, from: now)
+        let profileStart = profile.createdAt ?? snapshotStartDate(snapshots: snapshots) ?? now
+        let signupYear = calendar.component(.year, from: profileStart)
+        let signupMonth = calendar.component(.month, from: profileStart)
+        let snapshotMonth = snapshotStartDate(snapshots: snapshots).flatMap { date -> Int? in
+            calendar.component(.year, from: date) == currentYear ? calendar.component(.month, from: date) : nil
+        }
+        let startMonth = signupYear == currentYear
+            ? min(signupMonth, snapshotMonth ?? signupMonth)
+            : 1
+
+        guard startMonth <= currentMonth else {
+            return [monthKey(year: currentYear, month: currentMonth)]
+        }
+
+        return (startMonth...currentMonth).map { monthKey(year: currentYear, month: $0) }
+    }
+
+    private func snapshotStartDate(snapshots: [String: CashflowEntry]) -> Date? {
+        guard let firstKey = snapshots.keys.sorted().first else { return nil }
+        var components = firstKey.split(separator: "-").compactMap { Int($0) }
+        guard components.count >= 2 else { return nil }
+        components[1] = max(1, min(12, components[1]))
+        return Calendar.current.date(from: DateComponents(year: components[0], month: components[1], day: 1))
+    }
+
+    private func cashflowSnapshot(for key: String, in snapshots: [String: CashflowEntry]) -> CashflowEntry {
+        if let exact = snapshots[key] {
+            return exact
+        }
+
+        if let previousKey = snapshots.keys.sorted().last(where: { $0 < key }),
+           let previous = snapshots[previousKey] {
+            return previous
+        }
+
+        if let current = profile.cashflowData {
+            return current
+        }
+
+        var fallback = CashflowEntry()
+        let income = profile.basicDetails.monthlyIncomeAfterTax > 0
+            ? profile.basicDetails.monthlyIncomeAfterTax
+            : profile.basicDetails.monthlyIncome
+        if income > 0 {
+            fallback.incomeSources = [.init(name: "Income", amount: income)]
+        }
+        if profile.basicDetails.monthlyExpenses > 0 {
+            fallback.expenseSources = [.init(name: "Expenses", amount: profile.basicDetails.monthlyExpenses)]
+        }
+        return fallback
+    }
+
+    private func monthLabel(for key: String) -> String {
+        let months = ["Jan","Feb","Mar","Apr","May","Jun",
+                      "Jul","Aug","Sep","Oct","Nov","Dec"]
+        let parts = key.split(separator: "-")
+        guard parts.count >= 2, let parsedMonth = Int(parts[1]) else { return months[0] }
+        return months[max(0, min(11, parsedMonth - 1))]
+    }
+
+    private func monthKey(year: Int, month: Int) -> String {
+        String(format: "%d-%02d", year, month)
     }
 
     // Month-over-month income growth

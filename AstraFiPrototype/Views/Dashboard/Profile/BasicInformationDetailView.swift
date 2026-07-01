@@ -46,6 +46,7 @@ struct BasicInformationDetailView: View {
             Section("Income & Expenses") {
                 textRow("Monthly Income", text: $form.monthlyIncome, placeholder: "Income not added", keyboard: .decimalPad, prefix: "₹")
                 textRow("Monthly Expenses", text: $form.monthlyExpenses, placeholder: "Expenses not added", keyboard: .decimalPad, prefix: "₹")
+                textRow("Emergency Fund", text: $form.emergencyFundAmount, placeholder: "Emergency fund not added", keyboard: .decimalPad, prefix: "₹")
             }
         }
         .navigationTitle("Profile Information")
@@ -171,6 +172,7 @@ private struct ProfileInfoForm {
     var childDependents = 0
     var monthlyIncome = ""
     var monthlyExpenses = ""
+    var emergencyFundAmount = ""
 
     init() { }
 
@@ -187,13 +189,14 @@ private struct ProfileInfoForm {
         childDependents = basic.childDependents
         monthlyIncome = basic.monthlyIncome > 0 ? "\(basic.monthlyIncome.safeInt)" : ""
         monthlyExpenses = basic.monthlyExpenses > 0 ? "\(basic.monthlyExpenses.safeInt)" : ""
+        emergencyFundAmount = basic.emergencyFundAmount > 0 ? "\(basic.emergencyFundAmount.safeInt)" : ""
     }
 
     func apply(to profile: inout AstraUserProfile) {
         let cleanName = name.trimmingCharacters(in: .whitespacesAndNewlines)
         let cleanEmail = email.trimmingCharacters(in: .whitespacesAndNewlines)
         let cleanPhone = phoneNumber.trimmingCharacters(in: .whitespacesAndNewlines)
-        let newIncome = Double(monthlyIncome) ?? profile.basicDetails.monthlyIncome
+        let newIncome = Self.parseAmount(monthlyIncome) ?? profile.basicDetails.monthlyIncome
 
         profile.signUp.signUpName = cleanName
         profile.signUp.email = cleanEmail
@@ -206,7 +209,17 @@ private struct ProfileInfoForm {
         profile.basicDetails.childDependents = childDependents
         profile.basicDetails.monthlyIncomeAfterTax = afterTaxIncome(from: newIncome, oldProfile: profile)
         profile.basicDetails.monthlyIncome = newIncome
-        profile.basicDetails.monthlyExpenses = Double(monthlyExpenses) ?? profile.basicDetails.monthlyExpenses
+        profile.basicDetails.monthlyExpenses = Self.parseAmount(monthlyExpenses) ?? profile.basicDetails.monthlyExpenses
+        profile.basicDetails.emergencyFundAmount = Self.parseAmount(emergencyFundAmount) ?? profile.basicDetails.emergencyFundAmount
+    }
+
+    private static func parseAmount(_ text: String) -> Double? {
+        let cleaned = text
+            .replacingOccurrences(of: "₹", with: "")
+            .replacingOccurrences(of: ",", with: "")
+            .trimmingCharacters(in: .whitespacesAndNewlines)
+        guard !cleaned.isEmpty else { return nil }
+        return Double(cleaned)
     }
 
     private func afterTaxIncome(from newIncome: Double, oldProfile profile: AstraUserProfile) -> Double {
