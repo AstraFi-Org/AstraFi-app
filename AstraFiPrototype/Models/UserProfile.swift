@@ -272,6 +272,7 @@ struct MFScheme: Identifiable, Codable, Equatable {
     var id: String { schemeCode }
     let schemeCode: String
     let isin: String
+    let alternateISIN: String?
     let name: String
     let nav: Double
     let date: String
