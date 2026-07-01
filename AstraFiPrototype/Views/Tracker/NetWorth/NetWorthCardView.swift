@@ -275,8 +275,8 @@ struct NetWorthCard: View {
     private var chartLegendItems: some View {
         ChartLegendDot(color: NetWorthProjectionChart.baselineColor, label: "Current Plan")
         if hasSliderChanges {
-            ChartLegendDot(color: NetWorthProjectionChart.adjustedColor, label: "After Changes")
-            ChartLegendDot(color: NetWorthProjectionChart.inflationColor, label: "After Inflation")
+            ChartLegendDot(color: NetWorthProjectionChart.adjustedColor, label: "Projected Future Growth")
+            ChartLegendDot(color: NetWorthProjectionChart.inflationColor, label: "Projected Future Inflation")
             ChartLegendDot(color: NetWorthProjectionChart.baselineInflationColor, label: "Current Inflation")
         }
     }
