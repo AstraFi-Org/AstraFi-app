@@ -82,7 +82,7 @@ struct MonthlyHealthReportsView: View {
         .fullScreenCover(isPresented: $showingAssessment) {
             StartAssesmentView(
                 mode: .update,
-                prefilledData: appState.currentProfile.map(CompleteAssessmentData.prefilled(from:)),
+                prefilledData: appState.currentProfile.map { CompleteAssessmentData.prefilled(from: $0) },
                 onSaveComplete: {
                     showingAssessment = false
                 }

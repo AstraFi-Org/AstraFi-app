@@ -397,7 +397,7 @@ struct PrivacyControlsView: View {
         case .authorized, .provisional, .ephemeral: return "Allowed"
         case .denied: return "Denied"
         case .notDetermined: return "Not Requested"
-        @unknown default: return "Not Requested"
+        default: return "Not Requested"
         }
     }
     
@@ -410,7 +410,7 @@ struct PrivacyControlsView: View {
         case .authorized: return "Allowed"
         case .denied, .restricted: return "Denied"
         case .notDetermined: return "Not Requested"
-        @unknown default: return "Not Requested"
+        default: return "Not Requested"
         }
     }
     
@@ -423,7 +423,7 @@ struct PrivacyControlsView: View {
         case .authorized: return "Allowed"
         case .denied, .restricted: return "Denied"
         case .notDetermined: return "Not Requested"
-        @unknown default: return "Not Requested"
+        default: return "Not Requested"
         }
     }
     
@@ -436,7 +436,7 @@ struct PrivacyControlsView: View {
         case .authorized, .limited: return "Allowed"
         case .denied, .restricted: return "Denied"
         case .notDetermined: return "Not Requested"
-        @unknown default: return "Not Requested"
+        default: return "Not Requested"
         }
     }
     
@@ -446,10 +446,10 @@ struct PrivacyControlsView: View {
     
     private var locationStatusString: String {
         switch permissionManager.locationStatus {
-        case .authorizedAlways, .authorizedWhenInUse: return "Allowed"
+        case .authorizedAlways, .authorizedWhenInUse, .authorized: return "Allowed"
         case .denied, .restricted: return "Denied"
         case .notDetermined: return "Not Requested"
-        @unknown default: return "Not Requested"
+        default: return "Not Requested"
         }
     }
     
@@ -462,7 +462,7 @@ struct PrivacyControlsView: View {
         case .authorized: return "Allowed"
         case .denied, .restricted: return "Denied"
         case .notDetermined: return "Not Requested"
-        @unknown default: return "Not Requested"
+        default: return "Not Requested"
         }
     }
     
@@ -475,7 +475,7 @@ struct PrivacyControlsView: View {
         case .authorized: return "Allowed"
         case .denied, .restricted: return "Denied"
         case .notDetermined: return "Not Requested"
-        @unknown default: return "Not Requested"
+        default: return "Not Requested"
         }
     }
     

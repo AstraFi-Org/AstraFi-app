@@ -423,7 +423,6 @@ struct Plan2DetailView: View {
         let emi = InvestmentPlannerEngine.calculateEMIPublic(principal: principal, rate: rate, years: years, frequency: freq, interestType: type)
         let n = Int(Double(years) * freq.paymentsPerYear)
         let totalPaid = emi * Double(n)
-        let interest = totalPaid - principal
 
         let wTotal = CGFloat(totalPaid / maxTotal)
         let color = type == .compounded ? Color.blue : Color.green
