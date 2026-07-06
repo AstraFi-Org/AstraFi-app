@@ -38,7 +38,7 @@ final class CompleteAssessmentData {
 }
 
 extension CompleteAssessmentData {
-    nonisolated static func prefilled(from profile: AstraUserProfile) -> CompleteAssessmentData {
+    static func prefilled(from profile: AstraUserProfile) -> CompleteAssessmentData {
         let data = CompleteAssessmentData()
         data.name = profile.basicDetails.name
         data.email = profile.signUp.email
@@ -58,7 +58,7 @@ extension CompleteAssessmentData {
         return data
     }
 
-    nonisolated private static func investmentEntry(from investment: AstraInvestment) -> AssessmentInvestmentEntry {
+    private static func investmentEntry(from investment: AstraInvestment) -> AssessmentInvestmentEntry {
         var entry = AssessmentInvestmentEntry()
         entry.type = assessmentInvestmentType(from: investment.investmentType)
         entry.mode = investment.mode == .sip ? .sip : .lumpsum
@@ -85,7 +85,7 @@ extension CompleteAssessmentData {
         return entry
     }
 
-    nonisolated private static func loanEntry(from loan: AstraLoan) -> AssessmentLoanEntry {
+    private static func loanEntry(from loan: AstraLoan) -> AssessmentLoanEntry {
         var entry = AssessmentLoanEntry()
         entry.type = assessmentLoanType(from: loan.loanType)
         entry.amount = numberString(loan.loanAmount)
@@ -100,7 +100,7 @@ extension CompleteAssessmentData {
         return entry
     }
 
-    nonisolated private static func insuranceEntry(from insurance: AstraInsurance) -> AssessmentInsuranceEntry {
+    private static func insuranceEntry(from insurance: AstraInsurance) -> AssessmentInsuranceEntry {
         var entry = AssessmentInsuranceEntry()
         entry.insurer = insurance.provider
         entry.coverAmount = numberString(insurance.sumAssured)
@@ -116,7 +116,7 @@ extension CompleteAssessmentData {
         return entry
     }
 
-    nonisolated private static func assessmentInvestmentType(from type: AstraInvestmentType) -> AssessmentInvestmentEntry.InvestmentType {
+    private static func assessmentInvestmentType(from type: AstraInvestmentType) -> AssessmentInvestmentEntry.InvestmentType {
         switch type {
         case .mutualFund: return .mutualFund
         case .stocks: return .stocks
@@ -129,7 +129,7 @@ extension CompleteAssessmentData {
         }
     }
 
-    nonisolated private static func assessmentLoanType(from type: AstraLoanType) -> AssessmentLoanEntry.LoanType {
+    private static func assessmentLoanType(from type: AstraLoanType) -> AssessmentLoanEntry.LoanType {
         switch type {
         case .homeLoan: return .homeLoan
         case .educationLoan: return .educationLoan
@@ -140,7 +140,7 @@ extension CompleteAssessmentData {
         }
     }
 
-    nonisolated private static func assessmentInsuranceDetails(from insurance: AstraInsurance) -> AssessmentInsuranceEntry.InsuranceDetails {
+    private static func assessmentInsuranceDetails(from insurance: AstraInsurance) -> AssessmentInsuranceEntry.InsuranceDetails {
         switch insurance.insuranceType {
         case .health:
             var details = AssessmentInsuranceEntry.HealthDetails()
@@ -181,7 +181,7 @@ extension CompleteAssessmentData {
         }
     }
 
-    nonisolated private static func numberString(_ value: Double) -> String {
+    private static func numberString(_ value: Double) -> String {
         guard value.isFinite, value > 0 else { return "" }
         if value.rounded() == value {
             return String(Int(value))

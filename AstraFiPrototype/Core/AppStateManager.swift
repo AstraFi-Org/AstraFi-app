@@ -298,6 +298,19 @@ final class AppStateManager {
         showDashboard = true
     }
 
+    func syncProfile() {
+        guard let profile = currentProfile else { return }
+        Task {
+            if let session = try? await supabase.auth.session {
+                do {
+                    try await SupabaseRepository.shared.syncFullProfile(profile, userId: session.user.id)
+                } catch {
+                    print("Supabase profile sync failed: \(error)")
+                }
+            }
+        }
+    }
+
     func deleteAssessmentFromHistory(_ assessment: AstraHealthAssessment) {
         guard var profile = currentProfile else { return }
         profile.monthlyHealthAssessments.removeAll { $0.id == assessment.id }
