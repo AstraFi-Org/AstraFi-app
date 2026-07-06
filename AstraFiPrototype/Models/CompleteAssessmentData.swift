@@ -1,7 +1,7 @@
 import SwiftUI
 import Observation
 
-@Observable
+@Observable @MainActor
 final class CompleteAssessmentData {
 
     var name = ""
@@ -52,9 +52,9 @@ extension CompleteAssessmentData {
         data.isInsured = !profile.insurances.isEmpty
         data.investmentEntries = profile.investments
             .filter { $0.brokerSource != "Upstox" }
-            .map(Self.investmentEntry)
-        data.loanEntries = profile.loans.map(Self.loanEntry)
-        data.insuranceEntries = profile.insurances.map(Self.insuranceEntry)
+            .map { Self.investmentEntry(from: $0) }
+        data.loanEntries = profile.loans.map { Self.loanEntry(from: $0) }
+        data.insuranceEntries = profile.insurances.map { Self.insuranceEntry(from: $0) }
         return data
     }
 

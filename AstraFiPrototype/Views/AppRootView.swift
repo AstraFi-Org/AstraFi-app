@@ -47,7 +47,7 @@ struct AppRootView: View {
         .fullScreenCover(isPresented: $showingMonthlyAssessment) {
             StartAssesmentView(
                 mode: .update,
-                prefilledData: appState.currentProfile.map(CompleteAssessmentData.prefilled(from:)),
+                prefilledData: appState.currentProfile.map { CompleteAssessmentData.prefilled(from: $0) },
                 onSaveComplete: {
                     showingMonthlyAssessment = false
                 }
