@@ -226,7 +226,7 @@ final class AppStateManager {
         savedPlans.append(plan)
         Task {
             if let session = try? await supabase.auth.session {
-                _ = try? await SupabaseRepository.shared.savePlan(plan, userId: session.user.id)
+                try? await SupabaseRepository.shared.savePlan(plan, userId: session.user.id)
             }
         }
     }
@@ -236,7 +236,7 @@ final class AppStateManager {
             savedPlans[index].isFollowed = true
             Task {
                 if (try? await supabase.auth.session) != nil {
-                    _ = try? await SupabaseRepository.shared.updatePlanFollowStatus(
+                    try? await SupabaseRepository.shared.updatePlanFollowStatus(
                         planId: plan.id, isFollowed: true
                     )
                 }
@@ -249,7 +249,7 @@ final class AppStateManager {
             savedPlans[index].isFollowed = false
             Task {
                 if (try? await supabase.auth.session) != nil {
-                    _ = try? await SupabaseRepository.shared.updatePlanFollowStatus(
+                    try? await SupabaseRepository.shared.updatePlanFollowStatus(
                         planId: plan.id, isFollowed: false
                     )
                 }
@@ -266,7 +266,7 @@ final class AppStateManager {
 
         Task {
             if let session = try? await supabase.auth.session {
-                _ = try? await SupabaseRepository.shared.savePlan(plan, userId: session.user.id)
+                try? await SupabaseRepository.shared.savePlan(plan, userId: session.user.id)
             }
         }
     }
@@ -1128,13 +1128,17 @@ final class AppStateManager {
                 }
             }
             
-            // Merge Insurances
-            for newIns in newInsurances {
-                if !existingProfile.insurances.contains(where: {
-                    $0.policyNumber == newIns.policyNumber ||
-                    ($0.insuranceType == newIns.insuranceType && abs($0.sumAssured - newIns.sumAssured) < 1.0)
-                }) {
-                    existingProfile.insurances.append(newIns)
+            if assessmentData.hasCompletedInsuranceStep && !assessmentData.isInsured && !assessmentData.areDependentsInsured {
+                existingProfile.insurances.removeAll()
+            } else {
+                // Merge Insurances
+                for newIns in newInsurances {
+                    if !existingProfile.insurances.contains(where: {
+                        $0.policyNumber == newIns.policyNumber ||
+                        ($0.insuranceType == newIns.insuranceType && abs($0.sumAssured - newIns.sumAssured) < 1.0)
+                    }) {
+                        existingProfile.insurances.append(newIns)
+                    }
                 }
             }
             

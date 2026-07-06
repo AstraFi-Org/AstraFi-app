@@ -462,6 +462,7 @@ struct PrivacyControlsView: View {
         case .authorized: return "Allowed"
         case .denied, .restricted: return "Denied"
         case .notDetermined: return "Not Requested"
+        case .limited: return "Limited"
         @unknown default: return "Not Requested"
         }
     }

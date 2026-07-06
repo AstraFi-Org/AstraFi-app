@@ -40,6 +40,11 @@ class StockService {
     private func toYahooSymbol(_ symbol: String) -> String {
         return normalizeSearchSymbol(symbol)
     }
+
+    private func isIndianExchangeSymbol(_ symbol: String) -> Bool {
+        let normalized = normalizeSearchSymbol(symbol)
+        return normalized.hasSuffix(".NS") || normalized.hasSuffix(".BO")
+    }
     
     func searchStocks(query: String) async -> [AstraStock] {
         let trimmedQuery = query.trimmingCharacters(in: .whitespacesAndNewlines)
@@ -259,7 +264,7 @@ class StockService {
             )
         }
 
-        if apiKey.isEmpty {
+        if apiKey.isEmpty || isIndianExchangeSymbol(symbol) {
             return await fetchPriceFromYahoo(symbol: symbol)
         }
 
@@ -269,10 +274,9 @@ class StockService {
         
         do {
             print("Finnhub Symbol:", finnhubSymbol)
-            let (data, _) = try await URLSession.shared.data(from: url)
-            
-            if let jsonString = String(data: data, encoding: .utf8) {
-                print("Quote Response:", jsonString)
+            let (data, response) = try await URLSession.shared.data(from: url)
+            guard isValidJSONResponse(data: data, response: response, provider: "Finnhub", context: symbol) else {
+                return await fetchPriceFromYahoo(symbol: symbol)
             }
             
             let quote = try JSONDecoder().decode(FinnhubQuote.self, from: data)
@@ -412,9 +416,13 @@ class StockService {
         }
 
         do {
-            let (data, _) = try await URLSession.shared.data(from: url)
-            let response = try JSONDecoder().decode(YahooChartResponse.self, from: data)
-            if let result = response.chart.result?.first,
+            let (data, response) = try await URLSession.shared.data(from: url)
+            guard isValidJSONResponse(data: data, response: response, provider: "Yahoo Finance", context: symbol) else {
+                return mockStocks.first { $0.symbol == symbol }
+            }
+
+            let chartResponse = try JSONDecoder().decode(YahooChartResponse.self, from: data)
+            if let result = chartResponse.chart.result?.first,
                let price = result.meta.regularMarketPrice,
                price > 0 {
                 let resolvedChange = resolvedDailyChange(
@@ -436,6 +444,29 @@ class StockService {
             print("Yahoo Finance Quote Error: \(error)")
         }
         return mockStocks.first { $0.symbol == symbol }
+    }
+
+    private func isValidJSONResponse(data: Data, response: URLResponse, provider: String, context: String) -> Bool {
+        let statusCode = (response as? HTTPURLResponse)?.statusCode ?? 200
+        guard (200..<300).contains(statusCode) else {
+            print("\(provider) \(context) request failed with HTTP \(statusCode)")
+            return false
+        }
+
+        let trimmedPrefix = String(data: data.prefix(64), encoding: .utf8)?
+            .trimmingCharacters(in: .whitespacesAndNewlines) ?? ""
+        guard !trimmedPrefix.hasPrefix("<") else {
+            print("\(provider) \(context) returned non-JSON content")
+            return false
+        }
+
+        if let object = try? JSONSerialization.jsonObject(with: data) as? [String: Any],
+           let error = object["error"] {
+            print("\(provider) \(context) error: \(error)")
+            return false
+        }
+
+        return true
     }
 
     private func resolvedDailyChange(

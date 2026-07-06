@@ -6,8 +6,6 @@ struct TrackerView: View {
     @Environment(AppStateManager.self) var appState
     @Environment(\.colorScheme) private var colorScheme
     @ObservedObject private var upstoxViewModel = UpstoxViewModel.shared
-    @State private var showingMonthlyAssessmentPrompt = false
-    @State private var showingMonthlyAssessment = false
     private let trackerHorizontalPadding: CGFloat = 16
 
     var body: some View {
@@ -33,10 +31,6 @@ struct TrackerView: View {
                     )
                 }
 
-                TrackerActionRequiredSection {
-                    showingMonthlyAssessmentPrompt = true
-                }
-
                 TrackerInvestmentsSection(investments: viewModel.investments)
 
                 if !viewModel.followedPlans.isEmpty {
@@ -59,23 +53,6 @@ struct TrackerView: View {
         .navigationTitle("Tracker")
         .navigationBarTitleDisplayMode(.large)
         .background(AppTheme.appBackground(for: colorScheme))
-        .sheet(isPresented: $showingMonthlyAssessmentPrompt) {
-            MonthlyAssessmentPromptSheet {
-                showingMonthlyAssessmentPrompt = false
-                showingMonthlyAssessment = true
-            }
-            .presentationDetents([.height(380)])
-            .presentationDragIndicator(.visible)
-        }
-        .fullScreenCover(isPresented: $showingMonthlyAssessment) {
-            StartAssesmentView(
-                mode: .update,
-                prefilledData: appState.currentProfile.map(CompleteAssessmentData.prefilled(from:)),
-                onSaveComplete: {
-                    showingMonthlyAssessment = false
-                }
-            )
-        }
         .onAppear {
             viewModel.appState = appState
             viewModel.syncWithProfile(appState.currentProfile)

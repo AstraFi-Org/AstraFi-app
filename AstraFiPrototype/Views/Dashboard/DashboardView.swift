@@ -491,7 +491,7 @@ struct DashboardView: View {
                     }
                 }
                 .padding(.horizontal, 2)
-                .padding(.vertical, 2)
+                .padding(.vertical, 8)
             }
         }
     }
@@ -821,4 +821,3 @@ private struct DashboardAllocationData: Identifiable {
     let color: Color
     var id: String { name }
 }
-

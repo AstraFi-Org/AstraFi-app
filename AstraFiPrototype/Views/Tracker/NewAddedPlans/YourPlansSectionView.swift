@@ -201,16 +201,62 @@ struct FollowedPlanDetailView: View {
     }
 
     private func expectedVsActualChart(_ item: FollowedPlanSnapshot) -> some View {
+        let years = max(1, item.targetYear - Calendar.current.component(.year, from: Date()))
+
         return VStack(alignment: .leading, spacing: 12) {
-            Text("Expected vs Actual Growth").font(.headline)
+            HStack(alignment: .firstTextBaseline) {
+                Text("Expected vs Actual Growth").font(.headline)
+                Spacer()
+                HStack(spacing: 12) {
+                    allocationLegend(color: .blue, text: "Expected")
+                    allocationLegend(color: .green, text: "How it is going")
+                }
+            }
             Chart {
                 ForEach(planChartPoints(item, actual: false)) { point in
-                    LineMark(x: .value("Year", point.year), y: .value("Value", point.value))
+                    LineMark(
+                        x: .value("Years", point.year),
+                        y: .value("Value", point.value),
+                        series: .value("Series", "Expected")
+                    )
+                        .foregroundStyle(Color.blue)
+                        .lineStyle(StrokeStyle(lineWidth: 3, lineCap: .round, lineJoin: .round))
+                    PointMark(x: .value("Years", point.year), y: .value("Value", point.value))
                         .foregroundStyle(Color.blue)
                 }
                 ForEach(planChartPoints(item, actual: true)) { point in
-                    LineMark(x: .value("Year", point.year), y: .value("Value", point.value))
+                    LineMark(
+                        x: .value("Years", point.year),
+                        y: .value("Value", point.value),
+                        series: .value("Series", "How it is going")
+                    )
                         .foregroundStyle(Color.green)
+                        .lineStyle(StrokeStyle(lineWidth: 3, lineCap: .round, lineJoin: .round))
+                    PointMark(x: .value("Years", point.year), y: .value("Value", point.value))
+                        .foregroundStyle(Color.green)
+                }
+            }
+            .chartXScale(domain: 0...years)
+            .chartXAxis {
+                AxisMarks(values: .automatic(desiredCount: min(years + 1, 6))) { value in
+                    AxisGridLine()
+                    AxisTick()
+                    AxisValueLabel {
+                        if let year = value.as(Int.self) {
+                            Text(year == 0 ? "Now" : "+\(year)Y")
+                        }
+                    }
+                }
+            }
+            .chartYAxis {
+                AxisMarks(position: .trailing) { value in
+                    AxisGridLine()
+                    AxisTick()
+                    AxisValueLabel {
+                        if let amount = value.as(Double.self) {
+                            Text(amount.toCurrency(compact: true))
+                        }
+                    }
                 }
             }
             .frame(height: 180)
@@ -219,25 +265,161 @@ struct FollowedPlanDetailView: View {
     }
 
     private func allocationCard(_ item: FollowedPlanSnapshot) -> some View {
-        VStack(alignment: .leading, spacing: 12) {
-            Text("Planned Asset Allocation").font(.headline)
+        let rows = linkedAllocationRows(for: item)
+        let totalLinked = rows.reduce(0.0) { $0 + $1.actualAmount }
+
+        return VStack(alignment: .leading, spacing: 12) {
+            HStack(alignment: .firstTextBaseline) {
+                Text("Planned Asset Allocation").font(.headline)
+                Spacer()
+                if totalLinked > 0 {
+                    Text("Linked \(totalLinked.toCurrency(compact: true))")
+                        .font(.caption.weight(.semibold))
+                        .foregroundColor(.green)
+                }
+            }
+
+            HStack(spacing: 12) {
+                allocationLegend(color: .blue, text: "Planned")
+                allocationLegend(color: .green, text: "Linked actual")
+            }
+
             if item.allocation.isEmpty {
                 Text("Allocation is tracked through linked investments for this strategy.")
                     .font(.caption)
                     .foregroundColor(.secondary)
             } else {
-                ForEach(item.allocation) { allocation in
-                    HStack {
-                        Text(allocation.name).font(.caption)
-                        Spacer()
-                        Text("\(String(format: "%.0f", allocation.percentage))%")
-                            .font(.caption.weight(.bold))
-                    }
-                    ProgressView(value: allocation.percentage / 100.0)
+                ForEach(rows) { row in
+                    allocationRow(row)
                 }
             }
         }
         .auraCardStyle(radius: 20)
+    }
+
+    private func allocationLegend(color: Color, text: String) -> some View {
+        HStack(spacing: 5) {
+            Capsule()
+                .fill(color)
+                .frame(width: 18, height: 5)
+            Text(text)
+                .font(.caption2.weight(.semibold))
+                .foregroundColor(.secondary)
+        }
+    }
+
+    private func allocationRow(_ row: LinkedAllocationRow) -> some View {
+        VStack(alignment: .leading, spacing: 7) {
+            HStack(alignment: .firstTextBaseline) {
+                Text(row.name)
+                    .font(.caption)
+                    .lineLimit(1)
+                Spacer()
+                VStack(alignment: .trailing, spacing: 2) {
+                    Text("Plan \(String(format: "%.0f", row.plannedPercent))%")
+                        .font(.caption.weight(.bold))
+                    if row.actualAmount > 0 {
+                        Text("\(String(format: "%.1f", row.actualPercent))% • \(row.actualAmount.toCurrency(compact: true))")
+                            .font(.caption2.weight(.semibold))
+                            .foregroundColor(.green)
+                    }
+                }
+            }
+
+            GeometryReader { proxy in
+                let width = proxy.size.width
+                ZStack(alignment: .leading) {
+                    Capsule()
+                        .fill(Color.secondary.opacity(0.16))
+                        .frame(height: 6)
+                    Capsule()
+                        .fill(Color.blue)
+                        .frame(width: width * min(max(row.plannedPercent / 100, 0), 1), height: 6)
+                    Capsule()
+                        .fill(Color.green)
+                        .frame(width: width * min(max(row.actualPercent / 100, 0), 1), height: 4)
+                }
+            }
+            .frame(height: 8)
+
+            if !row.linkedInvestmentNames.isEmpty {
+                Text(row.linkedInvestmentNames.joined(separator: ", "))
+                    .font(.caption2)
+                    .foregroundColor(.secondary)
+                    .lineLimit(1)
+            }
+        }
+    }
+
+    private func linkedAllocationRows(for item: FollowedPlanSnapshot) -> [LinkedAllocationRow] {
+        let linkedNames = Set(item.plan.linkedInvestmentNames)
+        let linkedInvestments = trackerVM.investments.filter { linkedNames.contains($0.name) }
+        let totalLinked = linkedInvestments.reduce(0.0) { $0 + Double($1.amount) }
+
+        var rows = item.allocation.map {
+            LinkedAllocationRow(
+                allocationID: $0.id,
+                name: $0.name,
+                plannedPercent: $0.percentage,
+                actualAmount: 0,
+                actualPercent: 0,
+                linkedInvestmentNames: []
+            )
+        }
+
+        for investment in linkedInvestments {
+            guard let rowIndex = matchingAllocationIndex(for: investment, in: item.allocation) else { continue }
+            rows[rowIndex].actualAmount += Double(investment.amount)
+            rows[rowIndex].linkedInvestmentNames.append(investment.name)
+        }
+
+        guard totalLinked > 0 else { return rows }
+        return rows.map { row in
+            var updated = row
+            updated.actualPercent = (row.actualAmount / totalLinked) * 100
+            return updated
+        }
+    }
+
+    private func matchingAllocationIndex(for investment: Investment, in allocations: [AssetAllocation]) -> Int? {
+        let investmentText = "\(investment.name) \(investment.category)".lowercased()
+
+        if let index = firstAllocationIndex(in: allocations, matching: ["liquid", "short-term", "short term"], investmentText: investmentText, investmentKeywords: ["liquid", "overnight", "money market", "short term", "short-term"]) {
+            return index
+        }
+        if let index = firstAllocationIndex(in: allocations, matching: ["debt", "bond", "corporate"], investmentText: investmentText, investmentKeywords: ["debt", "bond", "gilt", "fixed income"]) {
+            return index
+        }
+        if let index = firstAllocationIndex(in: allocations, matching: ["small cap", "smallcap"], investmentText: investmentText, investmentKeywords: ["small cap", "smallcap"]) {
+            return index
+        }
+        if let index = firstAllocationIndex(in: allocations, matching: ["large cap", "largecap", "index"], investmentText: investmentText, investmentKeywords: ["large cap", "largecap", "index", "nifty", "sensex"]) {
+            return index
+        }
+        if investmentText.contains("stock") || investmentText.contains("equity") {
+            if let bluechip = allocations.firstIndex(where: { $0.name.localizedCaseInsensitiveContains("bluechip") || $0.name.localizedCaseInsensitiveContains("equity") }) {
+                return bluechip
+            }
+            return allocations.firstIndex { $0.riskLevel == .high || $0.riskLevel == .mid }
+        }
+        if investmentText.contains("mutual fund") {
+            return allocations.firstIndex { $0.name.localizedCaseInsensitiveContains("fund") }
+        }
+
+        return nil
+    }
+
+    private func firstAllocationIndex(
+        in allocations: [AssetAllocation],
+        matching allocationKeywords: [String],
+        investmentText: String,
+        investmentKeywords: [String]
+    ) -> Int? {
+        guard investmentKeywords.contains(where: { investmentText.contains($0) }) else { return nil }
+        return allocations.firstIndex { allocation in
+            let allocationName = allocation.name.lowercased()
+            return allocationKeywords.contains { allocationName.contains($0) }
+        }
     }
 
     private var linkedInvestmentsCard: some View {
@@ -333,12 +515,29 @@ struct FollowedPlanDetailView: View {
     }
 
     private func planChartPoints(_ item: FollowedPlanSnapshot, actual: Bool) -> [PlanChartPoint] {
-        let startYear = Calendar.current.component(.year, from: Date())
-        let years = max(1, item.targetYear - startYear)
-        let startValue = actual ? item.currentValue : max(0, item.currentValue * 0.9)
+        let years = max(1, item.targetYear - Calendar.current.component(.year, from: Date()))
         let rate = max(0, actual ? trackerVM.portfolioCAGR : item.expectedCAGR) / 100.0
+        let startValue: Double
+
+        if actual {
+            return [PlanChartPoint(year: 0, value: max(0, item.currentValue))]
+        } else if item.plannedCurrentValue > 0 {
+            startValue = item.plannedCurrentValue
+        } else if item.targetAmount > 0 && rate > 0 {
+            startValue = item.targetAmount / pow(1 + rate, Double(years))
+        } else {
+            startValue = max(0, item.currentValue * 0.95)
+        }
+
         return (0...years).map { offset in
-            PlanChartPoint(year: startYear + offset, value: startValue * pow(1 + rate, Double(offset)))
+            let value: Double
+            if !actual && item.targetAmount > startValue {
+                let progress = Double(offset) / Double(years)
+                value = startValue + ((item.targetAmount - startValue) * progress)
+            } else {
+                value = startValue * pow(1 + rate, Double(offset))
+            }
+            return PlanChartPoint(year: offset, value: value)
         }
     }
 }
@@ -490,6 +689,17 @@ struct PlanChartPoint: Identifiable {
     let id = UUID()
     let year: Int
     let value: Double
+}
+
+private struct LinkedAllocationRow: Identifiable {
+    let allocationID: UUID
+    let name: String
+    let plannedPercent: Double
+    var actualAmount: Double
+    var actualPercent: Double
+    var linkedInvestmentNames: [String]
+
+    var id: UUID { allocationID }
 }
 
 struct ProgressRing: View {

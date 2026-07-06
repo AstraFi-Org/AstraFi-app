@@ -29,12 +29,12 @@ final class AppleSignInDelegate: NSObject, ASAuthorizationControllerDelegate, AS
         let windowScene = scenes.first { $0.activationState == .foregroundActive } as? UIWindowScene
             ?? scenes.first as? UIWindowScene
         
-        let window = windowScene?.windows.first { $0.isKeyWindow }
-            ?? windowScene?.windows.first
-            ?? UIApplication.shared.windows.first { $0.isKeyWindow }
-            ?? UIApplication.shared.windows.first
-            ?? UIWindow()
-            
-        return window
+        if let windowScene {
+            return windowScene.windows.first { $0.isKeyWindow }
+                ?? windowScene.windows.first
+                ?? UIWindow(windowScene: windowScene)
+        }
+
+        return UIWindow(frame: UIScreen.main.bounds)
     }
 }
