@@ -139,9 +139,6 @@ struct EmergencyFundSectionView: View {
     private var monthlyIncome: Double   { profile?.basicDetails.monthlyIncome ?? 0 }
     private var monthlyExpenses: Double { profile?.basicDetails.monthlyExpenses ?? 0 }
     private var incomeAfterTax: Double  { profile?.basicDetails.monthlyIncomeAfterTax ?? 0 }
-    private var existingEMIs: Double {
-        profile?.loans.reduce(0.0) { $0 + $1.calculatedEMI } ?? 0
-    }
     private var planningIncome: Double {
         monthlyIncome > 0 ? monthlyIncome : incomeAfterTax
     }
@@ -166,7 +163,7 @@ struct EmergencyFundSectionView: View {
 
     // MARK: Savings & Slider Bounds
     private var monthlySavings: Double {
-        max(0, planningIncome - monthlyExpenses - existingEMIs)
+        max(0, planningIncome - monthlyExpenses)
     }
     private var contributionCap: Double { monthlySavings * 0.5 }
     private var sliderMin: Double { 500 }
