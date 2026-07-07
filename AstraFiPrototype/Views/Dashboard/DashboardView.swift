@@ -80,7 +80,7 @@ struct DashboardView: View {
         .fullScreenCover(isPresented: $showingMonthlyAssessment) {
             StartAssesmentView(
                 mode: .update,
-                prefilledData: appState.currentProfile.map(CompleteAssessmentData.prefilled(from:)),
+                prefilledData: appState.currentProfile.map { CompleteAssessmentData.prefilled(from: $0) },
                 onSaveComplete: {
                     showingMonthlyAssessment = false
                 }
@@ -491,7 +491,7 @@ struct DashboardView: View {
                     }
                 }
                 .padding(.horizontal, 2)
-                .padding(.vertical, 2)
+                .padding(.vertical, 8)
             }
         }
     }
@@ -821,4 +821,3 @@ private struct DashboardAllocationData: Identifiable {
     let color: Color
     var id: String { name }
 }
-

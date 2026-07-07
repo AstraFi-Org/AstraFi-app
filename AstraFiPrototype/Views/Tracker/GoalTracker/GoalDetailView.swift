@@ -184,6 +184,12 @@ struct GoalDetailView: View {
         return linked.filter { $0.mode == .sip }.reduce(0.0) { $0 + $1.investmentAmount }
     }
 
+    private var sipChartUpperBound: Double {
+        let visibleMax = dynamicSIPData.map(\.amount).max() ?? 0
+        let baseMax = max(sipBaseAmount, 1000)
+        return max(visibleMax, baseMax) * 1.3
+    }
+
     private var linkedFundName: String {
         let linked = goal.map { appState.investments(for: $0.id) } ?? []
         if linked.isEmpty { return "" }
@@ -437,12 +443,17 @@ struct GoalDetailView: View {
                     .cornerRadius(4)
             }
             .frame(height: 120)
-            .chartYScale(domain: 0...(max(sipBaseAmount * 1.5, 1000)))
+            .chartYScale(domain: 0...sipChartUpperBound)
             .chartYAxis(.hidden)
             .chartXAxis {
                 AxisMarks(values: .automatic) { _ in
                     AxisValueLabel().font(.caption2).foregroundStyle(.secondary)
                 }
+            }
+            .chartPlotStyle { plotArea in
+                plotArea
+                    .padding(.top, 12)
+                    .padding(.horizontal, 4)
             }
 
             HStack(spacing: 16) {

@@ -59,7 +59,7 @@ struct LoanTrackerView: View {
 
                 if loans.isEmpty {
                     EmptyLoansView()
-                } else {
+                } else {    
                     VStack(alignment: .leading, spacing: 12) {
                         Text("Active Loans")
                             .font(.system(size: 20, weight: .bold))
