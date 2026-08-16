@@ -273,7 +273,7 @@ private struct InvestmentSummaryCard: View {
     let asset: InvestmentSummaryAsset
 
     var body: some View {
-        VStack(alignment: .leading, spacing: 14) {
+        VStack(alignment: .leading, spacing: 12) {
             HStack(alignment: .top, spacing: 10) {
                 AssetIcon(kind: asset.kind, size: 36)
                 VStack(alignment: .leading, spacing: 5) {
@@ -281,25 +281,29 @@ private struct InvestmentSummaryCard: View {
                         .font(.system(size: 16, weight: .bold))
                         .foregroundStyle(.primary)
                         .lineLimit(2)
-                        .fixedSize(horizontal: false, vertical: true)
+                        .minimumScaleFactor(0.82)
                     Text(asset.sector)
                         .font(.system(size: 12, weight: .semibold))
                         .foregroundStyle(.secondary)
                         .lineLimit(1)
                 }
+                .frame(height: 58, alignment: .topLeading)
                 Spacer(minLength: 8)
             }
             
-            Spacer(minLength: 0)
+            Spacer(minLength: 8)
 
             HStack(spacing: 8) {
                 InfoPill(title: asset.kind == .mutualFund ? "Current NAV" : "Current Price", value: valueText(for: asset), color: asset.kind.accent)
                 InfoPill(title: "Growth", value: growthText(for: asset), color: growthColor(for: asset))
             }
             .frame(maxWidth: .infinity)
+            .frame(height: 48)
         }
-        .padding(16)
-        .frame(width: 248, height: 152, alignment: .topLeading)
+        .padding(.top, 16)
+        .padding(.horizontal, 16)
+        .padding(.bottom, 18)
+        .frame(width: 248, height: 166, alignment: .topLeading)
         .background(AppTheme.cardBackground)
         .clipShape(RoundedRectangle(cornerRadius: 20, style: .continuous))
         .shadow(color: AppTheme.adaptiveShadow.opacity(0.7), radius: 10, x: 0, y: 3)
@@ -310,7 +314,7 @@ struct InvestmentHomePreviewCard: View {
     let asset: InvestmentSummaryAsset
 
     var body: some View {
-        VStack(alignment: .leading, spacing: 14) {
+        VStack(alignment: .leading, spacing: 12) {
             HStack(alignment: .top, spacing: 10) {
                 AssetIcon(kind: asset.kind, size: 36)
                 VStack(alignment: .leading, spacing: 5) {
@@ -318,25 +322,29 @@ struct InvestmentHomePreviewCard: View {
                         .font(.system(size: 16, weight: .bold))
                         .foregroundStyle(.primary)
                         .lineLimit(2)
-                        .fixedSize(horizontal: false, vertical: true)
+                        .minimumScaleFactor(0.82)
                     Text(asset.sector)
                         .font(.system(size: 12, weight: .semibold))
                         .foregroundStyle(.secondary)
                         .lineLimit(1)
                 }
+                .frame(height: 58, alignment: .topLeading)
                 Spacer(minLength: 8)
             }
             
-            Spacer(minLength: 0)
+            Spacer(minLength: 8)
 
             HStack(spacing: 8) {
                 InfoPill(title: asset.kind == .mutualFund ? "Current NAV" : "Current Price", value: valueText(for: asset), color: asset.kind.accent)
                 InfoPill(title: "Growth", value: growthText(for: asset), color: growthColor(for: asset))
             }
             .frame(maxWidth: .infinity)
+            .frame(height: 48)
         }
-        .padding(16)
-        .frame(width: 248, height: 152, alignment: .topLeading)
+        .padding(.top, 16)
+        .padding(.horizontal, 16)
+        .padding(.bottom, 18)
+        .frame(width: 248, height: 166, alignment: .topLeading)
         .background(AppTheme.cardBackground)
         .clipShape(RoundedRectangle(cornerRadius: 20, style: .continuous))
         .shadow(color: AppTheme.adaptiveShadow.opacity(0.7), radius: 10, x: 0, y: 3)
@@ -421,6 +429,14 @@ private struct OverviewTab: View {
                         }
                     }
                 }
+            } else if asset.kind == .stock {
+                DetailCard(title: "Company Snapshot", systemImage: "building.2.fill") {
+                    MetricGrid(metrics: stockSnapshotMetrics)
+                    Text("Provider profile text is still loading or unavailable, so this snapshot uses the selected stock, exchange, price, category, and available financials.")
+                        .font(.system(size: 13, weight: .medium))
+                        .foregroundStyle(.secondary)
+                        .fixedSize(horizontal: false, vertical: true)
+                }
             } else if let fund = snapshot?.mutualFund {
                 DetailCard(title: "Mutual Fund Detail", systemImage: "chart.pie.fill") {
                     MetricGrid(metrics: [
@@ -445,6 +461,17 @@ private struct OverviewTab: View {
                 }
             }
         }
+    }
+
+    private var stockSnapshotMetrics: [InvestmentMetric] {
+        [
+            InvestmentMetric(title: "Company", value: asset.name, systemImage: "building.2.fill", color: asset.kind.accent),
+            InvestmentMetric(title: "Symbol", value: asset.symbol, systemImage: "tag.fill", color: AppTheme.auraMint),
+            InvestmentMetric(title: "Exchange", value: asset.metadata.isEmpty ? "Market" : asset.metadata, systemImage: "building.columns.fill", color: AppTheme.auraPurple),
+            InvestmentMetric(title: "Sector", value: asset.sector, systemImage: "square.grid.2x2.fill", color: AppTheme.vibrantCyan),
+            InvestmentMetric(title: "Current Price", value: asset.currentValue?.intelligenceCurrency ?? "Loading", systemImage: "indianrupeesign.circle.fill", color: AppTheme.auraGreen),
+            InvestmentMetric(title: "Daily Change", value: asset.dailyChange?.percentText ?? "Unavailable", systemImage: "chart.line.uptrend.xyaxis", color: AppTheme.vibrantOrange)
+        ]
     }
 }
 
@@ -494,6 +521,10 @@ private struct FinancialsTab: View {
     private var metrics: [InvestmentMetric] {
         if let financials = snapshot?.financials {
             return [
+                InvestmentMetric(title: "Market Cap", value: financials.marketCap?.indianMarketCapText ?? "Unavailable", systemImage: "building.columns.fill", color: AppTheme.auraIndigo),
+                InvestmentMetric(title: "P/E Ratio", value: financials.peRatio.map { String(format: "%.1fx", $0) } ?? "Unavailable", systemImage: "scale.3d", color: AppTheme.auraPurple),
+                InvestmentMetric(title: "52W High", value: financials.weekHigh52?.intelligenceCurrency ?? "Unavailable", systemImage: "arrow.up.right.circle.fill", color: AppTheme.auraGreen),
+                InvestmentMetric(title: "52W Low", value: financials.weekLow52?.intelligenceCurrency ?? "Unavailable", systemImage: "arrow.down.right.circle.fill", color: AppTheme.vibrantOrange),
                 InvestmentMetric(title: "Revenue Growth", value: financials.revenue?.percentText ?? "Unavailable", systemImage: "chart.line.uptrend.xyaxis", color: AppTheme.auraGreen),
                 InvestmentMetric(title: "Net Profit Margin", value: financials.netProfit?.percentText ?? "Unavailable", systemImage: "banknote.fill", color: AppTheme.auraMint),
                 InvestmentMetric(title: "EPS", value: financials.eps.map { String(format: "%.2f", $0) } ?? "Unavailable", systemImage: "plus.forwardslash.minus", color: AppTheme.auraIndigo),
@@ -508,8 +539,8 @@ private struct FinancialsTab: View {
         }
 
         return [
-            InvestmentMetric(title: "Current NAV", value: asset.currentValue?.intelligenceCurrency ?? "Loading", systemImage: "indianrupeesign.circle.fill", color: AppTheme.auraGreen),
-            InvestmentMetric(title: "1Y Return", value: asset.oneYearReturn?.percentText ?? "Based on NAV history", systemImage: "chart.line.uptrend.xyaxis", color: AppTheme.auraIndigo),
+            InvestmentMetric(title: asset.kind == .mutualFund ? "Current NAV" : "Current Price", value: asset.currentValue?.intelligenceCurrency ?? "Loading", systemImage: "indianrupeesign.circle.fill", color: AppTheme.auraGreen),
+            InvestmentMetric(title: "1Y Return", value: asset.oneYearReturn?.percentText ?? (asset.kind == .mutualFund ? "Based on NAV history" : "Based on price history"), systemImage: "chart.line.uptrend.xyaxis", color: AppTheme.auraIndigo),
             InvestmentMetric(title: "Risk Level", value: asset.riskLevel.rawValue, systemImage: "exclamationmark.triangle.fill", color: asset.riskLevel.color),
             InvestmentMetric(title: "Category", value: asset.sector, systemImage: "square.grid.2x2.fill", color: AppTheme.auraPurple)
         ]
@@ -680,6 +711,8 @@ private struct InfoPill: View {
                 .font(.system(size: 10, weight: .bold))
                 .foregroundStyle(.secondary)
                 .textCase(.uppercase)
+                .lineLimit(1)
+                .minimumScaleFactor(0.82)
                 .frame(maxWidth: .infinity, alignment: .leading)
             Text(value)
                 .font(.system(size: 12, weight: .bold))
@@ -689,8 +722,8 @@ private struct InfoPill: View {
                 .frame(maxWidth: .infinity, alignment: .leading)
         }
         .padding(.horizontal, 10)
-        .padding(.vertical, 8)
-        .frame(maxWidth: .infinity, alignment: .leading)
+        .padding(.vertical, 7)
+        .frame(maxWidth: .infinity, minHeight: 48, alignment: .leading)
         .background(color.opacity(0.10))
         .clipShape(RoundedRectangle(cornerRadius: 12, style: .continuous))
     }
@@ -1264,5 +1297,24 @@ private func changeColor(for asset: InvestmentSummaryAsset) -> Color {
 #Preview {
     NavigationStack {
         InvestmentIntelligenceView()
+    }
+}
+
+#Preview("Company Profile Summary") {
+    ScrollView {
+        CompanyProfileSummary(
+            profile: CompanyProfileSnapshot(
+                name: "Tata Consultancy Services",
+                ticker: "TCS.NS",
+                sector: "Technology",
+                industry: "Information Technology Services",
+                country: "India",
+                exchange: "NSE",
+                logoURL: nil,
+                description: "Tata Consultancy Services Limited is a worldwide leader in delivering information technology and IT-enabled services. Its operations are structured into business segments including Banking, Financial Services and Insurance, Manufacturing, Retail and Consumer Business, Communication, Media and Technology, and Life Sciences and Healthcare. The company provides proprietary platforms and software solutions including CHROMA, ignio, TCS iON, TAP, TCS MasterCraft, Quartz, TCS OmniStore, OPTUMERA, and TwinX. TCS also offers cloud, consulting, cybersecurity, analytics, and enterprise transformation services for global clients."
+            ),
+            accent: AppTheme.auraIndigo
+        )
+        .padding()
     }
 }

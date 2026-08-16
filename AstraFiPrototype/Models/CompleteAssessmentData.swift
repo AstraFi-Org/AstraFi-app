@@ -16,6 +16,7 @@ final class CompleteAssessmentData {
 
     // Insurance Flow
     var isInsured = false
+    var hasCompletedInsuranceStep = false
     var numberOfDependents = ""
     var areDependentsInsured = false
     var dependentInsuranceEntries: [AssessmentInsuranceEntry] = []
@@ -48,6 +49,7 @@ extension CompleteAssessmentData {
         data.income = Self.numberString(profile.basicDetails.monthlyIncomeAfterTax)
         data.expenditure = Self.numberString(profile.basicDetails.monthlyExpenses)
         data.emergencyFundAmount = Self.numberString(profile.basicDetails.emergencyFundAmount)
+        data.isInsured = !profile.insurances.isEmpty
         data.investmentEntries = profile.investments
             .filter { $0.brokerSource != "Upstox" }
             .map { Self.investmentEntry(from: $0) }

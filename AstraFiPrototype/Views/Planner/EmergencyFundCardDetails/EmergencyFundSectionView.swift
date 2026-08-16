@@ -139,6 +139,9 @@ struct EmergencyFundSectionView: View {
     private var monthlyIncome: Double   { profile?.basicDetails.monthlyIncome ?? 0 }
     private var monthlyExpenses: Double { profile?.basicDetails.monthlyExpenses ?? 0 }
     private var incomeAfterTax: Double  { profile?.basicDetails.monthlyIncomeAfterTax ?? 0 }
+    private var planningIncome: Double {
+        monthlyIncome > 0 ? monthlyIncome : incomeAfterTax
+    }
 
     /// What the user has already saved toward emergency fund
     private var currentSaved: Double { profile?.basicDetails.emergencyFundAmount ?? 0 }
@@ -158,15 +161,14 @@ struct EmergencyFundSectionView: View {
     private var goalMet: Bool { remainingNeeded <= 0 && emergencyFundTarget > 0 }
     private var hasData: Bool { emergencyFundTarget > 0 }
 
-    // MARK: Surplus & Slider Bounds
-    private var monthlySurplus: Double {
-        let emi  = profile?.loans.reduce(0.0) { $0 + $1.calculatedEMI } ?? 0
-        let base = incomeAfterTax > 0 ? incomeAfterTax : monthlyIncome
-        return max(500, base - monthlyExpenses - emi)
+    // MARK: Savings & Slider Bounds
+    private var monthlySavings: Double {
+        max(0, planningIncome - monthlyExpenses)
     }
+    private var contributionCap: Double { monthlySavings * 0.5 }
     private var sliderMin: Double { 500 }
     private var sliderMax: Double {
-        let cap = remainingNeeded > 0 ? min(monthlySurplus, remainingNeeded) : monthlySurplus
+        let cap = remainingNeeded > 0 ? min(contributionCap, remainingNeeded) : contributionCap
         return max(sliderMin + 500, cap)
     }
 
@@ -255,6 +257,8 @@ struct EmergencyFundSectionView: View {
             )
             .environment(appState)
         }
+        .onChange(of: monthlySavings) { _, _ in clampMonthlyContribution() }
+        .onChange(of: remainingNeeded) { _, _ in clampMonthlyContribution() }
     }
 
     // MARK: Header
@@ -343,8 +347,8 @@ struct EmergencyFundSectionView: View {
                 HStack {
                     Text(sliderMin.toCurrency(compact: true)).font(.system(size: 11, weight: .medium)).foregroundStyle(.secondary)
                     Spacer()
-                    if monthlySurplus > 0 {
-                        Text("Surplus: \(monthlySurplus.toCurrency(compact: true))/mo").font(.system(size: 11, weight: .medium)).foregroundStyle(.secondary)
+                    if monthlySavings > 0 {
+                        Text("Savings: \(monthlySavings.toCurrency(compact: true))/mo").font(.system(size: 11, weight: .medium)).foregroundStyle(.secondary)
                     }
                     Spacer()
                     Text(sliderMax.toCurrency(compact: true)).font(.system(size: 11, weight: .medium)).foregroundStyle(.secondary)
@@ -465,10 +469,18 @@ struct EmergencyFundSectionView: View {
     // MARK: Helpers
     private func syncFromProfile() {
         if let a = profile?.emergencyFundAllocation { pTBills = a.treasuryBills; pSavings = a.savingsAccount; pSweepFD = a.sweepInFD }
-        // Smart default: 30% of surplus, snapped to nearest ₹500
+        // Smart default: 30% of savings, snapped to nearest ₹500 and capped at 50%.
         if monthlyContribution == 0 && hasData {
-            let suggested = (monthlySurplus * 0.30 / 500).rounded() * 500
+            let suggested = (monthlySavings * 0.30 / 500).rounded() * 500
             monthlyContribution = min(max(sliderMin, suggested), sliderMax)
+        }
+    }
+    private func clampMonthlyContribution() {
+        guard hasData else { return }
+        if monthlyContribution == 0 {
+            syncFromProfile()
+        } else {
+            monthlyContribution = min(max(sliderMin, monthlyContribution), sliderMax)
         }
     }
     private func saveAllocation() {
@@ -652,8 +664,10 @@ struct AllocationRecommendationScreen: View {
         HStack(alignment: .top, spacing: 10) {
             Image(systemName: "lightbulb.fill").font(.system(size: 13)).foregroundStyle(Color(hex: "#FF9F0A")).padding(.top, 1)
             Text(riskRationale).font(.system(size: 13, design: .rounded)).foregroundStyle(.secondary).fixedSize(horizontal: false, vertical: true)
+            Spacer(minLength: 0)
         }
         .padding(14)
+        .frame(maxWidth: .infinity, alignment: .leading)
         .adaptivePlanCard(tint: Color(hex: "#FF9F0A"), colorScheme: colorScheme, cornerRadius: 12, tintOpacity: 0.08)
     }
 

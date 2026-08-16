@@ -43,7 +43,9 @@ struct InvestmentQuestionView: View {
                                 .foregroundStyle(.secondary)
                                 .fixedSize(horizontal: false, vertical: true)
                         }
+                        .frame(maxWidth: .infinity, alignment: .leading)
                     }
+                    .frame(maxWidth: .infinity, alignment: .leading)
                     
                     
                     

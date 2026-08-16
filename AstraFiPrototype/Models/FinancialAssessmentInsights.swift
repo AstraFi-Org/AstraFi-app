@@ -539,9 +539,11 @@ struct FinancialAssessmentInsights: Hashable, Codable {
         }
 
         func matches(_ other: InvestmentSnapshot) -> Bool {
-            name == other.name &&
-            typeName == other.typeName &&
-            abs(amount - other.amount) < 1
+            guard typeName == other.typeName else { return false }
+            if !name.isEmpty && name == other.name {
+                return true
+            }
+            return abs(amount - other.amount) < 1
         }
 
         private static let highRiskKeywords = [

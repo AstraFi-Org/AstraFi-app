@@ -25,8 +25,11 @@ struct AssessmentProgressHeader: View {
                     .font(.system(size: 14, design: .rounded))
                     .foregroundStyle(.secondary)
                     .lineLimit(2)
+                    .fixedSize(horizontal: false, vertical: true)
             }
+            .frame(maxWidth: .infinity, alignment: .leading)
         }
+        .frame(maxWidth: .infinity, alignment: .leading)
     }
 }
 

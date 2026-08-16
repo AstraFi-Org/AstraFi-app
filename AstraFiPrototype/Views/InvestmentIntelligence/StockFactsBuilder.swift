@@ -2,14 +2,11 @@ import Foundation
 
 enum StockFactsBuilderError: LocalizedError {
     case unsupportedAsset
-    case noProviderFacts
 
     var errorDescription: String? {
         switch self {
         case .unsupportedAsset:
             return "AI stock intelligence is available for stocks only."
-        case .noProviderFacts:
-            return "Provider facts are unavailable for this stock right now."
         }
     }
 }
@@ -63,10 +60,6 @@ final class StockFactsBuilder {
         let resolvedRecommendations = await recommendations
         let resolvedNews = await news
 
-        guard resolvedFMPProfile != nil || resolvedFMPMetrics != nil || resolvedFMPRatios != nil || resolvedProfile != nil || resolvedFinancials != nil || !resolvedNews.isEmpty else {
-            throw StockFactsBuilderError.noProviderFacts
-        }
-
         let buyCount = recommendationCount(in: resolvedRecommendations, labels: ["Strong Buy", "Buy"])
         let holdCount = recommendationCount(in: resolvedRecommendations, labels: ["Hold"])
         let sellCount = recommendationCount(in: resolvedRecommendations, labels: ["Sell", "Strong Sell"])
@@ -87,7 +80,7 @@ final class StockFactsBuilder {
             industry: resolvedFMPProfile?.industry ?? resolvedProfile?.industry ?? asset.sector,
             marketCap: normalizedMarketCap(resolvedFMPProfile?.mktCap) ?? resolvedFinancials?.marketCap ?? 0,
             employees: employeeCount(from: resolvedFMPProfile?.fullTimeEmployees),
-            description: resolvedFMPProfile?.description ?? resolvedProfile?.description ?? "Provider profile text is unavailable for this company.",
+            description: resolvedFMPProfile?.description ?? resolvedProfile?.description ?? fallbackDescription(for: asset),
             peRatio: resolvedFMPMetrics?.peRatioTTM ?? resolvedFMPRatios?.priceEarningsRatioTTM ?? resolvedFinancials?.peRatio ?? 0,
             roe: resolvedFMPMetrics?.roeTTM ?? resolvedFMPRatios?.returnOnEquityTTM ?? resolvedFinancials?.roe ?? 0,
             debtToEquity: resolvedFMPMetrics?.debtToEquityTTM ?? resolvedFMPRatios?.debtEquityRatioTTM ?? resolvedFinancials?.debtRatio ?? 0,
@@ -141,6 +134,18 @@ final class StockFactsBuilder {
 
     private func normalizedMarketCap(_ marketCap: Double?) -> Double? {
         guard let marketCap else { return nil }
-        return marketCap > 1_000_000 ? marketCap / 1_000_000 : marketCap
+        return marketCap
+    }
+
+    private func fallbackDescription(for asset: InvestmentSummaryAsset) -> String {
+        var details = "\(asset.name) is listed as \(asset.symbol)"
+        if !asset.sector.isEmpty {
+            details += " in the \(asset.sector) category"
+        }
+        if !asset.metadata.isEmpty {
+            details += " on \(asset.metadata)"
+        }
+        details += ". Provider profile text is unavailable right now."
+        return details
     }
 }

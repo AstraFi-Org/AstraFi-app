@@ -46,6 +46,8 @@ struct InsuranceDetailsScreen: View {
                             .onChange(of: data.isInsured) { _, newValue in
                                 if newValue && data.insuranceEntries.isEmpty {
                                     data.insuranceEntries.append(AssessmentInsuranceEntry())
+                                } else if !newValue {
+                                    data.insuranceEntries.removeAll()
                                 }
                             }
                     }
@@ -214,11 +216,18 @@ struct InsuranceDetailsScreen: View {
                 }
 
                 AssessmentFooterButton(label: "See My Report", enabled: true, isLast: true) {
+                    data.hasCompletedInsuranceStep = true
+                    if !data.isInsured {
+                        data.insuranceEntries.removeAll()
+                    }
+
                     // Merge dependent insurance policies into the main insuranceEntries
                     // so the report and AppStateManager both see them as one unified list.
-                    for depEntry in data.dependentInsuranceEntries {
-                        if !data.insuranceEntries.contains(where: { $0.id == depEntry.id }) {
-                            data.insuranceEntries.append(depEntry)
+                    if data.isInsured || data.areDependentsInsured {
+                        for depEntry in data.dependentInsuranceEntries {
+                            if !data.insuranceEntries.contains(where: { $0.id == depEntry.id }) {
+                                data.insuranceEntries.append(depEntry)
+                            }
                         }
                     }
                     // Persist insurance (and all other assessment) data to the profile

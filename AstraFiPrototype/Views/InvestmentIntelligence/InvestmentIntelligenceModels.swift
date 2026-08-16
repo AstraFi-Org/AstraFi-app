@@ -199,6 +199,26 @@ extension Double {
         return intelligenceCurrency
     }
 
+    var indianMarketCapText: String {
+        let absValue = abs(self)
+        let sign = self < 0 ? "-" : ""
+        let formatter = NumberFormatter()
+        formatter.numberStyle = .decimal
+        formatter.maximumFractionDigits = 0
+
+        if absValue >= 10_000_000 {
+            let value = formatter.string(from: NSNumber(value: absValue / 10_000_000)) ?? String(format: "%.0f", absValue / 10_000_000)
+            return "\(sign)₹\(value) Cr"
+        }
+
+        if absValue >= 100_000 {
+            let value = formatter.string(from: NSNumber(value: absValue / 100_000)) ?? String(format: "%.0f", absValue / 100_000)
+            return "\(sign)₹\(value) L"
+        }
+
+        return intelligenceCurrency
+    }
+
     var percentText: String {
         String(format: "%.2f%%", self)
     }

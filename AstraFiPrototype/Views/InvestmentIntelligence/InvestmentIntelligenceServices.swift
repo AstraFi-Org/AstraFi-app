@@ -296,7 +296,7 @@ final class FinancialService {
 
     private func normalizedMarketCap(_ marketCap: Double?) -> Double? {
         guard let marketCap else { return nil }
-        return marketCap > 1_000_000 ? marketCap / 1_000_000 : marketCap
+        return marketCap
     }
 }
 

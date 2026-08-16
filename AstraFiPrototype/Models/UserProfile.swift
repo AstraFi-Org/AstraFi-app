@@ -18,6 +18,48 @@ struct AstraUserProfile: Codable, Identifiable, Equatable {
     var monthlyHealthAssessments: [AstraHealthAssessment] = []
     var isSetuConnected: Bool = false
     var emergencyFundAllocation: AstraEmergencyFundAllocation?
+
+    mutating func updateManualAdjustment(for type: AstraInvestmentType, targetAmount: Double) {
+        let manualName = "Manual \(type.rawValue) Adjustment"
+        let otherInvestments = investments.filter { $0.investmentType == type && $0.investmentName != manualName }
+        let otherTotal = otherInvestments.reduce(0.0) { $0 + $1.currentValue.safeFinite }
+        
+        investments.removeAll { $0.investmentType == type && $0.investmentName == manualName }
+        
+        let needed = targetAmount - otherTotal
+        if needed != 0 {
+            let adj = AstraInvestment(
+                investmentType: type,
+                investmentName: manualName,
+                investmentAmount: needed,
+                startDate: Date(),
+                mode: .lumpsum
+            )
+            investments.append(adj)
+        }
+    }
+    
+    mutating func updateManualLoanAdjustment(for type: AstraLoanType, targetAmount: Double) {
+        let manualName = "Manual \(type.rawValue) Adjustment"
+        let otherLoans = loans.filter { $0.loanType == type && $0.loanName != manualName }
+        let otherTotal = otherLoans.reduce(0.0) { $0 + $1.loanAmount }
+        
+        loans.removeAll { $0.loanType == type && $0.loanName == manualName }
+        
+        let needed = targetAmount - otherTotal
+        if needed != 0 {
+            let adj = AstraLoan(
+                loanName: manualName,
+                loanType: type,
+                lender: .other,
+                loanAmount: needed,
+                interestRate: 0,
+                loanStartDate: Date(),
+                loanTenureMonths: 1
+            )
+            loans.append(adj)
+        }
+    }
 }
 
 struct AstraEmergencyFundAllocation: Codable, Equatable {
@@ -205,7 +247,11 @@ extension AstraInvestment {
         }
         
         let price = livePrice ?? lastNAV ?? 0
-        return (currentUnits.safeFinite * price.safeFinite).safeFinite
+        let calculated = (currentUnits.safeFinite * price.safeFinite).safeFinite
+        if calculated > 0 {
+            return calculated
+        }
+        return investmentAmount.safeFinite
     }
 
     var currentGain: Double {

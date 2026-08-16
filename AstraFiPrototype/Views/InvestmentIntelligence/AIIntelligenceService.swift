@@ -344,10 +344,24 @@ final class AIIntelligenceService {
     }
 
     private func formattedCurrency(_ value: Double) -> String {
+        let absValue = abs(value)
+        let sign = value < 0 ? "-" : ""
         let formatter = NumberFormatter()
+        formatter.numberStyle = .decimal
+        formatter.maximumFractionDigits = 0
+
+        if absValue >= 10_000_000 {
+            let formatted = formatter.string(from: NSNumber(value: absValue / 10_000_000)) ?? String(format: "%.0f", absValue / 10_000_000)
+            return "\(sign)₹\(formatted) Cr"
+        }
+
+        if absValue >= 100_000 {
+            let formatted = formatter.string(from: NSNumber(value: absValue / 100_000)) ?? String(format: "%.0f", absValue / 100_000)
+            return "\(sign)₹\(formatted) L"
+        }
+
         formatter.numberStyle = .currency
         formatter.currencyCode = "INR"
-        formatter.maximumFractionDigits = 0
         return formatter.string(from: NSNumber(value: value)) ?? "₹\(Int(value))"
     }
 
