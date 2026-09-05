@@ -148,7 +148,6 @@ struct PlannerView: View {
                     .shadow(color: AppTheme.adaptiveShadow, radius: 14, x: 0, y: 5)
                 }
 
-                
                 // MARK: - EmergencyFund
                 VStack(alignment: .leading, spacing: 10) {
                     HStack(spacing: 8) {
@@ -160,6 +159,10 @@ struct PlannerView: View {
                     }
                     EmergencyFundSectionView()
                 }
+
+                // MARK: - Financial Decision Center
+                FinancialDecisionCenterSection()
+
                 //New Investment plan and Company Analysis
                 actionButtonsSection
                 

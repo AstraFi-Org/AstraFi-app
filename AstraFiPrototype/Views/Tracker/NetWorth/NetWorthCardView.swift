@@ -14,6 +14,7 @@ struct NetWorthCard: View {
     @State private var extraLoanRepayment: Double = 0
     @State private var inflationRate: Double = 0.06
     @State private var showAddNetWorth = false
+    @State private var areScenarioControlsExpanded = false
     
     @Environment(\.colorScheme) private var colorScheme
 
@@ -215,55 +216,65 @@ struct NetWorthCard: View {
             .animation(.easeInOut(duration: 0.3), value: hasSliderChanges)
 
             VStack(alignment: .leading, spacing: 14) {
-                Text("Scenario Controls")
-                    .font(.auraBody(size: 16, weight: .semibold))
+                Button {
+                    withAnimation(.spring(response: 0.32, dampingFraction: 0.82)) {
+                        areScenarioControlsExpanded.toggle()
+                    }
+                } label: {
+                    HStack {
+                        Text("Scenario Controls")
+                            .font(.auraBody(size: 16, weight: .semibold))
+                            .foregroundStyle(.primary)
+                        Spacer()
+                        Image(systemName: "chevron.down")
+                            .font(.subheadline.weight(.bold))
+                            .foregroundStyle(AppTheme.auraIndigo)
+                            .rotationEffect(.degrees(areScenarioControlsExpanded ? 180 : 0))
+                            .accessibilityHidden(true)
+                    }
+                    .contentShape(Rectangle())
+                }
+                .buttonStyle(.plain)
+                .accessibilityLabel(areScenarioControlsExpanded ? "Collapse scenario controls" : "Expand scenario controls")
 
-                ProjectionSliderRow(
-                    title: "Increase monthly investment",
-                    icon: "plus.circle.fill",
-                    value: $extraMonthlyInvestment,
-                    range: 0...maxInvestmentStepUp,
-                    step: 1000,
-                    tint: AppTheme.auraGreen,
-                    suffix: "/mo"
-                )
+                if areScenarioControlsExpanded {
+                    VStack(spacing: 14) {
+                        ProjectionSliderRow(
+                            title: "Increase monthly investment",
+                            icon: "plus.circle.fill",
+                            value: $extraMonthlyInvestment,
+                            range: 0...maxInvestmentStepUp,
+                            step: 1000,
+                            tint: AppTheme.auraGreen,
+                            suffix: "/mo"
+                        )
 
-                ProjectionSliderRow(
-                    title: "Add extra loan repayment",
-                    icon: "minus.circle.fill",
-                    value: $extraLoanRepayment,
-                    range: 0...30000,
-                    step: 1000,
-                    tint: AppTheme.vibrantRed,
-                    suffix: "/mo"
-                )
+                        ProjectionSliderRow(
+                            title: "Add extra loan repayment",
+                            icon: "minus.circle.fill",
+                            value: $extraLoanRepayment,
+                            range: 0...30000,
+                            step: 1000,
+                            tint: AppTheme.vibrantRed,
+                            suffix: "/mo"
+                        )
 
-                ScenarioPercentSliderRow(
-                    title: "Inflation",
-                    icon: "chart.line.downtrend.xyaxis",
-                    value: $inflationRate,
-                    range: 0.03...0.08,
-                    step: 0.005,
-                    tint: AppTheme.vibrantOrange
-                )
+                        ScenarioPercentSliderRow(
+                            title: "Inflation",
+                            icon: "chart.line.downtrend.xyaxis",
+                            value: $inflationRate,
+                            range: 0.03...0.08,
+                            step: 0.005,
+                            tint: AppTheme.vibrantOrange
+                        )
+                    }
+                    .transition(.opacity.combined(with: .move(edge: .top)))
+                }
             }
             .padding(14)
             .background(AppTheme.elevatedCardBackground)
             .clipShape(RoundedRectangle(cornerRadius: 18, style: .continuous))
 
-            InflationImpactSection(
-                projectedValue: finalSummary.nominalNetWorth,
-                realValue: finalSummary.realPurchasingPower,
-                years: projectionYears,
-                inflationRate: hasSliderChanges ? inflationRate : defaultInflationRate
-            )
-
-            ProjectionBreakdownSection(
-                items: projectionItems,
-                years: projectionYears,
-                monthlyInvestment: extraMonthlyInvestment,
-                monthlyLoanPayment: monthlyEMI + extraLoanRepayment
-            )
         }
         .auraCardStyle(radius: 34)
         .sheet(isPresented: $showAddNetWorth) {
