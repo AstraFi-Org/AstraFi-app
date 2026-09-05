@@ -17,30 +17,33 @@ struct DashboardView: View {
     private var loans: [AstraLoan] { profile?.loans ?? [] }
     
     var body: some View {
-        ScrollView(showsIndicators: false) {
-            VStack(spacing: AppTheme.auraInterCardSpacing) {
-                investmentSummaryCard
-                
-                if shouldShowActionRequired {
-                    nextStepCard
-                } else if investments.isEmpty {
-                    emptyStateCard(
-                        icon: "sparkles",
-                        title: "Begin Your AstraFi Journey",
-                        message: "Complete your assessment to unlock personalised financial insights.",
-                        accentColor: AppTheme.auraGold
-                    )
+        GeometryReader { proxy in
+            ScrollView(.vertical, showsIndicators: false) {
+                VStack(spacing: AppTheme.auraInterCardSpacing) {
+                    investmentSummaryCard
+                    
+                    if shouldShowActionRequired {
+                        nextStepCard
+                    } else if investments.isEmpty {
+                        emptyStateCard(
+                            icon: "sparkles",
+                            title: "Begin Your AstraFi Journey",
+                            message: "Complete your assessment to unlock personalised financial insights.",
+                            accentColor: AppTheme.auraGold
+                        )
+                    }
+                    
+                    investmentIntelligenceSection
+                    goalsSection
+                    upcomingEMISection
                 }
-                
-                investmentIntelligenceSection
-                goalsSection
-                upcomingEMISection
+                .frame(width: max(0, proxy.size.width - (AppTheme.auraPadding * 2)), alignment: .center)
+                .padding(.horizontal, AppTheme.auraPadding)
+                .padding(.bottom, 48)
+                .contentShape(Rectangle())
+                .onTapGesture { hideKeyboard() }
             }
-            .frame(maxWidth: .infinity, alignment: .center)
-            .padding(.horizontal, AppTheme.auraPadding)
-            .padding(.bottom, 48)
-            .contentShape(Rectangle())
-            .onTapGesture { hideKeyboard() }
+            .frame(width: proxy.size.width)
         }
         .navigationTitle("Home")
         .navigationBarTitleDisplayMode(.large)
@@ -348,21 +351,21 @@ struct DashboardView: View {
                 }
             }
             
-//            NavigationLink(destination: PlannerView()) {
-//                HStack(spacing: 8) {
-//                    Text("View Full Analysis")
-//                        .font(.system(size: 14, weight: .semibold))
-//                    Spacer()
-//                    Image(systemName: "arrow.right")
-//                        .font(.system(size: 12, weight: .bold))
-//                }
-//                .foregroundStyle(.white)
-//                .padding(.horizontal, 18)
-//                .padding(.vertical, 13)
-//                .background(AppTheme.accentGradient)
-//                .clipShape(RoundedRectangle(cornerRadius: 14, style: .continuous))
-//                .shadow(color: Color(hex: "#007AFF").opacity(0.3), radius: 10, x: 0, y: 5)
-//            }
+            NavigationLink(destination: PlannerView()) {
+                HStack(spacing: 8) {
+                    Text("View Full Analysis")
+                        .font(.system(size: 14, weight: .semibold))
+                    Spacer()
+                    Image(systemName: "arrow.right")
+                        .font(.system(size: 12, weight: .bold))
+                }
+                .foregroundStyle(.white)
+                .padding(.horizontal, 18)
+                .padding(.vertical, 13)
+                .background(AppTheme.accentGradient)
+                .clipShape(RoundedRectangle(cornerRadius: 14, style: .continuous))
+                .shadow(color: Color(hex: "#007AFF").opacity(0.3), radius: 10, x: 0, y: 5)
+            }
         }
         .padding(20)
         .frame(maxWidth: .infinity, alignment: .leading)

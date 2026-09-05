@@ -297,7 +297,6 @@ struct AddInvestmentView: View {
                     }
                     .disabled(!canSave)
                 }
-                .sharedBackgroundVisibility(.visible)
             }
         }
     }

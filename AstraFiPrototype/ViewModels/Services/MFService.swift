@@ -12,7 +12,10 @@ class MFService {
 
     @ObservationIgnored private var historyCache: [String: [MFHistoryPoint]] = [:]
 
-    private let amfiURL = URL(string: "https://portal.amfiindia.com/spages/NAVAll.txt")!
+    private let amfiURLs = [
+        URL(string: "https://portal.amfiindia.com/spages/NAVAll.txt")!,
+        URL(string: "https://www.amfiindia.com/spages/NAVAll.txt")!
+    ]
 
     func fetchMFData(force: Bool = false) async {
         guard !isFetching else { return }
@@ -24,33 +27,36 @@ class MFService {
         isFetching = true
         defer { isFetching = false }
 
-        do {
-            var request = URLRequest(url: amfiURL)
-            request.timeoutInterval = 20
-            request.setValue("text/plain,*/*", forHTTPHeaderField: "Accept")
-            request.setValue("AstraFi/1.0 iOS", forHTTPHeaderField: "User-Agent")
+        for url in amfiURLs {
+            do {
+                var request = URLRequest(url: url)
+                request.timeoutInterval = 20
+                request.setValue("text/plain,*/*", forHTTPHeaderField: "Accept")
+                request.setValue("AstraFi/1.0 iOS", forHTTPHeaderField: "User-Agent")
 
-            let (data, response) = try await URLSession.shared.data(for: request)
-            guard let httpResponse = response as? HTTPURLResponse,
-                  200..<300 ~= httpResponse.statusCode else {
-                print("Error fetching AMFI data: invalid HTTP response")
+                let (data, response) = try await URLSession.shared.data(for: request)
+                guard let httpResponse = response as? HTTPURLResponse,
+                      200..<300 ~= httpResponse.statusCode else {
+                    print("Error fetching AMFI data from \(url): invalid HTTP response")
+                    continue
+                }
+
+                guard let content = String(data: data, encoding: .utf8) else { continue }
+
+                let parsed = parseAMFIData(content)
+                guard !parsed.isEmpty else {
+                    print("Error fetching AMFI data: no schemes parsed from \(url)")
+                    continue
+                }
+
+                await MainActor.run {
+                    self.allSchemes = parsed
+                    self.lastFetchDate = Date()
+                }
                 return
+            } catch {
+                print("Error fetching AMFI data from \(url): \(error)")
             }
-
-            guard let content = String(data: data, encoding: .utf8) else { return }
-
-            let parsed = parseAMFIData(content)
-            guard !parsed.isEmpty else {
-                print("Error fetching AMFI data: no schemes parsed")
-                return
-            }
-
-            await MainActor.run {
-                self.allSchemes = parsed
-                self.lastFetchDate = Date()
-            }
-        } catch {
-            print("Error fetching AMFI data: \(error)")
         }
     }
 
@@ -59,7 +65,10 @@ class MFService {
         let lines = content.components(separatedBy: .newlines)
 
         for line in lines {
-            let components = line.components(separatedBy: ";")
+            let lineStr = line.trimmingCharacters(in: .whitespacesAndNewlines)
+            guard !lineStr.isEmpty else { continue }
+
+            let components = lineStr.components(separatedBy: ";")
 
             guard components.count >= 6 else { continue }
 
@@ -69,15 +78,32 @@ class MFService {
 
             let isin = components[1].trimmingCharacters(in: .whitespaces)
             let alternateISIN = components[2].trimmingCharacters(in: .whitespaces)
-            let name = components[3].trimmingCharacters(in: .whitespaces)
-            let navString = components[4].trimmingCharacters(in: .whitespaces)
-            let date = components[5].trimmingCharacters(in: .whitespaces)
+
+            let navString: String
+            let date: String
+            let name: String
+
+            if components.count >= 8 {
+                let baseName = components[3].trimmingCharacters(in: .whitespaces)
+                let plan = components[4].trimmingCharacters(in: .whitespaces)
+                let option = components[5].trimmingCharacters(in: .whitespaces)
+
+                let nameParts = [baseName, plan, option].filter { !$0.isEmpty }
+                name = nameParts.joined(separator: " - ")
+
+                navString = components[6].trimmingCharacters(in: .whitespaces)
+                date = components[7].trimmingCharacters(in: .whitespaces)
+            } else {
+                name = components[3].trimmingCharacters(in: .whitespaces)
+                navString = components[4].trimmingCharacters(in: .whitespaces)
+                date = components[5].trimmingCharacters(in: .whitespaces)
+            }
 
             if let navValue = Double(navString) {
                 let scheme = MFScheme(
                     schemeCode: schemeCode,
                     isin: isin,
-                    alternateISIN: alternateISIN.isEmpty ? nil : alternateISIN,
+                    alternateISIN: (alternateISIN.isEmpty || alternateISIN == "-") ? nil : alternateISIN,
                     name: name,
                     nav: navValue,
                     date: date
@@ -92,34 +118,39 @@ class MFService {
     func searchSchemes(query: String) -> [MFScheme] {
         guard query.count >= 2 else { return [] }
         let lowerQuery = query.lowercased()
-        
-        // 1. Exact Match Check (Requirement: if name exact matches then show the same fund in list only)
+        let normQuery = lowerQuery.replacingOccurrences(of: "-", with: " ").replacingOccurrences(of: "  ", with: " ").trimmingCharacters(in: .whitespaces)
+
+        // 1. Exact Match Check
         if let exact = allSchemes.first(where: { $0.name.lowercased() == lowerQuery }) {
             return [exact]
         }
-        
-        // 2. High Priority: Contains query
-        let containsResults = allSchemes.filter { $0.name.lowercased().contains(lowerQuery) }
-        
+
+        // 2. High Priority: Contains query or normalized query
+        let containsResults = allSchemes.filter { scheme in
+            let lowerName = scheme.name.lowercased()
+            let normName = lowerName.replacingOccurrences(of: "-", with: " ").replacingOccurrences(of: "  ", with: " ")
+            return lowerName.contains(lowerQuery) || normName.contains(normQuery)
+        }
+
         // 3. Score and Sort
         let scoredItems = containsResults.map { scheme -> (scheme: MFScheme, score: Double) in
             var score = SearchUtility.fuzzyMatchScore(query: lowerQuery, target: scheme.name)
-            
+
             // AMC priority: If query matches the first word (AMC name)
             let firstWord = scheme.name.components(separatedBy: " ").first?.lowercased() ?? ""
             if firstWord == lowerQuery || firstWord.hasPrefix(lowerQuery) {
                 score += 0.2 // Boost AMC matches
             }
-            
+
             return (scheme, score)
         }
-        
+
         // 4. Fallback to Fuzzy Search if few results
         if scoredItems.count < 5 && query.count >= 3 {
-            let allScored = allSchemes.prefix(2000).map { scheme -> (scheme: MFScheme, score: Double) in // Limit full fuzzy to first 2000 for performance
+            let allScored = allSchemes.prefix(2000).map { scheme -> (scheme: MFScheme, score: Double) in
                 (scheme, SearchUtility.fuzzyMatchScore(query: lowerQuery, target: scheme.name))
             }.filter { $0.score > 0.6 }
-            
+
             return (scoredItems + allScored)
                 .sorted { $0.score > $1.score }
                 .map { $0.scheme }
@@ -127,7 +158,7 @@ class MFService {
                 .prefix(15)
                 .map { $0 }
         }
-        
+
         return scoredItems
             .sorted { $0.score > $1.score }
             .prefix(15)
@@ -147,12 +178,42 @@ class MFService {
     }
 
     func findSchemeCode(for name: String) -> String? {
+        let trimmedName = name.trimmingCharacters(in: .whitespacesAndNewlines)
+        guard !trimmedName.isEmpty else { return nil }
 
-        if let exact = allSchemes.first(where: { $0.name.lowercased() == name.lowercased() }) {
+        // 1. Direct exact match
+        if let exact = allSchemes.first(where: { $0.name.lowercased() == trimmedName.lowercased() }) {
             return exact.schemeCode
         }
 
-        return allSchemes.first(where: { name.lowercased().contains($0.name.lowercased()) || $0.name.lowercased().contains(name.lowercased()) })?.schemeCode
+        func normalize(_ str: String) -> String {
+            str.lowercased()
+                .replacingOccurrences(of: "-", with: " ")
+                .replacingOccurrences(of: "–", with: " ")
+                .replacingOccurrences(of: "_", with: " ")
+                .components(separatedBy: .whitespacesAndNewlines)
+                .filter { !$0.isEmpty }
+                .joined(separator: " ")
+        }
+
+        let normQuery = normalize(trimmedName)
+
+        // 2. Exact normalized match
+        if let normMatch = allSchemes.first(where: { normalize($0.name) == normQuery }) {
+            return normMatch.schemeCode
+        }
+
+        // 3. Substring normalized match
+        if let subMatch = allSchemes.first(where: {
+            let normScheme = normalize($0.name)
+            return normQuery.contains(normScheme) || normScheme.contains(normQuery)
+        }) {
+            return subMatch.schemeCode
+        }
+
+        // 4. Fallback search
+        let results = searchSchemes(query: trimmedName)
+        return results.first?.schemeCode
     }
 
     private func getFullHistory(for schemeCode: String) async throws -> [MFHistoryPoint] {

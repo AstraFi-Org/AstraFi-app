@@ -121,6 +121,7 @@ struct SignUpView: View {
     @State private var name: String = ""
     @State private var email: String = ""
     @State private var password: String = ""
+    @State private var showPassword: Bool = false
     @State private var confirmPassword: String = ""
     @State private var showConfirmPassword: Bool = false
     @State private var agreedToTerms: Bool = true
@@ -163,8 +164,9 @@ struct SignUpView: View {
                         .padding(.bottom, 20)
 
                     AuthFieldLabel(text: "Password")
-                    AuthInputField(placeholder: "Password", text: $password,
-                                   icon: "lock", isSecure: true)
+                    AuthPasswordField(placeholder: "Password",
+                                      text: $password,
+                                      showPassword: $showPassword)
                         .padding(.bottom, 20)
 
                     AuthFieldLabel(text: "Confirm Password")
@@ -316,5 +318,4 @@ struct SignUpView: View {
         return errors.isEmpty ? nil : errors.joined(separator: "\n")
     }
 }
-
 
