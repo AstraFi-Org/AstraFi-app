@@ -133,6 +133,7 @@ struct EmergencyFundSectionView: View {
     @State private var showManage:          Bool = false
     @State private var showEditSheet:       Bool = false
     @State private var showRecommendScreen: Bool = false
+    @State private var showFundSetup:       Bool = false
 
     // MARK: Profile accessors
     private var profile: AstraUserProfile? { appState.currentProfile }
@@ -247,6 +248,10 @@ struct EmergencyFundSectionView: View {
             ManageAllocationSheet(currentHolding: currentSaved, pTBills: $pTBills, pSavings: $pSavings, pSweepFD: $pSweepFD, onSave: saveAllocation)
                 .environment(appState)
         }
+        .navigationDestination(isPresented: $showFundSetup) {
+            EmergencyFundSetupView()
+                .environment(appState)
+        }
         .navigationDestination(isPresented: $showRecommendScreen) {
             AllocationRecommendationScreen(
                 currentHolding: currentSaved,
@@ -273,6 +278,12 @@ struct EmergencyFundSectionView: View {
                 Text(statusSubtitle).font(.system(size: 12, design: .rounded)).contentTransition(.numericText())
             }
             Spacer()
+            Button(currentSaved > 0 ? "Manage Fund" : "Start Fund") {
+                showFundSetup = true
+            }
+            .font(.system(size: 12, weight: .semibold, design: .rounded))
+            .buttonStyle(.borderedProminent)
+            .tint(AppTheme.auraIndigo)
         }
     }
     private var statusSubtitle: String {
@@ -487,6 +498,122 @@ struct EmergencyFundSectionView: View {
         guard var p = appState.currentProfile else { return }
         p.emergencyFundAllocation = AstraEmergencyFundAllocation(treasuryBills: pTBills, commercialPapers: 0, savingsAccount: pSavings, sweepInFD: pSweepFD, isAllocatedByUser: true)
         appState.currentProfile = p
+    }
+}
+
+// MARK: - Emergency Fund Setup
+struct EmergencyFundSetupView: View {
+    @Environment(\.dismiss) private var dismiss
+    @Environment(AppStateManager.self) private var appState
+
+    @State private var manualAmount: Double = 0
+    @State private var selectedInvestmentIDs: Set<UUID> = []
+
+    private var profile: AstraUserProfile? { appState.currentProfile }
+    private var investments: [AstraInvestment] { profile?.investments ?? [] }
+    private var linkedValue: Double {
+        investments
+            .filter { selectedInvestmentIDs.contains($0.id) }
+            .reduce(0) { $0 + $1.currentValue.safeFinite }
+    }
+    private var totalTracked: Double { (manualAmount + linkedValue).safeFinite }
+
+    var body: some View {
+        List {
+            Section {
+                VStack(alignment: .leading, spacing: 8) {
+                    Label("Build an emergency fund", systemImage: "shield.checkered")
+                        .font(.headline)
+                        .foregroundStyle(AppTheme.auraIndigo)
+                    Text("Add cash you already have, link investments you can use in an emergency, or do both. Linked investment values update automatically as their prices change.")
+                        .font(.subheadline)
+                        .foregroundStyle(.secondary)
+                }
+                .padding(.vertical, 4)
+            }
+
+            Section("Cash already saved") {
+                TextField("Amount", value: $manualAmount, format: .number)
+                    .keyboardType(.decimalPad)
+                Text("Use this for cash or savings that is not already listed as an investment.")
+                    .font(.caption)
+                    .foregroundStyle(.secondary)
+            }
+
+            Section {
+                if investments.isEmpty {
+                    ContentUnavailableView(
+                        "No investments to link",
+                        systemImage: "chart.line.uptrend.xyaxis",
+                        description: Text("Add an investment in Tracker, or connect a broker account, then return here to link it.")
+                    )
+                } else {
+                    ForEach(investments) { investment in
+                        Button {
+                            toggle(investment.id)
+                        } label: {
+                            HStack(spacing: 12) {
+                                Image(systemName: selectedInvestmentIDs.contains(investment.id)
+                                      ? "checkmark.circle.fill" : "circle")
+                                    .foregroundStyle(selectedInvestmentIDs.contains(investment.id)
+                                                     ? AppTheme.auraIndigo : Color.secondary)
+
+                                VStack(alignment: .leading, spacing: 3) {
+                                    Text(investment.investmentName)
+                                        .foregroundStyle(.primary)
+                                    Text(investment.brokerSource ?? investment.investmentType.rawValue)
+                                        .font(.caption)
+                                        .foregroundStyle(.secondary)
+                                }
+
+                                Spacer()
+                                Text(investment.currentValue.toCurrency())
+                                    .font(.subheadline.weight(.semibold))
+                                    .foregroundStyle(.primary)
+                            }
+                        }
+                    }
+                }
+            } header: {
+                Text("Link an ongoing investment")
+            } footer: {
+                Text("Only link investments that are sufficiently liquid for emergencies. You can change these selections later.")
+            }
+
+            Section("Emergency fund total") {
+                LabeledContent("Cash", value: manualAmount.toCurrency())
+                LabeledContent("Linked investments", value: linkedValue.toCurrency())
+                LabeledContent("Total tracked", value: totalTracked.toCurrency())
+                    .fontWeight(.bold)
+            }
+        }
+        .navigationTitle("Start Emergency Fund")
+        .navigationBarTitleDisplayMode(.inline)
+        .toolbar {
+            ToolbarItem(placement: .confirmationAction) {
+                Button("Save") {
+                    appState.updateEmergencyFund(
+                        manualAmount: manualAmount,
+                        linkedInvestmentIDs: Array(selectedInvestmentIDs)
+                    )
+                    dismiss()
+                }
+            }
+        }
+        .onAppear {
+            manualAmount = profile?.emergencyFundManualAmount
+                ?? profile?.basicDetails.emergencyFundAmount
+                ?? 0
+            selectedInvestmentIDs = Set(profile?.emergencyFundLinkedInvestmentIDs ?? [])
+        }
+    }
+
+    private func toggle(_ id: UUID) {
+        if selectedInvestmentIDs.contains(id) {
+            selectedInvestmentIDs.remove(id)
+        } else {
+            selectedInvestmentIDs.insert(id)
+        }
     }
 }
 

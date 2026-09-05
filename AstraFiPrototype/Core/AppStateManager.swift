@@ -1312,6 +1312,18 @@ final class AppStateManager {
 
     func recalculateFinancials() {
         guard var profile = currentProfile else { return }
+
+        // Linked investments retain their own values and automatically update the
+        // emergency-fund balance whenever holdings are refreshed.
+        if let linkedIDs = profile.emergencyFundLinkedInvestmentIDs {
+            let linkedIDSet = Set(linkedIDs)
+            let linkedValue = profile.investments
+                .filter { linkedIDSet.contains($0.id) }
+                .reduce(0.0) { $0 + $1.currentValue.safeFinite }
+            let manualAmount = profile.emergencyFundManualAmount
+                ?? profile.basicDetails.emergencyFundAmount
+            profile.basicDetails.emergencyFundAmount = (manualAmount + linkedValue).safeFinite
+        }
         
         var newAssets = profile.assets
         newAssets.stocksHoldingAmount = profile.investments.filter { $0.investmentType == .stocks }.map { $0.currentValue.safeFinite }.reduce(0, +)
@@ -1646,6 +1658,29 @@ final class AppStateManager {
                 if let session = try? await supabase.auth.session {
                     _ = try? await SupabaseRepository.shared.saveEmergencyFundAllocation(allocation, userId: session.user.id)
                 }
+            }
+        }
+    }
+
+    func updateEmergencyFund(manualAmount: Double, linkedInvestmentIDs: [UUID]) {
+        guard var profile = currentProfile else { return }
+
+        let uniqueLinkedIDs = Array(Set(linkedInvestmentIDs))
+        let linkedIDSet = Set(uniqueLinkedIDs)
+        let linkedValue = profile.investments
+            .filter { linkedIDSet.contains($0.id) }
+            .reduce(0.0) { $0 + $1.currentValue.safeFinite }
+
+        profile.emergencyFundManualAmount = max(0, manualAmount).safeFinite
+        profile.emergencyFundLinkedInvestmentIDs = uniqueLinkedIDs
+        profile.basicDetails.emergencyFundAmount = (max(0, manualAmount) + linkedValue).safeFinite
+        currentProfile = profile
+        recalculateFinancials()
+
+        Task {
+            if let session = try? await supabase.auth.session,
+               let profile = currentProfile {
+                try? await SupabaseRepository.shared.syncFullProfile(profile, userId: session.user.id)
             }
         }
     }
