@@ -267,6 +267,22 @@ struct NetWorthCard: View {
                             step: 0.005,
                             tint: AppTheme.vibrantOrange
                         )
+
+                        Divider()
+
+                        InflationImpactSection(
+                            projectedValue: finalSummary.nominalNetWorth,
+                            realValue: finalSummary.realPurchasingPower,
+                            years: projectionYears,
+                            inflationRate: hasSliderChanges ? inflationRate : defaultInflationRate
+                        )
+
+                        ProjectionBreakdownSection(
+                            items: projectionItems,
+                            years: projectionYears,
+                            monthlyInvestment: extraMonthlyInvestment,
+                            monthlyLoanPayment: monthlyEMI + extraLoanRepayment
+                        )
                     }
                     .transition(.opacity.combined(with: .move(edge: .top)))
                 }

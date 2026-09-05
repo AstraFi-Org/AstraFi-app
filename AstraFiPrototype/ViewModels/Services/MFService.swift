@@ -116,53 +116,39 @@ class MFService {
     }
 
     func searchSchemes(query: String) -> [MFScheme] {
-        guard query.count >= 2 else { return [] }
-        let lowerQuery = query.lowercased()
-        let normQuery = lowerQuery.replacingOccurrences(of: "-", with: " ").replacingOccurrences(of: "  ", with: " ").trimmingCharacters(in: .whitespaces)
+        let search = Self.normalizedSearchTerms(query)
+        guard !search.terms.isEmpty else { return [] }
 
-        // 1. Exact Match Check
-        if let exact = allSchemes.first(where: { $0.name.lowercased() == lowerQuery }) {
-            return [exact]
-        }
+        // AMFI scheme names vary by plan/option (for example, "Mid Cap" versus
+        // "Midcap") and often omit generic words such as "Mutual". Rank every
+        // available scheme against the meaningful terms instead of falling back
+        // to a small, unrelated prefix of the AMFI catalogue.
+        return allSchemes.compactMap { scheme in
+            let name = Self.normalizedSearchTerms(scheme.name, removeGenericTerms: false)
+            guard search.terms.allSatisfy({ name.compact.contains($0) }) else { return nil }
 
-        // 2. High Priority: Contains query or normalized query
-        let containsResults = allSchemes.filter { scheme in
-            let lowerName = scheme.name.lowercased()
-            let normName = lowerName.replacingOccurrences(of: "-", with: " ").replacingOccurrences(of: "  ", with: " ")
-            return lowerName.contains(lowerQuery) || normName.contains(normQuery)
-        }
-
-        // 3. Score and Sort
-        let scoredItems = containsResults.map { scheme -> (scheme: MFScheme, score: Double) in
-            var score = SearchUtility.fuzzyMatchScore(query: lowerQuery, target: scheme.name)
-
-            // AMC priority: If query matches the first word (AMC name)
-            let firstWord = scheme.name.components(separatedBy: " ").first?.lowercased() ?? ""
-            if firstWord == lowerQuery || firstWord.hasPrefix(lowerQuery) {
-                score += 0.2 // Boost AMC matches
+            var score = 0
+            if name.compact.hasPrefix(search.compact) { score += 100 }
+            else if name.compact.contains(search.compact) { score += 80 }
+            score += search.terms.reduce(into: 0) { partial, term in
+                if name.words.contains(where: { $0.hasPrefix(term) }) { partial += 10 }
             }
-
             return (scheme, score)
         }
-
-        // 4. Fallback to Fuzzy Search if few results
-        if scoredItems.count < 5 && query.count >= 3 {
-            let allScored = allSchemes.prefix(2000).map { scheme -> (scheme: MFScheme, score: Double) in
-                (scheme, SearchUtility.fuzzyMatchScore(query: lowerQuery, target: scheme.name))
-            }.filter { $0.score > 0.6 }
-
-            return (scoredItems + allScored)
-                .sorted { $0.score > $1.score }
-                .map { $0.scheme }
-                .removeDuplicates()
-                .prefix(15)
-                .map { $0 }
+        .sorted { lhs, rhs in
+            lhs.1 == rhs.1 ? lhs.0.name.localizedCaseInsensitiveCompare(rhs.0.name) == .orderedAscending : lhs.1 > rhs.1
         }
+        .prefix(15)
+        .map(\.0)
+    }
 
-        return scoredItems
-            .sorted { $0.score > $1.score }
-            .prefix(15)
-            .map { $0.scheme }
+    private static func normalizedSearchTerms(_ value: String, removeGenericTerms: Bool = true) -> (terms: [String], words: [String], compact: String) {
+        let folded = value.folding(options: [.caseInsensitive, .diacriticInsensitive], locale: .current)
+        let words = folded.components(separatedBy: CharacterSet.alphanumerics.inverted)
+            .filter { !$0.isEmpty }
+        let genericTerms: Set<String> = ["mutual", "fund", "funds", "scheme"]
+        let terms = removeGenericTerms ? words.filter { !genericTerms.contains($0) } : words
+        return (terms, words, terms.joined())
     }
 
     func getScheme(by code: String) -> MFScheme? {

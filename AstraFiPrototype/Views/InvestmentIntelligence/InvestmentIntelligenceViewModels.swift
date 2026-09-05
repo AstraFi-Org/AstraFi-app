@@ -42,6 +42,7 @@ final class InvestmentSearchViewModel {
 
     private let searchService: SearchService
     private let homeRepository: InvestmentIntelligenceRepository
+    @ObservationIgnored private var searchGeneration = 0
 
     init(searchService: SearchService = SearchService(), homeRepository: InvestmentIntelligenceRepository = InvestmentIntelligenceRepository()) {
         self.searchService = searchService
@@ -57,14 +58,24 @@ final class InvestmentSearchViewModel {
 
     func search() async {
         let trimmed = query.trimmingCharacters(in: .whitespacesAndNewlines)
+        searchGeneration += 1
+        let generation = searchGeneration
         guard trimmed.count >= 2 else {
             results = []
+            isSearching = false
             return
         }
 
         isSearching = true
-        defer { isSearching = false }
-        results = await searchService.search(query: trimmed)
+        let matchingResults = await searchService.search(query: trimmed)
+
+        // A network-backed search is launched for each keystroke. Ignore an older
+        // request that completes after a newer query, rather than replacing the
+        // current results with stale matches.
+        guard generation == searchGeneration,
+              query.trimmingCharacters(in: .whitespacesAndNewlines) == trimmed else { return }
+        results = matchingResults
+        isSearching = false
     }
 
     func recordRecent(_ asset: InvestmentSummaryAsset) {
