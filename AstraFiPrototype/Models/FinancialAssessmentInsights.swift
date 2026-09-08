@@ -460,10 +460,27 @@ struct FinancialAssessmentInsights: Hashable, Codable {
     }
 
     private static func estimateEMI(for entry: AssessmentLoanEntry) -> Double {
-        let principal = parseNumber(entry.amount)
+        // If explicit EMI amount is provided, use it directly
+        let explicitEMI = parseNumber(entry.emiAmount)
+        if explicitEMI > 0 {
+            return explicitEMI
+        }
+
+        let principal = parseNumber(entry.sanctionedAmount.isEmpty ? entry.amount : entry.sanctionedAmount)
         let annualRate = parseNumber(entry.interestRate) / 100
-        let tenureYears = parseNumber(entry.tenure)
-        let months = max(1, ((tenureYears > 0 ? tenureYears : 1) * 12).safeInt)
+        
+        let repayMonthsRaw = parseNumber(entry.repaymentPeriodMonths)
+        let totalMonthsRaw = parseNumber(entry.totalLoanPeriodMonths)
+        let moraMonthsRaw  = parseNumber(entry.moratoriumPeriodMonths)
+        
+        let months: Int
+        if repayMonthsRaw > 0 {
+            months = repayMonthsRaw.safeInt
+        } else if totalMonthsRaw > 0 {
+            months = max(1, (totalMonthsRaw - moraMonthsRaw).safeInt)
+        } else {
+            months = max(1, parseNumber(entry.tenure).safeInt)
+        }
 
         guard principal > 0 else { return 0 }
         if annualRate <= 0 {

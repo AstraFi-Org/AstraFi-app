@@ -119,27 +119,66 @@ class MFService {
         let search = Self.normalizedSearchTerms(query)
         guard !search.terms.isEmpty else { return [] }
 
-        // AMFI scheme names vary by plan/option (for example, "Mid Cap" versus
-        // "Midcap") and often omit generic words such as "Mutual". Rank every
-        // available scheme against the meaningful terms instead of falling back
-        // to a small, unrelated prefix of the AMFI catalogue.
-        return allSchemes.compactMap { scheme in
-            let name = Self.normalizedSearchTerms(scheme.name, removeGenericTerms: false)
-            guard search.terms.allSatisfy({ name.compact.contains($0) }) else { return nil }
+        // Precompute to reduce repeated property lookups
+        let searchCompact = search.compact
+        let searchTerms = search.terms
 
-            var score = 0
-            if name.compact.hasPrefix(search.compact) { score += 100 }
-            else if name.compact.contains(search.compact) { score += 80 }
-            score += search.terms.reduce(into: 0) { partial, term in
-                if name.words.contains(where: { $0.hasPrefix(term) }) { partial += 10 }
+        // 1) Filter candidates explicitly
+        var candidates: [(scheme: MFScheme, name: (terms: [String], words: [String], compact: String))] = []
+        for scheme in allSchemes {
+            let name = Self.normalizedSearchTerms(scheme.name, removeGenericTerms: false)
+            var containsAll = true
+            for term in searchTerms {
+                if !name.compact.contains(term) {
+                    containsAll = false
+                    break
+                }
             }
-            return (scheme, score)
+            if containsAll {
+                candidates.append((scheme, name))
+            }
         }
-        .sorted { lhs, rhs in
-            lhs.1 == rhs.1 ? lhs.0.name.localizedCaseInsensitiveCompare(rhs.0.name) == .orderedAscending : lhs.1 > rhs.1
+
+        // 2) Score candidates in a clear loop
+        var scored: [(scheme: MFScheme, score: Int)] = []
+        for (scheme, name) in candidates {
+            var score = 0
+            if name.compact.hasPrefix(searchCompact) {
+                score += 100
+            } else if name.compact.contains(searchCompact) {
+                score += 80
+            }
+            // Add 10 for each term that matches a word prefix
+            for term in searchTerms {
+                var matchedPrefix = false
+                for w in name.words {
+                    if w.hasPrefix(term) {
+                        matchedPrefix = true
+                        break
+                    }
+                }
+                if matchedPrefix { score += 10 }
+            }
+            scored.append((scheme, score))
         }
-        .prefix(15)
-        .map(\.0)
+
+        // 3) Sort deterministically by score then name
+        scored.sort { lhs, rhs in
+            if lhs.score == rhs.score {
+                return lhs.scheme.name.localizedCaseInsensitiveCompare(rhs.scheme.name) == .orderedAscending
+            }
+            return lhs.score > rhs.score
+        }
+
+        // 4) Return top 15 schemes
+        var result: [MFScheme] = []
+        let limit = min(15, scored.count)
+        if limit > 0 {
+            for i in 0..<limit {
+                result.append(scored[i].scheme)
+            }
+        }
+        return result
     }
 
     private static func normalizedSearchTerms(_ value: String, removeGenericTerms: Bool = true) -> (terms: [String], words: [String], compact: String) {
