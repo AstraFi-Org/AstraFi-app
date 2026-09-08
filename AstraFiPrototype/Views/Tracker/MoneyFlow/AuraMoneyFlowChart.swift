@@ -173,61 +173,20 @@ struct AuraMoneyFlowChart: View {
     var body: some View {
         VStack(spacing: 0) {
             // ── Chart
-            Chart {
-                ForEach(chartData) { entry in
-                    BarMark(
-                        x: .value("Month", entry.month),
-                        y: .value("Amount", entry.amount)
-                    )
-                    .foregroundStyle(barColor(for: entry))
-                    .opacity(selectedMonth == nil || selectedMonth == entry.month ? 1 : 0.35)
-                    .cornerRadius(4)
+            if uniqueMonths.count > 6 {
+                ScrollView(.horizontal, showsIndicators: false) {
+                    chartView
+                        .frame(width: CGFloat(uniqueMonths.count) * 54)
                 }
-
-                // Zero baseline
-                RuleMark(y: .value("Zero", 0))
-                    .lineStyle(StrokeStyle(lineWidth: 1.5, dash: [4, 4]))
-                    .foregroundStyle(Color.black)
-
-                // Selection highlight
-                if let sel = selectedMonth {
-                    RuleMark(x: .value("Sel", sel))
-                        .foregroundStyle(Color.secondary.opacity(0.12))
-                        .lineStyle(StrokeStyle(lineWidth: 24))
-                        .zIndex(-1)
-                }
+                .frame(height: 220)
+                .padding(.horizontal, 12)
+                .padding(.top, 16)
+            } else {
+                chartView
+                    .frame(height: 220)
+                    .padding(.horizontal, 12)
+                    .padding(.top, 16)
             }
-            .chartYScale(domain: chartYDomain)
-            .chartXSelection(value: $selectedMonth)
-            .chartScrollableAxes(.horizontal)
-            .chartXVisibleDomain(length: max(1, min(uniqueMonths.count, 6)))
-            .chartXAxis {
-                AxisMarks { val in
-                    AxisValueLabel()
-                        .font(.system(size: 11, weight: .medium))
-                        .foregroundStyle(Color.secondary)
-                }
-            }
-            .chartYAxis {
-                AxisMarks(position: .leading,
-                          values: .automatic(desiredCount: 4)) { val in
-                    AxisGridLine()
-                        .foregroundStyle(Color.secondary.opacity(0.12))
-                    AxisValueLabel {
-                        if let v = val.as(Double.self), v != 0 {
-                            Text(v.toCurrency(compact: true))
-                                .font(.system(size: 10))
-                                .foregroundStyle(Color.secondary)
-                        }
-                    }
-                }
-            }
-            .chartPlotStyle { plot in
-                plot.background(Color.clear)
-            }
-            .frame(height: 220)
-            .padding(.horizontal, 12)
-            .padding(.top, 16)
 
             // ── Bottom: tooltip or legend
             Group {
@@ -250,9 +209,60 @@ struct AuraMoneyFlowChart: View {
                     .font(.system(size: 13, design: .rounded))
                     .foregroundStyle(.secondary)
             }
-            .padding(.top, 4)
         }
-        
+    }
+
+    private var chartView: some View {
+        Chart {
+            ForEach(chartData) { entry in
+                BarMark(
+                    x: .value("Month", entry.month),
+                    y: .value("Amount", entry.amount)
+                )
+                .foregroundStyle(barColor(for: entry))
+                .opacity(selectedMonth == nil || selectedMonth == entry.month ? 1 : 0.35)
+                .cornerRadius(4)
+            }
+
+            // Zero baseline
+            RuleMark(y: .value("Zero", 0))
+                .lineStyle(StrokeStyle(lineWidth: 1.5, dash: [4, 4]))
+                .foregroundStyle(Color.black)
+
+            // Selection highlight
+            if let sel = selectedMonth {
+                RuleMark(x: .value("Sel", sel))
+                    .foregroundStyle(Color.secondary.opacity(0.12))
+                    .lineStyle(StrokeStyle(lineWidth: 24))
+                    .zIndex(-1)
+            }
+        }
+        .chartYScale(domain: chartYDomain)
+        .chartXSelection(value: $selectedMonth)
+        .chartXAxis {
+            AxisMarks { val in
+                AxisValueLabel()
+                    .font(.system(size: 11, weight: .medium))
+                    .foregroundStyle(Color.secondary)
+            }
+        }
+        .chartYAxis {
+            AxisMarks(position: .leading,
+                      values: .automatic(desiredCount: 4)) { val in
+                AxisGridLine()
+                    .foregroundStyle(Color.secondary.opacity(0.12))
+                AxisValueLabel {
+                    if let v = val.as(Double.self), v != 0 {
+                        Text(v.toCurrency(compact: true))
+                            .font(.system(size: 10))
+                            .foregroundStyle(Color.secondary)
+                    }
+                }
+            }
+        }
+        .chartPlotStyle { plot in
+            plot.background(Color.clear)
+        }
     }
 
     private var legendStrip: some View {

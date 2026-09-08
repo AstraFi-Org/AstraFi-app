@@ -75,6 +75,16 @@ extension Double {
         return Int(self)
     }
 }
+
+extension CGFloat {
+    var safeInt: Int {
+        guard self.isFinite else { return 0 }
+        if self > CGFloat(Int.max) { return Int.max }
+        if self < CGFloat(Int.min) { return Int.min }
+        return Int(self)
+    }
+}
+
 extension View {
     func hideKeyboard() {
         UIApplication.shared.sendAction(#selector(UIResponder.resignFirstResponder), to: nil, from: nil, for: nil)
