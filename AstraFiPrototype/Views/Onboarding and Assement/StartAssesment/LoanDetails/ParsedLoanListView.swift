@@ -12,18 +12,24 @@ struct ParsedLoanListView: View {
             List {
                 Section {
                     ForEach($loans) { $loan in
-                        VStack(alignment: .leading, spacing: 12) {
+                        VStack(alignment: .leading, spacing: 10) {
                             HStack(spacing: 12) {
                                 Toggle("", isOn: $loan.isSelected)
                                     .labelsHidden()
                                     .tint(.blue)
 
                                 VStack(alignment: .leading, spacing: 4) {
-                                    Text(loan.lender ?? "Loan extracted")
+                                    Text(loan.lender ?? "Sanctioned Loan")
                                         .font(.subheadline)
                                         .fontWeight(.semibold)
 
-                                    HStack(spacing: 8) {
+                                    if let scheme = loan.loanName, !scheme.isEmpty {
+                                        Text(scheme)
+                                            .font(.caption)
+                                            .foregroundStyle(.secondary)
+                                    }
+
+                                    HStack(spacing: 6) {
                                         Text(loan.type.rawValue)
                                             .font(.caption2)
                                             .padding(.horizontal, 6)
@@ -32,7 +38,7 @@ struct ParsedLoanListView: View {
                                             .cornerRadius(4)
 
                                         if loan.interestRate > 0 {
-                                            Text("\(String(format: "%.2f", loan.interestRate))% p.a.")
+                                            Text("\(String(format: "%.2f", loan.interestRate))% (\(loan.interestRateType.rawValue))")
                                                 .font(.caption2)
                                                 .foregroundStyle(.secondary)
                                         }
@@ -47,46 +53,53 @@ struct ParsedLoanListView: View {
                                         .fontWeight(.bold)
                                         .foregroundStyle(.blue)
 
-                                    if loan.emi > 0 {
-                                        Text("EMI: ₹\(String(format: "%.0f", loan.emi))")
+                                    if let emiVal = loan.emi, emiVal > 0 {
+                                        Text("EMI: ₹\(String(format: "%.0f", emiVal))")
                                             .font(.caption2)
                                             .fontWeight(.medium)
                                             .foregroundStyle(.secondary)
+                                    } else {
+                                        Text("EMI: Pending")
+                                            .font(.caption2)
+                                            .foregroundStyle(.tertiary)
                                     }
                                 }
                             }
 
-                            // Requirement 10: Advanced Amortization Breakdown
-                            if loan.totalInterestPaid != nil || loan.payoffTimelineMonths != nil {
-                                 HStack {
-                                     if let tip = loan.totalInterestPaid, tip > 0 {
-                                         VStack(alignment: .leading) {
-                                             Text("Total Interest")
-                                                 .font(.system(size: 8))
-                                                 .foregroundStyle(.secondary)
-                                             Text("₹\(String(format: "%.0f", tip))")
-                                                 .font(.caption2)
-                                                 .fontWeight(.bold)
-                                         }
-                                     }
-                                     
-                                     Spacer()
-
-                                     if let ptm = loan.payoffTimelineMonths, ptm > 0 {
-                                         VStack(alignment: .trailing) {
-                                             Text("Payoff Duration")
-                                                 .font(.system(size: 8))
-                                                 .foregroundStyle(.secondary)
-                                             Text("\(ptm) Months")
-                                                 .font(.caption2)
-                                                 .fontWeight(.bold)
-                                         }
-                                     }
-                                 }
-                                 .padding(8)
-                                 .background(Color.blue.opacity(0.05))
-                                 .cornerRadius(8)
+                            // Period Breakdown Grid
+                            HStack(spacing: 8) {
+                                VStack(alignment: .leading, spacing: 2) {
+                                    Text("Total Period")
+                                        .font(.system(size: 9))
+                                        .foregroundStyle(.secondary)
+                                    Text("\(loan.tenure) Mo")
+                                        .font(.caption2)
+                                        .fontWeight(.bold)
+                                }
+                                Spacer()
+                                VStack(alignment: .center, spacing: 2) {
+                                    Text("Moratorium")
+                                        .font(.system(size: 9))
+                                        .foregroundStyle(.secondary)
+                                    Text("\(loan.moratoriumMonths ?? 0) Mo")
+                                        .font(.caption2)
+                                        .fontWeight(.bold)
+                                        .foregroundStyle(AppTheme.vibrantOrange)
+                                }
+                                Spacer()
+                                VStack(alignment: .trailing, spacing: 2) {
+                                    Text("Repayment")
+                                        .font(.system(size: 9))
+                                        .foregroundStyle(.secondary)
+                                    Text("\(loan.repaymentMonths ?? (loan.tenure - (loan.moratoriumMonths ?? 0))) Mo")
+                                        .font(.caption2)
+                                        .fontWeight(.bold)
+                                        .foregroundStyle(AppTheme.auraGreen)
+                                }
                             }
+                            .padding(8)
+                            .background(Color(.secondarySystemGroupedBackground))
+                            .cornerRadius(8)
                         }
                         .padding(.vertical, 4)
                         .swipeActions(edge: .trailing) {
@@ -100,9 +113,9 @@ struct ParsedLoanListView: View {
                         }
                     }
                 } header: {
-                    Text("Detected Loans")
+                    Text("Detected Loans & Sanction Letters")
                 } footer: {
-                    Text("Verify and select the loans you want to import.")
+                    Text("Verify extracted moratorium, repayment period, and sanctioned amount before importing.")
                 }
             }
             .navigationBarTitleDisplayMode(.inline)

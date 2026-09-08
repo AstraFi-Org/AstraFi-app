@@ -970,27 +970,28 @@ final class AppStateManager {
         }
         
         let profileLoans = assessmentData.loanEntries.map { entry in
-            let rawAmt  = Double(entry.amount)       ?? 0
+            let rawAmt  = Double(entry.sanctionedAmount.isEmpty ? entry.amount : entry.sanctionedAmount) ?? 0
             let rawRate = Double(entry.interestRate) ?? 0
-            // The assessment field is labelled "Tenure (Months)" — store as-is.
-            // Do NOT multiply by 12; that would turn 15 months into 180 months.
-            let tenureMonths = Int(entry.tenure) ?? 0
+            let totalPeriod = Int(entry.totalLoanPeriodMonths.isEmpty ? entry.tenure : entry.totalLoanPeriodMonths) ?? 0
+            let moraPeriod  = Int(entry.moratoriumPeriodMonths.isEmpty ? entry.moratorium : entry.moratoriumPeriodMonths) ?? 0
 
             var loan = AstraLoan(
                 loanType: mapLoanType(entry.type),
-                lender: .other,
+                lender: mapLender(entry.lenderName),
                 loanAmount: rawAmt.isFinite  ? rawAmt  : 0,
                 interestRate: rawRate.isFinite ? rawRate : 0,
                 interestType: entry.interestType,
                 compoundingFrequency: entry.frequency,
-                loanStartDate: entry.startDate,
-                loanTenureMonths: tenureMonths
+                loanStartDate: entry.sanctionDate,
+                loanTenureMonths: totalPeriod
             )
-            // Preserve the custom name the user typed (e.g. "My Car Loan").
-            // Falls back to loanType.rawValue in the UI via displayName.
             loan.loanName = entry.loanName.trimmingCharacters(in: .whitespacesAndNewlines)
             loan.insurancePremium = Double(entry.insurancePremium) ?? 0
-            loan.moratoriumMonths = Int(entry.moratorium) ?? 0
+            loan.moratoriumMonths = moraPeriod
+            
+            if let emiVal = Double(entry.emiAmount), emiVal > 0 {
+                loan.emiAmount = emiVal
+            }
             return loan
         }
         
@@ -1312,6 +1313,18 @@ final class AppStateManager {
 
     func recalculateFinancials() {
         guard var profile = currentProfile else { return }
+
+        // Linked investments retain their own values and automatically update the
+        // emergency-fund balance whenever holdings are refreshed.
+        if let linkedIDs = profile.emergencyFundLinkedInvestmentIDs {
+            let linkedIDSet = Set(linkedIDs)
+            let linkedValue = profile.investments
+                .filter { linkedIDSet.contains($0.id) }
+                .reduce(0.0) { $0 + $1.currentValue.safeFinite }
+            let manualAmount = profile.emergencyFundManualAmount
+                ?? profile.basicDetails.emergencyFundAmount
+            profile.basicDetails.emergencyFundAmount = (manualAmount + linkedValue).safeFinite
+        }
         
         var newAssets = profile.assets
         newAssets.stocksHoldingAmount = profile.investments.filter { $0.investmentType == .stocks }.map { $0.currentValue.safeFinite }.reduce(0, +)
@@ -1646,6 +1659,29 @@ final class AppStateManager {
                 if let session = try? await supabase.auth.session {
                     _ = try? await SupabaseRepository.shared.saveEmergencyFundAllocation(allocation, userId: session.user.id)
                 }
+            }
+        }
+    }
+
+    func updateEmergencyFund(manualAmount: Double, linkedInvestmentIDs: [UUID]) {
+        guard var profile = currentProfile else { return }
+
+        let uniqueLinkedIDs = Array(Set(linkedInvestmentIDs))
+        let linkedIDSet = Set(uniqueLinkedIDs)
+        let linkedValue = profile.investments
+            .filter { linkedIDSet.contains($0.id) }
+            .reduce(0.0) { $0 + $1.currentValue.safeFinite }
+
+        profile.emergencyFundManualAmount = max(0, manualAmount).safeFinite
+        profile.emergencyFundLinkedInvestmentIDs = uniqueLinkedIDs
+        profile.basicDetails.emergencyFundAmount = (max(0, manualAmount) + linkedValue).safeFinite
+        currentProfile = profile
+        recalculateFinancials()
+
+        Task {
+            if let session = try? await supabase.auth.session,
+               let profile = currentProfile {
+                try? await SupabaseRepository.shared.syncFullProfile(profile, userId: session.user.id)
             }
         }
     }

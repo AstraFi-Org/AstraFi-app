@@ -25,8 +25,8 @@ final class UpstoxViewModel: ObservableObject {
     private let service: UpstoxService
     private let profileStorageKey = "upstox.profile"
 
-    private init(service: UpstoxService = .shared) {
-        self.service = service
+    private init(service: UpstoxService? = nil) {
+        self.service = service ?? UpstoxService.shared
         loadStoredConnection()
     }
 

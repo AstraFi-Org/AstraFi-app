@@ -120,7 +120,6 @@ struct AddInsuranceView: View {
                     }
                     .disabled(provider.isEmpty || cover.isEmpty || premium.isEmpty)
                 }
-                .sharedBackgroundVisibility(.visible)
             }
         }
     }
@@ -197,4 +196,3 @@ struct _InsField: View {
     AddInsuranceView()
         .environment(AppStateManager.withSampleData())
 }
-

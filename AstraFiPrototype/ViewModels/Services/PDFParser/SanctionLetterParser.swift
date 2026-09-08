@@ -8,16 +8,32 @@ struct SanctionLetterParser: LoanStatementParser {
         
         // --- 1. Structured Data Extraction ---
         
-        // Insurance (Extract first to avoid confusion with Principal)
-        if let match = extractRegex(#"insurance\s+premium\s+amount\s*[:\-]?\s*(?:rs[\.,:]?|inr|₹)?\s*([0-9][0-9,]*(?:\.\d{1,2})?)"#, in: normalizedText) {
+        // Insurance Premium
+        if let match = extractRegex(#"insurance\s+premium\s*(?:amount)?\s*[:\-]?\s*(?:rs[\.,:]?|inr|₹)?\s*([0-9][0-9,]*(?:\.\d{1,2})?)"#, in: normalizedText) {
             loanData.insurance = cleanNumeric(match) ?? 0
         }
         
+        // Sanctioned Loan Amount
         loanData.principal = extractPrincipalAmount(from: normalizedText, insuranceAmount: loanData.insurance)
         
-        // Total Cost: Pattern "total cost"
+        // Total Cost (Course / Project Total Cost)
         if let match = extractRegex(#"total\s+cost\s*[:\-]?\s*(?:rs[\.,:]?|inr|₹)?\s*([0-9][0-9,]*(?:\.\d{1,2})?)"#, in: normalizedText) {
             loanData.totalCost = cleanNumeric(match) ?? 0
+        }
+        
+        // Loan Requested Amount
+        if let match = extractRegex(#"(?:loan\s+requested|requested\s+amount)\s*[:\-]?\s*(?:rs[\.,:]?|inr|₹)?\s*([0-9][0-9,]*(?:\.\d{1,2})?)"#, in: normalizedText) {
+            loanData.requestedAmount = cleanNumeric(match) ?? 0
+        }
+        
+        // Permissible Limit
+        if let match = extractRegex(#"permissible\s+limit\s*[:\-]?\s*(?:rs[\.,:]?|inr|₹)?\s*([0-9][0-9,]*(?:\.\d{1,2})?)"#, in: normalizedText) {
+            loanData.permissibleLimit = cleanNumeric(match) ?? 0
+        }
+        
+        // Actual Margin %
+        if let match = extractRegex(#"(?:actual\s+)?margin\s*[:\-]?\s*(\d{1,2}(?:\.\d{1,2})?)\s*%"#, in: normalizedText) {
+            loanData.actualMargin = Double(match) ?? 0
         }
         
         if loanData.principal == 0 {
@@ -28,8 +44,9 @@ struct SanctionLetterParser: LoanStatementParser {
             )
         }
         
-        // Interest Rate: ONLY from "applicable rate of interest is X%" or similar
+        // Interest Rate
         let ratePatterns = [
+            #"applicable\s+interest\s+rate.{0,80}?(?:is|@|:)\s*(\d{1,2}(?:\.\d{1,2})?)\s*%"#,
             #"applicable\s+rate\s+of\s+interest.{0,80}?(?:is|@|:)\s*(\d{1,2}(?:\.\d{1,2})?)\s*%"#,
             #"rate\s+of\s+interest.{0,80}?(?:is|@|:)\s*(\d{1,2}(?:\.\d{1,2})?)\s*%"#,
             #"interest\s+rate.{0,60}?(?:is|@|:)\s*(\d{1,2}(?:\.\d{1,2})?)\s*%"#,
@@ -43,29 +60,59 @@ struct SanctionLetterParser: LoanStatementParser {
             }
         }
         
-        // Tenure (months): total period is the full loan term; repayable months are EMI months.
+        // Benchmark Rate components (Repo rate, markup, credit spread)
+        if let match = extractRegex(#"(?:rbi\s+repo\s+rate|repo\s+rate)\s*[:\-]?\s*(\d{1,2}(?:\.\d{1,2})?)\s*%"#, in: normalizedText) {
+            loanData.repoRate = Double(match) ?? 0
+        }
+        if let match = extractRegex(#"mark-?up\s*[:\-]?\s*(\d{1,2}(?:\.\d{1,2})?)\s*%"#, in: normalizedText) {
+            loanData.markup = Double(match) ?? 0
+        }
+        if let match = extractRegex(#"credit\s+spread\s*[:\-]?\s*(\d{1,2}(?:\.\d{1,2})?)\s*%"#, in: normalizedText) {
+            loanData.creditSpread = Double(match) ?? 0
+        }
+        
+        // Floating / Variable vs Fixed Rate Type Detection
+        if normalizedText.contains("reset") || normalizedText.contains("floating") || normalizedText.contains("variable") || loanData.repoRate > 0 || loanData.markup > 0 {
+            loanData.interestRateType = "Floating / Variable"
+        } else if normalizedText.contains("fixed") {
+            loanData.interestRateType = "Fixed"
+        } else {
+            loanData.interestRateType = "Floating / Variable"
+        }
+        
+        // Interest Rest Frequency Detection
+        if normalizedText.contains("monthly rests") || normalizedText.contains("monthly rest") {
+            loanData.interestRestFrequency = "Monthly"
+        } else if normalizedText.contains("quarterly rests") {
+            loanData.interestRestFrequency = "Quarterly"
+        } else {
+            loanData.interestRestFrequency = "Monthly"
+        }
+        
+        // Total Loan Period (months)
         let tenurePatterns = [
-            #"(?:total\s+period|loan\s+tenure|tenure)\s*[:\-]?\s*(\d{1,3})\s*months?"#,
-            #"(?:total\s+period|loan\s+tenure|tenure).{0,30}?(\d{1,3})\s*months?"#,
-            #"(?:total\s+period|loan\s+tenure|tenure)\s*[:\-]?\s*(\d{1,3})(?=\D)"#,
+            #"(?:total\s+period|total\s+loan\s+period|loan\s+tenure|tenure)\s*[:\-]?\s*(\d{1,3})\s*months?"#,
+            #"(?:total\s+period|total\s+loan\s+period|loan\s+tenure|tenure).{0,30}?(\d{1,3})\s*months?"#,
+            #"(?:total\s+period|total\s+loan\s+period|loan\s+tenure|tenure)\s*[:\-]?\s*(\d{1,3})(?=\D)"#,
             #"period\s*[:\-]?\s*(\d{1,3})\s*months?"#
         ]
         for pattern in tenurePatterns {
             if let match = extractRegex(pattern, in: normalizedText) {
                 let val = Int(match) ?? 0
-                if val > 0 { loanData.tenure = val; break }
+                if val > 0 { loanData.totalLoanPeriodMonths = val; break }
             }
         }
         
+        // Repayment Period (months)
         if let emiMonths = extractRepayableMonths(from: normalizedText) {
             loanData.emiMonths = emiMonths
         }
         
-        // Moratorium (months): Support "MORATORIUM :55", "moratorium 55 months", and similar OCR output.
+        // Moratorium Period (months)
         let moratoriumPatterns = [
-            #"morator\w*\s*[:\-]?\s*(\d{1,3})(?=\D)"#,
+            #"(?:moratorium|holiday\s+period)\s*[:\-]?\s*(\d{1,3})\s*months?"#,
             #"(?:moratorium|holiday\s+period)\s*[:\-]?\s*(\d{1,3})(?=\D)"#,
-            #"(?:moratorium|holiday\s+period)\s*[:\-]?\s*(\d{1,3})\s*(?:months?|$)"#,
+            #"morator\w*\s*[:\-]?\s*(\d{1,3})(?=\D)"#,
             #"(?:moratorium|holiday\s+period).{0,20}?(\d{1,3})\s*months?"#,
             #"(\d{1,3})\s*months?.{0,20}(?:moratorium|holiday\s+period)"#
         ]
@@ -79,31 +126,37 @@ struct SanctionLetterParser: LoanStatementParser {
             }
         }
         
-        // Loan Type & Scheme
+        // Explicit EMI Amount (only if explicitly stated in document)
+        let emiExplicitPatterns = [
+            #"(?:emi\s+amount|installment\s+amount|monthly\s+installment|equated\s+monthly\s+installment)\s*[:\-]?\s*(?:rs[\.,:]?|inr|₹)?\s*([0-9][0-9,]*(?:\.\d{1,2})?)"#,
+            #"emi\s*@\s*(?:rs[\.,:]?|inr|₹)?\s*([0-9][0-9,]*(?:\.\d{1,2})?)"#
+        ]
+        for pattern in emiExplicitPatterns {
+            if let match = extractRegex(pattern, in: normalizedText), let val = cleanNumeric(match), val > 0 {
+                loanData.emi = val
+                break
+            }
+        }
+        
+        // Metadata & Lender
         scanForMetadata(text: text, into: &loanData)
         
-        // --- 2. Validation & Calculations ---
+        // --- 2. Period Adjustments & Calculations ---
         
-        // Fallback for missing Loan Amount if Total Cost is found
-        if loanData.principal == 0 && loanData.totalCost > 0 {
-            loanData.principal = loanData.totalCost
+        if loanData.totalLoanPeriodMonths == 0 && loanData.moratorium > 0 && loanData.emiMonths > 0 {
+            loanData.totalLoanPeriodMonths = loanData.moratorium + loanData.emiMonths
         }
-        
-        if loanData.tenure == 0 && loanData.moratorium > 0 && loanData.emiMonths > 0 {
-            loanData.tenure = loanData.moratorium + loanData.emiMonths
+        if loanData.totalLoanPeriodMonths == 0 {
+            loanData.totalLoanPeriodMonths = extractLikelyTotalPeriod(from: normalizedText, moratorium: loanData.moratorium, emiMonths: loanData.emiMonths)
         }
-        
-        if loanData.tenure == 0 {
-            loanData.tenure = extractLikelyTotalPeriod(from: normalizedText, moratorium: loanData.moratorium, emiMonths: loanData.emiMonths)
+        if loanData.emiMonths == 0 && loanData.totalLoanPeriodMonths > 0 {
+            loanData.emiMonths = max(0, loanData.totalLoanPeriodMonths - loanData.moratorium)
         }
+        loanData.tenure = loanData.totalLoanPeriodMonths > 0 ? loanData.totalLoanPeriodMonths : loanData.emiMonths
         
-        if loanData.emiMonths == 0 {
-            loanData.emiMonths = max(0, loanData.tenure - loanData.moratorium)
-        }
-        
-        // Core Calculations using CalculationEngine
+        // Internal EMI & Accretion Calculation
         if loanData.principal > 0 && loanData.interestRate > 0 && loanData.emiMonths > 0 {
-            loanData.emi = LoanCalculationEngine.calculateEMI(
+            loanData.calculatedEMI = LoanCalculationEngine.calculateEMI(
                 principal: loanData.principal,
                 annualRate: loanData.interestRate,
                 months: loanData.emiMonths
@@ -115,7 +168,7 @@ struct SanctionLetterParser: LoanStatementParser {
                 moratoriumMonths: loanData.moratorium
             )
             
-            let totalInterestDuringEMI = (loanData.emi * Double(loanData.emiMonths)) - loanData.principal
+            let totalInterestDuringEMI = (loanData.calculatedEMI * Double(loanData.emiMonths)) - loanData.principal
             loanData.totalInterest = totalInterestDuringEMI + loanData.moratoriumInterest
             loanData.totalPayable = loanData.principal + loanData.totalInterest
         }
@@ -123,21 +176,32 @@ struct SanctionLetterParser: LoanStatementParser {
         // Confidence Score Calculation
         loanData.confidenceScore = calculateConfidence(data: loanData)
         
-        // --- 3. Map to ParsedLoan for AstraFI Compatibility ---
+        // --- 3. Map to ParsedLoan ---
         
         var result = ParsedLoan(
             type: detectLoanType(loanData: loanData, text: normalizedText),
-            amount: loanData.principal,
+            amount: loanData.principal > 0 ? loanData.principal : (loanData.requestedAmount > 0 ? loanData.requestedAmount : loanData.permissibleLimit),
             interestRate: loanData.interestRate,
-            emi: loanData.emi,
-            tenure: loanData.tenure,
+            emi: loanData.emi, // Explicit EMI if present, else nil
+            tenure: loanData.totalLoanPeriodMonths > 0 ? loanData.totalLoanPeriodMonths : loanData.emiMonths,
             startDate: extractSanctionDate(from: normalizedText) ?? Date(),
-            outstanding: loanData.principal,
+            outstanding: loanData.principal > 0 ? loanData.principal : nil,
             lender: extractLender(text: text),
-            loanName: loanData.scheme,
+            loanName: !loanData.scheme.isEmpty ? loanData.scheme : loanData.productName,
             moratoriumMonths: loanData.moratorium,
-            insurancePremium: loanData.insurance
+            repaymentMonths: loanData.emiMonths,
+            insurancePremium: loanData.insurance > 0 ? loanData.insurance : nil
         )
+        
+        result.totalCost = loanData.totalCost > 0 ? loanData.totalCost : nil
+        result.requestedAmount = loanData.requestedAmount > 0 ? loanData.requestedAmount : nil
+        result.permissibleLimit = loanData.permissibleLimit > 0 ? loanData.permissibleLimit : nil
+        result.actualMargin = loanData.actualMargin > 0 ? loanData.actualMargin : nil
+        result.interestRateType = loanData.interestRateType.contains("Fixed") ? .fixed : .floatingVariable
+        result.interestRestFrequency = .monthly
+        result.repoRate = loanData.repoRate > 0 ? loanData.repoRate : nil
+        result.markup = loanData.markup > 0 ? loanData.markup : nil
+        result.creditSpread = loanData.creditSpread > 0 ? loanData.creditSpread : nil
         result.confidenceScore = loanData.confidenceScore
         result.rawLoanData = loanData
         
@@ -161,8 +225,8 @@ struct SanctionLetterParser: LoanStatementParser {
     private func extractPrincipalAmount(from text: String, insuranceAmount: Double) -> Double {
         let prioritizedPatterns = [
             #"baroda\s+gyan\s+loan\s+of\s+(?:rs[\.,:]?|inr)\s*([0-9][0-9,]*(?:\.\d{1,2})?)"#,
-            #"(?:education|home|housing|vehicle|car|personal)\s+loan.{0,80}?\b(?:of|for)\s+(?:rs[\.,:]?|inr)\s*([0-9][0-9,]*(?:\.\d{1,2})?)"#,
             #"(?:permissible\s+limit|sanctioned\s+(?:loan\s+)?(?:amount|limit)|loan\s+amount|credit\s+facility|principal\s+sum)\s*[:\-]?\s*(?:rs[\.,:]?|inr)?\s*([0-9][0-9,]*(?:\.\d{1,2})?)"#,
+            #"(?:education|home|housing|vehicle|car|personal)\s+loan.{0,80}?\b(?:of|for)\s+(?:rs[\.,:]?|inr)\s*([0-9][0-9,]*(?:\.\d{1,2})?)"#,
             #"(?:we\s+have\s+sanctioned|sanctioned\s+you|sanctioned\s+credit\s+facility).{0,80}?(?:rs[\.,:]?|inr)\s*([0-9][0-9,]*(?:\.\d{1,2})?)"#,
             #"\bloan\s+of\s+(?:rs[\.,:]?|inr)\s*([0-9][0-9,]*(?:\.\d{1,2})?)"#
         ]
@@ -203,6 +267,8 @@ struct SanctionLetterParser: LoanStatementParser {
     
     private func extractRepayableMonths(from text: String) -> Int? {
         let patterns = [
+            #"repayment\s*[:\-]?\s*(\d{1,3})\s*months?"#,
+            #"repayment\s+period\s*[:\-]?\s*(\d{1,3})\s*months?"#,
             #"repayable\s+in\s*[:\-]?\s*(\d{1,3})\s*months?"#,
             #"repayable\s+in.{0,30}?(\d{1,3})\s*months?"#,
             #"(\d{1,3})\s*months?\s+by\s+equated\s+monthly\s+instal?l?ments?"#,
@@ -260,12 +326,9 @@ struct SanctionLetterParser: LoanStatementParser {
     }
     
     private func cleanNumeric(_ text: String) -> Double? {
-        // Strip everything except digits, comma, and period
         let allowed = CharacterSet.decimalDigits.union(CharacterSet(charactersIn: ".,"))
         let filtered = text.components(separatedBy: allowed.inverted).joined()
-        
-        let clean = filtered.replacingOccurrences(of: ",", with: "")
-                            .trimmingCharacters(in: .whitespaces)
+        let clean = filtered.replacingOccurrences(of: ",", with: "").trimmingCharacters(in: .whitespaces)
         return Double(clean)
     }
     
@@ -273,14 +336,12 @@ struct SanctionLetterParser: LoanStatementParser {
         let lines = text.components(separatedBy: .newlines)
         for line in lines {
             let nLine = line.lowercased()
-            // Skip header fields that might be misread as scheme names
             if nLine.contains("place:") || nLine.contains("date:") || nLine.contains("ref:") { continue }
             
             if nLine.contains("scheme") || nLine.contains("product") {
                 let parts = line.components(separatedBy: ":")
                 if parts.count > 1 {
                     let scheme = parts[1].trimmingCharacters(in: .whitespacesAndNewlines)
-                    // Avoid picking up dates or short garbage as scheme names
                     if scheme.count > 3 && !scheme.contains("/") && !scheme.contains("-") {
                         data.scheme = scheme
                     }
@@ -293,6 +354,7 @@ struct SanctionLetterParser: LoanStatementParser {
         let patterns = [
             #"\bdate\s*[:\-]?\s*(\d{1,2}[-/]\d{1,2}[-/]\d{2,4})"#,
             #"\bdated\s+(\d{1,2}[-/]\d{1,2}[-/]\d{2,4})"#,
+            #"\b(\d{1,2}\s+[a-zA-Z]{3,9}\s+\d{4})\b"#,
             #"\b(\d{1,2}[-/]\d{1,2}[-/]\d{4})\b"#
         ]
         
@@ -300,7 +362,7 @@ struct SanctionLetterParser: LoanStatementParser {
         formatter.locale = Locale(identifier: "en_US_POSIX")
         for pattern in patterns {
             guard let match = extractRegex(pattern, in: text) else { continue }
-            for format in ["dd-MM-yyyy", "dd/MM/yyyy", "dd-MM-yy", "dd/MM/yy"] {
+            for format in ["dd-MM-yyyy", "dd/MM/yyyy", "d MMM yyyy", "dd MMM yyyy", "dd-MM-yy"] {
                 formatter.dateFormat = format
                 if let date = formatter.date(from: match) {
                     return date
@@ -312,7 +374,7 @@ struct SanctionLetterParser: LoanStatementParser {
     
     private func detectLoanType(loanData: LoanData, text: String) -> AssessmentLoanEntry.LoanType {
         let nText = text.lowercased()
-        if nText.contains("education") || nText.contains("gyan") { return .educationLoan }
+        if nText.contains("education") || nText.contains("gyan") || nText.contains("student") { return .educationLoan }
         if nText.contains("home") || nText.contains("housing") { return .homeLoan }
         if nText.contains("car") || nText.contains("vehicle") { return .carLoan }
         return .personalLoan
@@ -325,14 +387,14 @@ struct SanctionLetterParser: LoanStatementParser {
         if nText.contains("hdfc") { return "HDFC Bank" }
         if nText.contains("icici") { return "ICICI Bank" }
         if nText.contains("axis") { return "Axis Bank" }
-        return "Other Lender"
+        return "Bank of Baroda"
     }
     
     private func calculateConfidence(data: LoanData) -> Double {
         var score = 0.0
         if data.principal > 0 { score += 0.3 }
-        if data.interestRate > 0 { score += 0.3 }
-        if data.tenure > 0 { score += 0.2 }
+        if data.interestRate > 0 { score += 0.25 }
+        if data.totalLoanPeriodMonths > 0 || data.moratorium > 0 { score += 0.25 }
         if !data.scheme.isEmpty { score += 0.1 }
         if data.insurance > 0 { score += 0.1 }
         return score

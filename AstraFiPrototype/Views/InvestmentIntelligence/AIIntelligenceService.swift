@@ -47,6 +47,53 @@ final class AIIntelligenceService {
         return fallbackIntelligence(from: facts)
     }
 
+    /// Reuses AstraFi's existing AI transport for explanation only. Financial
+    /// calculations are completed locally in FinancialDecisionAnalysis.
+    func generateFinancialDecisionInsight(from context: FinancialDecisionContext) async throws -> String {
+        guard !Secrets.openRouterAPIKey.isEmpty else {
+            return FinancialDecisionAIInsight.fallback(for: context)
+        }
+        let endpoint = Secrets.openRouterEndpoint.isEmpty
+            ? "https://openrouter.ai/api/v1/chat/completions"
+            : Secrets.openRouterEndpoint
+        guard let url = URL(string: endpoint), let model = openRouterModels.first else {
+            throw AIIntelligenceServiceError.missingConfiguration
+        }
+
+        let encodedContext = try JSONEncoder().encode(context)
+        let contextJSON = String(data: encodedContext, encoding: .utf8) ?? "{}"
+        let prompt = """
+        Explain the following PRE-CALCULATED personal-finance readiness facts in 80 words or fewer.
+        Use clear educational language. Do not calculate new metrics, alter numbers, recommend specific stocks, funds, banks, or products, predict returns, or give regulated financial advice.
+        State the key priority and its factual reason. Do not use markdown.
+
+        Facts JSON: \(contextJSON)
+        """
+        let payload = ChatCompletionRequest(
+            model: model,
+            messages: [
+                ChatMessage(role: "system", content: "Explain only supplied facts. Never provide product recommendations or guarantees."),
+                ChatMessage(role: "user", content: prompt)
+            ],
+            temperature: 0.2
+        )
+        var request = URLRequest(url: url)
+        request.httpMethod = "POST"
+        request.setValue("Bearer \(Secrets.openRouterAPIKey)", forHTTPHeaderField: "Authorization")
+        request.setValue("application/json", forHTTPHeaderField: "Content-Type")
+        request.setValue("https://astrafi.app", forHTTPHeaderField: "HTTP-Referer")
+        request.setValue("AstraFi", forHTTPHeaderField: "X-Title")
+        request.httpBody = try JSONEncoder().encode(payload)
+
+        let (data, response) = try await session.data(for: request)
+        guard (response as? HTTPURLResponse)?.statusCode ?? 200 < 400,
+              let content = try JSONDecoder().decode(ChatCompletionResponse.self, from: data).choices.first?.message.content,
+              !content.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty else {
+            throw AIIntelligenceServiceError.invalidResponse
+        }
+        return String(content.trimmingCharacters(in: .whitespacesAndNewlines).prefix(600))
+    }
+
     private func prompt(for facts: StockFacts) throws -> String {
         let factsData = try JSONEncoder().encode(facts)
         let factsJSON = String(data: factsData, encoding: .utf8) ?? "{}"

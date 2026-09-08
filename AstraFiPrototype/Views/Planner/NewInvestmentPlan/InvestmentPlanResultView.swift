@@ -13,11 +13,6 @@ struct InvestmentPlanResultView: View {
         )
     }
     
-    private var isLoanEligibleGoal: Bool {
-        let excluded = ["Retirement", "Wealth Creation"]
-        return !excluded.contains(input.purposeOfInvestment)
-    }
-    
     var body: some View {
         ScrollView(showsIndicators: false) {
             VStack(spacing: 32) {
@@ -103,68 +98,34 @@ struct InvestmentPlanResultView: View {
                     .buttonStyle(PlainButtonStyle())
                     
                     // Plan 3: Loan + Invest stress test
-                    if let p3 = results.plan3 {
-                        NavigationLink(destination: Plan3DetailView(input: input, result: p3)) {
-                            StrategySelectionCard(
-                                id: 3,
-                                title: "Loan Stress-Test Scenario",
-                                subtitle: "Compare debt-funded investing risks.",
-                                icon: "arrow.up.right.circle.fill",
-                                color: .purple,
-                                bestFor: "Efficiency",
-                                metric: "High risk simulation",
-                                isRecommended: false
-                            )
-                        }
-                        .buttonStyle(PlainButtonStyle())
-                    } else {
-                        NavigationLink(destination: noPlanWarning(message: "This stress-test scenario requires higher credit surplus.")) {
-                            StrategySelectionCard(
-                                id: 3,
-                                title: "Loan Stress-Test Scenario",
-                                subtitle: "Compare debt-funded investing risks.",
-                                icon: "arrow.up.right.circle.fill",
-                                color: .purple,
-                                bestFor: "Efficiency",
-                                metric: "Check Surplus",
-                                isRecommended: false
-                            )
-                        }
-                        .buttonStyle(PlainButtonStyle())
+                    NavigationLink(destination: Plan3DetailView(input: input, result: results.plan3!)) {
+                        StrategySelectionCard(
+                            id: 3,
+                            title: "Loan Stress-Test Scenario",
+                            subtitle: "Compare debt-funded investing risks.",
+                            icon: "arrow.up.right.circle.fill",
+                            color: .purple,
+                            bestFor: "Efficiency",
+                            metric: "High risk simulation",
+                            isRecommended: false
+                        )
                     }
+                    .buttonStyle(PlainButtonStyle())
                     
                     // Plan 2: Traditional Loan
-                    if isLoanEligibleGoal {
-                        if let p2 = results.plan2 {
-                            NavigationLink(destination: Plan2DetailView(input: input, result: p2)) {
-                                StrategySelectionCard(
-                                    id: 2,
-                                    title: "Traditional \(results.goalCategory.rawValue) Loan",
-                                    subtitle: "Simple bank loan with flexible EMI options.",
-                                    icon: "banknote.fill",
-                                    color: .orange,
-                                    bestFor: "Immediate Need",
-                                    metric: "Bank Fixed",
-                                    isRecommended: false
-                                )
-                            }
-                            .buttonStyle(PlainButtonStyle())
-                        } else {
-                            NavigationLink(destination: noPlanWarning(message: "This loan scenario is not suitable for your current profile inputs.")) {
-                                StrategySelectionCard(
-                                    id: 2,
-                                    title: "Traditional \(results.goalCategory.rawValue) Loan",
-                                    subtitle: "Simple bank loan with flexible EMI options.",
-                                    icon: "banknote.fill",
-                                    color: .orange,
-                                    bestFor: "Immediate Need",
-                                    metric: "Not Eligible",
-                                    isRecommended: false
-                                )
-                            }
-                            .buttonStyle(PlainButtonStyle())
-                        }
+                    NavigationLink(destination: Plan2DetailView(input: input, result: results.plan2!)) {
+                        StrategySelectionCard(
+                            id: 2,
+                            title: "Traditional \(results.goalCategory.rawValue) Loan",
+                            subtitle: "Simple bank loan with flexible EMI options.",
+                            icon: "banknote.fill",
+                            color: .orange,
+                            bestFor: "Immediate Need",
+                            metric: "Bank Fixed",
+                            isRecommended: false
+                        )
                     }
+                    .buttonStyle(PlainButtonStyle())
                 }
                 
                 // Compare All Plans Button
@@ -219,20 +180,6 @@ struct InvestmentPlanResultView: View {
         .navigationBarTitleDisplayMode(.inline)
         .background(AppTheme.appBackground(for: colorScheme))
     }
-    
-    private func noPlanWarning(message: String) -> some View {
-        VStack(spacing: 20) {
-            Image(systemName: "exclamationmark.triangle.fill")
-                .font(.system(size: 48))
-                .foregroundStyle(.orange)
-            Text(message)
-                .font(.headline)
-                .multilineTextAlignment(.center)
-        }
-        .padding()
-        .navigationTitle("Plan Unavailable")
-    }
-    
     
     // Redesigned StrategySelectionCard
     struct StrategySelectionCard: View {
