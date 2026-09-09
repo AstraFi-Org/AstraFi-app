@@ -10,6 +10,8 @@ struct PlannerView: View {
     @State private var showNewInvestmentPlan = false
     @State private var showCompanyAnalyzer = false
     @State private var projectionYears = 5
+    @State private var emergencyFundState = EmergencyFundSectionState()
+    @State private var plannerSelectedInvestmentIDs: Set<UUID> = []
 
     private var profile: AstraUserProfile? { appState.currentProfile }
     private var investments: [AstraInvestment]  { profile?.investments ?? [] }
@@ -73,7 +75,13 @@ struct PlannerView: View {
         investments.reduce(0) { $0 + projectedValue(for: $1, inYears: projectionYears) }
     }
 
+    private var emergencyFundSaved: Double {
+        profile?.basicDetails.emergencyFundAmount ?? 0
+    }
+
     var body: some View {
+        @Bindable var efState = emergencyFundState
+
         ScrollView(showsIndicators: false) {
             VStack(alignment: .leading, spacing: 22) {
                 // MARK: - Financial Vitals Card
@@ -148,7 +156,7 @@ struct PlannerView: View {
                     .shadow(color: AppTheme.adaptiveShadow, radius: 14, x: 0, y: 5)
                 }
 
-                // MARK: - EmergencyFund
+                // MARK: - Emergency Fund Summary
                 VStack(alignment: .leading, spacing: 10) {
                     HStack(spacing: 8) {
                         Image(systemName: "shield.lefthalf.filled")
@@ -157,8 +165,24 @@ struct PlannerView: View {
                         Text("Emergency Fund")
                             .font(.system(size: 20, weight: .bold))
                     }
-                    EmergencyFundSectionView()
+                    EmergencyFundSectionView(
+                        state: emergencyFundState,
+                        parts: [.summary]
+                    )
                 }
+
+                // MARK: - Investment Growth
+                VStack(alignment: .leading, spacing: 10) {
+                    InvestmentGrowthSectionView(
+                        selectedInvestmentIDs: $plannerSelectedInvestmentIDs
+                    )
+                }
+
+                // MARK: - Emergency Fund Planning Controls
+                EmergencyFundSectionView(
+                    state: emergencyFundState,
+                    parts: [.contribution, .allocation]
+                )
 
                 // MARK: - Financial Decision Center
                 FinancialDecisionCenterSection()
@@ -361,6 +385,21 @@ struct PlannerView: View {
                     }
                 }
 
+                // MARK: - Emergency Fund Savings Projection
+                VStack(alignment: .leading, spacing: 10) {
+                    HStack(spacing: 8) {
+                        Image(systemName: "chart.line.uptrend.xyaxis")
+                            .font(.system(size: 15, weight: .semibold))
+                            .foregroundStyle(AppTheme.auraIndigo)
+                        Text("Emergency Fund Projection")
+                            .font(.system(size: 20, weight: .bold))
+                    }
+                    EmergencyFundSectionView(
+                        state: emergencyFundState,
+                        parts: [.projection]
+                    )
+                }
+
                 //investment Forecast
                 //InvestmentForecast(appState: appState)
             }
@@ -372,6 +411,40 @@ struct PlannerView: View {
         .navigationBarTitleDisplayMode(.large)
         .background(AppTheme.appBackground(for: colorScheme))
         .navigationDestination(isPresented: $showNewInvestmentPlan) { GoalSelectionView() }
+        .navigationDestination(isPresented: $efState.showFundSetup) {
+            EmergencyFundSetupView(plannerState: emergencyFundState)
+                .environment(appState)
+        }
+        .navigationDestination(isPresented: $efState.showEditSheet) {
+            ManageAllocationSheet(
+                currentHolding: emergencyFundSaved,
+                pTBills: $efState.pTBills,
+                pSavings: $efState.pSavings,
+                pSweepFD: $efState.pSweepFD,
+                onSave: { efState.saveAllocation(appState: appState) }
+            )
+            .environment(appState)
+        }
+        .navigationDestination(isPresented: $efState.showRecommendScreen) {
+            AllocationRecommendationScreen(
+                currentHolding: emergencyFundSaved,
+                riskTolerance: profile?.basicDetails.riskTolerance ?? .medium,
+                pTBills: $efState.pTBills,
+                pSavings: $efState.pSavings,
+                pSweepFD: $efState.pSweepFD,
+                onAccept: {
+                    efState.saveAllocation(appState: appState)
+                    efState.showRecommendScreen = false
+                },
+                onCustomize: {
+                    efState.showRecommendScreen = false
+                    DispatchQueue.main.asyncAfter(deadline: .now() + 0.35) {
+                        efState.showEditSheet = true
+                    }
+                }
+            )
+            .environment(appState)
+        }
         .sheet(isPresented: $showCompanyAnalyzer)  { CompanyAnalyzerView() }
     }
     // MARK: - Action Buttons

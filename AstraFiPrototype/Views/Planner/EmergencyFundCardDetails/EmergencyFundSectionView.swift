@@ -18,6 +18,39 @@ struct GraphPoint: Identifiable {
     let amount: Double
 }
 
+// MARK: - Emergency Fund Section Parts
+
+enum EmergencyFundSectionPart: Hashable {
+    case summary
+    case contribution
+    case allocation
+    case projection
+}
+
+@Observable
+final class EmergencyFundSectionState {
+    var monthlyContribution: Double = 0
+    var pTBills: Double = 0
+    var pSavings: Double = 0
+    var pSweepFD: Double = 0
+    var showManage = false
+    var showEditSheet = false
+    var showRecommendScreen = false
+    var showFundSetup = false
+
+    func saveAllocation(appState: AppStateManager) {
+        guard var profile = appState.currentProfile else { return }
+        profile.emergencyFundAllocation = AstraEmergencyFundAllocation(
+            treasuryBills: pTBills,
+            commercialPapers: 0,
+            savingsAccount: pSavings,
+            sweepInFD: pSweepFD,
+            isAllocatedByUser: true
+        )
+        appState.currentProfile = profile
+    }
+}
+
 // MARK: - Emergency Fund Line Graph
 struct EFLineGraphView: View {
     let points: [GraphPoint]
@@ -123,17 +156,21 @@ struct EmergencyFundSectionView: View {
     @Environment(AppStateManager.self) var appState
     @Environment(\.colorScheme) var colorScheme
 
-    /// Monthly contribution slider — user drags this to see projection
-    @State private var monthlyContribution: Double = 0
+    @Bindable var state: EmergencyFundSectionState
+    var parts: Set<EmergencyFundSectionPart>
 
-    @State private var pTBills:  Double = 0
-    @State private var pSavings: Double = 0
-    @State private var pSweepFD: Double = 0
+    init(
+        state: EmergencyFundSectionState,
+        parts: Set<EmergencyFundSectionPart> = [.summary, .projection, .contribution, .allocation]
+    ) {
+        self.state = state
+        self.parts = parts
+    }
 
-    @State private var showManage:          Bool = false
-    @State private var showEditSheet:       Bool = false
-    @State private var showRecommendScreen: Bool = false
-    @State private var showFundSetup:       Bool = false
+    private var monthlyContribution: Double {
+        get { state.monthlyContribution }
+        nonmutating set { state.monthlyContribution = newValue }
+    }
 
     // MARK: Profile accessors
     private var profile: AstraUserProfile? { appState.currentProfile }
@@ -216,52 +253,48 @@ struct EmergencyFundSectionView: View {
         var annualReturn: Double { invested * annualRate }
     }
     private var instruments: [InstrumentInfo] {
-        [InstrumentInfo(name: "Treasury Bills",  icon: "building.columns.fill", color: Color(hex: "#30D158"), pct: pTBills,  annualRate: EFInstrumentRate.treasuryBills,  holding: currentSaved),
-         InstrumentInfo(name: "Saving Account",  icon: "banknote.fill",         color: Color(hex: "#007AFF"), pct: pSavings, annualRate: EFInstrumentRate.savingsAccount, holding: currentSaved),
-         InstrumentInfo(name: "Sweep-in FD",     icon: "arrow.2.squarepath",    color: Color(hex: "#FF9F0A"), pct: pSweepFD, annualRate: EFInstrumentRate.sweepInFD,      holding: currentSaved),
+        [InstrumentInfo(name: "Treasury Bills",  icon: "building.columns.fill", color: Color(hex: "#30D158"), pct: state.pTBills,  annualRate: EFInstrumentRate.treasuryBills,  holding: currentSaved),
+         InstrumentInfo(name: "Saving Account",  icon: "banknote.fill",         color: Color(hex: "#007AFF"), pct: state.pSavings, annualRate: EFInstrumentRate.savingsAccount, holding: currentSaved),
+         InstrumentInfo(name: "Sweep-in FD",     icon: "arrow.2.squarepath",    color: Color(hex: "#FF9F0A"), pct: state.pSweepFD, annualRate: EFInstrumentRate.sweepInFD,      holding: currentSaved),
         ].filter { $0.invested > 0 }
+    }
+
+    private var cardContent: some View {
+        VStack(alignment: .leading, spacing: 20) {
+            if parts.contains(.summary) {
+                headerView
+                goalSummaryRow
+            }
+            if parts.contains(.projection) {
+                if parts.contains(.summary) { Divider().padding(.horizontal, -20) }
+                lineGraphSection
+            }
+            if parts.contains(.contribution) {
+                if parts.contains(.summary) || parts.contains(.projection) { Divider().padding(.horizontal, -20) }
+                contributionSliderSection
+            }
+            if parts.contains(.allocation) {
+                if parts.contains(.summary) || parts.contains(.projection) || parts.contains(.contribution) {
+                    Divider().padding(.horizontal, -20)
+                }
+                allocationRow
+                if state.showManage && hasAllocation {
+                    allocationBreakdownTable.transition(.move(edge: .top).combined(with: .opacity))
+                }
+            }
+        }
     }
 
     // MARK: Body
     var body: some View {
-        VStack(alignment: .leading, spacing: 20) {
-            headerView
-            goalSummaryRow
-            Divider().padding(.horizontal, -20)
-            lineGraphSection
-            Divider().padding(.horizontal, -20)
-            contributionSliderSection
-            Divider().padding(.horizontal, -20)
-            allocationRow
-            if showManage && hasAllocation {
-                allocationBreakdownTable.transition(.move(edge: .top).combined(with: .opacity))
-            }
-        }
+        cardContent
         .padding(20)
         .background(AppTheme.cardBackground)
         .clipShape(RoundedRectangle(cornerRadius: 20, style: .continuous))
         .shadow(color: AppTheme.adaptiveShadow, radius: 14, x: 0, y: 5)
-        .animation(.spring(response: 0.36, dampingFraction: 0.80), value: showManage)
-        .animation(.spring(response: 0.28, dampingFraction: 0.75), value: monthlyContribution)
+        .animation(.spring(response: 0.36, dampingFraction: 0.80), value: state.showManage)
+        .animation(.spring(response: 0.28, dampingFraction: 0.75), value: state.monthlyContribution)
         .onAppear(perform: syncFromProfile)
-        .navigationDestination(isPresented: $showEditSheet){
-            ManageAllocationSheet(currentHolding: currentSaved, pTBills: $pTBills, pSavings: $pSavings, pSweepFD: $pSweepFD, onSave: saveAllocation)
-                .environment(appState)
-        }
-        .navigationDestination(isPresented: $showFundSetup) {
-            EmergencyFundSetupView()
-                .environment(appState)
-        }
-        .navigationDestination(isPresented: $showRecommendScreen) {
-            AllocationRecommendationScreen(
-                currentHolding: currentSaved,
-                riskTolerance: profile?.basicDetails.riskTolerance ?? .medium,
-                pTBills: $pTBills, pSavings: $pSavings, pSweepFD: $pSweepFD,
-                onAccept: { saveAllocation(); showRecommendScreen = false },
-                onCustomize: { showRecommendScreen = false; DispatchQueue.main.asyncAfter(deadline: .now() + 0.35) { showEditSheet = true } }
-            )
-            .environment(appState)
-        }
         .onChange(of: monthlySavings) { _, _ in clampMonthlyContribution() }
         .onChange(of: remainingNeeded) { _, _ in clampMonthlyContribution() }
     }
@@ -279,7 +312,7 @@ struct EmergencyFundSectionView: View {
             }
             Spacer()
             Button(currentSaved > 0 ? "Manage Fund" : "Start Fund") {
-                showFundSetup = true
+                state.showFundSetup = true
             }
             .font(.system(size: 12, weight: .semibold, design: .rounded))
             .buttonStyle(.borderedProminent)
@@ -353,7 +386,10 @@ struct EmergencyFundSectionView: View {
                 }
             }
             VStack(spacing: 6) {
-                Slider(value: $monthlyContribution, in: hasData ? sliderMin...max(sliderMax, sliderMin + 1) : 500...50000, step: 500)
+                Slider(value: Binding(
+                    get: { state.monthlyContribution },
+                    set: { state.monthlyContribution = $0 }
+                ), in: hasData ? sliderMin...max(sliderMax, sliderMin + 1) : 500...50000, step: 500)
                     .tint(AppTheme.auraIndigo)
                 HStack {
                     Text(sliderMin.toCurrency(compact: true)).font(.system(size: 11, weight: .medium)).foregroundStyle(.secondary)
@@ -412,16 +448,16 @@ struct EmergencyFundSectionView: View {
                 Text("No Allocation").font(.system(size: 13, weight: .medium, design: .rounded)).foregroundStyle(.secondary).padding(.horizontal, 14).padding(.vertical, 7).background(Color(uiColor: .tertiarySystemGroupedBackground)).clipShape(Capsule())
             } else {
                 HStack(spacing: 8) {
-                    if hasAllocation && showManage {
-                        Button { showEditSheet = true } label: { Image(systemName: "pencil.circle.fill").font(.system(size: 22)).foregroundStyle(AppTheme.auraIndigo.opacity(0.8)) }.buttonStyle(PlainButtonStyle())
+                    if hasAllocation && state.showManage {
+                        Button { state.showEditSheet = true } label: { Image(systemName: "pencil.circle.fill").font(.system(size: 22)).foregroundStyle(AppTheme.auraIndigo.opacity(0.8)) }.buttonStyle(PlainButtonStyle())
                     }
                     Button {
                         withAnimation(.spring(response: 0.38, dampingFraction: 0.82)) {
-                            if hasAllocation { showManage.toggle() } else { showRecommendScreen = true }
+                            if hasAllocation { state.showManage.toggle() } else { state.showRecommendScreen = true }
                         }
                     } label: {
                         HStack(spacing: 4) {
-                            Text(hasAllocation ? (showManage ? "Done" : "Manage") : "Allocate").font(.system(size: 13, weight: .semibold, design: .rounded))
+                            Text(hasAllocation ? (state.showManage ? "Done" : "Manage") : "Allocate").font(.system(size: 13, weight: .semibold, design: .rounded))
 //                            if !(hasAllocation && showManage) { Image(systemName: "chevron.right").font(.system(size: 10, weight: .bold)) }
                         }
                         .foregroundStyle(.white).padding(.horizontal, 14).padding(.vertical, 7).background(AppTheme.auraIndigo).clipShape(Capsule())
@@ -479,25 +515,231 @@ struct EmergencyFundSectionView: View {
 
     // MARK: Helpers
     private func syncFromProfile() {
-        if let a = profile?.emergencyFundAllocation { pTBills = a.treasuryBills; pSavings = a.savingsAccount; pSweepFD = a.sweepInFD }
+        if let a = profile?.emergencyFundAllocation {
+            state.pTBills = a.treasuryBills
+            state.pSavings = a.savingsAccount
+            state.pSweepFD = a.sweepInFD
+        }
         // Smart default: 30% of savings, snapped to nearest ₹500 and capped at 50%.
-        if monthlyContribution == 0 && hasData {
+        if state.monthlyContribution == 0 && hasData {
             let suggested = (monthlySavings * 0.30 / 500).rounded() * 500
-            monthlyContribution = min(max(sliderMin, suggested), sliderMax)
+            state.monthlyContribution = min(max(sliderMin, suggested), sliderMax)
         }
     }
     private func clampMonthlyContribution() {
         guard hasData else { return }
-        if monthlyContribution == 0 {
+        if state.monthlyContribution == 0 {
             syncFromProfile()
         } else {
-            monthlyContribution = min(max(sliderMin, monthlyContribution), sliderMax)
+            state.monthlyContribution = min(max(sliderMin, state.monthlyContribution), sliderMax)
         }
     }
     private func saveAllocation() {
-        guard var p = appState.currentProfile else { return }
-        p.emergencyFundAllocation = AstraEmergencyFundAllocation(treasuryBills: pTBills, commercialPapers: 0, savingsAccount: pSavings, sweepInFD: pSweepFD, isAllocatedByUser: true)
-        appState.currentProfile = p
+        state.saveAllocation(appState: appState)
+    }
+}
+
+// MARK: - Emergency Fund Projection Card
+
+struct EmergencyFundProjectionCard: View {
+    @Environment(\.colorScheme) private var colorScheme
+
+    let emergencyFundTarget: Double
+    let currentSaved: Double
+    @Binding var monthlyContribution: Double
+    let monthlySavings: Double
+
+    private var hasData: Bool { emergencyFundTarget > 0 }
+    private var remainingNeeded: Double { max(0, emergencyFundTarget - currentSaved) }
+    private var goalMet: Bool { remainingNeeded <= 0 && emergencyFundTarget > 0 }
+    private var sliderMin: Double { 500 }
+    private var contributionCap: Double { monthlySavings * 0.5 }
+    private var sliderMax: Double {
+        let cap = remainingNeeded > 0 ? min(contributionCap, remainingNeeded) : contributionCap
+        return max(sliderMin + 500, cap)
+    }
+    private var monthsToGoal: Int {
+        guard monthlyContribution > 0, remainingNeeded > 0 else { return 0 }
+        return ceil(remainingNeeded / monthlyContribution).safeInt
+    }
+    private var completionDate: String {
+        guard monthsToGoal > 0 else { return "" }
+        let date = Calendar.current.date(byAdding: .month, value: monthsToGoal, to: Date()) ?? Date()
+        let formatter = DateFormatter()
+        formatter.dateFormat = "MMM yyyy"
+        return formatter.string(from: date)
+    }
+    private var graphPoints: [GraphPoint] {
+        guard emergencyFundTarget > 0 else {
+            return [GraphPoint(month: 0, amount: currentSaved), GraphPoint(month: 12, amount: currentSaved)]
+        }
+        guard monthlyContribution > 0 else {
+            return [GraphPoint(month: 0, amount: currentSaved), GraphPoint(month: 12, amount: currentSaved)]
+        }
+        let months = min(monthsToGoal, 120)
+        return (0...months).map { month in
+            GraphPoint(
+                month: month,
+                amount: min(currentSaved + Double(month) * monthlyContribution, emergencyFundTarget)
+            )
+        }
+    }
+
+    var body: some View {
+        VStack(alignment: .leading, spacing: 16) {
+            projectionGraphSection
+            contributionSliderSection
+        }
+        .padding(.vertical, 4)
+        .onAppear(perform: ensureSuggestedContribution)
+    }
+
+    private var projectionGraphSection: some View {
+        VStack(alignment: .leading, spacing: 10) {
+            HStack {
+                Text("Savings Projection")
+                    .font(.system(size: 14, weight: .semibold, design: .rounded))
+                Spacer()
+                if monthsToGoal > 0 {
+                    Label(completionDate, systemImage: "flag.checkered")
+                        .font(.system(size: 12, weight: .medium, design: .rounded))
+                        .foregroundStyle(AppTheme.auraIndigo)
+                }
+            }
+
+            if hasData {
+                EFLineGraphView(
+                    points: graphPoints,
+                    target: emergencyFundTarget,
+                    currentSaved: currentSaved,
+                    accentColor: AppTheme.auraIndigo
+                )
+                .frame(height: 170)
+
+                HStack(spacing: 16) {
+                    projectionLegendDot(color: AppTheme.auraIndigo, label: "Projected")
+                    projectionLegendDot(color: Color(hex: "#30D158"), label: "Target")
+                    if currentSaved > 0 {
+                        projectionLegendDot(color: Color(hex: "#FF9F0A"), label: "Current")
+                    }
+                }
+            } else {
+                Text("Complete your financial assessment to unlock personalised projections.")
+                    .font(.system(size: 12, design: .rounded))
+                    .foregroundStyle(.secondary)
+            }
+        }
+    }
+
+    private var contributionSliderSection: some View {
+        VStack(alignment: .leading, spacing: 14) {
+            HStack(alignment: .firstTextBaseline) {
+                VStack(alignment: .leading, spacing: 2) {
+                    Text("Monthly Contribution")
+                        .font(.system(size: 15, weight: .medium))
+                    Text("Drag to project your goal timeline")
+                        .font(.system(size: 11, design: .rounded))
+                        .foregroundStyle(.secondary)
+                }
+                Spacer()
+                VStack(alignment: .trailing, spacing: 2) {
+                    Text(monthlyContribution > 0 ? monthlyContribution.toCurrency(compact: true) : "₹0")
+                        .font(.system(size: 20, weight: .bold, design: .rounded))
+                        .foregroundStyle(AppTheme.auraIndigo)
+                        .contentTransition(.numericText(countsDown: false))
+                    Text("/ month")
+                        .font(.system(size: 11, design: .rounded))
+                        .foregroundStyle(.secondary)
+                }
+            }
+
+            if hasData {
+                VStack(spacing: 6) {
+                    Slider(
+                        value: $monthlyContribution,
+                        in: sliderMin...max(sliderMax, sliderMin + 1),
+                        step: 500
+                    )
+                    .tint(AppTheme.auraIndigo)
+
+                    HStack {
+                        Text(sliderMin.toCurrency(compact: true))
+                            .font(.system(size: 11, weight: .medium))
+                            .foregroundStyle(.secondary)
+                        Spacer()
+                        if monthlySavings > 0 {
+                            Text("Savings: \(monthlySavings.toCurrency(compact: true))/mo")
+                                .font(.system(size: 11, weight: .medium))
+                                .foregroundStyle(.secondary)
+                        }
+                        Spacer()
+                        Text(sliderMax.toCurrency(compact: true))
+                            .font(.system(size: 11, weight: .medium))
+                            .foregroundStyle(.secondary)
+                    }
+                }
+
+                if monthlyContribution > 0 {
+                    timelineChip
+                }
+            }
+        }
+    }
+
+    private var timelineChip: some View {
+        HStack(spacing: 12) {
+            ZStack {
+                Circle()
+                    .fill((goalMet ? AppTheme.auraGreen : AppTheme.auraIndigo).opacity(0.12))
+                    .frame(width: 36, height: 36)
+                Image(systemName: goalMet ? "checkmark.seal.fill" : "calendar.badge.clock")
+                    .font(.system(size: 15, weight: .semibold))
+                    .foregroundStyle(goalMet ? AppTheme.auraGreen : AppTheme.auraIndigo)
+            }
+
+            if goalMet {
+                VStack(alignment: .leading, spacing: 2) {
+                    Text("Goal Already Achieved!")
+                        .font(.system(size: 13, weight: .bold, design: .rounded))
+                        .foregroundStyle(AppTheme.auraGreen)
+                    Text("Consider growing to a 12-month fund.")
+                        .font(.system(size: 11, design: .rounded))
+                        .foregroundStyle(.secondary)
+                }
+            } else {
+                VStack(alignment: .leading, spacing: 2) {
+                    Text("Achieve goal in **\(monthsToGoal) month\(monthsToGoal == 1 ? "" : "s")**")
+                        .font(.system(size: 13, weight: .semibold, design: .rounded))
+                    Text("By \(completionDate) · Remaining \(remainingNeeded.toCurrency(compact: true))")
+                        .font(.system(size: 11, design: .rounded))
+                        .foregroundStyle(.secondary)
+                        .contentTransition(.numericText())
+                }
+            }
+            Spacer()
+        }
+        .padding(12)
+        .adaptivePlanCard(
+            tint: goalMet ? AppTheme.auraGreen : AppTheme.auraIndigo,
+            colorScheme: colorScheme,
+            cornerRadius: 12,
+            tintOpacity: 0.05
+        )
+    }
+
+    private func projectionLegendDot(color: Color, label: String) -> some View {
+        HStack(spacing: 5) {
+            Circle().fill(color).frame(width: 7, height: 7)
+            Text(label)
+                .font(.system(size: 11, design: .rounded))
+                .foregroundStyle(.secondary)
+        }
+    }
+
+    private func ensureSuggestedContribution() {
+        guard hasData, monthlyContribution == 0 else { return }
+        let suggested = (monthlySavings * 0.30 / 500).rounded() * 500
+        monthlyContribution = min(max(sliderMin, suggested), sliderMax)
     }
 }
 
@@ -506,8 +748,14 @@ struct EmergencyFundSetupView: View {
     @Environment(\.dismiss) private var dismiss
     @Environment(AppStateManager.self) private var appState
 
+    @Bindable var plannerState: EmergencyFundSectionState
+
     @State private var manualAmount: Double = 0
     @State private var selectedInvestmentIDs: Set<UUID> = []
+
+    init(plannerState: EmergencyFundSectionState) {
+        self.plannerState = plannerState
+    }
 
     private var profile: AstraUserProfile? { appState.currentProfile }
     private var investments: [AstraInvestment] { profile?.investments ?? [] }
@@ -517,6 +765,17 @@ struct EmergencyFundSetupView: View {
             .reduce(0) { $0 + $1.currentValue.safeFinite }
     }
     private var totalTracked: Double { (manualAmount + linkedValue).safeFinite }
+
+    private var monthlyIncome: Double { profile?.basicDetails.monthlyIncome ?? 0 }
+    private var monthlyExpenses: Double { profile?.basicDetails.monthlyExpenses ?? 0 }
+    private var incomeAfterTax: Double { profile?.basicDetails.monthlyIncomeAfterTax ?? 0 }
+    private var planningIncome: Double { monthlyIncome > 0 ? monthlyIncome : incomeAfterTax }
+    private var monthlySavings: Double { max(0, planningIncome - monthlyExpenses) }
+    private var emergencyFundTarget: Double {
+        if monthlyIncome > 0 { return monthlyIncome * 6 }
+        if monthlyExpenses > 0 { return monthlyExpenses * 6 }
+        return 0
+    }
 
     var body: some View {
         List {
@@ -586,6 +845,19 @@ struct EmergencyFundSetupView: View {
                 LabeledContent("Total tracked", value: totalTracked.toCurrency())
                     .fontWeight(.bold)
             }
+
+            Section {
+                EmergencyFundProjectionCard(
+                    emergencyFundTarget: emergencyFundTarget,
+                    currentSaved: totalTracked,
+                    monthlyContribution: $plannerState.monthlyContribution,
+                    monthlySavings: monthlySavings
+                )
+            } header: {
+                Text("Savings Projection")
+            } footer: {
+                Text("Projection updates as you adjust cash, linked investments, or monthly contribution.")
+            }
         }
         .navigationTitle("Start Emergency Fund")
         .navigationBarTitleDisplayMode(.inline)
@@ -601,9 +873,13 @@ struct EmergencyFundSetupView: View {
             }
         }
         .onAppear {
-            manualAmount = profile?.emergencyFundManualAmount
-                ?? profile?.basicDetails.emergencyFundAmount
-                ?? 0
+            if let manual = profile?.emergencyFundManualAmount {
+                manualAmount = manual
+            } else if profile?.emergencyFundLinkedInvestmentIDs?.isEmpty ?? true {
+                manualAmount = profile?.basicDetails.emergencyFundAmount ?? 0
+            } else {
+                manualAmount = 0
+            }
             selectedInvestmentIDs = Set(profile?.emergencyFundLinkedInvestmentIDs ?? [])
         }
     }
@@ -921,5 +1197,8 @@ private struct HowToInvestFullGuideSheet: View {
 
 // MARK: - Preview
 #Preview {
-    ScrollView { VStack(spacing: 16) { EmergencyFundSectionView().environment(AppStateManager.withSampleData()) }.padding() }
+    ScrollView { VStack(spacing: 16) {
+        EmergencyFundSectionView(state: EmergencyFundSectionState())
+            .environment(AppStateManager.withSampleData())
+    }.padding() }
 }
