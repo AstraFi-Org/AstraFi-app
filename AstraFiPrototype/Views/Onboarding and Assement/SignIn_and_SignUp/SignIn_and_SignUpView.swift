@@ -125,7 +125,6 @@ struct SignUpView: View {
     @State private var confirmPassword: String = ""
     @State private var showConfirmPassword: Bool = false
     @State private var agreedToTerms: Bool = true
-    @State private var showSuccessPrompt: Bool = false
     @State private var showTermsSheet: Bool = false
     @State private var showPasswordRules: Bool = false
 
@@ -221,7 +220,9 @@ struct SignUpView: View {
                         Task {
                             let success = await appState.signUp(name: name, email: email, password: password)
                             if success {
-                                showSuccessPrompt = true
+                                withAnimation(.easeInOut(duration: 0.35)) {
+                                    appState.completeSignUp()
+                                }
                             }
                         }
                     }
@@ -264,13 +265,6 @@ struct SignUpView: View {
         
         .navigationBarBackButtonHidden(true)
         .background(Color(uiColor: .systemGroupedBackground).ignoresSafeArea())
-        .alert("Account created successfully", isPresented: $showSuccessPrompt) {
-            Button("OK", role: .cancel) {
-                appState.completeSignUp()
-            }
-        } message: {
-            Text("You are successfully signed up!")
-        }
         .alert("Authentication Error", isPresented: Binding(
             get: { appState.authError != nil },
             set: { if !$0 { appState.authError = nil } }

@@ -10,119 +10,140 @@ import SwiftUI
 struct PostAuthOnboardingView: View {
     @Environment(AppStateManager.self) var appState
     @Environment(\.colorScheme) var colorScheme
-    @State private var currentPage = 0
+    @State private var showingSignOutAlert = false
 
-    var body: some View {
-        ZStack {
-            Color(UIColor.systemGroupedBackground).ignoresSafeArea()
-
-            VStack(spacing: 30) {
-                Spacer()
-
-                TabView(selection: $currentPage) {
-                    OnboardingCard(
-                        title: "Start Your\nFinancial\nAssesment",
-                        subtitle: "See how your financial choices impact your present and future, and how to improve them.",
-                        footerText: "Your data stays private and secure.",
-                        footerIcon: "lock.shield",
-                        buttonTitle: "Start Assessment",
-                        action: {
-                            withAnimation {
-                                appState.showPostAuthOnboarding = false
-                                appState.showDashboard = false
-                            }
-                        }
-                    )
-                    .tag(0)
-
-                    OnboardingCard(
-                        title: "Take a quick tour\nto see how AstraFi\ncan help you.",
-                        subtitle: "Explore how AstraFi helps you assess your finances, plan investments, and track assets—before getting started.",
-                        footerText: nil,
-                        footerIcon: nil,
-                        buttonTitle: "Take a Look",
-                        action: {
-                            withAnimation {
-                                appState.showPostAuthOnboarding = false
-                                appState.showDashboard = true
-                            }
-                        }
-                    )
-                    .tag(1)
-                }
-                .tabViewStyle(.page(indexDisplayMode: .never))
-                .frame(height: 550)
-
-                // Page Indicator
-                HStack(spacing: 8) {
-                    Circle()
-                        .fill(currentPage == 0 ? Color.primary : Color.primary.opacity(0.2))
-                        .frame(width: 8, height: 8)
-                    Circle()
-                        .fill(currentPage == 1 ? Color.primary : Color.primary.opacity(0.2))
-                        .frame(width: 8, height: 8)
-                }
-                .padding(.bottom, 20)
-
-                Spacer()
-            }
+    private var userName: String {
+        guard let rawName = appState.currentProfile?.signUp.signUpName.trimmingCharacters(in: .whitespacesAndNewlines),
+              !rawName.isEmpty,
+              rawName != "User",
+              !rawName.contains("@") else {
+            return ""
         }
+        return rawName.components(separatedBy: " ").first ?? ""
     }
-}
-
-struct OnboardingCard: View {
-    let title: String
-    let subtitle: String
-    let footerText: String?
-    let footerIcon: String?
-    let buttonTitle: String
-    let action: () -> Void
 
     var body: some View {
-        VStack(spacing: 0) {
-            VStack(alignment: .leading, spacing: 20) {
-                Text(title)
-                    .font(.system(size: 36, weight: .bold))
-                    .foregroundColor(.primary)
-                    .lineSpacing(4)
+        NavigationStack {
+            VStack(spacing: 0) {
+                ScrollView(showsIndicators: false) {
+                    VStack(spacing: 20) {
+                        Spacer(minLength: 12)
 
-                Text(subtitle)
-                    .font(.system(size: 18, weight: .regular))
-                    .foregroundColor(.secondary)
-                    .lineSpacing(2)
+                        // Hero 3D Illustration
+                        Image("Signup")
+                            .resizable()
+                            .scaledToFit()
+                            .frame(maxWidth: 300, maxHeight: 270)
+                            .clipShape(RoundedRectangle(cornerRadius: 24, style: .continuous))
+                            .shadow(color: Color.black.opacity(colorScheme == .dark ? 0.25 : 0.05), radius: 20, x: 0, y: 10)
+                            .padding(.horizontal, 24)
 
-                Spacer()
+                        // Title & Subtitle
+                        VStack(spacing: 10) {
+                            Text(userName.isEmpty ? "Unlock your potential" : "Unlock your potential,\n\(userName)")
+                                .font(.system(size: 28, weight: .bold))
+                                .foregroundColor(.primary)
+                                .multilineTextAlignment(.center)
+                                .lineSpacing(3)
 
-                if let footerText = footerText {
-                    HStack(spacing: 6) {
-                        if let icon = footerIcon {
-                            Image(systemName: icon)
-                                .font(.system(size: 14))
+                            Text("Gain access to personalized tools, benchmarks, and strategies to build a more secure financial future.")
+                                .font(.system(size: 15, weight: .regular))
+                                .foregroundColor(.secondary)
+                                .multilineTextAlignment(.center)
+                                .lineSpacing(4)
+                                .padding(.horizontal, 28)
+
+                            // Trust & time expectation note
+                            HStack(spacing: 6) {
+                                Image(systemName: "lock.shield.fill")
+                                    .font(.system(size: 12))
+                                    .foregroundColor(.secondary)
+                                Text("Takes ~2 mins • Private & encrypted")
+                                    .font(.system(size: 12, weight: .medium))
+                                    .foregroundColor(.secondary)
+                            }
+                            .padding(.top, 4)
                         }
-                        Text(footerText)
-                            .font(.system(size: 14))
+                        .padding(.top, 4)
+
+                        Spacer(minLength: 16)
                     }
-                    .foregroundColor(.secondary.opacity(0.8))
+                }
+
+                // MARK: - Action Buttons
+                VStack(spacing: 12) {
+                    Button {
+                        withAnimation(.easeInOut(duration: 0.3)) {
+                            appState.showPostAuthOnboarding = false
+                            appState.showDashboard = false
+                        }
+                    } label: {
+                        Text("Start Financial Assessment")
+                            .font(.system(size: 17, weight: .semibold))
+                            .foregroundColor(.white)
+                            .frame(maxWidth: .infinity)
+                            .frame(height: 52)
+                            .background(Color.blue)
+                            .clipShape(RoundedRectangle(cornerRadius: 14, style: .continuous))
+                    }
+
+                    Button {
+                        withAnimation(.easeInOut(duration: 0.3)) {
+                            appState.showPostAuthOnboarding = false
+                            appState.showDashboard = true
+                        }
+                    } label: {
+                        Text("Explore Dashboard First")
+                            .font(.system(size: 16, weight: .regular))
+                            .foregroundColor(.secondary)
+                            .frame(maxWidth: .infinity)
+                            .frame(height: 40)
+                    }
+                }
+                .padding(.horizontal, 24)
+                .padding(.top, 8)
+                .padding(.bottom, 16)
+            }
+            .background(Color(UIColor.systemBackground).ignoresSafeArea())
+            .navigationBarTitleDisplayMode(.inline)
+            .toolbar {
+                // Centered App Logo + Name (Apple Native Principal Placement)
+                ToolbarItem(placement: .principal) {
+                    HStack(spacing: 8) {
+                        Image("AppLogo")
+                            .resizable()
+                            .scaledToFit()
+                            .frame(width: 26, height: 26)
+                            .clipShape(RoundedRectangle(cornerRadius: 6, style: .continuous))
+                            .shadow(color: Color.black.opacity(0.12), radius: 2, x: 0, y: 1)
+
+                        Text("AstraFi")
+                            .font(.system(size: 20, weight: .bold, design: .rounded))
+                            .foregroundColor(.primary)
+                    }
+                }
+
+                // Sign Out Action (Destructive Red)
+                ToolbarItem(placement: .topBarTrailing) {
+                    Button(role: .destructive) {
+                        showingSignOutAlert = true
+                    } label: {
+                        Text("Sign Out")
+                            .font(.system(size: 15, weight: .medium))
+                            .foregroundColor(.red)
+                    }
                 }
             }
-            .padding(40)
-            .frame(maxWidth: .infinity, alignment: .leading)
-            .background(Color(UIColor.secondarySystemGroupedBackground))
-            .cornerRadius(35)
-            .shadow(color: Color.primary.opacity(0.06), radius: 20, x: 0, y: 10) // ← adaptive shadow
-            .padding(.horizontal, 25)
-
-            Button(action: action) {
-                Text(buttonTitle)
-                    .font(.system(size: 18, weight: .semibold))
-                    .foregroundColor(.white)
-                    .frame(maxWidth: .infinity)
-                    .padding(.vertical, 18)
-                    .background(AppTheme.auraIndigo)
-                    .clipShape(Capsule())
+            .alert("Sign Out", isPresented: $showingSignOutAlert) {
+                Button("Cancel", role: .cancel) { }
+                Button("Sign Out", role: .destructive) {
+                    Task {
+                        await appState.signOut()
+                    }
+                }
+            } message: {
+                Text("Are you sure you want to sign out? You can sign back in at any time.")
             }
-            .padding(.horizontal, 25)
-            .padding(.top, 40)
         }
     }
 }
@@ -131,3 +152,5 @@ struct OnboardingCard: View {
     PostAuthOnboardingView()
         .environment(AppStateManager())
 }
+
+

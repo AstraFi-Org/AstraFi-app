@@ -134,10 +134,11 @@ final class AppStateManager {
     }
     
     func setupEmptyProfile(name: String = "User", email: String = "", createdAt: Date? = nil) {
-        let signUp = AstraSignUp(signUpName: name, email: email, password: "")
+        let cleanName = (name.contains("@") || name.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty) ? "User" : name
+        let signUp = AstraSignUp(signUpName: cleanName, email: email, password: "")
         
         let basic = AstraBasicDetails(
-            name: name, age: 0, gender: .male, maritalStatus: .single,
+            name: cleanName, age: 0, gender: .male, maritalStatus: .single,
             adultDependents: 0, childDependents: 0,
             incomeType: .fixed,
             monthlyIncome: 0, monthlyIncomeAfterTax: 0,
@@ -427,7 +428,11 @@ final class AppStateManager {
         do {
             let session = try await supabase.auth.signUp(
                 email: email,
-                password: password
+                password: password,
+                data: [
+                    "name": .string(name),
+                    "full_name": .string(name)
+                ]
             )
             try? await supabase.from("users").insert([
                 "id": session.user.id.uuidString,
@@ -602,7 +607,7 @@ final class AppStateManager {
                     let fullName = [appleIDCredential.fullName?.givenName, appleIDCredential.fullName?.familyName]
                         .compactMap { $0 }
                         .joined(separator: " ")
-                    let displayName = fullName.isEmpty ? (session.user.email ?? "User") : fullName
+                    let displayName = (fullName.isEmpty || fullName.contains("@")) ? "User" : fullName
                     
                     setupEmptyProfile(name: displayName, email: session.user.email ?? "", createdAt: session.user.createdAt)
                     isAuthenticated = true
@@ -695,7 +700,8 @@ final class AppStateManager {
                     showDashboard = true
                 }
             } else {
-                setupEmptyProfile(name: session.user.email ?? "User", email: session.user.email ?? "", createdAt: session.user.createdAt)
+                let resolvedName = resolveUserName(from: session.user)
+                setupEmptyProfile(name: resolvedName, email: session.user.email ?? "", createdAt: session.user.createdAt)
                 
                 isAuthenticated = true
                 hasCompletedOnboarding = true
@@ -761,7 +767,8 @@ final class AppStateManager {
                     showDashboard = true
                 }
             } else {
-                setupEmptyProfile(name: session.user.email ?? "User", email: session.user.email ?? "", createdAt: session.user.createdAt)
+                let resolvedName = resolveUserName(from: session.user)
+                setupEmptyProfile(name: resolvedName, email: session.user.email ?? "", createdAt: session.user.createdAt)
                 
                 isAuthenticated = true
                 hasCompletedOnboarding = true
@@ -854,7 +861,8 @@ final class AppStateManager {
                     showDashboard = true
                 }
             } else {
-                setupEmptyProfile(name: session.user.email ?? "User", email: session.user.email ?? "", createdAt: session.user.createdAt)
+                let resolvedName = resolveUserName(from: session.user)
+                setupEmptyProfile(name: resolvedName, email: session.user.email ?? "", createdAt: session.user.createdAt)
                 
                 isAuthenticated = true
                 hasCompletedOnboarding = true
@@ -880,6 +888,21 @@ final class AppStateManager {
             isAuthLoading = false
             return false
         }
+    }
+
+    private func resolveUserName(from user: User) -> String {
+        let metadata = user.userMetadata
+        if let val = metadata["full_name"]?.stringValue,
+           !val.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty,
+           !val.contains("@") {
+            return val.trimmingCharacters(in: .whitespacesAndNewlines)
+        }
+        if let val = metadata["name"]?.stringValue,
+           !val.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty,
+           !val.contains("@") {
+            return val.trimmingCharacters(in: .whitespacesAndNewlines)
+        }
+        return "User"
     }
 
     func signOut() async {

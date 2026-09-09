@@ -12,8 +12,8 @@ struct ProfileView: View {
     private var report: AstraFinancialHealthReport? { profile?.financialHealthReport }
 
     private var displayName: String {
-        if let name = basic?.name, !name.isEmpty { return name }
-        if let signUpName = profile?.signUp.signUpName, !signUpName.isEmpty { return signUpName }
+        if let name = basic?.name, !name.isEmpty, !name.contains("@"), name != "User" { return name }
+        if let signUpName = profile?.signUp.signUpName, !signUpName.isEmpty, !signUpName.contains("@"), signUpName != "User" { return signUpName }
         return "AstraFi User"
     }
 
