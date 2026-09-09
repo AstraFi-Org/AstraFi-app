@@ -6,14 +6,15 @@ struct ProfileView: View {
     @Environment(AppStateManager.self) private var appState
     @AppStorage("profileImageData") private var profileImageData: Data?
     @State private var selectedPhotoItem: PhotosPickerItem?
+    @State private var showingSignOutAlert = false
 
     private var profile: AstraUserProfile? { appState.currentProfile }
     private var basic: AstraBasicDetails? { profile?.basicDetails }
     private var report: AstraFinancialHealthReport? { profile?.financialHealthReport }
 
     private var displayName: String {
-        if let name = basic?.name, !name.isEmpty { return name }
-        if let signUpName = profile?.signUp.signUpName, !signUpName.isEmpty { return signUpName }
+        if let name = basic?.name, !name.isEmpty, !name.contains("@"), name != "User" { return name }
+        if let signUpName = profile?.signUp.signUpName, !signUpName.isEmpty, !signUpName.contains("@"), signUpName != "User" { return signUpName }
         return "AstraFi User"
     }
 
@@ -123,7 +124,7 @@ struct ProfileView: View {
 
             Section {
                 Button(role: .destructive) {
-                    Task { await appState.signOut() }
+                    showingSignOutAlert = true
                 } label: {
                     HStack {
                         Spacer()
@@ -132,6 +133,14 @@ struct ProfileView: View {
                     }
                 }
             }
+        }
+        .alert("Sign Out", isPresented: $showingSignOutAlert) {
+            Button("Cancel", role: .cancel) { }
+            Button("Sign Out", role: .destructive) {
+                Task { await appState.signOut() }
+            }
+        } message: {
+            Text("Are you sure you want to sign out of your account?")
         }
         .navigationTitle("Profile")
         .scrollContentBackground(.hidden)

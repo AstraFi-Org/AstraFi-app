@@ -18,6 +18,9 @@ struct AstraUserProfile: Codable, Identifiable, Equatable {
     var monthlyHealthAssessments: [AstraHealthAssessment] = []
     var isSetuConnected: Bool = false
     var emergencyFundAllocation: AstraEmergencyFundAllocation?
+    // Kept optional so profiles saved before this feature remain decodable.
+    var emergencyFundManualAmount: Double? = nil
+    var emergencyFundLinkedInvestmentIDs: [UUID]? = nil
 
     mutating func updateManualAdjustment(for type: AstraInvestmentType, targetAmount: Double) {
         let manualName = "Manual \(type.rawValue) Adjustment"

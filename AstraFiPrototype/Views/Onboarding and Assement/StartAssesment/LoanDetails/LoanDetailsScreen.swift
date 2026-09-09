@@ -89,7 +89,7 @@ struct LoanDetailsScreen: View {
                     } else {
                         ForEach($data.loanEntries) { $entry in
                             Section(header: HStack {
-                                Text(entry.loanName.isEmpty ? "Loan Details" : entry.loanName)
+                                Text(entry.schemeName.isEmpty ? (entry.lenderName.isEmpty ? "Loan Details" : entry.lenderName) : entry.schemeName)
                                 Spacer()
                                 Button(role: .destructive) {
                                     let idToDelete = entry.id
@@ -104,76 +104,51 @@ struct LoanDetailsScreen: View {
                                     }
                                 }
 
-                                if !entry.loanName.isEmpty {
-                                    TextField("Scheme Name", text: $entry.loanName)
+                                HStack {
+                                    Text("Lender / Bank")
+                                    Spacer()
+                                    TextField("e.g. Bank of Baroda", text: $entry.lenderName)
+                                        .multilineTextAlignment(.trailing)
+                                        .frame(width: 170)
                                 }
 
-                                DatePicker("Loan Sanction Date", selection: $entry.startDate, displayedComponents: .date)
-//                                AssessmentField(
-//                                    icon: "indianrupeesign",
-//                                    label: "Loan Amount",
-//                                    placeholder: "e.g. 352000",
-//                                    text: $entry.amount,
-//                                    keyboard: .numberPad
-//                                )
-                                HStack{
-                                    Text("Loan Amount")
+                                HStack {
+                                    Text("Scheme Name")
                                     Spacer()
-                                    TextField("Loan Amount (₹)", text: $entry.amount)
-                                    .keyboardType(.numberPad)
-                                    .multilineTextAlignment(.trailing)
-                                    .frame(width: 150)
-                                }
-//                                AssessmentField(
-//                                    icon: "percent",
-//                                    label: "Interest Rate (%)",
-//                                    placeholder: "e.g. 7.5",
-//                                    text: $entry.interestRate,
-//                                    keyboard: .decimalPad
-//                                )
-                                HStack{
-                                    Text("Interest Rate (%)")
-                                    Spacer()
-                                    TextField("Interest Rate (%)", text: $entry.interestRate)
-                                        .keyboardType(.decimalPad)
+                                    TextField("e.g. Baroda Gyan Loan", text: $entry.schemeName)
                                         .multilineTextAlignment(.trailing)
-                                        .frame(width: 150)
-                                    
+                                        .frame(width: 170)
                                 }
-//                                AssessmentField(
-//                                    icon: "calendar",
-//                                    label: "Tenure (Months)",
-//                                    placeholder: "e.g. 20",
-//                                    text: $entry.tenure,
-//                                    keyboard: .numberPad
-//                                )
-                                HStack{
-                                    Text("Tenure (Months)")
+
+                                DatePicker("Loan Sanction Date", selection: $entry.sanctionDate, displayedComponents: .date)
+
+                                // Amount Fields
+                                HStack {
+                                    Text("Sanctioned Amount")
                                     Spacer()
-                                    
-                                    TextField("Tenure (Months)", text: $entry.tenure)
+                                    TextField("Amount (₹)", text: $entry.sanctionedAmount)
                                         .keyboardType(.numberPad)
                                         .multilineTextAlignment(.trailing)
-                                        .frame(width: 150)
+                                        .frame(width: 140)
                                 }
-                                
-                                
-                                
-                                if !entry.moratorium.isEmpty {
-//                                    AssessmentField(
-//                                        icon: "calendar",
-//                                        label: "Moratorium (Months)",
-//                                        placeholder: "e.g. 3",
-//                                        text: $entry.moratorium,
-//                                        keyboard: .numberPad
-//                                    )
-                                    HStack{
-                                        Text("Moratorium (Months)")
+
+                                HStack {
+                                    Text("Current Outstanding Principal")
+                                    Spacer()
+                                    TextField("Outstanding (₹)", text: $entry.currentOutstandingPrincipal)
+                                        .keyboardType(.numberPad)
+                                        .multilineTextAlignment(.trailing)
+                                        .frame(width: 140)
+                                }
+
+                                if !entry.totalCost.isEmpty {
+                                    HStack {
+                                        Text("Total Project Cost")
                                         Spacer()
-                                        TextField("e.g. 5", text: $entry.moratorium)
+                                        TextField("Total Cost (₹)", text: $entry.totalCost)
                                             .keyboardType(.numberPad)
                                             .multilineTextAlignment(.trailing)
-                                            .frame(width: 150)
+                                            .frame(width: 140)
                                     }
                                 }
 
@@ -181,23 +156,74 @@ struct LoanDetailsScreen: View {
                                     HStack {
                                         Text("Insurance Premium")
                                         Spacer()
-                                        TextField("e.g. 2540", text: $entry.insurancePremium)
+                                        TextField("Premium (₹)", text: $entry.insurancePremium)
                                             .keyboardType(.numberPad)
                                             .multilineTextAlignment(.trailing)
-                                            .frame(width: 150)
+                                            .frame(width: 140)
                                     }
                                 }
 
-                                Picker("Interest Type", selection: $entry.interestType) {
-                                    ForEach(AstraInterestType.allCases, id: \.self) { type in
+                                // Interest Fields
+                                HStack {
+                                    Text("Interest Rate (%)")
+                                    Spacer()
+                                    TextField("Rate (%)", text: $entry.interestRate)
+                                        .keyboardType(.decimalPad)
+                                        .multilineTextAlignment(.trailing)
+                                        .frame(width: 140)
+                                }
+
+                                Picker("Interest Rate Type", selection: $entry.interestRateType) {
+                                    ForEach(AssessmentLoanEntry.InterestRateType.allCases) { type in
                                         Text(type.rawValue).tag(type)
                                     }
                                 }
 
-                                Picker("Compounding Frequency", selection: $entry.frequency) {
-                                    ForEach(AstraCompoundingFrequency.allCases, id: \.self) { freq in
+                                Picker("Interest Rest Frequency", selection: $entry.interestRestFrequency) {
+                                    ForEach(AssessmentLoanEntry.InterestRestFrequency.allCases) { freq in
                                         Text(freq.rawValue).tag(freq)
                                     }
+                                }
+
+                                // Period Breakdown Fields
+                                HStack {
+                                    Text("Total Loan Period")
+                                    Spacer()
+                                    TextField("Months", text: $entry.totalLoanPeriodMonths)
+                                        .keyboardType(.numberPad)
+                                        .multilineTextAlignment(.trailing)
+                                        .frame(width: 100)
+                                    Text("Months").font(.caption).foregroundStyle(.secondary)
+                                }
+
+                                HStack {
+                                    Text("Moratorium Period")
+                                    Spacer()
+                                    TextField("Months", text: $entry.moratoriumPeriodMonths)
+                                        .keyboardType(.numberPad)
+                                        .multilineTextAlignment(.trailing)
+                                        .frame(width: 100)
+                                    Text("Months").font(.caption).foregroundStyle(.secondary)
+                                }
+
+                                HStack {
+                                    Text("Repayment Period (EMI)")
+                                    Spacer()
+                                    TextField("Months", text: $entry.repaymentPeriodMonths)
+                                        .keyboardType(.numberPad)
+                                        .multilineTextAlignment(.trailing)
+                                        .frame(width: 100)
+                                    Text("Months").font(.caption).foregroundStyle(.secondary)
+                                }
+
+                                // EMI Details
+                                HStack {
+                                    Text("EMI Amount")
+                                    Spacer()
+                                    TextField("Optional (₹)", text: $entry.emiAmount)
+                                        .keyboardType(.numberPad)
+                                        .multilineTextAlignment(.trailing)
+                                        .frame(width: 140)
                                 }
                             }
                         }

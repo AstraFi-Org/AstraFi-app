@@ -9,26 +9,60 @@ struct InvestmentAccountsDetailView: View {
     @State private var setuConnecting = false
     @ObservedObject private var upstoxViewModel = UpstoxViewModel.shared
 
+    /// Every connected broker writes its holdings into the profile with a broker source.
+    /// This keeps the snapshot independent of any one broker integration.
+    private var connectedBrokerInvestments: [AstraInvestment] {
+        appState.currentProfile?.investments.filter {
+            !($0.brokerSource?.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty ?? true)
+        } ?? []
+    }
+
+    private var connectedPortfolioValue: Double {
+        connectedBrokerInvestments.reduce(0) { $0 + $1.currentValue.safeFinite }
+    }
+
+    private var connectedBrokerNames: [String] {
+        var names = Set(
+            connectedBrokerInvestments.compactMap { investment -> String? in
+                guard let source = investment.brokerSource?.trimmingCharacters(in: .whitespacesAndNewlines),
+                      !source.isEmpty else { return nil }
+                return source
+            }
+        )
+
+        if upstoxViewModel.isConnected {
+            names.insert("Upstox")
+        }
+
+        return names.sorted()
+    }
+
+    private var lastPortfolioSync: Date? {
+        connectedBrokerInvestments
+            .map { $0.lastUpdated ?? $0.createdAt }
+            .max()
+    }
+
     var body: some View {
         ScrollView {
             VStack(alignment: .leading, spacing: 24) {
 
-                VStack(alignment: .leading, spacing: 12) {
-                    HStack {
-                        Image(systemName: "link.circle.fill")
-                            .font(.title)
-                            .foregroundColor(.blue)
-                        Text("Connected Portfolios")
-                            .font(.headline)
-                    }
-                    Text("Securely connect broker and portfolio sources so AstraFi can keep your investment view fresh.")
-                        .font(.caption)
-                        .foregroundColor(.secondary)
-                }
-                .padding()
-                .background(AppTheme.cardBackground)
-                .cornerRadius(16)
-                .shadow(color: AppTheme.adaptiveShadow, radius: 8, x: 0, y: 2)
+//                VStack(alignment: .leading, spacing: 12) {
+//                    HStack {
+//                        Image(systemName: "link.circle.fill")
+//                            .font(.title)
+//                            .foregroundColor(.blue)
+//                        Text("Connected Portfolios")
+//                            .font(.headline)
+//                    }
+//                    Text("Securely connect broker and portfolio sources so AstraFi can keep your investment view fresh.")
+//                        .font(.caption)
+//                        .foregroundColor(.secondary)
+//                }
+//                .padding()
+//                .background(AppTheme.cardBackground)
+//                .cornerRadius(16)
+//                .shadow(color: AppTheme.adaptiveShadow, radius: 8, x: 0, y: 2)
 
                 VStack(alignment: .leading, spacing: 16) {
                     Text("Connected Accounts")
@@ -39,52 +73,52 @@ struct InvestmentAccountsDetailView: View {
                     ConnectedAccountView(viewModel: upstoxViewModel)
                 }
 
-                VStack(alignment: .leading, spacing: 16) {
-                    Text("Portfolio Sources")
-                        .font(.subheadline)
-                        .foregroundColor(.secondary)
-                        .padding(.horizontal)
+//                VStack(alignment: .leading, spacing: 16) {
+//                    Text("Portfolio Sources")
+//                        .font(.subheadline)
+//                        .foregroundColor(.secondary)
+//                        .padding(.horizontal)
+//
+//                    VStack(spacing: 0) {
+//                        ConnectionRow(name: "CAMS - CAS", status: "Connected", icon: "doc.text.fill", color: .blue)
+//                        Divider().padding(.leading, 56)
+//                        ConnectionRow(name: "NSDL Demat", status: "Connected", icon: "briefcase.fill", color: .indigo)
+//                        Divider().padding(.leading, 56)
+//                        ConnectionRow(name: "KFintech", status: "Not Linked", icon: "chart.pie.fill", color: .gray)
+//                    }
+//                    .background(AppTheme.cardBackground)
+//                    .cornerRadius(16)
+//                    .shadow(color: AppTheme.adaptiveShadow, radius: 8, x: 0, y: 2)
+//                }
 
-                    VStack(spacing: 0) {
-                        ConnectionRow(name: "CAMS - CAS", status: "Connected", icon: "doc.text.fill", color: .blue)
-                        Divider().padding(.leading, 56)
-                        ConnectionRow(name: "NSDL Demat", status: "Connected", icon: "briefcase.fill", color: .indigo)
-                        Divider().padding(.leading, 56)
-                        ConnectionRow(name: "KFintech", status: "Not Linked", icon: "chart.pie.fill", color: .gray)
-                    }
-                    .background(AppTheme.cardBackground)
-                    .cornerRadius(16)
-                    .shadow(color: AppTheme.adaptiveShadow, radius: 8, x: 0, y: 2)
-                }
-
-                Button(action: {
-                    setuConnecting = true
-                    DispatchQueue.main.asyncAfter(deadline: .now() + 1.5) {
-                        setuConnecting = false
-                        if var profile = appState.currentProfile {
-                            profile.isSetuConnected = true
-                            appState.currentProfile = profile
-                        }
-                    }
-                }) {
-                    HStack {
-                        if setuConnecting {
-                            ProgressView()
-                                .tint(.white)
-                        } else {
-                            Image(systemName: appState.currentProfile?.isSetuConnected == true ? "checkmark.circle.fill" : "plus.circle.fill")
-                        }
-                        Text(setuConnecting ? "Connecting via Setu..." : (appState.currentProfile?.isSetuConnected == true ? "Portfolio Linked" : "Link New Account"))
-                            .fontWeight(.semibold)
-                    }
-                    .foregroundColor(.white)
-                    .frame(maxWidth: .infinity)
-                    .padding()
-                    .background(appState.currentProfile?.isSetuConnected == true ? Color.blue : Color.blue)
-                    .cornerRadius(16)
-                    .shadow(color: (appState.currentProfile?.isSetuConnected == true ? Color.blue : Color.blue).opacity(0.3), radius: 8, x: 0, y: 4)
-                }
-                .disabled(appState.currentProfile?.isSetuConnected == true)
+//                Button(action: {
+//                    setuConnecting = true
+//                    DispatchQueue.main.asyncAfter(deadline: .now() + 1.5) {
+//                        setuConnecting = false
+//                        if var profile = appState.currentProfile {
+//                            profile.isSetuConnected = true
+//                            appState.currentProfile = profile
+//                        }
+//                    }
+//                }) {
+//                    HStack {
+//                        if setuConnecting {
+//                            ProgressView()
+//                                .tint(.white)
+//                        } else {
+//                            Image(systemName: appState.currentProfile?.isSetuConnected == true ? "checkmark.circle.fill" : "plus.circle.fill")
+//                        }
+//                        Text(setuConnecting ? "Connecting via Setu..." : (appState.currentProfile?.isSetuConnected == true ? "Portfolio Linked" : "Link New Account"))
+//                            .fontWeight(.semibold)
+//                    }
+//                    .foregroundColor(.white)
+//                    .frame(maxWidth: .infinity)
+//                    .padding()
+//                    .background(appState.currentProfile?.isSetuConnected == true ? Color.blue : Color.blue)
+//                    .cornerRadius(16)
+//                    .shadow(color: (appState.currentProfile?.isSetuConnected == true ? Color.blue : Color.blue).opacity(0.3), radius: 8, x: 0, y: 4)
+//                }
+//                .disabled(appState.currentProfile?.isSetuConnected == true)
 
                 VStack(alignment: .leading, spacing: 16) {
                     Text("Portfolio Snapshot")
@@ -95,15 +129,17 @@ struct InvestmentAccountsDetailView: View {
                     VStack(spacing: 16) {
                         HStack {
                             VStack(alignment: .leading) {
-                                Text("Total Assets Fetch")
+                                Text("Total Connected Assets")
                                     .font(.caption)
                                     .foregroundColor(.secondary)
-                                Text("₹12,80,000")
+                                Text(connectedPortfolioValue.toCurrency())
                                     .font(.title3)
                                     .fontWeight(.bold)
                             }
                             Spacer()
-                            Text("Updated 2h ago")
+                            Text(connectedBrokerNames.isEmpty
+                                 ? "No accounts connected"
+                                 : "\(connectedBrokerNames.count) account\(connectedBrokerNames.count == 1 ? "" : "s")")
                                 .font(.caption2)
                                 .foregroundColor(.blue)
                         }
@@ -112,17 +148,20 @@ struct InvestmentAccountsDetailView: View {
 
                         HStack {
                             VStack(alignment: .leading) {
-                                Text("Last CAS Generation")
+                                Text("Last portfolio sync")
                                     .font(.caption)
                                     .foregroundColor(.secondary)
-                                Text("15 Mar 2024")
+                                Text(lastPortfolioSync?.formatted(date: .abbreviated, time: .shortened) ?? "Not synced yet")
                                     .font(.subheadline)
                                     .fontWeight(.medium)
                             }
                             Spacer()
-                            Button("Refresh") { }
+                            Button("Refresh") {
+                                Task { await refreshConnectedAccounts() }
+                            }
                                 .font(.caption)
                                 .foregroundColor(.blue)
+                                .disabled(upstoxViewModel.isSyncingHoldings)
                         }
                     }
                     .padding()
@@ -138,7 +177,27 @@ struct InvestmentAccountsDetailView: View {
         .background(AppTheme.appBackground(for: colorScheme))
         .task {
             upstoxViewModel.loadStoredConnection()
+            await refreshConnectedAccounts()
         }
+        .onChange(of: upstoxViewModel.isConnected) { _, isConnected in
+            if isConnected {
+                Task { await refreshConnectedAccounts() }
+            } else {
+                appState.removeUpstoxHoldings()
+            }
+        }
+    }
+
+    private func refreshConnectedAccounts() async {
+        guard upstoxViewModel.isConnected else { return }
+
+        let snapshot = await upstoxViewModel.fetchConnectedInvestments()
+        appState.syncUpstoxHoldings(
+            snapshot.equity,
+            mutualFunds: snapshot.mutualFunds,
+            mutualFundOrders: snapshot.mutualFundOrders,
+            mutualFundSIPs: snapshot.mutualFundSIPs
+        )
     }
 }
 

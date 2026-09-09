@@ -29,7 +29,6 @@ struct OnboardingPagesView: View {
             ZStack {
                 Color(.systemBackground).ignoresSafeArea()
                 VStack {
-                    
                     TabView(selection: $currentPage) {
                         ForEach(0..<onboardingPages.count, id: \.self) { index in
                             PageView(page: onboardingPages[index])

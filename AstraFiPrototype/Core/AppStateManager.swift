@@ -134,10 +134,11 @@ final class AppStateManager {
     }
     
     func setupEmptyProfile(name: String = "User", email: String = "", createdAt: Date? = nil) {
-        let signUp = AstraSignUp(signUpName: name, email: email, password: "")
+        let cleanName = (name.contains("@") || name.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty) ? "User" : name
+        let signUp = AstraSignUp(signUpName: cleanName, email: email, password: "")
         
         let basic = AstraBasicDetails(
-            name: name, age: 0, gender: .male, maritalStatus: .single,
+            name: cleanName, age: 0, gender: .male, maritalStatus: .single,
             adultDependents: 0, childDependents: 0,
             incomeType: .fixed,
             monthlyIncome: 0, monthlyIncomeAfterTax: 0,
@@ -427,7 +428,11 @@ final class AppStateManager {
         do {
             let session = try await supabase.auth.signUp(
                 email: email,
-                password: password
+                password: password,
+                data: [
+                    "name": .string(name),
+                    "full_name": .string(name)
+                ]
             )
             try? await supabase.from("users").insert([
                 "id": session.user.id.uuidString,
@@ -602,7 +607,7 @@ final class AppStateManager {
                     let fullName = [appleIDCredential.fullName?.givenName, appleIDCredential.fullName?.familyName]
                         .compactMap { $0 }
                         .joined(separator: " ")
-                    let displayName = fullName.isEmpty ? (session.user.email ?? "User") : fullName
+                    let displayName = (fullName.isEmpty || fullName.contains("@")) ? "User" : fullName
                     
                     setupEmptyProfile(name: displayName, email: session.user.email ?? "", createdAt: session.user.createdAt)
                     isAuthenticated = true
@@ -695,7 +700,8 @@ final class AppStateManager {
                     showDashboard = true
                 }
             } else {
-                setupEmptyProfile(name: session.user.email ?? "User", email: session.user.email ?? "", createdAt: session.user.createdAt)
+                let resolvedName = resolveUserName(from: session.user)
+                setupEmptyProfile(name: resolvedName, email: session.user.email ?? "", createdAt: session.user.createdAt)
                 
                 isAuthenticated = true
                 hasCompletedOnboarding = true
@@ -761,7 +767,8 @@ final class AppStateManager {
                     showDashboard = true
                 }
             } else {
-                setupEmptyProfile(name: session.user.email ?? "User", email: session.user.email ?? "", createdAt: session.user.createdAt)
+                let resolvedName = resolveUserName(from: session.user)
+                setupEmptyProfile(name: resolvedName, email: session.user.email ?? "", createdAt: session.user.createdAt)
                 
                 isAuthenticated = true
                 hasCompletedOnboarding = true
@@ -854,7 +861,8 @@ final class AppStateManager {
                     showDashboard = true
                 }
             } else {
-                setupEmptyProfile(name: session.user.email ?? "User", email: session.user.email ?? "", createdAt: session.user.createdAt)
+                let resolvedName = resolveUserName(from: session.user)
+                setupEmptyProfile(name: resolvedName, email: session.user.email ?? "", createdAt: session.user.createdAt)
                 
                 isAuthenticated = true
                 hasCompletedOnboarding = true
@@ -880,6 +888,21 @@ final class AppStateManager {
             isAuthLoading = false
             return false
         }
+    }
+
+    private func resolveUserName(from user: User) -> String {
+        let metadata = user.userMetadata
+        if let val = metadata["full_name"]?.stringValue,
+           !val.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty,
+           !val.contains("@") {
+            return val.trimmingCharacters(in: .whitespacesAndNewlines)
+        }
+        if let val = metadata["name"]?.stringValue,
+           !val.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty,
+           !val.contains("@") {
+            return val.trimmingCharacters(in: .whitespacesAndNewlines)
+        }
+        return "User"
     }
 
     func signOut() async {
@@ -970,27 +993,28 @@ final class AppStateManager {
         }
         
         let profileLoans = assessmentData.loanEntries.map { entry in
-            let rawAmt  = Double(entry.amount)       ?? 0
+            let rawAmt  = Double(entry.sanctionedAmount.isEmpty ? entry.amount : entry.sanctionedAmount) ?? 0
             let rawRate = Double(entry.interestRate) ?? 0
-            // The assessment field is labelled "Tenure (Months)" — store as-is.
-            // Do NOT multiply by 12; that would turn 15 months into 180 months.
-            let tenureMonths = Int(entry.tenure) ?? 0
+            let totalPeriod = Int(entry.totalLoanPeriodMonths.isEmpty ? entry.tenure : entry.totalLoanPeriodMonths) ?? 0
+            let moraPeriod  = Int(entry.moratoriumPeriodMonths.isEmpty ? entry.moratorium : entry.moratoriumPeriodMonths) ?? 0
 
             var loan = AstraLoan(
                 loanType: mapLoanType(entry.type),
-                lender: .other,
+                lender: mapLender(entry.lenderName),
                 loanAmount: rawAmt.isFinite  ? rawAmt  : 0,
                 interestRate: rawRate.isFinite ? rawRate : 0,
                 interestType: entry.interestType,
                 compoundingFrequency: entry.frequency,
-                loanStartDate: entry.startDate,
-                loanTenureMonths: tenureMonths
+                loanStartDate: entry.sanctionDate,
+                loanTenureMonths: totalPeriod
             )
-            // Preserve the custom name the user typed (e.g. "My Car Loan").
-            // Falls back to loanType.rawValue in the UI via displayName.
             loan.loanName = entry.loanName.trimmingCharacters(in: .whitespacesAndNewlines)
             loan.insurancePremium = Double(entry.insurancePremium) ?? 0
-            loan.moratoriumMonths = Int(entry.moratorium) ?? 0
+            loan.moratoriumMonths = moraPeriod
+            
+            if let emiVal = Double(entry.emiAmount), emiVal > 0 {
+                loan.emiAmount = emiVal
+            }
             return loan
         }
         
@@ -1117,42 +1141,21 @@ final class AppStateManager {
         let newInsurances = profileInsurances
         
         if var existingProfile = self.currentProfile {
-            // MERGE LOGIC
             existingProfile.signUp.email = assessmentData.email.isEmpty
                     ? existingProfile.signUp.email : assessmentData.email
             
-            // Merge Investments
-            for newInv in newInvestments {
-                if !existingProfile.investments.contains(where: {
-                    $0.investmentName.lowercased() == newInv.investmentName.lowercased() &&
-                    abs($0.investmentAmount - newInv.investmentAmount) < 1.0
-                }) {
-                    existingProfile.investments.append(newInv)
-                }
-            }
+            // Retain broker-connected holdings (Upstox) and update manual assessment-sourced investments
+            let brokerHoldings = existingProfile.investments.filter { $0.brokerSource == "Upstox" }
+            existingProfile.investments = brokerHoldings + newInvestments
             
-            // Merge Loans
-            for newLoan in newLoans {
-                if !existingProfile.loans.contains(where: {
-                    abs($0.loanAmount - newLoan.loanAmount) < 1.0 &&
-                    $0.loanType == newLoan.loanType
-                }) {
-                    existingProfile.loans.append(newLoan)
-                }
-            }
+            // Update loans with latest assessment loan entries
+            existingProfile.loans = newLoans
             
+            // Update insurances with latest assessment insurance entries
             if assessmentData.hasCompletedInsuranceStep && !assessmentData.isInsured && !assessmentData.areDependentsInsured {
                 existingProfile.insurances.removeAll()
             } else {
-                // Merge Insurances
-                for newIns in newInsurances {
-                    if !existingProfile.insurances.contains(where: {
-                        $0.policyNumber == newIns.policyNumber ||
-                        ($0.insuranceType == newIns.insuranceType && abs($0.sumAssured - newIns.sumAssured) < 1.0)
-                    }) {
-                        existingProfile.insurances.append(newIns)
-                    }
-                }
+                existingProfile.insurances = newInsurances
             }
             
             if !assessmentData.income.isEmpty {
@@ -1215,7 +1218,7 @@ final class AppStateManager {
                 goals: [],
                 financialHealthReport: report,
                 cashflowData: cf,
-                monthlyHealthAssessments: [firstAssessment],
+                monthlyHealthAssessments: [],
                 isSetuConnected: false
             )
             newProfile.monthlyCashflowSnapshots[monthKey] = cf
@@ -1312,6 +1315,18 @@ final class AppStateManager {
 
     func recalculateFinancials() {
         guard var profile = currentProfile else { return }
+
+        // Linked investments retain their own values and automatically update the
+        // emergency-fund balance whenever holdings are refreshed.
+        if let linkedIDs = profile.emergencyFundLinkedInvestmentIDs {
+            let linkedIDSet = Set(linkedIDs)
+            let linkedValue = profile.investments
+                .filter { linkedIDSet.contains($0.id) }
+                .reduce(0.0) { $0 + $1.currentValue.safeFinite }
+            let manualAmount = profile.emergencyFundManualAmount
+                ?? profile.basicDetails.emergencyFundAmount
+            profile.basicDetails.emergencyFundAmount = (manualAmount + linkedValue).safeFinite
+        }
         
         var newAssets = profile.assets
         newAssets.stocksHoldingAmount = profile.investments.filter { $0.investmentType == .stocks }.map { $0.currentValue.safeFinite }.reduce(0, +)
@@ -1342,13 +1357,13 @@ final class AppStateManager {
         
         let efTarget = profile.basicDetails.monthlyIncome * 6.0
         let efMonths = efTarget > 0 ? ((profile.basicDetails.emergencyFundAmount / efTarget) * 6.0).safeFinite : 0
-        let investmentScore = min(100, max(0, (savingsRate * 0.5) + (efMonths * 10))).safeInt
+        let healthScore = FinancialAssessmentInsights.build(profile: profile, data: nil).overallScore.safeInt
         
         profile.financialHealthReport = AstraFinancialHealthReport(
             netWorth: netWorth,
             savingsRate: savingsRate,
             debtToIncomeRatio: dti,
-            investmentScore: investmentScore,
+            investmentScore: healthScore,
             emergencyFundMonths: efMonths
         )
         
@@ -1646,6 +1661,29 @@ final class AppStateManager {
                 if let session = try? await supabase.auth.session {
                     _ = try? await SupabaseRepository.shared.saveEmergencyFundAllocation(allocation, userId: session.user.id)
                 }
+            }
+        }
+    }
+
+    func updateEmergencyFund(manualAmount: Double, linkedInvestmentIDs: [UUID]) {
+        guard var profile = currentProfile else { return }
+
+        let uniqueLinkedIDs = Array(Set(linkedInvestmentIDs))
+        let linkedIDSet = Set(uniqueLinkedIDs)
+        let linkedValue = profile.investments
+            .filter { linkedIDSet.contains($0.id) }
+            .reduce(0.0) { $0 + $1.currentValue.safeFinite }
+
+        profile.emergencyFundManualAmount = max(0, manualAmount).safeFinite
+        profile.emergencyFundLinkedInvestmentIDs = uniqueLinkedIDs
+        profile.basicDetails.emergencyFundAmount = (max(0, manualAmount) + linkedValue).safeFinite
+        currentProfile = profile
+        recalculateFinancials()
+
+        Task {
+            if let session = try? await supabase.auth.session,
+               let profile = currentProfile {
+                try? await SupabaseRepository.shared.syncFullProfile(profile, userId: session.user.id)
             }
         }
     }

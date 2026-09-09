@@ -20,6 +20,7 @@ struct FinancialHealthReportView: View {
     @State private var navigateToVitals   = false
     @State private var navigateToRisk     = false
     @State private var navigateToEmergency = false
+    @State private var navigateToDecisionCenter = false
     @State private var animatedScore: Double = 0
     @State private var vitalsPeriod: VitalsPeriod = .monthly
 
@@ -29,14 +30,9 @@ struct FinancialHealthReportView: View {
         FinancialAssessmentInsights.build(profile: profile, data: data)
     }
 
-    private var score: Double {
-        let values = insights.radarValues.map { $0.1 }
-        let avg = values.reduce(0.0, +) / Double(values.count)
-        return min(100, avg * 100)
-    }
-
+    private var score: Double { insights.overallScore }
     private var savingRatio: Double { insights.savingsRate }
-    private var status: String { score >= 80 ? "Excellent" : score >= 70 ? "Good" : "Needs Work" }
+    private var status: String { insights.statusTitle }
 
     private func periodValue(_ monthly: Double) -> Double {
         vitalsPeriod == .yearly ? monthly * 12 : monthly
@@ -78,6 +74,19 @@ struct FinancialHealthReportView: View {
                 case .emergencyFund: navigateToEmergency = true
                 }
             }
+
+            Button {
+                navigateToDecisionCenter = true
+            } label: {
+                Label("Explore My Financial Decisions", systemImage: "arrow.triangle.branch")
+                    .font(.subheadline.weight(.semibold))
+                    .frame(maxWidth: .infinity)
+                    .padding(.vertical, 13)
+                    .foregroundStyle(.white)
+                    .background(AppTheme.auraIndigo, in: RoundedRectangle(cornerRadius: 14, style: .continuous))
+            }
+            .padding(.horizontal, 20)
+            .padding(.bottom, 20)
         }
     }
 
@@ -183,6 +192,9 @@ struct FinancialHealthReportView: View {
         }
         .navigationDestination(isPresented: $navigateToEmergency) {
             EmergencyFundInsightSheet(insights: insights)
+        }
+        .navigationDestination(isPresented: $navigateToDecisionCenter) {
+            FinancialDecisionCenterView()
         }
         .sheet(isPresented: $spendingSheet) {
             CashflowInputSheet(cashflow: Binding(

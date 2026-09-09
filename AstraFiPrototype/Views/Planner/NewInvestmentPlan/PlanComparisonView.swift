@@ -218,12 +218,12 @@ struct PlanComparisonView: View {
                         .font(.caption).fontWeight(.bold).foregroundColor(.orange)
                     
                     VStack(alignment: .leading, spacing: 8) {
-                        commitmentRow(plan: "Plan 1", val: "₹\(InvestmentPlannerEngine.parseAmount(input.amount).toCurrency(compact: true))", color: .blue)
+                        commitmentRow(plan: "Plan 1", val: "\(InvestmentPlannerEngine.parseAmount(input.amount).toCurrency(compact: true))", color: .blue)
                         if results.plan2 != nil {
-                            commitmentRow(plan: "Plan 2", val: "₹\(results.plan2!.totalMonthlyCommitment.toCurrency(compact: true))", color: .purple)
+                            commitmentRow(plan: "Plan 2", val: "\(results.plan2!.totalMonthlyCommitment.toCurrency(compact: true))", color: .purple)
                         }
                         if results.plan3 != nil {
-                            commitmentRow(plan: "Plan 3", val: "₹\(results.plan3!.monthlyEMI.toCurrency(compact: true))", color: .pink)
+                            commitmentRow(plan: "Plan 3", val: "\(results.plan3!.monthlyEMI.toCurrency(compact: true))", color: .pink)
                         }
                     }
                 }
