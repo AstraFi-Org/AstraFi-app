@@ -27,13 +27,13 @@ extension Double {
         
         if compact {
             if absValue >= 10000000 {
-                return String(format: "%@%.1fCr", sign, absValue / 10000000)
+                return String(format: "%@₹%.1fCr", sign, absValue / 10000000)
             } else if absValue >= 100000 {
-                return String(format: "%@%.1fL", sign, absValue / 100000)
+                return String(format: "%@₹%.1fL", sign, absValue / 100000)
             } else if absValue >= 1000 {
-                return String(format: "%@%.1fK", sign, absValue / 1000)
+                return String(format: "%@₹%.1fK", sign, absValue / 1000)
             } else {
-                return String(format: "%@%.0f", sign, absValue)
+                return String(format: "%@₹%.0f", sign, absValue)
             }
         }
         
@@ -75,6 +75,16 @@ extension Double {
         return Int(self)
     }
 }
+
+extension CGFloat {
+    var safeInt: Int {
+        guard self.isFinite else { return 0 }
+        if self > CGFloat(Int.max) { return Int.max }
+        if self < CGFloat(Int.min) { return Int.min }
+        return Int(self)
+    }
+}
+
 extension View {
     func hideKeyboard() {
         UIApplication.shared.sendAction(#selector(UIResponder.resignFirstResponder), to: nil, from: nil, for: nil)

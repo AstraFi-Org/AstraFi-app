@@ -30,14 +30,9 @@ struct FinancialHealthReportView: View {
         FinancialAssessmentInsights.build(profile: profile, data: data)
     }
 
-    private var score: Double {
-        let values = insights.radarValues.map { $0.1 }
-        let avg = values.reduce(0.0, +) / Double(values.count)
-        return min(100, avg * 100)
-    }
-
+    private var score: Double { insights.overallScore }
     private var savingRatio: Double { insights.savingsRate }
-    private var status: String { score >= 80 ? "Excellent" : score >= 70 ? "Good" : "Needs Work" }
+    private var status: String { insights.statusTitle }
 
     private func periodValue(_ monthly: Double) -> Double {
         vitalsPeriod == .yearly ? monthly * 12 : monthly
