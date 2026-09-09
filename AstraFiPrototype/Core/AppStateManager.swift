@@ -1118,42 +1118,21 @@ final class AppStateManager {
         let newInsurances = profileInsurances
         
         if var existingProfile = self.currentProfile {
-            // MERGE LOGIC
             existingProfile.signUp.email = assessmentData.email.isEmpty
                     ? existingProfile.signUp.email : assessmentData.email
             
-            // Merge Investments
-            for newInv in newInvestments {
-                if !existingProfile.investments.contains(where: {
-                    $0.investmentName.lowercased() == newInv.investmentName.lowercased() &&
-                    abs($0.investmentAmount - newInv.investmentAmount) < 1.0
-                }) {
-                    existingProfile.investments.append(newInv)
-                }
-            }
+            // Retain broker-connected holdings (Upstox) and update manual assessment-sourced investments
+            let brokerHoldings = existingProfile.investments.filter { $0.brokerSource == "Upstox" }
+            existingProfile.investments = brokerHoldings + newInvestments
             
-            // Merge Loans
-            for newLoan in newLoans {
-                if !existingProfile.loans.contains(where: {
-                    abs($0.loanAmount - newLoan.loanAmount) < 1.0 &&
-                    $0.loanType == newLoan.loanType
-                }) {
-                    existingProfile.loans.append(newLoan)
-                }
-            }
+            // Update loans with latest assessment loan entries
+            existingProfile.loans = newLoans
             
+            // Update insurances with latest assessment insurance entries
             if assessmentData.hasCompletedInsuranceStep && !assessmentData.isInsured && !assessmentData.areDependentsInsured {
                 existingProfile.insurances.removeAll()
             } else {
-                // Merge Insurances
-                for newIns in newInsurances {
-                    if !existingProfile.insurances.contains(where: {
-                        $0.policyNumber == newIns.policyNumber ||
-                        ($0.insuranceType == newIns.insuranceType && abs($0.sumAssured - newIns.sumAssured) < 1.0)
-                    }) {
-                        existingProfile.insurances.append(newIns)
-                    }
-                }
+                existingProfile.insurances = newInsurances
             }
             
             if !assessmentData.income.isEmpty {
@@ -1216,7 +1195,7 @@ final class AppStateManager {
                 goals: [],
                 financialHealthReport: report,
                 cashflowData: cf,
-                monthlyHealthAssessments: [firstAssessment],
+                monthlyHealthAssessments: [],
                 isSetuConnected: false
             )
             newProfile.monthlyCashflowSnapshots[monthKey] = cf
@@ -1355,13 +1334,13 @@ final class AppStateManager {
         
         let efTarget = profile.basicDetails.monthlyIncome * 6.0
         let efMonths = efTarget > 0 ? ((profile.basicDetails.emergencyFundAmount / efTarget) * 6.0).safeFinite : 0
-        let investmentScore = min(100, max(0, (savingsRate * 0.5) + (efMonths * 10))).safeInt
+        let healthScore = FinancialAssessmentInsights.build(profile: profile, data: nil).overallScore.safeInt
         
         profile.financialHealthReport = AstraFinancialHealthReport(
             netWorth: netWorth,
             savingsRate: savingsRate,
             debtToIncomeRatio: dti,
-            investmentScore: investmentScore,
+            investmentScore: healthScore,
             emergencyFundMonths: efMonths
         )
         
