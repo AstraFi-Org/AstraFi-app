@@ -127,7 +127,32 @@ final class AppStateManager {
                 investmentScore: 72, emergencyFundMonths: 5.5
             ),
             cashflowData: CashflowEntry(rent: 20000, groceries: 8000, utilities: 4000, dining: 6000, transport: 5000, shopping: 7000, entertainment: 3000, misc: 2000),
-            monthlyHealthAssessments: [],
+            monthlyHealthAssessments: [
+                AstraHealthAssessment(
+                    date: Calendar.current.date(from: DateComponents(year: 2026, month: 6, day: 1)) ?? Date(),
+                    score: 61,
+                    status: "Needs Work",
+                    keyInsights: ["Emergency fund covered only 1.5 months", "High debt-to-income ratio (45%)"]
+                ),
+                AstraHealthAssessment(
+                    date: Calendar.current.date(from: DateComponents(year: 2026, month: 7, day: 1)) ?? Date(),
+                    score: 65,
+                    status: "Needs Work",
+                    keyInsights: ["Started emergency fund SIP", "Reduced credit card balance"]
+                ),
+                AstraHealthAssessment(
+                    date: Calendar.current.date(from: DateComponents(year: 2026, month: 8, day: 1)) ?? Date(),
+                    score: 69,
+                    status: "Good",
+                    keyInsights: ["Emergency fund reached 3.5 months", "Savings rate increased to 35%"]
+                ),
+                AstraHealthAssessment(
+                    date: Calendar.current.date(from: DateComponents(year: 2026, month: 9, day: 1)) ?? Date(),
+                    score: 74,
+                    status: "Good",
+                    keyInsights: ["Health & term life insurance secured", "Emergency reserve reached 5.5 months"]
+                )
+            ],
             isSetuConnected: false
         )
         return mgr
@@ -195,6 +220,9 @@ final class AppStateManager {
     var showDashboard: Bool = false
     var selectedTab: Int = 0
     var showPostAuthOnboarding: Bool = false
+
+    var showPersonalizedHealthPlan: Bool = false
+    var completedPlanActionIDs: Set<String> = []
     
     var requiresMFAChallenge: Bool = false
     var mfaFactorId: String? = nil
@@ -272,6 +300,19 @@ final class AppStateManager {
         }
     }
     
+    func activatePersonalizedPlanFromAssessment() {
+        showPersonalizedHealthPlan = true
+        selectedTab = 1
+    }
+
+    func togglePlanActionCompleted(_ id: String) {
+        if completedPlanActionIDs.contains(id) {
+            completedPlanActionIDs.remove(id)
+        } else {
+            completedPlanActionIDs.insert(id)
+        }
+    }
+
     func saveAssessmentToHistory(score: Int, status: String, insights: [String], assessmentInsights: FinancialAssessmentInsights? = nil) {
         if var profile = currentProfile {
             let newAssessment = AstraHealthAssessment(

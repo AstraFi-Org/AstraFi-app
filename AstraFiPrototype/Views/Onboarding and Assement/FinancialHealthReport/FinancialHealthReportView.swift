@@ -4,6 +4,7 @@ import PhotosUI
 
 // MARK: - Main View
 struct FinancialHealthReportView: View {
+    @Environment(\.dismiss) private var dismiss
     @Environment(\.colorScheme) var colorScheme
     @Environment(AppStateManager.self) var appState
     @ObservedObject private var upstoxViewModel = UpstoxViewModel.shared
@@ -44,6 +45,16 @@ struct FinancialHealthReportView: View {
                     },
                     onDecisionCenter: {
                         navigateToDecisionCenter = true
+                    },
+                    onImproveHealth: {
+                        if let data = data {
+                            appState.saveAssessmentToHistory(score: score.safeInt, status: status, insights: reportModel.insights.activeConcerns.map { $0.title }, assessmentInsights: reportModel.insights)
+                            appState.updateProfile(from: data)
+                            appState.isAssessmentSkipped = false
+                        }
+                        appState.activatePersonalizedPlanFromAssessment()
+                        onSaveComplete()
+                        dismiss()
                     }
                 )
 

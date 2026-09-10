@@ -8,72 +8,98 @@ struct FinancialHealthReportContent: View {
     var onAction: (FinancialHealthActionDestination) -> Void
     var onDecisionCenter: () -> Void
 
+    var onImproveHealth: (() -> Void)? = nil
+
+    private var identifiedAreasCount: Int {
+        if !report.priorities.isEmpty {
+            return report.priorities.count
+        }
+        if !report.insights.activeConcerns.isEmpty {
+            return report.insights.activeConcerns.count
+        }
+        return 3
+    }
+
     var body: some View {
         VStack(spacing: 0) {
-            HeroCard(
-                name: userName,
-                score: animatedScore,
-                radarValues: report.radarValues,
-                insights: report.insights,
-                parameters: report.parameters,
-                statusTitle: report.statusTitle,
-                scoreChange: report.scoreChange
-            )
-            .padding(.horizontal, 20)
-            .padding(.top, 20)
-            .padding(.bottom, 12)
+            Group {
+                HeroCard(
+                    name: userName,
+                    score: animatedScore,
+                    radarValues: report.radarValues,
+                    insights: report.insights,
+                    parameters: report.parameters,
+                    statusTitle: report.statusTitle,
+                    scoreChange: report.scoreChange
+                )
+                .padding(.horizontal, 20)
+                .padding(.top, 20)
+                .padding(.bottom, 12)
 
-            if let change = report.scoreChange, let previous = report.previousScore {
-                scoreChangeCard(change: change, previous: previous)
+                FinancialHealthPlannerConnectionCard(
+                    score: report.overallScoreInt,
+                    identifiedAreasCount: identifiedAreasCount,
+                    onImproveHealth: {
+                        onImproveHealth?()
+                    }
+                )
+                .padding(.horizontal, 20)
+                .padding(.bottom, 12)
+
+                if let change = report.scoreChange, let previous = report.previousScore {
+                    scoreChangeCard(change: change, previous: previous)
+                        .padding(.horizontal, 20)
+                        .padding(.bottom, 8)
+                }
+
+                ScoreDriversSection(parameters: report.parameters, onTap: onSelectParameter)
+
+                if !report.priorities.isEmpty {
+                    TopFinancialPrioritiesSection(items: report.priorities, onAction: onAction)
+                }
+            }
+
+            Group {
+                ForEach(orderedParameters) { result in
+                    ReportSectionTitle(result.parameter.title)
+                    ParameterHealthCard(result: result) {
+                        onAction(result.actionDestination)
+                    }
                     .padding(.horizontal, 20)
-                    .padding(.bottom, 8)
-            }
+                    .padding(.bottom, 6)
+                    .onTapGesture { onSelectParameter(result.parameter) }
+                }
 
-            ScoreDriversSection(parameters: report.parameters, onTap: onSelectParameter)
+                if !report.whatIfScenarios.isEmpty {
+                    WhatIfScoreSection(currentScore: report.overallScoreInt, scenarios: report.whatIfScenarios)
+                }
 
-            if !report.priorities.isEmpty {
-                TopFinancialPrioritiesSection(items: report.priorities, onAction: onAction)
-            }
+                if !report.goals.isEmpty {
+                    GoalReadinessSection(goals: report.goals) {
+                        onAction(.goals)
+                    }
+                }
 
-            ForEach(orderedParameters) { result in
-                ReportSectionTitle(result.parameter.title)
-                ParameterHealthCard(result: result) {
-                    onAction(result.actionDestination)
+                if report.journey.count >= 2 {
+                    FinancialJourneySection(points: report.journey, gain: report.journeyGain)
+                }
+
+                if !report.nextSteps.isEmpty {
+                    nextStepsSection
+                }
+
+                Button(action: onDecisionCenter) {
+                    Label("Explore My Financial Decisions", systemImage: "arrow.triangle.branch")
+                        .font(.subheadline.weight(.semibold))
+                        .frame(maxWidth: .infinity)
+                        .padding(.vertical, 13)
+                        .foregroundStyle(.white)
+                        .background(AppTheme.auraIndigo, in: RoundedRectangle(cornerRadius: 14, style: .continuous))
                 }
                 .padding(.horizontal, 20)
-                .padding(.bottom, 6)
-                .onTapGesture { onSelectParameter(result.parameter) }
+                .padding(.top, 16)
+                .padding(.bottom, 20)
             }
-
-            if !report.whatIfScenarios.isEmpty {
-                WhatIfScoreSection(currentScore: report.overallScoreInt, scenarios: report.whatIfScenarios)
-            }
-
-            if !report.goals.isEmpty {
-                GoalReadinessSection(goals: report.goals) {
-                    onAction(.goals)
-                }
-            }
-
-            if report.journey.count >= 2 {
-                FinancialJourneySection(points: report.journey, gain: report.journeyGain)
-            }
-
-            if !report.nextSteps.isEmpty {
-                nextStepsSection
-            }
-
-            Button(action: onDecisionCenter) {
-                Label("Explore My Financial Decisions", systemImage: "arrow.triangle.branch")
-                    .font(.subheadline.weight(.semibold))
-                    .frame(maxWidth: .infinity)
-                    .padding(.vertical, 13)
-                    .foregroundStyle(.white)
-                    .background(AppTheme.auraIndigo, in: RoundedRectangle(cornerRadius: 14, style: .continuous))
-            }
-            .padding(.horizontal, 20)
-            .padding(.top, 16)
-            .padding(.bottom, 20)
         }
     }
 
@@ -357,26 +383,15 @@ struct FinancialJourneySection: View {
 
     var body: some View {
         VStack(alignment: .leading, spacing: 0) {
-            ReportSectionTitle("Your Financial Journey")
-            VStack(alignment: .leading, spacing: 12) {
-                ForEach(points) { point in
-                    HStack {
-                        Text(point.label)
-                            .font(.subheadline)
-                        Spacer()
-                        Text("\(point.score)")
-                            .font(.subheadline.weight(.bold))
-                            .foregroundStyle(FinancialHealthUIStyle.scoreColor(point.score))
-                    }
-                }
-                if let gain, points.count >= 2 {
-                    Text("\(gain >= 0 ? "+" : "")\(gain) points since first assessment.")
-                        .font(.subheadline.weight(.semibold))
-                        .foregroundStyle(gain >= 0 ? Color(hex: "#30D158") : Color(hex: "#FF453A"))
-                    Text("Based on saved AstraFi assessments. Major score moves usually follow changes in emergency reserves, debt, or savings rate.")
-                        .font(.caption)
-                        .foregroundStyle(.secondary)
-                }
+            ReportSectionTitle("Financial Health History")
+            VStack(alignment: .leading, spacing: 14) {
+                gainBanner
+
+                historyList
+
+                Text("Tracking month-over-month score progress helps you stay consistent and build long-term wealth.")
+                    .font(.caption)
+                    .foregroundStyle(.secondary)
             }
             .padding(16)
             .background(AppTheme.cardBackground)
@@ -384,5 +399,65 @@ struct FinancialJourneySection: View {
             .padding(.horizontal, 20)
             .padding(.bottom, 8)
         }
+    }
+
+    @ViewBuilder
+    private var gainBanner: some View {
+        if let gain, gain != 0 {
+            let isPositive = gain >= 0
+            let statusText = isPositive ? "improved" : "changed"
+            let gainPoints = abs(gain)
+            let tintColor = isPositive ? Color(hex: "#30D158") : Color(hex: "#FF453A")
+            let iconName = isPositive ? "arrow.up.right.circle.fill" : "arrow.down.right.circle.fill"
+
+            HStack(spacing: 10) {
+                Image(systemName: iconName)
+                    .font(.system(size: 20, weight: .bold))
+                    .foregroundStyle(tintColor)
+                
+                Text("Your financial health \(statusText) by \(gainPoints) points.")
+                    .font(.subheadline.weight(.bold))
+                    .foregroundStyle(.primary)
+            }
+            .padding(12)
+            .frame(maxWidth: .infinity, alignment: .leading)
+            .background(tintColor.opacity(0.08))
+            .clipShape(RoundedRectangle(cornerRadius: 12, style: .continuous))
+        }
+    }
+
+    private var historyList: some View {
+        VStack(spacing: 8) {
+            ForEach(0..<points.count, id: \.self) { index in
+                FinancialJourneyRow(index: index, point: points[index])
+            }
+        }
+    }
+}
+
+struct FinancialJourneyRow: View {
+    let index: Int
+    let point: FinancialHealthJourneyPoint
+
+    var body: some View {
+        HStack(spacing: 12) {
+            Text("\(index + 1)")
+                .font(.system(size: 14, weight: .bold, design: .monospaced))
+                .foregroundStyle(.tertiary)
+                .frame(width: 18)
+
+            Text(point.label)
+                .font(.subheadline.weight(.medium))
+
+            Spacer()
+
+            Text("\(point.score)")
+                .font(.system(.subheadline, design: .monospaced).weight(.bold))
+                .foregroundStyle(FinancialHealthUIStyle.scoreColor(point.score))
+        }
+        .padding(.horizontal, 12)
+        .padding(.vertical, 8)
+        .background(Color.primary.opacity(0.03))
+        .clipShape(RoundedRectangle(cornerRadius: 10, style: .continuous))
     }
 }
