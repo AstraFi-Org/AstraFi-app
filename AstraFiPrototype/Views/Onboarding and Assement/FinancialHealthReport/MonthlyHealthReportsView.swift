@@ -56,6 +56,7 @@ struct MonthlyHealthReportsView: View {
                     monthlyReminderCard
                 }
                 headerCard
+                FinancialHealthHistoryComparisonCard(history: reports)
                 if !hasCompletedAssessment || reports.isEmpty {
                     noAssessmentCard
                 } else {
