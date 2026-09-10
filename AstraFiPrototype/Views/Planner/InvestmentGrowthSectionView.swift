@@ -48,7 +48,7 @@ struct InvestmentGrowthSectionView: View {
     }
 
     var body: some View {
-        VStack(alignment: .leading, spacing: 20) {
+        VStack(alignment: .leading, spacing: 14) {
             headerSection
 
             if investments.isEmpty {
@@ -68,7 +68,7 @@ struct InvestmentGrowthSectionView: View {
                 }
             }
         }
-        .padding(20)
+        .padding(16)
         .background(AppTheme.cardBackground)
         .clipShape(RoundedRectangle(cornerRadius: 20, style: .continuous))
         .shadow(color: AppTheme.adaptiveShadow, radius: 14, x: 0, y: 5)
@@ -98,17 +98,17 @@ struct InvestmentGrowthSectionView: View {
 
     private var selectionSummary: some View {
         HStack {
-            VStack(alignment: .leading, spacing: 3) {
+            VStack(alignment: .leading, spacing: 2) {
                 Text("Selected")
                     .font(.system(size: 11, weight: .medium, design: .rounded))
                     .foregroundStyle(.secondary)
                 if selectedInvestments.count == 1, let name = selectedInvestments.first?.investmentName {
                     Text(name)
-                        .font(.system(size: 14, weight: .semibold, design: .rounded))
-                        .lineLimit(2)
+                        .font(.system(size: 13, weight: .semibold, design: .rounded))
+                        .lineLimit(1)
                 } else {
                     Text("\(selectedInvestments.count) Investments")
-                        .font(.system(size: 14, weight: .semibold, design: .rounded))
+                        .font(.system(size: 13, weight: .semibold, design: .rounded))
                 }
             }
             Spacer()
@@ -122,54 +122,81 @@ struct InvestmentGrowthSectionView: View {
     // MARK: - Performance Summary
 
     private var performanceSummary: some View {
-        let columns = [
-            summaryMetric(
-                title: isCombinedMode ? "Combined Current Value" : "Current Value",
-                value: combinedCurrentValue.toCurrency()
-            ),
-            summaryMetric(
-                title: isCombinedMode ? "Total Invested" : "Invested Amount",
-                value: combinedInvested > 0 ? combinedInvested.toCurrency() : "—"
-            ),
-            summaryMetric(
-                title: isCombinedMode ? "Total Profit" : "Profit",
-                value: profitLabel(combinedProfit),
-                color: combinedProfit >= 0 ? AppTheme.auraGreen : Color(hex: "#FF453A")
-            ),
-            summaryMetric(
-                title: isCombinedMode ? "Portfolio Return" : "Return",
-                value: combinedReturnPct.map { formatSignedPercent($0) } ?? "—",
-                color: (combinedReturnPct ?? 0) >= 0 ? AppTheme.auraGreen : Color(hex: "#FF453A")
-            ),
-            summaryMetric(
-                title: "Period Change",
-                value: growthResult.periodChangePct.map { formatSignedPercent($0) } ?? "—",
-                color: (growthResult.periodChangePct ?? 0) >= 0 ? AppTheme.auraGreen : Color(hex: "#FF453A")
-            )
-        ]
+        VStack(spacing: 8) {
+            HStack {
+                horizontalMetric(
+                    title: isCombinedMode ? "Combined Value" : "Current Value",
+                    value: combinedCurrentValue.toCurrency()
+                )
+                Spacer()
+                horizontalMetric(
+                    title: isCombinedMode ? "Total Invested" : "Invested Amount",
+                    value: combinedInvested > 0 ? combinedInvested.toCurrency() : "—"
+                )
+            }
 
-        return LazyVGrid(columns: [GridItem(.flexible()), GridItem(.flexible())], spacing: 12) {
-            ForEach(Array(columns.enumerated()), id: \.offset) { _, column in
-                column
+            Divider()
+
+            ViewThatFits {
+                HStack {
+                    horizontalMetric(
+                        title: isCombinedMode ? "Profit" : "Profit",
+                        value: profitLabel(combinedProfit),
+                        color: combinedProfit >= 0 ? AppTheme.auraGreen : Color(hex: "#FF453A")
+                    )
+                    Spacer()
+                    horizontalMetric(
+                        title: isCombinedMode ? "Return" : "Return",
+                        value: combinedReturnPct.map { formatSignedPercent($0) } ?? "—",
+                        color: (combinedReturnPct ?? 0) >= 0 ? AppTheme.auraGreen : Color(hex: "#FF453A")
+                    )
+                    Spacer()
+                    horizontalMetric(
+                        title: "Period Change",
+                        value: growthResult.periodChangePct.map { formatSignedPercent($0) } ?? "—",
+                        color: (growthResult.periodChangePct ?? 0) >= 0 ? AppTheme.auraGreen : Color(hex: "#FF453A")
+                    )
+                }
+
+                ScrollView(.horizontal, showsIndicators: false) {
+                    HStack(spacing: 12) {
+                        horizontalMetric(
+                            title: isCombinedMode ? "Profit" : "Profit",
+                            value: profitLabel(combinedProfit),
+                            color: combinedProfit >= 0 ? AppTheme.auraGreen : Color(hex: "#FF453A")
+                        )
+                        horizontalMetric(
+                            title: isCombinedMode ? "Return" : "Return",
+                            value: combinedReturnPct.map { formatSignedPercent($0) } ?? "—",
+                            color: (combinedReturnPct ?? 0) >= 0 ? AppTheme.auraGreen : Color(hex: "#FF453A")
+                        )
+                        horizontalMetric(
+                            title: "Period Change",
+                            value: growthResult.periodChangePct.map { formatSignedPercent($0) } ?? "—",
+                            color: (growthResult.periodChangePct ?? 0) >= 0 ? AppTheme.auraGreen : Color(hex: "#FF453A")
+                        )
+                    }
+                }
             }
         }
-    }
-
-    private func summaryMetric(title: String, value: String, color: Color = .primary) -> some View {
-        VStack(alignment: .leading, spacing: 4) {
-            Text(title)
-                .font(.system(size: 11, weight: .medium, design: .rounded))
-                .foregroundStyle(.secondary)
-                .lineLimit(2)
-            Text(value)
-                .font(.system(size: 15, weight: .bold, design: .rounded))
-                .foregroundStyle(color)
-                .contentTransition(.numericText())
-        }
-        .frame(maxWidth: .infinity, alignment: .leading)
-        .padding(12)
+        .padding(.horizontal, 14)
+        .padding(.vertical, 10)
         .background(Color(uiColor: .secondarySystemGroupedBackground))
         .clipShape(RoundedRectangle(cornerRadius: 12, style: .continuous))
+    }
+
+    private func horizontalMetric(title: String, value: String, color: Color = .primary) -> some View {
+        HStack(spacing: 6) {
+            Text(title)
+                .font(.system(size: 12, weight: .medium, design: .rounded))
+                .foregroundStyle(.secondary)
+                .lineLimit(1)
+            Text(value)
+                .font(.system(size: 13, weight: .bold, design: .rounded))
+                .foregroundStyle(color)
+                .contentTransition(.numericText())
+                .lineLimit(1)
+        }
     }
 
     // MARK: - Timeframe
@@ -220,7 +247,7 @@ struct InvestmentGrowthSectionView: View {
         } else if growthResult.actualPoints.isEmpty {
             unavailableChartState(message: "Historical performance unavailable.")
         } else {
-            VStack(alignment: .leading, spacing: 10) {
+            VStack(alignment: .leading, spacing: 8) {
                 if growthResult.hasLimitedData {
                     Label("Showing available historical data.", systemImage: "info.circle")
                         .font(.system(size: 11, design: .rounded))
@@ -232,7 +259,7 @@ struct InvestmentGrowthSectionView: View {
                 }
 
                 growthChart
-                    .frame(height: 190)
+                    .frame(height: 165)
 
                 HStack(spacing: 16) {
                     legendItem(color: AppTheme.auraIndigo, label: "Actual", dashed: false)
@@ -352,21 +379,21 @@ struct InvestmentGrowthSectionView: View {
     }
 
     private func chartSelectionCallout(for point: GrowthChartPoint) -> some View {
-        VStack(alignment: .leading, spacing: 4) {
+        VStack(alignment: .leading, spacing: 3) {
             Text(relativeDateLabel(point.date))
-                .font(.system(size: 12, weight: .semibold, design: .rounded))
+                .font(.system(size: 11, weight: .semibold, design: .rounded))
             Text(point.value.toCurrency())
-                .font(.system(size: 16, weight: .bold, design: .rounded))
+                .font(.system(size: 15, weight: .bold, design: .rounded))
             if let change = point.changeFromPrevious, let pct = point.changePctFromPrevious {
                 Text("\(change >= 0 ? "+" : "")\(change.toCurrency()) · \(formatSignedPercent(pct))")
                     .font(.system(size: 11, weight: .medium, design: .rounded))
                     .foregroundStyle(change >= 0 ? AppTheme.auraGreen : Color(hex: "#FF453A"))
             }
         }
-        .padding(12)
+        .padding(10)
         .frame(maxWidth: .infinity, alignment: .leading)
         .background(AppTheme.auraIndigo.opacity(0.06))
-        .clipShape(RoundedRectangle(cornerRadius: 12, style: .continuous))
+        .clipShape(RoundedRectangle(cornerRadius: 10, style: .continuous))
     }
 
     // MARK: - Historical Insight
@@ -378,30 +405,30 @@ struct InvestmentGrowthSectionView: View {
                 ForEach(growthResult.snapshots) { snapshot in
                     HStack {
                         Text(snapshot.label)
-                            .font(.system(size: 13, weight: .medium, design: .rounded))
+                            .font(.system(size: 12, weight: .medium, design: .rounded))
                         Spacer()
                         if snapshot.label.contains("Change"), let pct = snapshot.value {
                             Text(formatSignedPercent(pct))
-                                .font(.system(size: 13, weight: .bold, design: .rounded))
+                                .font(.system(size: 12, weight: .bold, design: .rounded))
                                 .foregroundStyle(pct >= 0 ? AppTheme.auraGreen : Color(hex: "#FF453A"))
                         } else if let value = snapshot.value {
                             Text(value.toCurrency())
-                                .font(.system(size: 13, weight: .bold, design: .rounded))
+                                .font(.system(size: 12, weight: .bold, design: .rounded))
                         } else {
                             Text("—")
-                                .font(.system(size: 13))
+                                .font(.system(size: 12))
                                 .foregroundStyle(.secondary)
                         }
                     }
-                    .padding(.vertical, 10)
+                    .padding(.vertical, 7)
                     if snapshot.id != growthResult.snapshots.last?.id {
                         Divider()
                     }
                 }
             }
-            .padding(.horizontal, 14)
+            .padding(.horizontal, 12)
             .background(Color(uiColor: .secondarySystemGroupedBackground))
-            .clipShape(RoundedRectangle(cornerRadius: 12, style: .continuous))
+            .clipShape(RoundedRectangle(cornerRadius: 10, style: .continuous))
         }
     }
 
@@ -412,40 +439,40 @@ struct InvestmentGrowthSectionView: View {
         if growthResult.isUnavailable || growthResult.actualPoints.count < 3 {
             EmptyView()
         } else if let estimate = growthResult.projection, estimate.isAvailable {
-            VStack(alignment: .leading, spacing: 10) {
+            VStack(alignment: .leading, spacing: 6) {
                 Text("Estimated Range")
-                    .font(.system(size: 14, weight: .semibold, design: .rounded))
+                    .font(.system(size: 13, weight: .semibold, design: .rounded))
                 Text("Estimated based on recent trend. Not a guaranteed return.")
                     .font(.system(size: 11, design: .rounded))
                     .foregroundStyle(.secondary)
 
                 HStack {
-                    VStack(alignment: .leading, spacing: 4) {
+                    VStack(alignment: .leading, spacing: 2) {
                         Text("Current")
-                            .font(.system(size: 11, weight: .medium, design: .rounded))
+                            .font(.system(size: 10, weight: .medium, design: .rounded))
                             .foregroundStyle(.secondary)
                         Text(estimate.currentValue.toCurrency())
-                            .font(.system(size: 15, weight: .bold, design: .rounded))
+                            .font(.system(size: 14, weight: .bold, design: .rounded))
                     }
                     Spacer()
-                    VStack(alignment: .trailing, spacing: 4) {
+                    VStack(alignment: .trailing, spacing: 2) {
                         Text("Projected Range")
-                            .font(.system(size: 11, weight: .medium, design: .rounded))
+                            .font(.system(size: 10, weight: .medium, design: .rounded))
                             .foregroundStyle(.secondary)
                         Text("\(estimate.low.toCurrency()) – \(estimate.high.toCurrency())")
-                            .font(.system(size: 15, weight: .bold, design: .rounded))
+                            .font(.system(size: 14, weight: .bold, design: .rounded))
                             .foregroundStyle(AppTheme.auraIndigo.opacity(0.85))
                     }
                 }
-                .padding(14)
+                .padding(10)
                 .background(AppTheme.auraIndigo.opacity(0.05))
-                .clipShape(RoundedRectangle(cornerRadius: 12, style: .continuous))
+                .clipShape(RoundedRectangle(cornerRadius: 10, style: .continuous))
             }
         } else {
             Text("Not enough historical data to generate a projection.")
-                .font(.system(size: 12, design: .rounded))
+                .font(.system(size: 11, design: .rounded))
                 .foregroundStyle(.secondary)
-                .padding(.vertical, 4)
+                .padding(.vertical, 2)
         }
     }
 

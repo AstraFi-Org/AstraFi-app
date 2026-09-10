@@ -160,6 +160,8 @@ final class SupabaseRepository {
         let priceChange: Double?
         let priceChangePercentage: Double?
         let createdAt: String
+        let brokerSource: String?
+        let brokerInstrumentID: String?
 
         enum CodingKeys: String, CodingKey {
             case id, user_id, subtype, symbol, quantity, isin, units
@@ -174,6 +176,8 @@ final class SupabaseRepository {
             case priceChange = "priceChange"
             case priceChangePercentage = "priceChangePercentage"
             case createdAt = "createdAt"
+            case brokerSource = "brokerSource"
+            case brokerInstrumentID = "brokerInstrumentID"
         }
     }
 
@@ -531,7 +535,9 @@ final class SupabaseRepository {
             quantity: inv.quantity,
             priceChange: inv.priceChange,
             priceChangePercentage: inv.priceChangePercentage,
-            createdAt: fmt.string(from: inv.createdAt)
+            createdAt: fmt.string(from: inv.createdAt),
+            brokerSource: inv.brokerSource,
+            brokerInstrumentID: inv.brokerInstrumentID
         )).execute()
 
         for tx in inv.installments {
@@ -568,6 +574,8 @@ final class SupabaseRepository {
             let priceChange: Double?
             let priceChangePercentage: Double?
             let createdAt: String
+            let brokerSource: String?
+            let brokerInstrumentID: String?
         }
         struct TxRow: Decodable {
             let id: UUID
@@ -621,6 +629,8 @@ final class SupabaseRepository {
             )
             inv.lastNAV = row.lastNAV
             inv.installments = txs
+            inv.brokerSource = row.brokerSource
+            inv.brokerInstrumentID = row.brokerInstrumentID
             return inv
         }
     }

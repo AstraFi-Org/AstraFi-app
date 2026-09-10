@@ -1157,17 +1157,28 @@ final class AppStateManager {
             existingProfile.signUp.email = assessmentData.email.isEmpty
                     ? existingProfile.signUp.email : assessmentData.email
             
-            // Retain broker-connected holdings (Upstox) and upsert manual assessment-sourced investments
-            let brokerHoldings = existingProfile.investments.filter { $0.brokerSource == "Upstox" }
+            // ─── Investment Upsert (NON-DESTRUCTIVE) ───────────────────────────────
+            // All linked/broker investments AND previously saved manual investments must
+            // survive assessment re-runs, monthly reviews, and app rebuilds.
+            // Strategy:
+            //   1. Retain every existing investment that is NOT being replaced by an
+            //      equivalent entry from the new assessment.
+            //   2. Upsert assessment-sourced investments by matching equivalents.
+            // This means: adding cash / changing allocation NEVER clears investments.
             var updatedInvestments: [AstraInvestment] = []
+            var replacedExistingIDs = Set<UUID>()
             for inv in newInvestments {
                 if let existingIdx = existingProfile.investments.firstIndex(where: { $0.isEquivalent(to: inv) }) {
-                    updatedInvestments.append(existingProfile.investments[existingIdx].merged(with: inv))
+                    let merged = existingProfile.investments[existingIdx].merged(with: inv)
+                    updatedInvestments.append(merged)
+                    replacedExistingIDs.insert(existingProfile.investments[existingIdx].id)
                 } else {
                     updatedInvestments.append(inv)
                 }
             }
-            existingProfile.investments = (brokerHoldings + updatedInvestments).deduplicated()
+            // Retain ALL existing investments not replaced by the assessment upsert
+            let retained = existingProfile.investments.filter { !replacedExistingIDs.contains($0.id) }
+            existingProfile.investments = (retained + updatedInvestments).deduplicated()
             
             // Upsert loans (preserving existing tracking progress, payments, and installments paid)
             var updatedLoans: [AstraLoan] = []
@@ -1406,12 +1417,23 @@ final class AppStateManager {
             emergencyFundMonths: efMonths
         )
         
-        // Sync goal currentAmount with dynamic total
+        // Sync goal currentAmount with dynamic total and detect goal achievement
         for i in 0..<profile.goals.count {
             let gid = profile.goals[i].id
             let linked = profile.investments.filter { $0.associatedGoalID == gid }
             let linkedTotal = linked.reduce(0.0) { $0 + $1.currentValue }
-            profile.goals[i].currentAmount = linkedTotal + profile.goals[i].manualSavingsContribution
+            let newAmount = linkedTotal + profile.goals[i].manualSavingsContribution
+            profile.goals[i].currentAmount = newAmount
+
+            // Goal Achievement Detection — transition to goalAchieved + Protection Mode
+            let target = profile.goals[i].targetAmount
+            let currentStatus = profile.goals[i].status
+            let notAlreadyAchieved = currentStatus != .goalAchieved && currentStatus != .protection
+                && currentStatus != .completed && currentStatus != .cancelled
+            if target > 0 && newAmount >= target && notAlreadyAchieved {
+                profile.goals[i].status = .goalAchieved
+                profile.goals[i].isProtectionModeEnabled = true
+            }
         }
         
         self.currentProfile = profile
@@ -1519,7 +1541,155 @@ final class AppStateManager {
             }
         }
     }
-    
+
+    // MARK: - Goal Lifecycle
+
+    /// Update a goal's status/protection fields and persist.
+    func updateGoalStatus(_ updatedGoal: AstraGoal) {
+        guard var profile = currentProfile,
+              let index = profile.goals.firstIndex(where: { $0.id == updatedGoal.id }) else { return }
+        profile.goals[index] = updatedGoal
+        currentProfile = profile
+        recalculateFinancials()
+        Task {
+            if let session = try? await supabase.auth.session {
+                _ = try? await SupabaseRepository.shared.saveGoal(updatedGoal, userId: session.user.id)
+            }
+        }
+    }
+
+    /// Dismiss goal achievement notification. Preserves goalAchieved status but marks banner dismissed.
+    func dismissGoalAchievementMessage(goalId: UUID) {
+        guard var profile = currentProfile,
+              let index = profile.goals.firstIndex(where: { $0.id == goalId }) else { return }
+        profile.goals[index].achievementMessageDismissed = true
+        currentProfile = profile
+        Task {
+            if let session = try? await supabase.auth.session {
+                _ = try? await SupabaseRepository.shared.saveGoal(profile.goals[index], userId: session.user.id)
+            }
+        }
+    }
+
+    // MARK: - Atomic Financial Transfers
+
+    /// Atomically transfer an amount FROM an investment TO cash (savings account).
+    /// Updates both source and destination in the same profile mutation and appends a TransferRecord.
+    /// Prevents double-counting — the same rupee cannot appear in both investment and cash.
+    func executeGoalWithdrawal(
+        goalId: UUID,
+        investmentId: UUID?,
+        amount: Double,
+        note: String? = nil
+    ) {
+        guard var profile = currentProfile, amount > 0 else { return }
+
+        // 1. Reduce the investment value (mark as withdrawn / reduce amount)
+        let goalName = profile.goals.first(where: { $0.id == goalId })?.goalName ?? "Goal"
+        if let investId = investmentId,
+           let invIdx = profile.investments.firstIndex(where: { $0.id == investId }) {
+            let currentVal = profile.investments[invIdx].currentValue
+            let remaining = max(0, currentVal - amount)
+            // Reflect the reduction via investmentAmount (for non-broker manual investments)
+            if !profile.investments[invIdx].isLinked {
+                profile.investments[invIdx].investmentAmount = max(0, profile.investments[invIdx].investmentAmount - amount)
+            }
+            profile.investments[invIdx].status = remaining <= 0 ? .withdrawn : .active
+        }
+
+        // 2. Increase cash (savings account)
+        profile.assets.savingsAccountAmount += amount
+
+        // 3. Update goal: mark as protection / completed and record protected cash
+        if let gIdx = profile.goals.firstIndex(where: { $0.id == goalId }) {
+            profile.goals[gIdx].protectedCashAmount += amount
+            profile.goals[gIdx].status = .protection
+        }
+
+        // 4. Append transfer record (audit trail, prevents double-count queries)
+        let transfer = FinancialTransferRecord(
+            fromEntity: "\(goalName) Investment",
+            toEntity: "Cash / Savings",
+            amount: amount,
+            transferType: .goalAchievementWithdrawal,
+            note: note
+        )
+        profile.safeTransferHistory.append(transfer)
+
+        currentProfile = profile
+        recalculateFinancials()
+
+        Task {
+            if let session = try? await supabase.auth.session {
+                _ = try? await SupabaseRepository.shared.syncFullProfile(profile, userId: session.user.id)
+            }
+        }
+    }
+
+    // MARK: - Monthly Performance Records
+
+    /// Record a monthly performance entry for an investment / goal without treating the return as a new contribution.
+    func recordMonthlyPerformance(
+        goalId: UUID? = nil,
+        investmentId: UUID? = nil,
+        period: String,
+        openingValue: Double,
+        closingValue: Double
+    ) {
+        guard var profile = currentProfile else { return }
+        let returnAmount = closingValue - openingValue
+        let returnPct = openingValue > 0 ? (returnAmount / openingValue) * 100 : 0
+        let record = InvestmentPerformanceRecord(
+            investmentId: investmentId,
+            goalId: goalId,
+            period: period,
+            openingValue: openingValue,
+            closingValue: closingValue,
+            returnAmount: returnAmount,
+            returnPercentage: returnPct
+        )
+        profile.safePerformanceRecords.append(record)
+        currentProfile = profile
+        // Sync async — performance records are non-critical path
+        Task {
+            if let session = try? await supabase.auth.session {
+                _ = try? await SupabaseRepository.shared.syncFullProfile(profile, userId: session.user.id)
+            }
+        }
+    }
+
+    /// Move a realized return FROM an investment TO cash atomically (no double-counting).
+    func realizeReturnToCash(recordId: UUID, investmentId: UUID, amount: Double) {
+        guard var profile = currentProfile, amount > 0 else { return }
+        let invName = profile.investments.first(where: { $0.id == investmentId })?.investmentName ?? "Investment"
+
+        // Reduce investment amount by realized return
+        if let invIdx = profile.investments.firstIndex(where: { $0.id == investmentId }),
+           !profile.investments[invIdx].isLinked {
+            profile.investments[invIdx].investmentAmount = max(0, profile.investments[invIdx].investmentAmount - amount)
+        }
+
+        // Increase cash (savings account)
+        profile.assets.savingsAccountAmount += amount
+
+        // Append transfer record
+        let transfer = FinancialTransferRecord(
+            fromEntity: invName,
+            toEntity: "Cash / Savings",
+            amount: amount,
+            transferType: .returnRealization
+        )
+        profile.safeTransferHistory.append(transfer)
+
+        currentProfile = profile
+        recalculateFinancials()
+        Task {
+            if let session = try? await supabase.auth.session {
+                _ = try? await SupabaseRepository.shared.syncFullProfile(profile, userId: session.user.id)
+            }
+        }
+    }
+
     func addInvestment(_ investment: AstraInvestment) {
         if var profile = currentProfile {
             let targetInv: AstraInvestment

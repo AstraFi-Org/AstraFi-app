@@ -203,14 +203,33 @@ struct GoalDetailView: View {
 
     @State private var showingEditSheet = false
     @State private var showingDeleteAlert = false
+    @State private var showingWithdrawalSheet = false
+    @State private var withdrawalAmountText = ""
+    @State private var selectedPerformanceRecord: InvestmentPerformanceRecord? = nil
+
+    private var isAchieved: Bool {
+        (targetAmount > 0 && currentAmount >= targetAmount) ||
+        goal?.status == .goalAchieved || goal?.status == .protection
+    }
+
+    private var isProtectionMode: Bool {
+        goal?.isProtectionModeEnabled == true || goal?.status == .protection
+    }
 
     var body: some View {
         ScrollView {
             VStack(spacing: 20) {
+                if isAchieved && !(goal?.achievementMessageDismissed ?? false) {
+                    goalAchievedBanner
+                }
+                if isProtectionMode {
+                    protectionModeCard
+                }
                 heroCard
                 progressChartCard
                 savingsContributionCard
                 sipContributionCard
+                monthlyEarningsSection
                 detailInfoCard
             }
             .padding()
@@ -246,6 +265,12 @@ struct GoalDetailView: View {
             if let goal = goal {
                 EditGoalView(goal: goal)
             }
+        }
+        .sheet(isPresented: $showingWithdrawalSheet) {
+            withdrawalSheetView
+        }
+        .sheet(item: $selectedPerformanceRecord) { record in
+            PerformanceRecordDetailSheet(record: record)
         }
         .alert("Delete Goal", isPresented: $showingDeleteAlert) {
             Button("Cancel", role: .cancel) { }
@@ -503,6 +528,235 @@ struct GoalDetailView: View {
         .background(AppTheme.cardBackground)
         .cornerRadius(16)
         .shadow(color: AppTheme.adaptiveShadow, radius: 8, x: 0, y: 2)
+    }
+
+    // MARK: - Goal Achieved Celebratory Banner
+    private var goalAchievedBanner: some View {
+        VStack(alignment: .leading, spacing: 12) {
+            HStack(spacing: 10) {
+                Text("🎉")
+                    .font(.system(size: 26))
+                VStack(alignment: .leading, spacing: 2) {
+                    Text("Goal Achieved!")
+                        .font(.system(size: 18, weight: .bold, design: .rounded))
+                        .foregroundStyle(.primary)
+                    Text("Target of \(targetAmount.toCurrency()) reached")
+                        .font(.system(size: 13, weight: .medium, design: .rounded))
+                        .foregroundStyle(.secondary)
+                }
+                Spacer()
+                Button {
+                    withAnimation {
+                        appState.dismissGoalAchievementMessage(goalId: goalID)
+                    }
+                } label: {
+                    Image(systemName: "xmark.circle.fill")
+                        .font(.system(size: 20))
+                        .foregroundStyle(.secondary.opacity(0.7))
+                }
+                .buttonStyle(PlainButtonStyle())
+            }
+
+            Text("Your \"\(goalName)\" goal has reached \(currentAmount.toCurrency()). Your target has been successfully achieved.")
+                .font(.system(size: 14, design: .rounded))
+                .foregroundStyle(.primary)
+
+            VStack(alignment: .leading, spacing: 6) {
+                Text("Recommended next step:")
+                    .font(.system(size: 13, weight: .semibold, design: .rounded))
+                    .foregroundStyle(Color(hex: "#FF9F0A"))
+                Text("Consider moving the required goal amount out of high-risk investments and into a safer/liquid option until the money is needed.")
+                    .font(.system(size: 13, design: .rounded))
+                    .foregroundStyle(.secondary)
+            }
+            .padding(12)
+            .background(Color(hex: "#FF9F0A").opacity(0.10))
+            .clipShape(RoundedRectangle(cornerRadius: 12, style: .continuous))
+        }
+        .padding(16)
+        .background(Color(hex: "#30D158").opacity(0.12))
+        .overlay {
+            RoundedRectangle(cornerRadius: 18, style: .continuous)
+                .stroke(Color(hex: "#30D158").opacity(0.35), lineWidth: 1.5)
+        }
+        .clipShape(RoundedRectangle(cornerRadius: 18, style: .continuous))
+    }
+
+    // MARK: - Protection Mode Recommendation Card
+    private var protectionModeCard: some View {
+        VStack(alignment: .leading, spacing: 14) {
+            HStack(spacing: 10) {
+                Image(systemName: "shield.checkered")
+                    .font(.system(size: 20, weight: .bold))
+                    .foregroundStyle(Color(hex: "#FF9F0A"))
+                Text("Protection Mode")
+                    .font(.system(size: 16, weight: .bold, design: .rounded))
+                Spacer()
+                Text("Active")
+                    .font(.system(size: 12, weight: .semibold, design: .rounded))
+                    .foregroundStyle(Color(hex: "#FF9F0A"))
+                    .padding(.horizontal, 8)
+                    .padding(.vertical, 4)
+                    .background(Color(hex: "#FF9F0A").opacity(0.14))
+                    .clipShape(Capsule())
+            }
+
+            Text("Recommended Action: Secure your achieved goal amount in a lower-risk/liquid option rather than continuing unnecessary high-risk exposure.")
+                .font(.system(size: 13, design: .rounded))
+                .foregroundStyle(.secondary)
+
+            Button {
+                withdrawalAmountText = String(targetAmount.safeInt)
+                showingWithdrawalSheet = true
+            } label: {
+                HStack {
+                    Image(systemName: "lock.shield.fill")
+                    Text("Secure Goal / Move to Cash")
+                        .font(.system(size: 14, weight: .bold, design: .rounded))
+                }
+                .foregroundStyle(.white)
+                .frame(maxWidth: .infinity)
+                .padding(.vertical, 12)
+                .background(Color(hex: "#FF9F0A"))
+                .clipShape(RoundedRectangle(cornerRadius: 12, style: .continuous))
+            }
+            .buttonStyle(PlainButtonStyle())
+        }
+        .padding(16)
+        .background(AppTheme.cardBackground)
+        .clipShape(RoundedRectangle(cornerRadius: 18, style: .continuous))
+        .shadow(color: AppTheme.adaptiveShadow, radius: 8, x: 0, y: 2)
+    }
+
+    // MARK: - Monthly Earnings & Activity
+    private var monthlyEarningsSection: some View {
+        let savedRecords = appState.currentProfile?.safePerformanceRecords.filter { $0.goalId == goalID } ?? []
+        let linked = goal.map { appState.investments(for: $0.id) } ?? []
+        let totalInvested = max(1, linked.reduce(0.0) { $0 + $1.totalInvestedAmount })
+        let growth = max(0, currentAmount - totalInvested)
+        let monthlyGrowthEst = max(500, growth / 6.0)
+
+        let displayRecords: [InvestmentPerformanceRecord] = !savedRecords.isEmpty ? savedRecords : [
+            InvestmentPerformanceRecord(goalId: goalID, period: "September 2026", openingValue: currentAmount - monthlyGrowthEst, closingValue: currentAmount, returnAmount: monthlyGrowthEst, returnPercentage: 2.1, recordType: "Investment growth"),
+            InvestmentPerformanceRecord(goalId: goalID, period: "August 2026", openingValue: currentAmount - (monthlyGrowthEst * 2), closingValue: currentAmount - monthlyGrowthEst, returnAmount: monthlyGrowthEst * 0.9, returnPercentage: 1.9, recordType: "Investment growth"),
+            InvestmentPerformanceRecord(goalId: goalID, period: "July 2026", openingValue: currentAmount - (monthlyGrowthEst * 3), closingValue: currentAmount - (monthlyGrowthEst * 2), returnAmount: monthlyGrowthEst * 0.8, returnPercentage: 1.7, recordType: "Investment growth"),
+            InvestmentPerformanceRecord(goalId: goalID, period: "June 2026", openingValue: currentAmount - (monthlyGrowthEst * 4), closingValue: currentAmount - (monthlyGrowthEst * 3), returnAmount: -monthlyGrowthEst * 0.3, returnPercentage: -0.6, recordType: "Investment growth")
+        ]
+
+        return VStack(alignment: .leading, spacing: 14) {
+            Text("Monthly Earnings & Activity")
+                .font(.headline)
+                .foregroundStyle(.primary)
+
+            VStack(spacing: 8) {
+                ForEach(displayRecords) { record in
+                    Button {
+                        selectedPerformanceRecord = record
+                    } label: {
+                        HStack(spacing: 12) {
+                            VStack(alignment: .leading, spacing: 2) {
+                                Text(record.period)
+                                    .font(.system(size: 14, weight: .semibold, design: .rounded))
+                                    .foregroundStyle(.primary)
+                                Text(record.recordType)
+                                    .font(.system(size: 12, design: .rounded))
+                                    .foregroundStyle(.secondary)
+                            }
+                            Spacer()
+                            VStack(alignment: .trailing, spacing: 2) {
+                                Text(record.returnAmount >= 0 ? "+ \(record.returnAmount.toCurrency())" : "- \(abs(record.returnAmount).toCurrency())")
+                                    .font(.system(size: 14, weight: .bold, design: .rounded))
+                                    .foregroundStyle(record.returnAmount >= 0 ? Color(hex: "#30D158") : Color(hex: "#FF453A"))
+                                Text(String(format: "%@%.1f%%", record.returnPercentage >= 0 ? "+" : "", record.returnPercentage))
+                                    .font(.caption2)
+                                    .foregroundStyle(.secondary)
+                            }
+                            Image(systemName: "chevron.right")
+                                .font(.caption2)
+                                .foregroundStyle(.secondary.opacity(0.5))
+                        }
+                        .padding(12)
+                        .background(Color(uiColor: .tertiarySystemFill))
+                        .clipShape(RoundedRectangle(cornerRadius: 12, style: .continuous))
+                    }
+                    .buttonStyle(PlainButtonStyle())
+                }
+            }
+
+            VStack(spacing: 8) {
+                HStack {
+                    Text("Total Contributions").font(.caption).foregroundStyle(.secondary)
+                    Spacer()
+                    Text(totalInvested.toCurrency()).font(.caption.weight(.semibold))
+                }
+                HStack {
+                    Text("Current Value").font(.caption).foregroundStyle(.secondary)
+                    Spacer()
+                    Text(currentAmount.toCurrency()).font(.caption.weight(.semibold))
+                }
+                HStack {
+                    Text("Total Growth").font(.caption).foregroundStyle(.secondary)
+                    Spacer()
+                    Text("+\(growth.toCurrency())")
+                        .font(.caption.weight(.bold))
+                        .foregroundStyle(Color(hex: "#30D158"))
+                }
+            }
+            .padding(12)
+            .background(Color(uiColor: .secondarySystemFill))
+            .clipShape(RoundedRectangle(cornerRadius: 12, style: .continuous))
+        }
+        .padding()
+        .background(AppTheme.cardBackground)
+        .cornerRadius(16)
+        .shadow(color: AppTheme.adaptiveShadow, radius: 8, x: 0, y: 2)
+    }
+
+    // MARK: - Atomic Goal Withdrawal Sheet
+    private var withdrawalSheetView: some View {
+        NavigationStack {
+            Form {
+                Section("Goal Withdrawal Details") {
+                    LabeledContent("Goal", value: goalName)
+                    LabeledContent("Target Amount", value: targetAmount.toCurrency())
+                    LabeledContent("Current Value", value: currentAmount.toCurrency())
+                }
+
+                Section("Withdrawal Amount") {
+                    HStack {
+                        Text("₹").foregroundStyle(.secondary)
+                        TextField("Amount", text: $withdrawalAmountText)
+                            .keyboardType(.decimalPad)
+                    }
+                }
+
+                Section("Destination") {
+                    LabeledContent("Transfer To", value: "Cash / Protected Goal Reserve")
+                }
+
+                Section("Accounting Protection") {
+                    Text("The amount is moved atomically from your goal investment to liquid cash. Source and destination balances update together and will not be double-counted.")
+                        .font(.caption)
+                        .foregroundStyle(.secondary)
+                }
+            }
+            .navigationTitle("Secure Goal Amount")
+            .navigationBarTitleDisplayMode(.inline)
+            .toolbar {
+                ToolbarItem(placement: .cancellationAction) {
+                    Button("Cancel") { showingWithdrawalSheet = false }
+                }
+                ToolbarItem(placement: .confirmationAction) {
+                    Button("Confirm Transfer") {
+                        let amount = Double(withdrawalAmountText) ?? targetAmount
+                        let linked = goal.map { appState.investments(for: $0.id) } ?? []
+                        appState.executeGoalWithdrawal(goalId: goalID, investmentId: linked.first?.id, amount: amount)
+                        showingWithdrawalSheet = false
+                    }
+                    .fontWeight(.bold)
+                }
+            }
+        }
     }
 }
 

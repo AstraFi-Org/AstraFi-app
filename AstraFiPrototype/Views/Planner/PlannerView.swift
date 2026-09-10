@@ -178,11 +178,6 @@ struct PlannerView: View {
                     )
                 }
 
-                // MARK: - Emergency Fund Planning Controls
-                EmergencyFundSectionView(
-                    state: emergencyFundState,
-                    parts: [.contribution, .allocation]
-                )
 
                 // MARK: - Financial Decision Center
                 FinancialDecisionCenterSection()
@@ -414,36 +409,6 @@ struct PlannerView: View {
         .navigationDestination(isPresented: $efState.showFundSetup) {
             EmergencyFundSetupView(plannerState: emergencyFundState)
                 .environment(appState)
-        }
-        .navigationDestination(isPresented: $efState.showEditSheet) {
-            ManageAllocationSheet(
-                currentHolding: emergencyFundSaved,
-                pTBills: $efState.pTBills,
-                pSavings: $efState.pSavings,
-                pSweepFD: $efState.pSweepFD,
-                onSave: { efState.saveAllocation(appState: appState) }
-            )
-            .environment(appState)
-        }
-        .navigationDestination(isPresented: $efState.showRecommendScreen) {
-            AllocationRecommendationScreen(
-                currentHolding: emergencyFundSaved,
-                riskTolerance: profile?.basicDetails.riskTolerance ?? .medium,
-                pTBills: $efState.pTBills,
-                pSavings: $efState.pSavings,
-                pSweepFD: $efState.pSweepFD,
-                onAccept: {
-                    efState.saveAllocation(appState: appState)
-                    efState.showRecommendScreen = false
-                },
-                onCustomize: {
-                    efState.showRecommendScreen = false
-                    DispatchQueue.main.asyncAfter(deadline: .now() + 0.35) {
-                        efState.showEditSheet = true
-                    }
-                }
-            )
-            .environment(appState)
         }
         .sheet(isPresented: $showCompanyAnalyzer)  { CompanyAnalyzerView() }
     }

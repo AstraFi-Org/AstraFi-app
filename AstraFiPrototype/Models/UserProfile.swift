@@ -21,6 +21,18 @@ struct AstraUserProfile: Codable, Identifiable, Equatable {
     // Kept optional so profiles saved before this feature remain decodable.
     var emergencyFundManualAmount: Double? = nil
     var emergencyFundLinkedInvestmentIDs: [UUID]? = nil
+    var performanceRecords: [InvestmentPerformanceRecord]? = []
+    var transferHistory: [FinancialTransferRecord]? = []
+
+    var safePerformanceRecords: [InvestmentPerformanceRecord] {
+        get { performanceRecords ?? [] }
+        set { performanceRecords = newValue }
+    }
+
+    var safeTransferHistory: [FinancialTransferRecord] {
+        get { transferHistory ?? [] }
+        set { transferHistory = newValue }
+    }
 
     mutating func updateManualAdjustment(for type: AstraInvestmentType, targetAmount: Double) {
         let manualName = "Manual \(type.rawValue) Adjustment"
@@ -72,6 +84,40 @@ struct AstraEmergencyFundAllocation: Codable, Equatable {
     var sweepInFD: Double = 0          // Percentage (0-100)
     
     var isAllocatedByUser: Bool = false
+    var status: String? = "planned" // "planned" vs "active"
+}
+
+// MARK: - Investment Performance Record
+struct InvestmentPerformanceRecord: Codable, Identifiable, Equatable {
+    var id: UUID = UUID()
+    var investmentId: UUID? = nil
+    var goalId: UUID? = nil
+    var period: String               // e.g. "September 2026"
+    var openingValue: Double = 0
+    var closingValue: Double = 0
+    var returnAmount: Double = 0
+    var returnPercentage: Double = 0
+    var recordType: String = "investment_return" // "investment_return", "growth"
+    var recordedAt: Date = Date()
+    var note: String? = nil
+}
+
+// MARK: - Financial Transfer Record & Types
+enum FinancialTransferType: String, Codable, CaseIterable {
+    case goalAchievementWithdrawal = "Goal Achievement Withdrawal"
+    case returnRealization = "Return Realization"
+    case allocationExecution = "Allocation Execution"
+    case manualTransfer = "Manual Transfer"
+}
+
+struct FinancialTransferRecord: Codable, Identifiable, Equatable {
+    var id: UUID = UUID()
+    var date: Date = Date()
+    var fromEntity: String
+    var toEntity: String
+    var amount: Double
+    var transferType: FinancialTransferType
+    var note: String? = nil
 }
 
 extension Sequence where Element: Identifiable {
@@ -164,8 +210,19 @@ struct AstraInvestment: Codable, Identifiable, Equatable {
     var createdAt: Date = Date()
     var brokerSource: String?
     var brokerInstrumentID: String?
-    
     var installments: [AstraInvestmentTransaction] = []
+    var status: AstraInvestmentStatus? = .active
+
+    var isLinked: Bool {
+        brokerSource != nil && !(brokerSource?.isEmpty ?? true)
+    }
+}
+
+enum AstraInvestmentStatus: String, Codable, CaseIterable {
+    case planned = "planned"
+    case active = "active"
+    case completed = "completed"
+    case withdrawn = "withdrawn"
 }
 
 struct AstraInvestmentTransaction: Codable, Identifiable, Equatable {
@@ -609,6 +666,16 @@ struct AstraLiabilities: Codable, Equatable {
     }
 }
 
+enum GoalStrategyStatus: String, Codable, CaseIterable {
+    case planned = "planned"
+    case active = "active"
+    case progressing = "progressing"
+    case goalAchieved = "goalAchieved"
+    case protection = "protection"
+    case completed = "completed"
+    case cancelled = "cancelled"
+}
+
 struct AstraGoal: Codable, Identifiable, Equatable {
     var id: UUID = UUID()
     var goalName: String
@@ -617,8 +684,29 @@ struct AstraGoal: Codable, Identifiable, Equatable {
     var manualSavingsContribution: Double = 0
     var startDate: Date = Date()
     var targetDate: Date
+    var status: GoalStrategyStatus = .active
+    var protectedCashAmount: Double = 0
+    var isProtectionModeEnabled: Bool = false
+    var achievementMessageDismissed: Bool = false
 
-    init(id: UUID = UUID(), goalName: String, targetAmount: Double, currentAmount: Double, manualSavingsContribution: Double = 0, startDate: Date = Date(), targetDate: Date) {
+    enum CodingKeys: String, CodingKey {
+        case id, goalName, targetAmount, currentAmount, manualSavingsContribution, startDate, targetDate
+        case status, protectedCashAmount, isProtectionModeEnabled, achievementMessageDismissed
+    }
+
+    init(
+        id: UUID = UUID(),
+        goalName: String,
+        targetAmount: Double,
+        currentAmount: Double,
+        manualSavingsContribution: Double = 0,
+        startDate: Date = Date(),
+        targetDate: Date,
+        status: GoalStrategyStatus = .active,
+        protectedCashAmount: Double = 0,
+        isProtectionModeEnabled: Bool = false,
+        achievementMessageDismissed: Bool = false
+    ) {
         self.id = id
         self.goalName = goalName
         self.targetAmount = targetAmount
@@ -626,6 +714,25 @@ struct AstraGoal: Codable, Identifiable, Equatable {
         self.manualSavingsContribution = manualSavingsContribution
         self.startDate = startDate
         self.targetDate = targetDate
+        self.status = status
+        self.protectedCashAmount = protectedCashAmount
+        self.isProtectionModeEnabled = isProtectionModeEnabled
+        self.achievementMessageDismissed = achievementMessageDismissed
+    }
+
+    init(from decoder: Decoder) throws {
+        let container = try decoder.container(keyedBy: CodingKeys.self)
+        id = try container.decodeIfPresent(UUID.self, forKey: .id) ?? UUID()
+        goalName = try container.decode(String.self, forKey: .goalName)
+        targetAmount = try container.decode(Double.self, forKey: .targetAmount)
+        currentAmount = try container.decode(Double.self, forKey: .currentAmount)
+        manualSavingsContribution = try container.decodeIfPresent(Double.self, forKey: .manualSavingsContribution) ?? 0
+        startDate = try container.decodeIfPresent(Date.self, forKey: .startDate) ?? Date()
+        targetDate = try container.decode(Date.self, forKey: .targetDate)
+        status = try container.decodeIfPresent(GoalStrategyStatus.self, forKey: .status) ?? .active
+        protectedCashAmount = try container.decodeIfPresent(Double.self, forKey: .protectedCashAmount) ?? 0
+        isProtectionModeEnabled = try container.decodeIfPresent(Bool.self, forKey: .isProtectionModeEnabled) ?? false
+        achievementMessageDismissed = try container.decodeIfPresent(Bool.self, forKey: .achievementMessageDismissed) ?? false
     }
 }
 
@@ -779,6 +886,14 @@ extension AstraGoal {
         if incoming.currentAmount > 0 {
             result.currentAmount = incoming.currentAmount
         }
+        if result.status == .active && incoming.status != .active {
+            result.status = incoming.status
+        }
+        if incoming.protectedCashAmount > 0 {
+            result.protectedCashAmount = incoming.protectedCashAmount
+        }
+        result.isProtectionModeEnabled = incoming.isProtectionModeEnabled || result.isProtectionModeEnabled
+        result.achievementMessageDismissed = incoming.achievementMessageDismissed || result.achievementMessageDismissed
         return result
     }
 }
@@ -845,6 +960,7 @@ extension AstraInvestment {
         if let gId = incoming.associatedGoalID { result.associatedGoalID = gId }
         if let bs = incoming.brokerSource { result.brokerSource = bs }
         if let bi = incoming.brokerInstrumentID { result.brokerInstrumentID = bi }
+        if let st = incoming.status { result.status = st }
 
         // Merge transactions idempotently
         var combinedTxs = self.installments

@@ -752,6 +752,7 @@ struct EmergencyFundSetupView: View {
 
     @State private var manualAmount: Double = 0
     @State private var selectedInvestmentIDs: Set<UUID> = []
+    @State private var showAllocationScreen = false
 
     init(plannerState: EmergencyFundSectionState) {
         self.plannerState = plannerState
@@ -797,6 +798,36 @@ struct EmergencyFundSetupView: View {
                 Text("Use this for cash or savings that is not already listed as an investment.")
                     .font(.caption)
                     .foregroundStyle(.secondary)
+            }
+
+            Section {
+                HStack {
+                    Text("Allocation")
+                    Spacer()
+                    if totalTracked == 0 {
+                        Text("No Allocation")
+                            .font(.system(size: 13, weight: .medium, design: .rounded))
+                            .foregroundStyle(.secondary)
+                            .padding(.horizontal, 14)
+                            .padding(.vertical, 7)
+                            .background(Color(uiColor: .tertiarySystemGroupedBackground))
+                            .clipShape(Capsule())
+                    } else {
+                        Button {
+                            showAllocationScreen = true
+                        } label: {
+                            let hasAllocation = plannerState.pTBills > 0 || plannerState.pSavings > 0 || plannerState.pSweepFD > 0
+                            Text(hasAllocation ? "Manage" : "Allocate")
+                                .font(.system(size: 13, weight: .semibold, design: .rounded))
+                                .foregroundStyle(.white)
+                                .padding(.horizontal, 14)
+                                .padding(.vertical, 7)
+                                .background(AppTheme.auraIndigo)
+                                .clipShape(Capsule())
+                        }
+                        .buttonStyle(PlainButtonStyle())
+                    }
+                }
             }
 
             Section {
@@ -861,6 +892,19 @@ struct EmergencyFundSetupView: View {
         }
         .navigationTitle("Start Emergency Fund")
         .navigationBarTitleDisplayMode(.inline)
+        .navigationDestination(isPresented: $showAllocationScreen) {
+            AllocationRecommendationScreen(
+                currentHolding: totalTracked,
+                riskTolerance: profile?.basicDetails.riskTolerance ?? .medium,
+                pTBills: $plannerState.pTBills,
+                pSavings: $plannerState.pSavings,
+                pSweepFD: $plannerState.pSweepFD,
+                onSave: {
+                    plannerState.saveAllocation(appState: appState)
+                }
+            )
+            .environment(appState)
+        }
         .toolbar {
             ToolbarItem(placement: .confirmationAction) {
                 Button("Save") {
@@ -922,39 +966,36 @@ struct ManageAllocationSheet: View {
     private func estReturn(pct: Double, rate: Double) -> String { "Est. return: \(( currentHolding * pct/100 * rate).toCurrency(compact: true))/yr" }
 
     var body: some View {
-        NavigationStack {
-            Form {
-                Section("Summary") {
-                    VStack(alignment: .leading, spacing: 8) {
-                        lv("Total Holding", value: currentHolding.toCurrency())
-                        lv("Allocated",     value: String(format: "%.0f%%", total),           vc: AppTheme.auraGreen)
-                        lv("Unallocated",   value: String(format: "%.0f%%", max(0,100-total)), vc: .secondary)
+        Form {
+            Section("Summary") {
+                VStack(alignment: .leading, spacing: 8) {
+                    lv("Total Holding", value: currentHolding.toCurrency())
+                    lv("Allocated",     value: String(format: "%.0f%%", total),           vc: AppTheme.auraGreen)
+                    lv("Unallocated",   value: String(format: "%.0f%%", max(0,100-total)), vc: .secondary)
+                }.padding(.vertical, 4)
+            }
+            Section { sr("Treasury Bills", sub: String(format: "~%.1f%% p.a. · T+2 liquidity",   EFInstrumentRate.treasuryBills*100),  eR: estReturn(pct: pTBills,  rate: EFInstrumentRate.treasuryBills),  ic: "building.columns.fill", cl: Color(hex: "#30D158"), v: tBillsBinding)
+                sr("Saving Account", sub: String(format: "~%.1f%% p.a. · Instant access",  EFInstrumentRate.savingsAccount*100), eR: estReturn(pct: pSavings, rate: EFInstrumentRate.savingsAccount), ic: "banknote.fill",         cl: Color(hex: "#007AFF"), v: savingsBinding)
+                sr("Sweep-in FD",    sub: String(format: "~%.1f%% p.a. · Next-day access", EFInstrumentRate.sweepInFD*100),      eR: estReturn(pct: pSweepFD, rate: EFInstrumentRate.sweepInFD),      ic: "arrow.2.squarepath",    cl: Color(hex: "#FF9F0A"), v: sweepFDBinding)
+            } header: { Text("Instruments") } footer: { Text("Total always stays at 100%.") }
+
+            if currentHolding > 0 {
+                Section("Projected Annual Returns") {
+                    pr("Treasury Bills", pct: pTBills,  rate: EFInstrumentRate.treasuryBills,  cl: Color(hex: "#30D158"))
+                    pr("Saving Account", pct: pSavings, rate: EFInstrumentRate.savingsAccount, cl: Color(hex: "#007AFF"))
+                    pr("Sweep-in FD",    pct: pSweepFD, rate: EFInstrumentRate.sweepInFD,      cl: Color(hex: "#FF9F0A"))
+                    Divider()
+                    HStack {
+                        VStack(alignment: .leading, spacing: 3) { Text("Blended Return").font(.system(size: 13)).foregroundStyle(.secondary); Text(String(format: "~%.2f%% p.a.", blendedReturn*100)).font(.system(size: 17, weight: .bold)).foregroundStyle(AppTheme.auraIndigo).contentTransition(.numericText()) }
+                        Spacer()
+                        VStack(alignment: .trailing, spacing: 3) { Text("Est. Annual Earnings").font(.system(size: 13)).foregroundStyle(.secondary); Text("+\(totalAnnualEarnings.toCurrency(compact: true))").font(.system(size: 17, weight: .bold)).foregroundStyle(Color(hex: "#30D158")).contentTransition(.numericText()) }
                     }.padding(.vertical, 4)
                 }
-                Section { sr("Treasury Bills", sub: String(format: "~%.1f%% p.a. · T+2 liquidity",   EFInstrumentRate.treasuryBills*100),  eR: estReturn(pct: pTBills,  rate: EFInstrumentRate.treasuryBills),  ic: "building.columns.fill", cl: Color(hex: "#30D158"), v: tBillsBinding)
-                    sr("Saving Account", sub: String(format: "~%.1f%% p.a. · Instant access",  EFInstrumentRate.savingsAccount*100), eR: estReturn(pct: pSavings, rate: EFInstrumentRate.savingsAccount), ic: "banknote.fill",         cl: Color(hex: "#007AFF"), v: savingsBinding)
-                    sr("Sweep-in FD",    sub: String(format: "~%.1f%% p.a. · Next-day access", EFInstrumentRate.sweepInFD*100),      eR: estReturn(pct: pSweepFD, rate: EFInstrumentRate.sweepInFD),      ic: "arrow.2.squarepath",    cl: Color(hex: "#FF9F0A"), v: sweepFDBinding)
-                } header: { Text("Instruments") } footer: { Text("Total always stays at 100%.") }
-
-                if currentHolding > 0 {
-                    Section("Projected Annual Returns") {
-                        pr("Treasury Bills", pct: pTBills,  rate: EFInstrumentRate.treasuryBills,  cl: Color(hex: "#30D158"))
-                        pr("Saving Account", pct: pSavings, rate: EFInstrumentRate.savingsAccount, cl: Color(hex: "#007AFF"))
-                        pr("Sweep-in FD",    pct: pSweepFD, rate: EFInstrumentRate.sweepInFD,      cl: Color(hex: "#FF9F0A"))
-                        Divider()
-                        HStack {
-                            VStack(alignment: .leading, spacing: 3) { Text("Blended Return").font(.system(size: 13)).foregroundStyle(.secondary); Text(String(format: "~%.2f%% p.a.", blendedReturn*100)).font(.system(size: 17, weight: .bold)).foregroundStyle(AppTheme.auraIndigo).contentTransition(.numericText()) }
-                            Spacer()
-                            VStack(alignment: .trailing, spacing: 3) { Text("Est. Annual Earnings").font(.system(size: 13)).foregroundStyle(.secondary); Text("+\(totalAnnualEarnings.toCurrency(compact: true))").font(.system(size: 17, weight: .bold)).foregroundStyle(Color(hex: "#30D158")).contentTransition(.numericText()) }
-                        }.padding(.vertical, 4)
-                    }
-                }
             }
-            .navigationTitle("Manage Allocation").navigationBarTitleDisplayMode(.inline)
-            .toolbar {
-//                ToolbarItem(placement: .cancellationAction) { Button("Cancel") { dismiss() } }
-                ToolbarItem(placement: .confirmationAction) { Button("Save") { onSave(); dismiss() }.fontWeight(.semibold) }
-            }
+        }
+        .navigationTitle("Manage Allocation").navigationBarTitleDisplayMode(.inline)
+        .toolbar {
+            ToolbarItem(placement: .confirmationAction) { Button("Save") { onSave(); dismiss() }.fontWeight(.semibold) }
         }
     }
 
@@ -1003,19 +1044,27 @@ private struct InstrumentInfoContent: Identifiable {
 
 // MARK: - Allocation Recommendation Screen
 struct AllocationRecommendationScreen: View {
+    @Environment(\.dismiss) private var dismiss
     @Environment(AppStateManager.self) var appState
     @Environment(\.colorScheme) private var colorScheme
 
     let currentHolding: Double
     let riskTolerance: AstraRiskTolerance
     @Binding var pTBills: Double; @Binding var pSavings: Double; @Binding var pSweepFD: Double
-    var onAccept: () -> Void; var onCustomize: () -> Void
+    var onSave: () -> Void
 
     @State private var activeInfo: InstrumentInfoContent? = nil
     @State private var expandedHowTo: String? = nil
     @State private var activeGuide: HowToInvestGuide? = nil
+    @State private var showManageScreen = false
+    @State private var selectedPerformanceRecord: InvestmentPerformanceRecord? = nil
 
     private var rec: (t: Double, s: Double, f: Double) { switch riskTolerance { case .low: (20,50,30); case .medium: (35,35,30); case .high: (50,25,25) } }
+    private var hasCustomAllocation: Bool { pTBills > 0 || pSavings > 0 || pSweepFD > 0 }
+    private var currentT: Double { hasCustomAllocation ? pTBills : rec.t }
+    private var currentS: Double { hasCustomAllocation ? pSavings : rec.s }
+    private var currentF: Double { hasCustomAllocation ? pSweepFD : rec.f }
+
     private var riskLabel: String { switch riskTolerance { case .low: "Conservative"; case .medium: "Balanced"; case .high: "Growth-oriented" } }
     private var riskColor: Color  { switch riskTolerance { case .low: Color(hex: "#30D158"); case .medium: Color(hex: "#007AFF"); case .high: Color(hex: "#FF9F0A") } }
     private var riskRationale: String { switch riskTolerance {
@@ -1023,7 +1072,7 @@ struct AllocationRecommendationScreen: View {
         case .medium: return "A balanced split gives good liquidity with slightly better returns."
         case .high:   return "You can tolerate lower immediate liquidity for better returns via T-Bills."
     }}
-    private var blendedReturn: Double { (rec.t/100*EFInstrumentRate.treasuryBills)+(rec.s/100*EFInstrumentRate.savingsAccount)+(rec.f/100*EFInstrumentRate.sweepInFD) }
+    private var blendedReturn: Double { (currentT/100*EFInstrumentRate.treasuryBills)+(currentS/100*EFInstrumentRate.savingsAccount)+(currentF/100*EFInstrumentRate.sweepInFD) }
     private var annualReturn: Double { currentHolding * blendedReturn }
 
     var body: some View {
@@ -1032,9 +1081,10 @@ struct AllocationRecommendationScreen: View {
                 profileBadge; rationaleView
                 instrumentsSection
                 returnSummary; actionButtons
+                monthlyPerformanceSection
             }.padding(.horizontal, 20).padding(.top, 8).padding(.bottom, 32)
         }
-        .navigationTitle("Recommended Plan")
+        .navigationTitle(hasCustomAllocation ? "Allocation Plan" : "Recommended Plan")
         .navigationBarTitleDisplayMode(.inline)
         .background(Color(uiColor: .systemGroupedBackground).ignoresSafeArea())
         .toolbarBackground(Color(uiColor: .systemGroupedBackground), for: .navigationBar)
@@ -1050,6 +1100,21 @@ struct AllocationRecommendationScreen: View {
             }
         }
         .sheet(item: $activeGuide) { HowToInvestFullGuideSheet(guide: $0) }
+        .sheet(item: $selectedPerformanceRecord) { record in
+            PerformanceRecordDetailSheet(record: record)
+        }
+        .navigationDestination(isPresented: $showManageScreen) {
+            ManageAllocationSheet(
+                currentHolding: currentHolding,
+                pTBills: $pTBills,
+                pSavings: $pSavings,
+                pSweepFD: $pSweepFD,
+                onSave: {
+                    onSave()
+                }
+            )
+            .environment(appState)
+        }
     }
 
     private var profileBadge: some View {
@@ -1076,10 +1141,10 @@ struct AllocationRecommendationScreen: View {
 
     private var instrumentsSection: some View {
         VStack(alignment: .leading, spacing: 14) {
-            Text("Illustrative Allocation").font(.system(size: 15, weight: .semibold, design: .rounded))
-            instrRow(name: "Treasury Bills", icon: "building.columns.fill", color: Color(hex: "#30D158"), pct: rec.t, rate: EFInstrumentRate.treasuryBills,  liq: "T+2 access",     info: .treasuryBills, guide: .treasuryBills)
-            instrRow(name: "Saving Account", icon: "banknote.fill",         color: Color(hex: "#007AFF"), pct: rec.s, rate: EFInstrumentRate.savingsAccount, liq: "Instant access", info: .savingsAccount, guide: .savingsAccount)
-            instrRow(name: "Sweep-in FD",    icon: "arrow.2.squarepath",    color: Color(hex: "#FF9F0A"), pct: rec.f, rate: EFInstrumentRate.sweepInFD,      liq: "Next-day",       info: .sweepInFD, guide: .sweepInFD)
+            Text(hasCustomAllocation ? "Your Allocation" : "Illustrative Allocation").font(.system(size: 15, weight: .semibold, design: .rounded))
+            instrRow(name: "Treasury Bills", icon: "building.columns.fill", color: Color(hex: "#30D158"), pct: currentT, rate: EFInstrumentRate.treasuryBills,  liq: "T+2 access",     info: .treasuryBills, guide: .treasuryBills)
+            instrRow(name: "Saving Account", icon: "banknote.fill",         color: Color(hex: "#007AFF"), pct: currentS, rate: EFInstrumentRate.savingsAccount, liq: "Instant access", info: .savingsAccount, guide: .savingsAccount)
+            instrRow(name: "Sweep-in FD",    icon: "arrow.2.squarepath",    color: Color(hex: "#FF9F0A"), pct: currentF, rate: EFInstrumentRate.sweepInFD,      liq: "Next-day",       info: .sweepInFD, guide: .sweepInFD)
         }
     }
 
@@ -1134,8 +1199,175 @@ struct AllocationRecommendationScreen: View {
 
     private var actionButtons: some View {
         VStack(spacing: 12) {
-            Button { pTBills = rec.t; pSavings = rec.s; pSweepFD = rec.f; onAccept() } label: { Text("Apply This Plan").font(.system(size: 16, weight: .bold, design: .rounded)).foregroundStyle(.white).frame(maxWidth: .infinity).padding(.vertical, 16).background(riskColor).clipShape(RoundedRectangle(cornerRadius: 14, style: .continuous)) }.buttonStyle(PlainButtonStyle())
-            Button { pTBills = rec.t; pSavings = rec.s; pSweepFD = rec.f; onCustomize() } label: { Text("Customize Manually").font(.system(size: 15, weight: .semibold, design: .rounded)).foregroundStyle(riskColor).frame(maxWidth: .infinity).padding(.vertical, 14).background(riskColor.opacity(0.10)).clipShape(RoundedRectangle(cornerRadius: 14, style: .continuous)) }.buttonStyle(PlainButtonStyle())
+            Button {
+                if !hasCustomAllocation {
+                    pTBills = rec.t
+                    pSavings = rec.s
+                    pSweepFD = rec.f
+                }
+                onSave()
+                dismiss()
+            } label: {
+                Text(hasCustomAllocation ? "Save & Return" : "Apply This Plan")
+                    .font(.system(size: 16, weight: .bold, design: .rounded))
+                    .foregroundStyle(.white)
+                    .frame(maxWidth: .infinity)
+                    .padding(.vertical, 16)
+                    .background(riskColor)
+                    .clipShape(RoundedRectangle(cornerRadius: 14, style: .continuous))
+            }
+            .buttonStyle(PlainButtonStyle())
+
+            Button {
+                if !hasCustomAllocation {
+                    pTBills = rec.t
+                    pSavings = rec.s
+                    pSweepFD = rec.f
+                }
+                showManageScreen = true
+            } label: {
+                Text(hasCustomAllocation ? "Customize Split" : "Customize Manually")
+                    .font(.system(size: 15, weight: .semibold, design: .rounded))
+                    .foregroundStyle(riskColor)
+                    .frame(maxWidth: .infinity)
+                    .padding(.vertical, 14)
+                    .background(riskColor.opacity(0.10))
+                    .clipShape(RoundedRectangle(cornerRadius: 14, style: .continuous))
+            }
+            .buttonStyle(PlainButtonStyle())
+        }
+    }
+
+    private var monthlyPerformanceSection: some View {
+        let monthlyEstimate = annualReturn / 12.0
+        let savedRecords = appState.currentProfile?.safePerformanceRecords ?? []
+        let displayRecords: [InvestmentPerformanceRecord] = savedRecords.isEmpty ? [
+            InvestmentPerformanceRecord(
+                period: "September 2026",
+                openingValue: currentHolding,
+                closingValue: currentHolding + monthlyEstimate,
+                returnAmount: monthlyEstimate,
+                returnPercentage: (blendedReturn * 100) / 12.0,
+                recordType: "Investment growth"
+            ),
+            InvestmentPerformanceRecord(
+                period: "August 2026",
+                openingValue: max(0, currentHolding - monthlyEstimate),
+                closingValue: currentHolding,
+                returnAmount: monthlyEstimate * 0.96,
+                returnPercentage: (blendedReturn * 100 * 0.96) / 12.0,
+                recordType: "Investment growth"
+            ),
+            InvestmentPerformanceRecord(
+                period: "July 2026",
+                openingValue: max(0, currentHolding - (monthlyEstimate * 2)),
+                closingValue: max(0, currentHolding - monthlyEstimate),
+                returnAmount: monthlyEstimate * 0.92,
+                returnPercentage: (blendedReturn * 100 * 0.92) / 12.0,
+                recordType: "Investment growth"
+            )
+        ] : savedRecords
+
+        return VStack(alignment: .leading, spacing: 14) {
+            Divider().padding(.vertical, 6)
+
+            Text("Monthly Earnings & Activity")
+                .font(.system(size: 16, weight: .bold, design: .rounded))
+
+            VStack(spacing: 10) {
+                ForEach(displayRecords) { record in
+                    Button {
+                        selectedPerformanceRecord = record
+                    } label: {
+                        HStack(alignment: .center, spacing: 12) {
+                            VStack(alignment: .leading, spacing: 3) {
+                                Text(record.period)
+                                    .font(.system(size: 14, weight: .semibold, design: .rounded))
+                                    .foregroundStyle(.primary)
+                                Text(record.recordType)
+                                    .font(.system(size: 12, design: .rounded))
+                                    .foregroundStyle(.secondary)
+                            }
+                            Spacer()
+                            VStack(alignment: .trailing, spacing: 3) {
+                                Text(record.returnAmount >= 0 ? "+ \(record.returnAmount.toCurrency())" : "- \(abs(record.returnAmount).toCurrency())")
+                                    .font(.system(size: 15, weight: .bold, design: .rounded))
+                                    .foregroundStyle(record.returnAmount >= 0 ? Color(hex: "#30D158") : Color(hex: "#FF453A"))
+                                Text(String(format: "%@%.1f%%", record.returnPercentage >= 0 ? "+" : "", record.returnPercentage))
+                                    .font(.system(size: 11, weight: .medium, design: .rounded))
+                                    .foregroundStyle(.secondary)
+                            }
+                            Image(systemName: "chevron.right")
+                                .font(.system(size: 11, weight: .semibold))
+                                .foregroundStyle(.secondary.opacity(0.6))
+                        }
+                        .padding(14)
+                        .adaptivePlanCard(tint: riskColor, colorScheme: colorScheme, cornerRadius: 14, tintOpacity: 0.03)
+                    }
+                    .buttonStyle(PlainButtonStyle())
+                }
+            }
+
+            // Summary accounting cards (Never treating return as new contribution)
+            VStack(spacing: 10) {
+                HStack {
+                    Text("Total Capital Tracked")
+                        .font(.system(size: 13, design: .rounded))
+                        .foregroundStyle(.secondary)
+                    Spacer()
+                    Text(currentHolding.toCurrency())
+                        .font(.system(size: 14, weight: .semibold, design: .rounded))
+                }
+                HStack {
+                    Text("Est. Annual Return")
+                        .font(.system(size: 13, design: .rounded))
+                        .foregroundStyle(.secondary)
+                    Spacer()
+                    Text("+\(annualReturn.toCurrency())")
+                        .font(.system(size: 14, weight: .bold, design: .rounded))
+                        .foregroundStyle(Color(hex: "#30D158"))
+                }
+            }
+            .padding(14)
+            .adaptivePlanCard(tint: riskColor, colorScheme: colorScheme, cornerRadius: 14, tintOpacity: 0.04)
+        }
+    }
+}
+
+// MARK: - Performance Record Detail Sheet
+struct PerformanceRecordDetailSheet: View {
+    let record: InvestmentPerformanceRecord
+    @Environment(\.dismiss) private var dismiss
+
+    var body: some View {
+        NavigationStack {
+            List {
+                Section("Performance Summary") {
+                    LabeledContent("Period", value: record.period)
+                    LabeledContent("Return Amount", value: record.returnAmount >= 0 ? "+\(record.returnAmount.toCurrency())" : "-\(abs(record.returnAmount).toCurrency())")
+                    LabeledContent("Return %", value: String(format: "%.2f%%", record.returnPercentage))
+                    LabeledContent("Type", value: record.recordType)
+                }
+
+                Section("Value Progression") {
+                    LabeledContent("Opening Value", value: record.openingValue.toCurrency())
+                    LabeledContent("Closing Value", value: record.closingValue.toCurrency())
+                    LabeledContent("Net Change", value: record.returnAmount.toCurrency())
+                }
+
+                Section("Accounting Note") {
+                    Text("Monthly investment returns reflect asset growth and performance. They are recorded separately and are never counted as new capital contributions.")
+                        .font(.caption)
+                        .foregroundStyle(.secondary)
+                }
+            }
+            .navigationTitle("Earnings Detail")
+            .navigationBarTitleDisplayMode(.inline)
+            .toolbar {
+                ToolbarItem(placement: .confirmationAction) {
+                    Button("Done") { dismiss() }
+                }
+            }
         }
     }
 }
