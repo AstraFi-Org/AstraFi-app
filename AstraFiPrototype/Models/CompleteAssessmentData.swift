@@ -60,6 +60,7 @@ extension CompleteAssessmentData {
 
     private static func investmentEntry(from investment: AstraInvestment) -> AssessmentInvestmentEntry {
         var entry = AssessmentInvestmentEntry()
+        entry.id = investment.id
         entry.type = assessmentInvestmentType(from: investment.investmentType)
         entry.mode = investment.mode == .sip ? .sip : .lumpsum
         entry.fundName = investment.investmentName
@@ -87,6 +88,7 @@ extension CompleteAssessmentData {
 
     private static func loanEntry(from loan: AstraLoan) -> AssessmentLoanEntry {
         var entry = AssessmentLoanEntry()
+        entry.id = loan.id
         entry.type = assessmentLoanType(from: loan.loanType)
         entry.amount = numberString(loan.loanAmount)
         entry.interestRate = numberString(loan.interestRate)
@@ -102,6 +104,7 @@ extension CompleteAssessmentData {
 
     private static func insuranceEntry(from insurance: AstraInsurance) -> AssessmentInsuranceEntry {
         var entry = AssessmentInsuranceEntry()
+        entry.id = insurance.id
         entry.insurer = insurance.provider
         entry.coverAmount = numberString(insurance.sumAssured)
         entry.annualPremium = numberString(insurance.annualPremium)

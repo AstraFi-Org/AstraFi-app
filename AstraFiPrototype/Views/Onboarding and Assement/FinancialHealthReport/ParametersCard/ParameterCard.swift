@@ -64,10 +64,15 @@ struct ParameterCard: View {
                     .font(.system(size: 11, weight: .semibold)).foregroundStyle(.tertiary)
             }
             Text(summary.parameter.title).font(.subheadline).bold()
+            if summary.scoreOutOf10 > 0 || !summary.statusTitle.isEmpty {
+                Text(String(format: "%.1f / 10", summary.scoreOutOf10))
+                    .font(.caption.weight(.bold))
+                    .foregroundStyle(statusColor)
+            }
             Text(summary.description).font(.caption).foregroundStyle(.secondary).lineLimit(2)
             Spacer(minLength: 4)
             HStack(spacing: 4) {
-                Text(statusLabel).font(.caption).fontWeight(.semibold)
+                Text(summary.statusTitle.isEmpty ? statusLabel : summary.statusTitle).font(.caption).fontWeight(.semibold)
             }
             .foregroundStyle(statusColor)
             .padding(.horizontal, 8).padding(.vertical, 4)

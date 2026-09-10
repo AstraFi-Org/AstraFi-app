@@ -12,10 +12,10 @@ enum AssessmentParameter: String, CaseIterable, Identifiable, Hashable, Codable 
     var title: String {
         switch self {
         case .vitals:        return "Financial Vitals"
-        case .investment:    return "Investment"
-        case .liabilities:   return "Liabilities"
-        case .insurance:     return "Insurance"
-        case .emergencyFund: return "Emergency Fund"
+        case .investment:    return "Investment Health"
+        case .liabilities:   return "Debt Health"
+        case .insurance:     return "Risk Protection"
+        case .emergencyFund: return "Emergency Readiness"
         }
     }
 }
@@ -61,6 +61,8 @@ struct AssessmentParameterSummary: Identifiable, Hashable, Codable {
     let parameter: AssessmentParameter
     let description: String
     let status: AssessmentParameterStatus
+    var scoreOutOf10: Double = 0
+    var statusTitle: String = ""
 }
 
 struct FinancialAssessmentInsights: Hashable, Codable {
@@ -201,9 +203,13 @@ struct FinancialAssessmentInsights: Hashable, Codable {
         }
         let emergencyFund = max(0, emergencyFundRaw)
 
-        let savings = max(0, takeHomeIncome - expenses)
-        let savingsRate = takeHomeIncome > 0 ? min(1, savings / takeHomeIncome) : 0
-        let emergencyTarget = grossIncome * Threshold.emergencyFundMonths
+        let savings = takeHomeIncome - expenses
+        let savingsRate = takeHomeIncome > 0 ? savings / takeHomeIncome : 0
+        let emiForEmergency = FinancialHealthCalculations.totalMonthlyEMI(profile: profile, data: data)
+        let (essential, isEstimate) = FinancialHealthCalculations.essentialExpenses(profile: profile, fallbackExpenses: expenses)
+        let includeEMI = FinancialHealthCalculations.shouldAddEMIToEmergencyNeed(profile: profile, essential: essential, isEstimate: isEstimate)
+        let emergencyMonthlyNeed = max(1, essential + (includeEMI ? emiForEmergency : 0))
+        let emergencyTarget = FinancialHealthWeights.emergencyFundMonths * monthlyNeedSafe(emergencyMonthlyNeed, fallbackIncome: grossIncome)
         let emergencyCoverage = emergencyTarget > 0 ? emergencyFund / emergencyTarget : 0
 
         // Determine investment source:
@@ -251,7 +257,7 @@ struct FinancialAssessmentInsights: Hashable, Codable {
             hasLife = profile?.insurances.contains { [.life, .termLifeInsurance, .ulip].contains($0.insuranceType) } ?? false
         }
 
-        let debtRatio = computeDebtToIncomeRatio(profile: profile, data: data, grossIncome: grossIncome)
+        let debtRatio = FinancialHealthCalculations.computeDebtToIncomeRatio(profile: profile, data: data, grossIncome: grossIncome)
         let fixedIncome = (data != nil) ? (data?.incomeType == .fixed) : (profile?.basicDetails.incomeType == .fixed)
 
         let concerns = buildConcerns(
@@ -307,6 +313,9 @@ struct FinancialAssessmentInsights: Hashable, Codable {
     }
 
     func status(for parameter: AssessmentParameter) -> AssessmentParameterStatus {
+        if concerns.contains(where: { $0.parameter == parameter && $0.status == .critical }) {
+            return .critical
+        }
         if concerns.contains(where: { $0.parameter == parameter && $0.status == .concern }) {
             return .concern
         }
@@ -316,34 +325,21 @@ struct FinancialAssessmentInsights: Hashable, Codable {
         return .fine
     }
 
+    private var scoringSnapshot: FinancialHealthSnapshot {
+        FinancialHealthCalculations.snapshot(from: self, profile: nil, data: nil)
+    }
+
     var parameterSummaries: [AssessmentParameterSummary] {
-        [
+        let report = FinancialHealthEngine.evaluate(insights: self)
+        return report.parameters.map { result in
             AssessmentParameterSummary(
-                parameter: .vitals,
-                description: "You save \(savingRatioPercent)% of your monthly income",
-                status: status(for: .vitals)
-            ),
-            AssessmentParameterSummary(
-                parameter: .investment,
-                description: investmentSummaryText,
-                status: status(for: .investment)
-            ),
-            AssessmentParameterSummary(
-                parameter: .liabilities,
-                description: loanCount == 0 ? "No active loans" : "\(loanCount) active loan\(loanCount == 1 ? "" : "s")",
-                status: status(for: .liabilities)
-            ),
-            AssessmentParameterSummary(
-                parameter: .insurance,
-                description: insuranceSummaryText,
-                status: status(for: .insurance)
-            ),
-            AssessmentParameterSummary(
-                parameter: .emergencyFund,
-                description: "Emergency corpus \(emergencyFundAmount.toCurrency(compact: true)) / \(emergencyFundTarget.toCurrency(compact: true))",
-                status: status(for: .emergencyFund)
-            ),
-        ]
+                parameter: result.parameter,
+                description: result.oneLineReason,
+                status: result.status,
+                scoreOutOf10: result.scoreOutOf10,
+                statusTitle: result.statusTitle
+            )
+        }
     }
 
     var insuranceSummaryText: String {
@@ -360,78 +356,41 @@ struct FinancialAssessmentInsights: Hashable, Codable {
         }
     }
 
-    var savingDisciplineScore: Double {
-        let baseSaving = min(1.0, savingsRate / 0.30)
-        return hasFixedIncome ? baseSaving : min(1.0, baseSaving * 0.95)
+    var financialVitalsScore: Double {
+        FinancialHealthScoring.calculateFinancialVitals(scoringSnapshot).score
     }
 
+    var savingDisciplineScore: Double { financialVitalsScore }
+
     var debtHealthScore: Double {
-        // 1. Debt-free user gets a perfect 1.0 (10/10)
-        guard loanCount > 0, debtToIncomeRatio > 0 else { return 1.0 }
+        FinancialHealthScoring.calculateDebtHealth(scoringSnapshot).score
+    }
 
-        // 2. Base score derived from Debt-to-Income (DTI) ratio based on Indian banking standards:
-        // <= 20% DTI: Excellent (0.90 to 1.0)
-        // 20% to 35% DTI: Healthy / standard home loan benchmark (0.75 to 0.90)
-        // 35% to 50% DTI: Stretched (0.45 to 0.75)
-        // > 50% DTI: Severely overleveraged (0.10 to 0.45)
-        let baseScore: Double
-        if debtToIncomeRatio <= 0.20 {
-            baseScore = 1.0 - (debtToIncomeRatio / 0.20) * 0.10
-        } else if debtToIncomeRatio <= 0.35 {
-            let t = (debtToIncomeRatio - 0.20) / 0.15
-            baseScore = 0.90 - (t * 0.15)
-        } else if debtToIncomeRatio <= 0.50 {
-            let t = (debtToIncomeRatio - 0.35) / 0.15
-            baseScore = 0.75 - (t * 0.30)
-        } else {
-            let excess = min(0.35, debtToIncomeRatio - 0.50)
-            baseScore = max(0.10, 0.45 - (excess / 0.35) * 0.35)
-        }
+    var emergencyReadinessScore: Double {
+        FinancialHealthScoring.calculateEmergencyReadiness(scoringSnapshot).score
+    }
 
-        // 3. Penalty for high-risk unsecured debt (credit card, personal loan)
-        let riskPenalty: Double = hasHighRiskDebt ? 0.12 : 0.0
-        var score = max(0.10, baseScore - riskPenalty)
-
-        // 4. Cashflow strain check: do required EMIs exceed disposable monthly savings?
-        let totalEMI = debtToIncomeRatio * grossMonthlyIncome
-        if monthlySavings > 0 && totalEMI > monthlySavings {
-            score = min(score, 0.35)
-        } else if monthlySavings <= 0 && totalEMI > 0 {
-            score = min(score, 0.25)
-        }
-
-        return max(0.10, min(1.0, score))
+    var investmentHealthScore: Double {
+        FinancialHealthScoring.calculateInvestmentHealth(scoringSnapshot).score
     }
 
     var riskProtectionScore: Double {
-        if hasHealthInsurance && hasLifeInsurance {
-            return 0.95
-        } else if hasHealthInsurance {
-            return adultDependents == 0 ? 0.90 : 0.75
-        } else if hasLifeInsurance {
-            return 0.65
-        } else if insuranceCount > 0 {
-            return 0.45
-        } else {
-            return 0.20
-        }
+        FinancialHealthScoring.calculateRiskProtection(scoringSnapshot).score
     }
 
     var radarValues: [(String, Double, Double)] {
         [
-            ("Saving Discipline",   savingDisciplineScore, 0.70),
+            ("Financial Vitals",    financialVitalsScore, 0.75),
             ("Debt Health",         debtHealthScore, 0.75),
-            ("Emergency Readiness", min(1.0, emergencyCoverageRatio), 0.75),
-            ("Investment Balance",  investmentBalanceScore, 0.65),
-            ("Risk Protection",     riskProtectionScore, 0.55),
+            ("Emergency Readiness", emergencyReadinessScore, 0.75),
+            ("Investment Health",   investmentHealthScore, 0.70),
+            ("Risk Protection",     riskProtectionScore, 0.70),
         ]
     }
 
     var overallScore: Double {
-        let values = radarValues.map { $0.1 }
-        guard !values.isEmpty else { return 0 }
-        let avg = values.reduce(0.0, +) / Double(values.count)
-        return min(100, max(0, avg * 100))
+        let scores = FinancialHealthScoring.scores(for: scoringSnapshot)
+        return scores.overall
     }
 
     var statusTitle: String {
@@ -439,16 +398,26 @@ struct FinancialAssessmentInsights: Hashable, Codable {
     }
 
     static func statusTitle(for score: Int) -> String {
-        score >= 80 ? "Excellent" : score >= 70 ? "Good" : "Needs Work"
+        FinancialHealthStatusBand.overallTitle(for: score)
+    }
+
+    var expenseRatio: Double {
+        monthlyIncome > 0 ? monthlyExpenses / monthlyIncome : 0
+    }
+
+    var monthlySurplus: Double { monthlyIncome - monthlyExpenses }
+
+    var emergencyCoverageMonths: Double {
+        emergencyCoverageRatio * FinancialHealthWeights.emergencyFundMonths
     }
 
     var emergencyStatusMessage: String {
         if emergencyFundAmount <= 0 {
-            return "No emergency fund found. Target at least \(emergencyFundTarget.toCurrency(compact: true)) (6× income)."
+            return "No emergency fund found. Target at least \(emergencyFundTarget.toCurrency(compact: true)) (about 6 months of essential expenses)."
         }
         if emergencyFundAmount < emergencyFundTarget {
             let shortBy = emergencyFundTarget - emergencyFundAmount
-            return "Emergency fund is partial, increase by \(shortBy.toCurrency(compact: true)) to reach 6× monthly income."
+            return "Emergency fund is partial; increase by \(shortBy.toCurrency(compact: true)) to reach about 6 months of essential expenses."
         }
         if investmentBreakdown.lowRiskLiquidAmount <= 0 {
             return "Emergency fund is adequate, but allocate part of it to high liquidity low risk options."
@@ -463,13 +432,7 @@ struct FinancialAssessmentInsights: Hashable, Codable {
         return "\(investmentCount) investments • \(highRiskInvestmentPercent)% high-risk exposure"
     }
 
-    var investmentBalanceScore: Double {
-        guard investmentBreakdown.totalAmount > 0 else { return 0.1 }
-        let diversificationScore: Double = investmentCount >= 3 ? 1.0 : (investmentCount == 2 ? 0.75 : 0.55)
-        let riskScore: Double = investmentBreakdown.highRiskRatio >= Threshold.highRiskConcentration ? 0.35 : 1.0 - (investmentBreakdown.highRiskRatio * 0.5)
-        let liquidityScore: Double = investmentBreakdown.lowRiskLiquidAmount > 0 ? 1.0 : 0.65
-        return max(0.1, min(1.0, diversificationScore * riskScore * liquidityScore))
-    }
+    var investmentBalanceScore: Double { investmentHealthScore }
 
     private static func buildConcerns(
         savingsRate: Double,
@@ -546,7 +509,7 @@ struct FinancialAssessmentInsights: Hashable, Codable {
                         status: .concern,
                         title: "Emergency fund not available",
                         summary: "No emergency corpus is recorded in your assessment.",
-                        recommendation: "Build an emergency fund of \(emergencyTarget.toCurrency(compact: true)) (6× monthly income)."
+                                        recommendation: "Build an emergency fund of \(emergencyTarget.toCurrency(compact: true)) (about 6 months of essential expenses)."
                     )
                 )
             } else if emergencyFund < emergencyTarget {
@@ -556,7 +519,7 @@ struct FinancialAssessmentInsights: Hashable, Codable {
                         parameter: .emergencyFund,
                         status: .watch,
                         title: "Emergency fund is under target",
-                        summary: "Emergency corpus is short by \(shortBy.toCurrency(compact: true)) versus the 6× income target.",
+                        summary: "Emergency corpus is short by \(shortBy.toCurrency(compact: true)) versus the 6-month essential-expense target.",
                         recommendation: "Top up gradually each month until you reach the full emergency fund target."
                     )
                 )
@@ -643,8 +606,13 @@ struct FinancialAssessmentInsights: Hashable, Codable {
             }
         }
 
-        _ = grossIncome // Keep available for future policy variants while preserving function signature.
         return cards
+    }
+
+    private static func monthlyNeedSafe(_ monthlyNeed: Double, fallbackIncome: Double) -> Double {
+        if monthlyNeed > 1 { return monthlyNeed }
+        if fallbackIncome > 0 { return fallbackIncome }
+        return 1
     }
 
     private static func computeDebtToIncomeRatio(
@@ -654,51 +622,11 @@ struct FinancialAssessmentInsights: Hashable, Codable {
     ) -> Double {
         guard grossIncome > 0 else { return 0 }
 
-        let totalEMI: Double
-        if let data = data {
-            totalEMI = data.loanEntries.reduce(0) { $0 + estimateEMI(for: $1) }
-        } else if let profile = profile {
-            totalEMI = profile.loans.reduce(0) { $0 + max(0, $1.calculatedEMI) }
-        } else {
-            totalEMI = 0
-        }
-
-        return max(0, min(1, totalEMI / grossIncome))
+        return FinancialHealthCalculations.computeDebtToIncomeRatio(profile: profile, data: data, grossIncome: grossIncome)
     }
 
-    private static func estimateEMI(for entry: AssessmentLoanEntry) -> Double {
-        // If explicit EMI amount is provided, use it directly
-        let explicitEMI = parseNumber(entry.emiAmount)
-        if explicitEMI > 0 {
-            return explicitEMI
-        }
-
-        let principal = parseNumber(entry.sanctionedAmount.isEmpty ? entry.amount : entry.sanctionedAmount)
-        let annualRate = parseNumber(entry.interestRate) / 100
-        
-        let repayMonthsRaw = parseNumber(entry.repaymentPeriodMonths)
-        let totalMonthsRaw = parseNumber(entry.totalLoanPeriodMonths)
-        let moraMonthsRaw  = parseNumber(entry.moratoriumPeriodMonths)
-        
-        let months: Int
-        if repayMonthsRaw > 0 {
-            months = repayMonthsRaw.safeInt
-        } else if totalMonthsRaw > 0 {
-            months = max(1, (totalMonthsRaw - moraMonthsRaw).safeInt)
-        } else {
-            months = max(1, parseNumber(entry.tenure).safeInt)
-        }
-
-        guard principal > 0 else { return 0 }
-        if annualRate <= 0 {
-            return principal / Double(months)
-        }
-
-        let monthlyRate = annualRate / 12
-        let growth = pow(1 + monthlyRate, Double(months))
-        guard (growth - 1) != 0 else { return principal / Double(months) }
-        let emi = (principal * monthlyRate * growth) / (growth - 1)
-        return emi.isFinite ? max(0, emi) : 0
+    static func estimateEMI(for entry: AssessmentLoanEntry) -> Double {
+        FinancialHealthCalculations.estimateEMI(for: entry)
     }
 
     private static func buildInvestmentBreakdown(from snapshots: [InvestmentSnapshot]) -> InvestmentRiskBreakdown {

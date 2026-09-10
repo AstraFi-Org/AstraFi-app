@@ -15,15 +15,19 @@ import SwiftUI
 // MARK: - Radar Info Sheet
 private struct RadarChartInfoSheet: View {
     let insights: FinancialAssessmentInsights
+    var parameters: [FinancialHealthParameterResult] = []
     @Environment(\.dismiss) private var dismiss
     @Environment(\.colorScheme) private var colorScheme
 
-    // Live scores — mirror radarValues exactly (0 - 10 scale)
-    private var savingScore: Double    { insights.savingDisciplineScore * 10 }
-    private var debtScore: Double      { insights.debtHealthScore * 10 }
-    private var emergencyScore: Double { min(10, insights.emergencyCoverageRatio * 10) }
-    private var investScore: Double    { insights.investmentBalanceScore * 10 }
-    private var riskScore: Double      { insights.riskProtectionScore * 10 }
+    private func scoreOutOf10(_ parameter: AssessmentParameter, fallback: Double) -> Double {
+        parameters.first(where: { $0.parameter == parameter })?.scoreOutOf10 ?? fallback
+    }
+
+    private var savingScore: Double    { scoreOutOf10(.vitals, fallback: insights.financialVitalsScore * 10) }
+    private var debtScore: Double      { scoreOutOf10(.liabilities, fallback: insights.debtHealthScore * 10) }
+    private var emergencyScore: Double { scoreOutOf10(.emergencyFund, fallback: insights.emergencyReadinessScore * 10) }
+    private var investScore: Double    { scoreOutOf10(.investment, fallback: insights.investmentHealthScore * 10) }
+    private var riskScore: Double      { scoreOutOf10(.insurance, fallback: insights.riskProtectionScore * 10) }
 
     private var savingsPct: Int        { (insights.savingsRate * 100).rounded().safeInt }
     private var dtiPct: Int            { (insights.debtToIncomeRatio * 100).rounded().safeInt }
@@ -41,7 +45,7 @@ private struct RadarChartInfoSheet: View {
                     // ── Parameter cards ──
                     VStack(spacing: 14) {
                         paramCard(
-                            title: "Saving Discipline",
+                            title: "Financial Vitals",
                             icon: "banknote",
                             accentHex: "#30D158",
                             score: savingScore,
@@ -87,19 +91,19 @@ private struct RadarChartInfoSheet: View {
                             accentHex: "#FF9F0A",
                             score: emergencyScore,
                             howLabel: insights.emergencyFundAmount > 0
-                                ? "\(insights.emergencyFundAmount.toCurrency()) saved of \(insights.emergencyFundTarget.toCurrency()) target (\(String(format: "%.1f", coverageMonths)) of 6 mo)"
+                                ? "\(insights.emergencyFundAmount.toCurrency()) saved of \(insights.emergencyFundTarget.toCurrency()) target (\(String(format: "%.1f", insights.emergencyCoverageMonths)) of 6 mo)"
                                 : "₹0 saved of \(insights.emergencyFundTarget.toCurrency()) target (0 of 6 months covered)",
-                            howDetail: "Target is 6× your gross monthly income as an instantly accessible reserve in savings or liquid funds.",
-                            insight: coverageMonths >= 6
+                            howDetail: "Target is about 6 months of essential expenses, including EMI when those obligations would continue during an income disruption.",
+                            insight: insights.emergencyCoverageMonths >= 6
                                 ? "Fully funded — you have a complete \(insights.emergencyFundAmount.toCurrency()) liquid safety buffer for unforeseen contingencies."
-                                : coverageMonths >= 3
-                                    ? "Partial coverage (\(String(format: "%.1f", coverageMonths)) months). Build another \((max(0, insights.emergencyFundTarget - insights.emergencyFundAmount)).toCurrency()) to complete your 6-month buffer."
-                                    : "Under 3 months covered. Prioritize building an emergency fund of at least \(insights.emergencyFundTarget.toCurrency()) to prevent having to borrow in emergencies."
+                                : insights.emergencyCoverageMonths >= 3
+                                    ? "Partial coverage (\(String(format: "%.1f", insights.emergencyCoverageMonths)) months). Build another \((max(0, insights.emergencyFundTarget - insights.emergencyFundAmount)).toCurrency()) to complete your 6-month buffer."
+                                    : "Under 3 months covered. Prioritize building an emergency fund of at least \(insights.emergencyFundTarget.toCurrency()) to reduce the need to borrow in emergencies."
                         )
 
                         let totalInvested = insights.investmentBreakdown.totalAmount
                         paramCard(
-                            title: "Investment Balance",
+                            title: "Investment Health",
                             icon: "chart.pie.fill",
                             accentHex: "#007AFF",
                             score: investScore,
@@ -214,7 +218,7 @@ private struct RadarChartInfoSheet: View {
                 Spacer()
 
                 // Score badge
-                Text(String(format: "%.1f", score))
+                Text(String(format: "%.1f / 10", score))
                     .font(.system(size: 15, weight: .bold, design: .rounded))
                     .foregroundStyle(scoreColor)
                     .padding(.horizontal, 10)
@@ -295,14 +299,17 @@ struct HeroCard: View {
     let score: Double
     let radarValues: [(String, Double, Double)]
     let insights: FinancialAssessmentInsights
+    var parameters: [FinancialHealthParameterResult] = []
+    var statusTitle: String? = nil
+    var scoreChange: Int? = nil
 
     @State private var showRadarInfo = false
 
     private var scoreColor: Color {
-        score >= 80 ? Color(hex: "#30D158") : score >= 70 ? Color(hex: "#FF9F0A") : Color(hex: "#FF453A")
+        FinancialHealthUIStyle.scoreColor(score.safeInt)
     }
     private var scoreLabel: String {
-        insights.statusTitle
+        statusTitle ?? insights.statusTitle
     }
 
     var body: some View {
@@ -320,6 +327,11 @@ struct HeroCard: View {
                     Text("Hi, \(name)").font(.title2).bold()
                     Text("Your financial health assessment is complete.")
                         .font(.subheadline).foregroundStyle(.secondary).lineSpacing(2)
+                    if let scoreChange {
+                        Text("\(scoreChange >= 0 ? "+" : "")\(scoreChange) since previous assessment")
+                            .font(.caption.weight(.semibold))
+                            .foregroundStyle(scoreChange >= 0 ? Color(hex: "#30D158") : Color(hex: "#FF453A"))
+                    }
                 }
                 .frame(maxWidth: .infinity, alignment: .leading)
 
@@ -364,7 +376,7 @@ struct HeroCard: View {
         .clipShape(RoundedRectangle(cornerRadius: 20, style: .continuous))
         .shadow(color: AppTheme.adaptiveShadow, radius: 14, x: 0, y: 6)
         .sheet(isPresented: $showRadarInfo) {
-            RadarChartInfoSheet(insights: insights)
+            RadarChartInfoSheet(insights: insights, parameters: parameters)
                 .presentationDetents([.large])
                 .presentationDragIndicator(.visible)
         }

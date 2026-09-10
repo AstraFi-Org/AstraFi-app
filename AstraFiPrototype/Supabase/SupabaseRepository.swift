@@ -1083,11 +1083,16 @@ ins.maturityDate = row.maturityDate.flatMap { parseDate($0) }
     // MARK: - Full Sync
 
     func syncFullProfile(_ profile: AstraUserProfile, userId: UUID) async throws {
+        let deduplicatedGoals = profile.goals.deduplicated()
+        let deduplicatedInvestments = profile.investments.deduplicated()
+        let deduplicatedLoans = profile.loans.deduplicated()
+        let deduplicatedInsurances = profile.insurances.deduplicated()
+
         try await saveUserProfile(profile, userId: userId)
-        for goal in profile.goals { try await saveGoal(goal, userId: userId) }
-        for inv  in profile.investments { try await saveInvestment(inv, userId: userId) }
-        for loan in profile.loans { try await saveLoan(loan, userId: userId) }
-        for ins  in profile.insurances { try await saveInsurance(ins, userId: userId) }
+        for goal in deduplicatedGoals { try await saveGoal(goal, userId: userId) }
+        for inv  in deduplicatedInvestments { try await saveInvestment(inv, userId: userId) }
+        for loan in deduplicatedLoans { try await saveLoan(loan, userId: userId) }
+        for ins  in deduplicatedInsurances { try await saveInsurance(ins, userId: userId) }
         for (key, entry) in profile.monthlyCashflowSnapshots {
             try await saveCashflowSnapshot(entry, monthKey: key, userId: userId)
         }
@@ -1096,6 +1101,34 @@ ins.maturityDate = row.maturityDate.flatMap { parseDate($0) }
         }
         if let allocation = profile.emergencyFundAllocation {
             try await saveEmergencyFundAllocation(allocation, userId: userId)
+        }
+
+        // Reconcile and remove stale/duplicate rows from remote DB
+        Task {
+            if let existingGoals = try? await self.fetchGoals(userId: userId) {
+                let activeIDs = Set(deduplicatedGoals.map(\.id))
+                for g in existingGoals where !activeIDs.contains(g.id) {
+                    _ = try? await self.deleteGoal(g.id)
+                }
+            }
+            if let existingInvestments = try? await self.fetchInvestments(userId: userId) {
+                let activeIDs = Set(deduplicatedInvestments.map(\.id))
+                for inv in existingInvestments where !activeIDs.contains(inv.id) {
+                    _ = try? await self.deleteInvestment(inv.id)
+                }
+            }
+            if let existingLoans = try? await self.fetchLoans(userId: userId) {
+                let activeIDs = Set(deduplicatedLoans.map(\.id))
+                for l in existingLoans where !activeIDs.contains(l.id) {
+                    _ = try? await self.deleteLoan(l.id)
+                }
+            }
+            if let existingInsurances = try? await self.fetchInsurances(userId: userId) {
+                let activeIDs = Set(deduplicatedInsurances.map(\.id))
+                for ins in existingInsurances where !activeIDs.contains(ins.id) {
+                    _ = try? await self.deleteInsurance(ins.id)
+                }
+            }
         }
     }
 
@@ -1134,12 +1167,33 @@ ins.maturityDate = row.maturityDate.flatMap { parseDate($0) }
         let assetsRow: AssetsFetchRow?      = try? await supabase.from("assets").select().eq("user_id", value: userId.uuidString).single().execute().value
         let liabilitiesRow: LiabilitiesFetchRow? = try? await supabase.from("liabilities").select().eq("user_id", value: userId.uuidString).single().execute().value
 
-        let goals       = (try? await fetchGoals(userId: userId)) ?? []
-        let investments = (try? await fetchInvestments(userId: userId)) ?? []
-        let loans       = (try? await fetchLoans(userId: userId)) ?? []
-        let insurances  = (try? await fetchInsurances(userId: userId)) ?? []
-        let snapshots   = (try? await fetchCashflowSnapshots(userId: userId)) ?? [:]
-        let assessments = (try? await fetchHealthAssessments(userId: userId)) ?? []
+        let rawGoals       = (try? await fetchGoals(userId: userId)) ?? []
+        let rawInvestments = (try? await fetchInvestments(userId: userId)) ?? []
+        let rawLoans       = (try? await fetchLoans(userId: userId)) ?? []
+        let rawInsurances  = (try? await fetchInsurances(userId: userId)) ?? []
+        let snapshots      = (try? await fetchCashflowSnapshots(userId: userId)) ?? [:]
+        let assessments    = (try? await fetchHealthAssessments(userId: userId)) ?? []
+
+        // Apply entity deduplication
+        let goals       = rawGoals.deduplicated()
+        let investments = rawInvestments.deduplicated()
+        let loans       = rawLoans.deduplicated()
+        let insurances  = rawInsurances.deduplicated()
+
+        // Clean up redundant database rows if duplicates were found
+        let redundantGoalIDs = Set(rawGoals.map(\.id)).subtracting(Set(goals.map(\.id)))
+        let redundantInvIDs = Set(rawInvestments.map(\.id)).subtracting(Set(investments.map(\.id)))
+        let redundantLoanIDs = Set(rawLoans.map(\.id)).subtracting(Set(loans.map(\.id)))
+        let redundantInsIDs = Set(rawInsurances.map(\.id)).subtracting(Set(insurances.map(\.id)))
+
+        if !redundantGoalIDs.isEmpty || !redundantInvIDs.isEmpty || !redundantLoanIDs.isEmpty || !redundantInsIDs.isEmpty {
+            Task {
+                for gid in redundantGoalIDs { _ = try? await self.deleteGoal(gid) }
+                for iid in redundantInvIDs { _ = try? await self.deleteInvestment(iid) }
+                for lid in redundantLoanIDs { _ = try? await self.deleteLoan(lid) }
+                for inId in redundantInsIDs { _ = try? await self.deleteInsurance(inId) }
+            }
+        }
 
         let signUp = AstraSignUp(signUpName: profileRow.signUpName ?? "", email: "", password: "")
         let basicDetails = AstraBasicDetails(

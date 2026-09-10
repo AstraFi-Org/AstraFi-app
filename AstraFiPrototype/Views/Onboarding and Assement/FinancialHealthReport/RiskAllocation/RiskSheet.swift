@@ -53,7 +53,7 @@ struct RiskSheet: View {
 
                 // Diversification status
                 Section {
-                    let score = insights.investmentBalanceScore
+                    let score = insights.investmentHealthScore
                     HStack {
                         VStack(alignment: .leading, spacing: 4) {
                             Text("Diversification Score").font(.subheadline).foregroundStyle(.secondary)

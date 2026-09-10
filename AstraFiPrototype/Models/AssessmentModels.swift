@@ -1,7 +1,7 @@
 import Foundation
 
 struct AssessmentInvestmentEntry: Identifiable {
-    let id = UUID()
+    var id: UUID = UUID()
     var type: InvestmentType = .mutualFund
     var mode: InvestmentMode = .lumpsum
     var fundName: String = ""
@@ -51,7 +51,7 @@ struct AssessmentInvestmentEntry: Identifiable {
 }
 
 struct AssessmentLoanEntry: Identifiable {
-    let id = UUID()
+    var id: UUID = UUID()
     
     // Basic Information
     var type: LoanType = .educationLoan
@@ -187,7 +187,7 @@ struct AssessmentLoanEntry: Identifiable {
 }
 
 struct AssessmentInsuranceEntry: Identifiable {
-    let id = UUID()
+    var id: UUID = UUID()
 
     var insurer: String = ""
     var coverAmount: String = ""
