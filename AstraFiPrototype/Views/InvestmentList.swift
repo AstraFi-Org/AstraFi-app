@@ -22,9 +22,27 @@ struct InvestmentList: View {
 
 #Preview {
     InvestmentList(investments: [
-        UserInvestment(name: "ICICI Bank FD", amount: 56000, category: "Debt"),
-        UserInvestment(name: "Axis Bluechip Mutual Fund", amount: 18900, category: "Equity"),
-        UserInvestment(name: "Gold ETF", amount: 10000, category: "Commodity")
-    ] as! [AstraInvestment])
+        AstraInvestment(
+            investmentType: .deposits,
+            investmentName: "ICICI Bank FD",
+            investmentAmount: 56000,
+            startDate: Date()
+        ),
+        AstraInvestment(
+            investmentType: .mutualFund,
+            subtype: .equityFund,
+            investmentName: "Axis Bluechip Mutual Fund",
+            investmentAmount: 18900,
+            startDate: Date(),
+            mode: .sip
+        ),
+        AstraInvestment(
+            investmentType: .goldETF,
+            investmentName: "Gold ETF",
+            investmentAmount: 10000,
+            startDate: Date()
+        )
+    ])
     .padding()
+    .environment(AppStateManager.withSampleData())
 }
