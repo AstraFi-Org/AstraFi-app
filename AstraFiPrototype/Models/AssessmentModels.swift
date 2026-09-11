@@ -1,7 +1,7 @@
 import Foundation
 
 struct AssessmentInvestmentEntry: Identifiable {
-    let id = UUID()
+    var id: UUID = UUID()
     var type: InvestmentType = .mutualFund
     var mode: InvestmentMode = .lumpsum
     var fundName: String = ""
@@ -51,27 +51,143 @@ struct AssessmentInvestmentEntry: Identifiable {
 }
 
 struct AssessmentLoanEntry: Identifiable {
-    let id = UUID()
-    var type: LoanType = .homeLoan
-    var amount: String = ""
-    var interestRate: String = ""
-    var tenure: String = ""
-    var moratorium: String = ""
+    var id: UUID = UUID()
+    
+    // Basic Information
+    var type: LoanType = .educationLoan
+    var lenderName: String = ""
+    var productName: String = ""
+    var schemeName: String = ""
+    var purpose: String = ""
+    var facilityType: String = ""
+    var sanctionDate: Date = Date()
+    
+    // Amount Details
+    var totalCost: String = ""
+    var requestedAmount: String = ""
+    var sanctionedAmount: String = "" // Primary Loan Amount
+    var permissibleLimit: String = ""
+    var currentOutstandingPrincipal: String = ""
+    var actualMargin: String = ""
     var insurancePremium: String = ""
-    var startDate: Date = Date()
-    var loanName: String = ""
-    var interestType: AstraInterestType = .compound
-    var frequency: AstraCompoundingFrequency = .monthly
+    
+    // Interest Details
+    var interestRate: String = ""
+    var interestRateType: InterestRateType = .floatingVariable
+    var benchmarkRate: String = "" // e.g. Repo Rate 6.50%
+    var markup: String = ""        // e.g. 2.65%
+    var creditSpread: String = ""  // e.g. 2.00%
+    var interestRestFrequency: InterestRestFrequency = .monthly
+    
+    // Repayment Timeline Details
+    var totalLoanPeriodMonths: String = ""   // e.g. 96 months
+    var moratoriumPeriodMonths: String = ""  // e.g. 55 months
+    var repaymentPeriodMonths: String = ""   // e.g. 41 months
+    var repaymentStartDate: Date?
+    var maturityDate: Date?
+    var emiAmount: String = ""               // Optional/user-entered
+    var emiFrequency: AstraEMIFrequency = .monthly
+    var emiDueDate: String = ""              // Day of month, e.g. "5"
+    
+    // Tracking & Metadata
+    var emisPaid: String = ""
+    var emisRemaining: String = ""
+    var principalPaid: String = ""
+    var interestPaid: String = ""
+    var nextEmiDate: Date?
+    var lastPaymentDate: Date?
+    var overdueAmount: String = ""
+    var overdueEmiCount: String = ""
+    
+    var prepaymentCharges: String = ""
+    var foreclosureCharges: String = ""
+    var latePaymentCharges: String = ""
+    
+    var sourceDocument: String = ""
+    var extractionConfidence: Double = 0.0
+    var userVerified: Bool = false
     var customData: [String: String] = [:]
-
+    
     enum LoanType: String, CaseIterable, Identifiable, Hashable {
         case homeLoan = "Home Loan", carLoan = "Car Loan", educationLoan = "Education Loan", businessLoan = "Business Loan", personalLoan = "Personal Loan", creditCard = "Credit Card"
         var id: String { rawValue }
     }
+    
+    enum InterestRateType: String, CaseIterable, Identifiable, Hashable {
+        case floatingVariable = "Floating / Variable"
+        case fixed = "Fixed"
+        var id: String { rawValue }
+    }
+    
+    enum InterestRestFrequency: String, CaseIterable, Identifiable, Hashable {
+        case monthly = "Monthly"
+        case quarterly = "Quarterly"
+        case halfYearly = "Half-Yearly"
+        case yearly = "Yearly"
+        var id: String { rawValue }
+    }
+    
+    // MARK: - Backward Compatibility Bridges
+    
+    var amount: String {
+        get { sanctionedAmount.isEmpty ? requestedAmount : sanctionedAmount }
+        set { sanctionedAmount = newValue }
+    }
+    
+    var loanName: String {
+        get {
+            if !schemeName.isEmpty { return schemeName }
+            if !productName.isEmpty { return productName }
+            return lenderName
+        }
+        set { schemeName = newValue }
+    }
+    
+    var tenure: String {
+        get {
+            if !repaymentPeriodMonths.isEmpty { return repaymentPeriodMonths }
+            return totalLoanPeriodMonths
+        }
+        set { repaymentPeriodMonths = newValue }
+    }
+    
+    var moratorium: String {
+        get { moratoriumPeriodMonths }
+        set { moratoriumPeriodMonths = newValue }
+    }
+    
+    var startDate: Date {
+        get { sanctionDate }
+        set { sanctionDate = newValue }
+    }
+    
+    var interestType: AstraInterestType {
+        get { interestRateType == .fixed ? .simple : .compound }
+        set { interestRateType = (newValue == .simple) ? .fixed : .floatingVariable }
+    }
+    
+    var frequency: AstraCompoundingFrequency {
+        get {
+            switch interestRestFrequency {
+            case .monthly: return .monthly
+            case .quarterly: return .quarterly
+            case .halfYearly: return .quarterly
+            case .yearly: return .yearly
+            }
+        }
+        set {
+            switch newValue {
+            case .monthly: interestRestFrequency = .monthly
+            case .quarterly: interestRestFrequency = .quarterly
+            case .yearly: interestRestFrequency = .yearly
+            case .none: interestRestFrequency = .monthly
+            }
+        }
+    }
 }
 
 struct AssessmentInsuranceEntry: Identifiable {
-    let id = UUID()
+    var id: UUID = UUID()
 
     var insurer: String = ""
     var coverAmount: String = ""

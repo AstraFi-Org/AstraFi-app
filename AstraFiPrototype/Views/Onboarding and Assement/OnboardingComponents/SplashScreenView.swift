@@ -48,7 +48,7 @@ struct SplashScreenView: View {
                             ),
                             lineWidth: 2
                         )
-                        .frame(width: 96, height: 96)
+                        .frame(width: 116, height: 116)
 
                     // Inner fill
                     //Circle()
@@ -68,7 +68,7 @@ struct SplashScreenView: View {
                         Image(.splash)
                             .resizable()
                             .scaledToFill()
-                            .frame(width: 82, height: 82)
+                            .frame(width: 102, height: 102)
                             .clipShape(Circle())
                     }
                 }

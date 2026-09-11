@@ -26,9 +26,8 @@ struct MonthlyHealthReportsView: View {
               profile.financialHealthReport != nil else { return nil }
 
         let insights = FinancialAssessmentInsights.build(profile: profile, data: nil)
-        let values = insights.radarValues.map { $0.1 }
-        let score = min(100, (values.reduce(0.0, +) / Double(values.count)) * 100).safeInt
-        let status = Self.status(for: score)
+        let score = insights.overallScore.safeInt
+        let status = FinancialAssessmentInsights.statusTitle(for: score)
         let keyInsights = insights.activeConcerns.map(\.title)
 
         return AstraHealthAssessment(
@@ -57,6 +56,7 @@ struct MonthlyHealthReportsView: View {
                     monthlyReminderCard
                 }
                 headerCard
+                FinancialHealthHistoryComparisonCard(history: reports)
                 if !hasCompletedAssessment || reports.isEmpty {
                     noAssessmentCard
                 } else {

@@ -18,6 +18,21 @@ struct AstraUserProfile: Codable, Identifiable, Equatable {
     var monthlyHealthAssessments: [AstraHealthAssessment] = []
     var isSetuConnected: Bool = false
     var emergencyFundAllocation: AstraEmergencyFundAllocation?
+    // Kept optional so profiles saved before this feature remain decodable.
+    var emergencyFundManualAmount: Double? = nil
+    var emergencyFundLinkedInvestmentIDs: [UUID]? = nil
+    var performanceRecords: [InvestmentPerformanceRecord]? = []
+    var transferHistory: [FinancialTransferRecord]? = []
+
+    var safePerformanceRecords: [InvestmentPerformanceRecord] {
+        get { performanceRecords ?? [] }
+        set { performanceRecords = newValue }
+    }
+
+    var safeTransferHistory: [FinancialTransferRecord] {
+        get { transferHistory ?? [] }
+        set { transferHistory = newValue }
+    }
 
     mutating func updateManualAdjustment(for type: AstraInvestmentType, targetAmount: Double) {
         let manualName = "Manual \(type.rawValue) Adjustment"
@@ -69,6 +84,40 @@ struct AstraEmergencyFundAllocation: Codable, Equatable {
     var sweepInFD: Double = 0          // Percentage (0-100)
     
     var isAllocatedByUser: Bool = false
+    var status: String? = "planned" // "planned" vs "active"
+}
+
+// MARK: - Investment Performance Record
+struct InvestmentPerformanceRecord: Codable, Identifiable, Equatable {
+    var id: UUID = UUID()
+    var investmentId: UUID? = nil
+    var goalId: UUID? = nil
+    var period: String               // e.g. "September 2026"
+    var openingValue: Double = 0
+    var closingValue: Double = 0
+    var returnAmount: Double = 0
+    var returnPercentage: Double = 0
+    var recordType: String = "investment_return" // "investment_return", "growth"
+    var recordedAt: Date = Date()
+    var note: String? = nil
+}
+
+// MARK: - Financial Transfer Record & Types
+enum FinancialTransferType: String, Codable, CaseIterable {
+    case goalAchievementWithdrawal = "Goal Achievement Withdrawal"
+    case returnRealization = "Return Realization"
+    case allocationExecution = "Allocation Execution"
+    case manualTransfer = "Manual Transfer"
+}
+
+struct FinancialTransferRecord: Codable, Identifiable, Equatable {
+    var id: UUID = UUID()
+    var date: Date = Date()
+    var fromEntity: String
+    var toEntity: String
+    var amount: Double
+    var transferType: FinancialTransferType
+    var note: String? = nil
 }
 
 extension Sequence where Element: Identifiable {
@@ -161,8 +210,19 @@ struct AstraInvestment: Codable, Identifiable, Equatable {
     var createdAt: Date = Date()
     var brokerSource: String?
     var brokerInstrumentID: String?
-    
     var installments: [AstraInvestmentTransaction] = []
+    var status: AstraInvestmentStatus? = .active
+
+    var isLinked: Bool {
+        brokerSource != nil && !(brokerSource?.isEmpty ?? true)
+    }
+}
+
+enum AstraInvestmentStatus: String, Codable, CaseIterable {
+    case planned = "planned"
+    case active = "active"
+    case completed = "completed"
+    case withdrawn = "withdrawn"
 }
 
 struct AstraInvestmentTransaction: Codable, Identifiable, Equatable {
@@ -606,6 +666,16 @@ struct AstraLiabilities: Codable, Equatable {
     }
 }
 
+enum GoalStrategyStatus: String, Codable, CaseIterable {
+    case planned = "planned"
+    case active = "active"
+    case progressing = "progressing"
+    case goalAchieved = "goalAchieved"
+    case protection = "protection"
+    case completed = "completed"
+    case cancelled = "cancelled"
+}
+
 struct AstraGoal: Codable, Identifiable, Equatable {
     var id: UUID = UUID()
     var goalName: String
@@ -614,8 +684,29 @@ struct AstraGoal: Codable, Identifiable, Equatable {
     var manualSavingsContribution: Double = 0
     var startDate: Date = Date()
     var targetDate: Date
+    var status: GoalStrategyStatus = .active
+    var protectedCashAmount: Double = 0
+    var isProtectionModeEnabled: Bool = false
+    var achievementMessageDismissed: Bool = false
 
-    init(id: UUID = UUID(), goalName: String, targetAmount: Double, currentAmount: Double, manualSavingsContribution: Double = 0, startDate: Date = Date(), targetDate: Date) {
+    enum CodingKeys: String, CodingKey {
+        case id, goalName, targetAmount, currentAmount, manualSavingsContribution, startDate, targetDate
+        case status, protectedCashAmount, isProtectionModeEnabled, achievementMessageDismissed
+    }
+
+    init(
+        id: UUID = UUID(),
+        goalName: String,
+        targetAmount: Double,
+        currentAmount: Double,
+        manualSavingsContribution: Double = 0,
+        startDate: Date = Date(),
+        targetDate: Date,
+        status: GoalStrategyStatus = .active,
+        protectedCashAmount: Double = 0,
+        isProtectionModeEnabled: Bool = false,
+        achievementMessageDismissed: Bool = false
+    ) {
         self.id = id
         self.goalName = goalName
         self.targetAmount = targetAmount
@@ -623,6 +714,25 @@ struct AstraGoal: Codable, Identifiable, Equatable {
         self.manualSavingsContribution = manualSavingsContribution
         self.startDate = startDate
         self.targetDate = targetDate
+        self.status = status
+        self.protectedCashAmount = protectedCashAmount
+        self.isProtectionModeEnabled = isProtectionModeEnabled
+        self.achievementMessageDismissed = achievementMessageDismissed
+    }
+
+    init(from decoder: Decoder) throws {
+        let container = try decoder.container(keyedBy: CodingKeys.self)
+        id = try container.decodeIfPresent(UUID.self, forKey: .id) ?? UUID()
+        goalName = try container.decode(String.self, forKey: .goalName)
+        targetAmount = try container.decode(Double.self, forKey: .targetAmount)
+        currentAmount = try container.decode(Double.self, forKey: .currentAmount)
+        manualSavingsContribution = try container.decodeIfPresent(Double.self, forKey: .manualSavingsContribution) ?? 0
+        startDate = try container.decodeIfPresent(Date.self, forKey: .startDate) ?? Date()
+        targetDate = try container.decode(Date.self, forKey: .targetDate)
+        status = try container.decodeIfPresent(GoalStrategyStatus.self, forKey: .status) ?? .active
+        protectedCashAmount = try container.decodeIfPresent(Double.self, forKey: .protectedCashAmount) ?? 0
+        isProtectionModeEnabled = try container.decodeIfPresent(Bool.self, forKey: .isProtectionModeEnabled) ?? false
+        achievementMessageDismissed = try container.decodeIfPresent(Bool.self, forKey: .achievementMessageDismissed) ?? false
     }
 }
 
@@ -741,5 +851,315 @@ struct CashflowEntry: Codable, Equatable {
 
     private var dailyHouseholdCombined: Double {
         groceries + dining + shopping + entertainment
+    }
+}
+
+// MARK: - Normalization & Deduplication Extensions
+
+extension String {
+    var normalizedEntityKey: String {
+        self.trimmingCharacters(in: .whitespacesAndNewlines)
+            .lowercased()
+            .components(separatedBy: .whitespacesAndNewlines)
+            .filter { !$0.isEmpty }
+            .joined(separator: " ")
+    }
+}
+
+extension AstraGoal {
+    func isEquivalent(to other: AstraGoal) -> Bool {
+        if self.id == other.id { return true }
+        let name1 = self.goalName.normalizedEntityKey
+        let name2 = other.goalName.normalizedEntityKey
+        return !name1.isEmpty && name1 == name2
+    }
+
+    func merged(with incoming: AstraGoal) -> AstraGoal {
+        var result = self
+        result.goalName = incoming.goalName.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty ? self.goalName : incoming.goalName
+        result.targetAmount = incoming.targetAmount > 0 ? incoming.targetAmount : self.targetAmount
+        result.targetDate = incoming.targetDate
+        result.startDate = min(self.startDate, incoming.startDate)
+        if incoming.manualSavingsContribution > 0 {
+            result.manualSavingsContribution = incoming.manualSavingsContribution
+        }
+        if incoming.currentAmount > 0 {
+            result.currentAmount = incoming.currentAmount
+        }
+        if result.status == .active && incoming.status != .active {
+            result.status = incoming.status
+        }
+        if incoming.protectedCashAmount > 0 {
+            result.protectedCashAmount = incoming.protectedCashAmount
+        }
+        result.isProtectionModeEnabled = incoming.isProtectionModeEnabled || result.isProtectionModeEnabled
+        result.achievementMessageDismissed = incoming.achievementMessageDismissed || result.achievementMessageDismissed
+        return result
+    }
+}
+
+extension AstraInvestment {
+    func isEquivalent(to other: AstraInvestment) -> Bool {
+        if self.id == other.id { return true }
+        
+        // Broker instrument match
+        if let b1 = self.brokerInstrumentID, !b1.isEmpty,
+           let b2 = other.brokerInstrumentID, !b2.isEmpty, b1 == b2 {
+            return true
+        }
+
+        // Mutual fund scheme code match
+        if let s1 = self.schemeCode, !s1.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty,
+           let s2 = other.schemeCode, !s2.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty,
+           s1.normalizedEntityKey == s2.normalizedEntityKey {
+            return true
+        }
+
+        // ISIN match
+        if let i1 = self.isin, !i1.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty,
+           let i2 = other.isin, !i2.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty,
+           i1.normalizedEntityKey == i2.normalizedEntityKey {
+            return true
+        }
+
+        // Stock symbol match
+        if let sym1 = self.symbol, !sym1.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty,
+           let sym2 = other.symbol, !sym2.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty,
+           sym1.normalizedEntityKey == sym2.normalizedEntityKey {
+            return true
+        }
+
+        // Name + type match
+        let n1 = self.investmentName.normalizedEntityKey
+        let n2 = other.investmentName.normalizedEntityKey
+        if !n1.isEmpty && n1 == n2 && self.investmentType == other.investmentType {
+            return true
+        }
+
+        return false
+    }
+
+    func merged(with incoming: AstraInvestment) -> AstraInvestment {
+        var result = self
+        result.investmentName = incoming.investmentName.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty ? self.investmentName : incoming.investmentName
+        result.investmentType = incoming.investmentType
+        if let sub = incoming.subtype { result.subtype = sub }
+        result.investmentAmount = incoming.investmentAmount > 0 ? incoming.investmentAmount : self.investmentAmount
+        result.mode = incoming.mode
+        result.startDate = incoming.startDate
+        if let sc = incoming.schemeCode, !sc.isEmpty { result.schemeCode = sc }
+        if let isin = incoming.isin, !isin.isEmpty { result.isin = isin }
+        if let sym = incoming.symbol, !sym.isEmpty { result.symbol = sym }
+        if let units = incoming.units, units > 0 { result.units = units }
+        if let qty = incoming.quantity, qty > 0 { result.quantity = qty }
+        if let nav = incoming.lastNAV, nav > 0 { result.lastNAV = nav }
+        if let pNav = incoming.purchaseNAV, pNav > 0 { result.purchaseNAV = pNav }
+        if let lp = incoming.livePrice, lp > 0 { result.livePrice = lp }
+        if let pc = incoming.priceChange { result.priceChange = pc }
+        if let pcp = incoming.priceChangePercentage { result.priceChangePercentage = pcp }
+        if let gId = incoming.associatedGoalID { result.associatedGoalID = gId }
+        if let bs = incoming.brokerSource { result.brokerSource = bs }
+        if let bi = incoming.brokerInstrumentID { result.brokerInstrumentID = bi }
+        if let st = incoming.status { result.status = st }
+
+        // Merge transactions idempotently
+        var combinedTxs = self.installments
+        for tx in incoming.installments {
+            if !combinedTxs.contains(where: { $0.id == tx.id || (abs($0.date.timeIntervalSince(tx.date)) < 86400 && $0.amount == tx.amount && $0.type == tx.type) }) {
+                combinedTxs.append(tx)
+            }
+        }
+        result.installments = combinedTxs
+        return result
+    }
+}
+
+extension AstraLoan {
+    func isEquivalent(to other: AstraLoan) -> Bool {
+        if self.id == other.id { return true }
+
+        let n1 = self.displayName.normalizedEntityKey
+        let n2 = other.displayName.normalizedEntityKey
+
+        // Specific custom/scheme name match
+        if !n1.isEmpty && !n2.isEmpty && n1 == n2 && self.loanType == other.loanType {
+            return true
+        }
+
+        // Generic loan type + lender match
+        if self.loanType == other.loanType && self.lender == other.lender {
+            return true
+        }
+
+        return false
+    }
+
+    func merged(with incoming: AstraLoan) -> AstraLoan {
+        var result = self
+        if !incoming.loanName.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty {
+            result.loanName = incoming.loanName
+        }
+        result.loanType = incoming.loanType
+        if incoming.lender != .other || result.lender == .other {
+            result.lender = incoming.lender
+        }
+        result.loanAmount = incoming.loanAmount > 0 ? incoming.loanAmount : self.loanAmount
+        result.interestRate = incoming.interestRate > 0 ? incoming.interestRate : self.interestRate
+        result.interestType = incoming.interestType
+        result.compoundingFrequency = incoming.compoundingFrequency
+        if let emi = incoming.emiAmount, emi > 0 { result.emiAmount = emi }
+        result.emiFrequency = incoming.emiFrequency
+        result.loanStartDate = incoming.loanStartDate
+        if let firstEmi = incoming.firstEMIDate { result.firstEMIDate = firstEmi }
+        result.loanTenureMonths = incoming.loanTenureMonths > 0 ? incoming.loanTenureMonths : self.loanTenureMonths
+        result.moratoriumMonths = incoming.moratoriumMonths
+        result.insurancePremium = incoming.insurancePremium > 0 ? incoming.insurancePremium : self.insurancePremium
+
+        // Preserve tracking progress & payments
+        result.installmentsPaid = max(self.installmentsPaid, incoming.installmentsPaid)
+        var combinedPayments = self.payments
+        for p in incoming.payments {
+            if !combinedPayments.contains(where: { $0.id == p.id || $0.emiNumber == p.emiNumber }) {
+                combinedPayments.append(p)
+            }
+        }
+        result.payments = combinedPayments
+
+        var combinedPrepay = self.prepayments
+        for prep in incoming.prepayments {
+            if !combinedPrepay.contains(where: { $0.id == prep.id }) {
+                combinedPrepay.append(prep)
+            }
+        }
+        result.prepayments = combinedPrepay
+
+        return result
+    }
+}
+
+extension AstraInsurance {
+    func isEquivalent(to other: AstraInsurance) -> Bool {
+        if self.id == other.id { return true }
+
+        let p1 = self.policyNumber.normalizedEntityKey
+        let p2 = other.policyNumber.normalizedEntityKey
+        if !p1.isEmpty && !p2.isEmpty && p1 == p2 {
+            return true
+        }
+
+        let prov1 = self.provider.normalizedEntityKey
+        let prov2 = other.provider.normalizedEntityKey
+        if self.insuranceType == other.insuranceType && !prov1.isEmpty && prov1 == prov2 {
+            return true
+        }
+
+        return false
+    }
+
+    func merged(with incoming: AstraInsurance) -> AstraInsurance {
+        var result = self
+        result.insuranceType = incoming.insuranceType
+        if !incoming.provider.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty {
+            result.provider = incoming.provider
+        }
+        if !incoming.policyNumber.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty {
+            result.policyNumber = incoming.policyNumber
+        }
+        result.sumAssured = incoming.sumAssured > 0 ? incoming.sumAssured : self.sumAssured
+        result.annualPremium = incoming.annualPremium > 0 ? incoming.annualPremium : self.annualPremium
+        if incoming.basePremium > 0 { result.basePremium = incoming.basePremium }
+        if incoming.taxesGST > 0 { result.taxesGST = incoming.taxesGST }
+        if incoming.addOnCost > 0 { result.addOnCost = incoming.addOnCost }
+        result.premiumFrequency = incoming.premiumFrequency
+        result.startDate = incoming.startDate
+        if let exp = incoming.expiryDate { result.expiryDate = exp }
+        if let life = incoming.lifeDetails { result.lifeDetails = life }
+        if let health = incoming.healthDetails { result.healthDetails = health }
+        if let motor = incoming.motorDetails { result.motorDetails = motor }
+        if let surr = incoming.surrenderValue { result.surrenderValue = surr }
+        if let mat = incoming.maturityDate { result.maturityDate = mat }
+        if let expMat = incoming.expectedMaturityAmount { result.expectedMaturityAmount = expMat }
+
+        var combinedClaims = self.claims
+        for c in incoming.claims {
+            if !combinedClaims.contains(where: { $0.id == c.id }) {
+                combinedClaims.append(c)
+            }
+        }
+        result.claims = combinedClaims
+
+        var combinedPayments = self.payments
+        for p in incoming.payments {
+            if !combinedPayments.contains(where: { $0.id == p.id }) {
+                combinedPayments.append(p)
+            }
+        }
+        result.payments = combinedPayments
+
+        var combinedRiders = self.riders
+        for r in incoming.riders {
+            if !combinedRiders.contains(where: { $0.id == r.id }) {
+                combinedRiders.append(r)
+            }
+        }
+        result.riders = combinedRiders
+
+        return result
+    }
+}
+
+extension Array where Element == AstraGoal {
+    func deduplicated() -> [AstraGoal] {
+        var result: [AstraGoal] = []
+        for goal in self {
+            if let index = result.firstIndex(where: { $0.isEquivalent(to: goal) }) {
+                result[index] = result[index].merged(with: goal)
+            } else {
+                result.append(goal)
+            }
+        }
+        return result
+    }
+}
+
+extension Array where Element == AstraInvestment {
+    func deduplicated() -> [AstraInvestment] {
+        var result: [AstraInvestment] = []
+        for inv in self {
+            if let index = result.firstIndex(where: { $0.isEquivalent(to: inv) }) {
+                result[index] = result[index].merged(with: inv)
+            } else {
+                result.append(inv)
+            }
+        }
+        return result
+    }
+}
+
+extension Array where Element == AstraLoan {
+    func deduplicated() -> [AstraLoan] {
+        var result: [AstraLoan] = []
+        for loan in self {
+            if let index = result.firstIndex(where: { $0.isEquivalent(to: loan) }) {
+                result[index] = result[index].merged(with: loan)
+            } else {
+                result.append(loan)
+            }
+        }
+        return result
+    }
+}
+
+extension Array where Element == AstraInsurance {
+    func deduplicated() -> [AstraInsurance] {
+        var result: [AstraInsurance] = []
+        for ins in self {
+            if let index = result.firstIndex(where: { $0.isEquivalent(to: ins) }) {
+                result[index] = result[index].merged(with: ins)
+            } else {
+                result.append(ins)
+            }
+        }
+        return result
     }
 }

@@ -7,8 +7,14 @@
 
 import SwiftUI
 
+enum VitalsPeriod: String, CaseIterable { case monthly = "Monthly"; case yearly = "Yearly" }
+
+extension FinancialHealthReportView {
+    typealias VitalsPeriod = AstraFiPrototype.VitalsPeriod
+}
+
 struct VitalsCard: View {
-    @Binding var period: FinancialHealthReportView.VitalsPeriod
+    @Binding var period: VitalsPeriod
     let income: String; let expenses: String; let cashflow: CashflowEntry?
 
     private let segColors: [Color] = [
@@ -27,7 +33,7 @@ struct VitalsCard: View {
                 Spacer()
                 HStack(spacing: 4) {
                     Picker("", selection: $period) {
-                        ForEach(FinancialHealthReportView.VitalsPeriod.allCases, id: \.self) { Text($0.rawValue) }
+                        ForEach(VitalsPeriod.allCases, id: \.self) { Text($0.rawValue) }
                     }
                     .pickerStyle(.segmented).frame(width: 160)
                 }

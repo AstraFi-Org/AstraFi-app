@@ -15,21 +15,24 @@ import SwiftUI
 // MARK: - Radar Info Sheet
 private struct RadarChartInfoSheet: View {
     let insights: FinancialAssessmentInsights
+    var parameters: [FinancialHealthParameterResult] = []
     @Environment(\.dismiss) private var dismiss
     @Environment(\.colorScheme) private var colorScheme
 
-    // Live scores — mirror radarValues exactly
-    private var incomeScore: Double { insights.hasFixedIncome ? 9.5 : 6.5 }
-    private var savingScore: Double { min(10, (insights.savingsRate / 0.30) * 10) }
-    private var emergencyScore: Double { min(10, insights.emergencyCoverageRatio * 10) }
-    private var investScore: Double  { insights.investmentBalanceScore * 10 }
-    private var riskScore: Double {
-        insights.insuranceCount >= 2 ? 9.0 : insights.insuranceCount == 1 ? 6.5 : 2.0
+    private func scoreOutOf10(_ parameter: AssessmentParameter, fallback: Double) -> Double {
+        parameters.first(where: { $0.parameter == parameter })?.scoreOutOf10 ?? fallback
     }
 
-    private var savingsPct: Int   { (insights.savingsRate * 100).rounded().safeInt }
+    private var savingScore: Double    { scoreOutOf10(.vitals, fallback: insights.financialVitalsScore * 10) }
+    private var debtScore: Double      { scoreOutOf10(.liabilities, fallback: insights.debtHealthScore * 10) }
+    private var emergencyScore: Double { scoreOutOf10(.emergencyFund, fallback: insights.emergencyReadinessScore * 10) }
+    private var investScore: Double    { scoreOutOf10(.investment, fallback: insights.investmentHealthScore * 10) }
+    private var riskScore: Double      { scoreOutOf10(.insurance, fallback: insights.riskProtectionScore * 10) }
+
+    private var savingsPct: Int        { (insights.savingsRate * 100).rounded().safeInt }
+    private var dtiPct: Int            { (insights.debtToIncomeRatio * 100).rounded().safeInt }
     private var coverageMonths: Double { insights.emergencyCoverageRatio * 6 }
-    private var highRiskPct: Int  { (insights.investmentBreakdown.highRiskRatio * 100).rounded().safeInt }
+    private var highRiskPct: Int       { (insights.investmentBreakdown.highRiskRatio * 100).rounded().safeInt }
 
     var body: some View {
         NavigationStack {
@@ -42,31 +45,44 @@ private struct RadarChartInfoSheet: View {
                     // ── Parameter cards ──
                     VStack(spacing: 14) {
                         paramCard(
-                            title: "Income Stability",
-                            icon: "chart.line.uptrend.xyaxis",
-                            accentHex: "#007AFF",
-                            score: incomeScore,
-                            howLabel: insights.hasFixedIncome ? "Fixed salary" : "Variable income",
-                            howDetail: insights.hasFixedIncome
-                                ? "Fixed income earns 9.5 — the highest band."
-                                : "Variable income earns 6.5. A fixed retainer would move you up.",
-                            insight: insights.hasFixedIncome
-                                ? "Your stable income is a strong financial foundation."
-                                : "Consider negotiating a base salary to stabilise your score."
-                        )
-
-                        paramCard(
-                            title: "Saving Discipline",
+                            title: "Financial Vitals",
                             icon: "banknote",
                             accentHex: "#30D158",
                             score: savingScore,
-                            howLabel: "You save \(savingsPct)% of take-home",
-                            howDetail: "Benchmark is 30%. Score scales linearly up to that target.",
+                            howLabel: insights.monthlySavings > 0
+                                ? "\(insights.monthlySavings.toCurrency())/mo saved · \(savingsPct)% of take-home pay"
+                                : "₹0 saved · Expenses consume 100% of income",
+                            howDetail: "Indian financial benchmark is 30% savings rate. Score scales proportionally up to this target.",
                             insight: savingsPct >= 30
-                                ? "Outstanding — you're well above the 30% savings benchmark."
+                                ? "Outstanding — saving \(savingsPct)% of take-home income exceeds the Indian 30% benchmark."
                                 : savingsPct >= 20
-                                    ? "Good progress at \(savingsPct)%. Closing the gap to 30% will boost this significantly."
-                                    : "At \(savingsPct)% savings, reducing fixed monthly costs would have the biggest impact."
+                                    ? "Good discipline saving \(insights.monthlySavings.toCurrency())/mo (\(savingsPct)%). Scaling to 30% (\((insights.monthlyIncome * 0.30).toCurrency())/mo) will maximize your score."
+                                    : savingsPct > 0
+                                        ? "Currently saving \(insights.monthlySavings.toCurrency())/mo (\(savingsPct)%). Trimming discretionary spends can help reach the recommended 30% target."
+                                        : "Zero savings margin. Expenses of \(insights.monthlyExpenses.toCurrency()) match or exceed take-home pay, leaving no room to build wealth."
+                        )
+
+                        let totalEMI = insights.debtToIncomeRatio * insights.grossMonthlyIncome
+                        paramCard(
+                            title: "Debt Health",
+                            icon: "creditcard.fill",
+                            accentHex: "#BF5AF2",
+                            score: debtScore,
+                            howLabel: insights.loanCount == 0
+                                ? "Debt-free (0 active loans · ₹0 EMI)"
+                                : "\(insights.loanCount) active loan\(insights.loanCount == 1 ? "" : "s") · \(totalEMI.toCurrency())/mo EMI (\(dtiPct)% DTI)",
+                            howDetail: "Measures EMI burden against gross income. DTI under 20% is ideal, under 35% is healthy (Indian banking standard).",
+                            insight: insights.loanCount == 0
+                                ? "Outstanding — being completely debt-free gives you maximum disposable cashflow and financial safety."
+                                : insights.hasHighRiskDebt
+                                    ? "High-interest debt detected (Credit Card or Personal Loan). Paying this off first will yield immediate interest savings and raise your score."
+                                    : insights.monthlySavings > 0 && totalEMI > insights.monthlySavings
+                                        ? "Warning: Required EMIs (\(totalEMI.toCurrency())) exceed your monthly savings (\(insights.monthlySavings.toCurrency())), creating severe cashflow strain."
+                                        : dtiPct <= 20
+                                            ? "Very healthy debt load. EMIs take only \(dtiPct)% of monthly income, well within comfortable banking limits."
+                                            : dtiPct <= 35
+                                                ? "Manageable debt burden within standard Indian bank eligibility limits. Avoid taking on high-interest personal debt."
+                                                : "Debt-to-income is elevated at \(dtiPct)%. RBI guidelines view DTI > 50% as high risk. Prioritize loan prepayment."
                         )
 
                         paramCard(
@@ -74,29 +90,36 @@ private struct RadarChartInfoSheet: View {
                             icon: "umbrella.fill",
                             accentHex: "#FF9F0A",
                             score: emergencyScore,
-                            howLabel: "~\(String(format: "%.1f", coverageMonths)) of 6 months covered",
-                            howDetail: "Target is 6× your gross monthly income as a liquid buffer.",
-                            insight: coverageMonths >= 6
-                                ? "You're fully covered — great financial safety net."
-                                : coverageMonths >= 3
-                                    ? "Partial coverage. Keep building until you reach 6 months."
-                                    : "Under 3 months covered. Prioritise this before new investments."
+                            howLabel: insights.emergencyFundAmount > 0
+                                ? "\(insights.emergencyFundAmount.toCurrency()) saved of \(insights.emergencyFundTarget.toCurrency()) target (\(String(format: "%.1f", insights.emergencyCoverageMonths)) of 6 mo)"
+                                : "₹0 saved of \(insights.emergencyFundTarget.toCurrency()) target (0 of 6 months covered)",
+                            howDetail: "Target is about 6 months of essential expenses, including EMI when those obligations would continue during an income disruption.",
+                            insight: insights.emergencyCoverageMonths >= 6
+                                ? "Fully funded — you have a complete \(insights.emergencyFundAmount.toCurrency()) liquid safety buffer for unforeseen contingencies."
+                                : insights.emergencyCoverageMonths >= 3
+                                    ? "Partial coverage (\(String(format: "%.1f", insights.emergencyCoverageMonths)) months). Build another \((max(0, insights.emergencyFundTarget - insights.emergencyFundAmount)).toCurrency()) to complete your 6-month buffer."
+                                    : "Under 3 months covered. Prioritize building an emergency fund of at least \(insights.emergencyFundTarget.toCurrency()) to reduce the need to borrow in emergencies."
                         )
 
+                        let totalInvested = insights.investmentBreakdown.totalAmount
                         paramCard(
-                            title: "Investment Balance",
+                            title: "Investment Health",
                             icon: "chart.pie.fill",
-                            accentHex: "#BF5AF2",
+                            accentHex: "#007AFF",
                             score: investScore,
-                            howLabel: "\(insights.investmentCount) instrument\(insights.investmentCount == 1 ? "" : "s") · \(highRiskPct)% high-risk",
-                            howDetail: "Score combines diversification, risk concentration, and liquidity.",
+                            howLabel: insights.investmentCount > 0
+                                ? "\(totalInvested.toCurrency()) invested · \(insights.investmentCount) instrument\(insights.investmentCount == 1 ? "" : "s") · \(highRiskPct)% high-risk"
+                                : "No investments added (₹0 invested)",
+                            howDetail: "Score evaluates asset diversification (3+ types), equity/high-risk proportion, and low-risk liquidity.",
                             insight: insights.investmentCount == 0
-                                ? "No investments found. Even a small SIP would move this score immediately."
+                                ? "No investments recorded yet. Even a small monthly SIP in mutual funds will activate compounding."
                                 : highRiskPct >= 80
-                                    ? "\(highRiskPct)% in high-risk assets caps your score. Rebalancing into debt funds would help."
-                                    : insights.investmentCount >= 3
-                                        ? "Well diversified across \(insights.investmentCount) instruments with manageable risk."
-                                        : "Add a third instrument type to unlock better diversification score."
+                                    ? "Heavy concentration in high-risk assets (\(highRiskPct)%). Adding debt funds, fixed deposits, or PPF will balance your risk profile."
+                                    : insights.investmentBreakdown.lowRiskLiquidAmount == 0
+                                        ? "Portfolio lacks a liquid low-risk component. Allocating a portion to liquid funds or FDs will improve stability."
+                                        : insights.investmentCount >= 3
+                                            ? "Well diversified across \(insights.investmentCount) asset classes with a balanced risk allocation."
+                                            : "Holding \(insights.investmentCount) asset type\(insights.investmentCount == 1 ? "" : "s"). Adding another instrument type (e.g. mutual funds, gold, or FDs) will maximize your diversification score."
                         )
 
                         paramCard(
@@ -104,13 +127,25 @@ private struct RadarChartInfoSheet: View {
                             icon: "shield.fill",
                             accentHex: "#FF453A",
                             score: riskScore,
-                            howLabel: "\(insights.insuranceCount) active polic\(insights.insuranceCount == 1 ? "y" : "ies")",
-                            howDetail: "2+ policies → 9.0  ·  1 policy → 6.5  ·  None → 2.0",
-                            insight: insights.insuranceCount >= 2
-                                ? "\(insights.insuranceCount) policies give you a solid coverage baseline."
-                                : insights.insuranceCount == 1
-                                    ? "One policy is a start. Adding health + term cover pushes you to 9.0."
-                                    : "No insurance detected. A basic health policy is the highest-impact addition you can make."
+                            howLabel: insights.hasHealthInsurance && insights.hasLifeInsurance
+                                ? "Health + Term Life active (\(insights.insuranceCount) policies)"
+                                : insights.hasHealthInsurance
+                                    ? "Health cover active · No term life (\(insights.insuranceCount) polic\(insights.insuranceCount == 1 ? "y" : "ies"))"
+                                    : insights.hasLifeInsurance
+                                        ? "Term life active · No health cover (\(insights.insuranceCount) polic\(insights.insuranceCount == 1 ? "y" : "ies"))"
+                                        : insights.insuranceCount > 0
+                                            ? "General policy active · Health/Life missing (\(insights.insuranceCount) policies)"
+                                            : "No insurance detected (0 active policies)",
+                            howDetail: "Evaluates essential Health cover for medical emergencies and Term Life to protect family income.",
+                            insight: insights.hasHealthInsurance && insights.hasLifeInsurance
+                                ? "Comprehensive protection in place. Both hospitalization costs and family life risks are shielded."
+                                : insights.hasHealthInsurance
+                                    ? (insights.adultDependents > 0
+                                        ? "Health insurance is in place, but your \(insights.adultDependents) dependent\(insights.adultDependents == 1 ? "" : "s") need term life cover (target: 10× annual income)."
+                                        : "Good health coverage. Since you have no dependents, term life cover is optional.")
+                                    : insights.hasLifeInsurance
+                                        ? "Term life is active, but lack of health insurance leaves you exposed to out-of-pocket hospital bills."
+                                        : "Critical gap: Medical emergencies and loss of income are unhedged. Prioritize securing a base health policy (₹5L–₹10L)."
                         )
                     }
                     .padding(.horizontal, 16)
@@ -142,7 +177,7 @@ private struct RadarChartInfoSheet: View {
             Text("How your scores are calculated")
                 .font(.title3).bold()
 
-            Text("Each axis is scored 0 – 10 from your real financial data. Tap any card to see what's driving your score.")
+            Text("Each dimension is scored 0 – 10 from your financial inputs and Indian personal finance benchmarks.")
                 .font(.subheadline)
                 .foregroundStyle(.secondary)
                 .multilineTextAlignment(.center)
@@ -183,7 +218,7 @@ private struct RadarChartInfoSheet: View {
                 Spacer()
 
                 // Score badge
-                Text(String(format: "%.1f", score))
+                Text(String(format: "%.1f / 10", score))
                     .font(.system(size: 15, weight: .bold, design: .rounded))
                     .foregroundStyle(scoreColor)
                     .padding(.horizontal, 10)
@@ -264,14 +299,17 @@ struct HeroCard: View {
     let score: Double
     let radarValues: [(String, Double, Double)]
     let insights: FinancialAssessmentInsights
+    var parameters: [FinancialHealthParameterResult] = []
+    var statusTitle: String? = nil
+    var scoreChange: Int? = nil
 
     @State private var showRadarInfo = false
 
     private var scoreColor: Color {
-        score >= 75 ? Color(hex: "#30D158") : score >= 50 ? Color(hex: "#FF9F0A") : Color(hex: "#FF453A")
+        FinancialHealthUIStyle.scoreColor(score.safeInt)
     }
     private var scoreLabel: String {
-        score >= 80 ? "Excellent" : score >= 65 ? "Good" : score >= 45 ? "Fair" : "Needs Work"
+        statusTitle ?? insights.statusTitle
     }
 
     var body: some View {
@@ -289,6 +327,11 @@ struct HeroCard: View {
                     Text("Hi, \(name)").font(.title2).bold()
                     Text("Your financial health assessment is complete.")
                         .font(.subheadline).foregroundStyle(.secondary).lineSpacing(2)
+                    if let scoreChange {
+                        Text("\(scoreChange >= 0 ? "+" : "")\(scoreChange) since previous assessment")
+                            .font(.caption.weight(.semibold))
+                            .foregroundStyle(scoreChange >= 0 ? Color(hex: "#30D158") : Color(hex: "#FF453A"))
+                    }
                 }
                 .frame(maxWidth: .infinity, alignment: .leading)
 
@@ -313,7 +356,7 @@ struct HeroCard: View {
             // Radar chart section
             VStack(alignment: .leading, spacing: 10) {
                 HStack {
-                    Text("Finanical Health Overview").font(.headline)
+                    Text("Financial Health Overview").font(.headline)
                     Spacer()
                     Button { showRadarInfo = true } label: {
                         Image(systemName: "info.circle")
@@ -333,7 +376,7 @@ struct HeroCard: View {
         .clipShape(RoundedRectangle(cornerRadius: 20, style: .continuous))
         .shadow(color: AppTheme.adaptiveShadow, radius: 14, x: 0, y: 6)
         .sheet(isPresented: $showRadarInfo) {
-            RadarChartInfoSheet(insights: insights)
+            RadarChartInfoSheet(insights: insights, parameters: parameters)
                 .presentationDetents([.large])
                 .presentationDragIndicator(.visible)
         }

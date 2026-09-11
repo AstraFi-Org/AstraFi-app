@@ -127,17 +127,43 @@ final class AppStateManager {
                 investmentScore: 72, emergencyFundMonths: 5.5
             ),
             cashflowData: CashflowEntry(rent: 20000, groceries: 8000, utilities: 4000, dining: 6000, transport: 5000, shopping: 7000, entertainment: 3000, misc: 2000),
-            monthlyHealthAssessments: [],
+            monthlyHealthAssessments: [
+                AstraHealthAssessment(
+                    date: Calendar.current.date(from: DateComponents(year: 2026, month: 6, day: 1)) ?? Date(),
+                    score: 61,
+                    status: "Needs Work",
+                    keyInsights: ["Emergency fund covered only 1.5 months", "High debt-to-income ratio (45%)"]
+                ),
+                AstraHealthAssessment(
+                    date: Calendar.current.date(from: DateComponents(year: 2026, month: 7, day: 1)) ?? Date(),
+                    score: 65,
+                    status: "Needs Work",
+                    keyInsights: ["Started emergency fund SIP", "Reduced credit card balance"]
+                ),
+                AstraHealthAssessment(
+                    date: Calendar.current.date(from: DateComponents(year: 2026, month: 8, day: 1)) ?? Date(),
+                    score: 69,
+                    status: "Good",
+                    keyInsights: ["Emergency fund reached 3.5 months", "Savings rate increased to 35%"]
+                ),
+                AstraHealthAssessment(
+                    date: Calendar.current.date(from: DateComponents(year: 2026, month: 9, day: 1)) ?? Date(),
+                    score: 74,
+                    status: "Good",
+                    keyInsights: ["Health & term life insurance secured", "Emergency reserve reached 5.5 months"]
+                )
+            ],
             isSetuConnected: false
         )
         return mgr
     }
     
     func setupEmptyProfile(name: String = "User", email: String = "", createdAt: Date? = nil) {
-        let signUp = AstraSignUp(signUpName: name, email: email, password: "")
+        let cleanName = (name.contains("@") || name.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty) ? "User" : name
+        let signUp = AstraSignUp(signUpName: cleanName, email: email, password: "")
         
         let basic = AstraBasicDetails(
-            name: name, age: 0, gender: .male, maritalStatus: .single,
+            name: cleanName, age: 0, gender: .male, maritalStatus: .single,
             adultDependents: 0, childDependents: 0,
             incomeType: .fixed,
             monthlyIncome: 0, monthlyIncomeAfterTax: 0,
@@ -194,6 +220,9 @@ final class AppStateManager {
     var showDashboard: Bool = false
     var selectedTab: Int = 0
     var showPostAuthOnboarding: Bool = false
+
+    var showPersonalizedHealthPlan: Bool = false
+    var completedPlanActionIDs: Set<String> = []
     
     var requiresMFAChallenge: Bool = false
     var mfaFactorId: String? = nil
@@ -271,6 +300,19 @@ final class AppStateManager {
         }
     }
     
+    func activatePersonalizedPlanFromAssessment() {
+        showPersonalizedHealthPlan = true
+        selectedTab = 1
+    }
+
+    func togglePlanActionCompleted(_ id: String) {
+        if completedPlanActionIDs.contains(id) {
+            completedPlanActionIDs.remove(id)
+        } else {
+            completedPlanActionIDs.insert(id)
+        }
+    }
+
     func saveAssessmentToHistory(score: Int, status: String, insights: [String], assessmentInsights: FinancialAssessmentInsights? = nil) {
         if var profile = currentProfile {
             let newAssessment = AstraHealthAssessment(
@@ -365,6 +407,11 @@ final class AppStateManager {
                             if sanitizedProfile.signUp.email.isEmpty, let email = session.user.email, !email.isEmpty {
                                 sanitizedProfile.signUp.email = email
                             }
+                            // Deduplicate any stale duplicate entities that may already be in Supabase
+                            sanitizedProfile.goals = sanitizedProfile.goals.deduplicated()
+                            sanitizedProfile.investments = sanitizedProfile.investments.deduplicated()
+                            sanitizedProfile.loans = sanitizedProfile.loans.deduplicated()
+                            sanitizedProfile.insurances = sanitizedProfile.insurances.deduplicated()
                             self.currentProfile = sanitizedProfile
                             self.isAuthenticated = true
                             self.hasCompletedOnboarding = true
@@ -386,6 +433,11 @@ final class AppStateManager {
                     if sanitizedProfile.signUp.email.isEmpty, let email = session.user.email, !email.isEmpty {
                         sanitizedProfile.signUp.email = email
                     }
+                    // Deduplicate any stale duplicate entities that may already be in Supabase
+                    sanitizedProfile.goals = sanitizedProfile.goals.deduplicated()
+                    sanitizedProfile.investments = sanitizedProfile.investments.deduplicated()
+                    sanitizedProfile.loans = sanitizedProfile.loans.deduplicated()
+                    sanitizedProfile.insurances = sanitizedProfile.insurances.deduplicated()
                     self.currentProfile = sanitizedProfile
                     self.isAuthenticated = true
                     self.hasCompletedOnboarding = true
@@ -427,7 +479,11 @@ final class AppStateManager {
         do {
             let session = try await supabase.auth.signUp(
                 email: email,
-                password: password
+                password: password,
+                data: [
+                    "name": .string(name),
+                    "full_name": .string(name)
+                ]
             )
             try? await supabase.from("users").insert([
                 "id": session.user.id.uuidString,
@@ -602,7 +658,7 @@ final class AppStateManager {
                     let fullName = [appleIDCredential.fullName?.givenName, appleIDCredential.fullName?.familyName]
                         .compactMap { $0 }
                         .joined(separator: " ")
-                    let displayName = fullName.isEmpty ? (session.user.email ?? "User") : fullName
+                    let displayName = (fullName.isEmpty || fullName.contains("@")) ? "User" : fullName
                     
                     setupEmptyProfile(name: displayName, email: session.user.email ?? "", createdAt: session.user.createdAt)
                     isAuthenticated = true
@@ -695,7 +751,8 @@ final class AppStateManager {
                     showDashboard = true
                 }
             } else {
-                setupEmptyProfile(name: session.user.email ?? "User", email: session.user.email ?? "", createdAt: session.user.createdAt)
+                let resolvedName = resolveUserName(from: session.user)
+                setupEmptyProfile(name: resolvedName, email: session.user.email ?? "", createdAt: session.user.createdAt)
                 
                 isAuthenticated = true
                 hasCompletedOnboarding = true
@@ -761,7 +818,8 @@ final class AppStateManager {
                     showDashboard = true
                 }
             } else {
-                setupEmptyProfile(name: session.user.email ?? "User", email: session.user.email ?? "", createdAt: session.user.createdAt)
+                let resolvedName = resolveUserName(from: session.user)
+                setupEmptyProfile(name: resolvedName, email: session.user.email ?? "", createdAt: session.user.createdAt)
                 
                 isAuthenticated = true
                 hasCompletedOnboarding = true
@@ -854,7 +912,8 @@ final class AppStateManager {
                     showDashboard = true
                 }
             } else {
-                setupEmptyProfile(name: session.user.email ?? "User", email: session.user.email ?? "", createdAt: session.user.createdAt)
+                let resolvedName = resolveUserName(from: session.user)
+                setupEmptyProfile(name: resolvedName, email: session.user.email ?? "", createdAt: session.user.createdAt)
                 
                 isAuthenticated = true
                 hasCompletedOnboarding = true
@@ -880,6 +939,21 @@ final class AppStateManager {
             isAuthLoading = false
             return false
         }
+    }
+
+    private func resolveUserName(from user: User) -> String {
+        let metadata = user.userMetadata
+        if let val = metadata["full_name"]?.stringValue,
+           !val.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty,
+           !val.contains("@") {
+            return val.trimmingCharacters(in: .whitespacesAndNewlines)
+        }
+        if let val = metadata["name"]?.stringValue,
+           !val.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty,
+           !val.contains("@") {
+            return val.trimmingCharacters(in: .whitespacesAndNewlines)
+        }
+        return "User"
     }
 
     func signOut() async {
@@ -943,6 +1017,7 @@ final class AppStateManager {
         let profileInvestments = assessmentData.investmentEntries.map { entry in
             let rawAmt = Double(entry.amount) ?? 0
             var inv = AstraInvestment(
+                id: entry.id,
                 investmentType: mapInvestmentType(entry.type),
                 investmentName: entry.fundName,
                 investmentAmount: rawAmt.isFinite ? rawAmt : 0,
@@ -970,32 +1045,35 @@ final class AppStateManager {
         }
         
         let profileLoans = assessmentData.loanEntries.map { entry in
-            let rawAmt  = Double(entry.amount)       ?? 0
+            let rawAmt  = Double(entry.sanctionedAmount.isEmpty ? entry.amount : entry.sanctionedAmount) ?? 0
             let rawRate = Double(entry.interestRate) ?? 0
-            // The assessment field is labelled "Tenure (Months)" — store as-is.
-            // Do NOT multiply by 12; that would turn 15 months into 180 months.
-            let tenureMonths = Int(entry.tenure) ?? 0
+            let totalPeriod = Int(entry.totalLoanPeriodMonths.isEmpty ? entry.tenure : entry.totalLoanPeriodMonths) ?? 0
+            let moraPeriod  = Int(entry.moratoriumPeriodMonths.isEmpty ? entry.moratorium : entry.moratoriumPeriodMonths) ?? 0
 
             var loan = AstraLoan(
+                id: entry.id,
                 loanType: mapLoanType(entry.type),
-                lender: .other,
+                lender: mapLender(entry.lenderName),
                 loanAmount: rawAmt.isFinite  ? rawAmt  : 0,
                 interestRate: rawRate.isFinite ? rawRate : 0,
                 interestType: entry.interestType,
                 compoundingFrequency: entry.frequency,
-                loanStartDate: entry.startDate,
-                loanTenureMonths: tenureMonths
+                loanStartDate: entry.sanctionDate,
+                loanTenureMonths: totalPeriod
             )
-            // Preserve the custom name the user typed (e.g. "My Car Loan").
-            // Falls back to loanType.rawValue in the UI via displayName.
             loan.loanName = entry.loanName.trimmingCharacters(in: .whitespacesAndNewlines)
             loan.insurancePremium = Double(entry.insurancePremium) ?? 0
-            loan.moratoriumMonths = Int(entry.moratorium) ?? 0
+            loan.moratoriumMonths = moraPeriod
+            
+            if let emiVal = Double(entry.emiAmount), emiVal > 0 {
+                loan.emiAmount = emiVal
+            }
             return loan
         }
         
         let profileInsurances = assessmentData.insuranceEntries.map { entry in
             var ins = AstraInsurance(
+                id: entry.id,
                 insuranceType: mapInsuranceType(entry.currentType),
                 provider: entry.insurer,
                 policyNumber: entry.policyNumber,
@@ -1117,43 +1195,59 @@ final class AppStateManager {
         let newInsurances = profileInsurances
         
         if var existingProfile = self.currentProfile {
-            // MERGE LOGIC
             existingProfile.signUp.email = assessmentData.email.isEmpty
                     ? existingProfile.signUp.email : assessmentData.email
             
-            // Merge Investments
-            for newInv in newInvestments {
-                if !existingProfile.investments.contains(where: {
-                    $0.investmentName.lowercased() == newInv.investmentName.lowercased() &&
-                    abs($0.investmentAmount - newInv.investmentAmount) < 1.0
-                }) {
-                    existingProfile.investments.append(newInv)
+            // ─── Investment Upsert (NON-DESTRUCTIVE) ───────────────────────────────
+            // All linked/broker investments AND previously saved manual investments must
+            // survive assessment re-runs, monthly reviews, and app rebuilds.
+            // Strategy:
+            //   1. Retain every existing investment that is NOT being replaced by an
+            //      equivalent entry from the new assessment.
+            //   2. Upsert assessment-sourced investments by matching equivalents.
+            // This means: adding cash / changing allocation NEVER clears investments.
+            var updatedInvestments: [AstraInvestment] = []
+            var replacedExistingIDs = Set<UUID>()
+            for inv in newInvestments {
+                if let existingIdx = existingProfile.investments.firstIndex(where: { $0.isEquivalent(to: inv) }) {
+                    let merged = existingProfile.investments[existingIdx].merged(with: inv)
+                    updatedInvestments.append(merged)
+                    replacedExistingIDs.insert(existingProfile.investments[existingIdx].id)
+                } else {
+                    updatedInvestments.append(inv)
                 }
             }
+            // Retain ALL existing investments not replaced by the assessment upsert
+            let retained = existingProfile.investments.filter { !replacedExistingIDs.contains($0.id) }
+            existingProfile.investments = (retained + updatedInvestments).deduplicated()
             
-            // Merge Loans
-            for newLoan in newLoans {
-                if !existingProfile.loans.contains(where: {
-                    abs($0.loanAmount - newLoan.loanAmount) < 1.0 &&
-                    $0.loanType == newLoan.loanType
-                }) {
-                    existingProfile.loans.append(newLoan)
+            // Upsert loans (preserving existing tracking progress, payments, and installments paid)
+            var updatedLoans: [AstraLoan] = []
+            for loan in newLoans {
+                if let existingIdx = existingProfile.loans.firstIndex(where: { $0.isEquivalent(to: loan) }) {
+                    updatedLoans.append(existingProfile.loans[existingIdx].merged(with: loan))
+                } else {
+                    updatedLoans.append(loan)
                 }
             }
+            existingProfile.loans = updatedLoans.deduplicated()
             
+            // Update insurances with latest assessment insurance entries
             if assessmentData.hasCompletedInsuranceStep && !assessmentData.isInsured && !assessmentData.areDependentsInsured {
                 existingProfile.insurances.removeAll()
             } else {
-                // Merge Insurances
-                for newIns in newInsurances {
-                    if !existingProfile.insurances.contains(where: {
-                        $0.policyNumber == newIns.policyNumber ||
-                        ($0.insuranceType == newIns.insuranceType && abs($0.sumAssured - newIns.sumAssured) < 1.0)
-                    }) {
-                        existingProfile.insurances.append(newIns)
+                var updatedInsurances: [AstraInsurance] = []
+                for ins in newInsurances {
+                    if let existingIdx = existingProfile.insurances.firstIndex(where: { $0.isEquivalent(to: ins) }) {
+                        updatedInsurances.append(existingProfile.insurances[existingIdx].merged(with: ins))
+                    } else {
+                        updatedInsurances.append(ins)
                     }
                 }
+                existingProfile.insurances = updatedInsurances.deduplicated()
             }
+            
+            existingProfile.goals = existingProfile.goals.deduplicated()
             
             if !assessmentData.income.isEmpty {
                 existingProfile.basicDetails.monthlyIncome = incomeValue
@@ -1215,7 +1309,7 @@ final class AppStateManager {
                 goals: [],
                 financialHealthReport: report,
                 cashflowData: cf,
-                monthlyHealthAssessments: [firstAssessment],
+                monthlyHealthAssessments: [],
                 isSetuConnected: false
             )
             newProfile.monthlyCashflowSnapshots[monthKey] = cf
@@ -1312,6 +1406,18 @@ final class AppStateManager {
 
     func recalculateFinancials() {
         guard var profile = currentProfile else { return }
+
+        // Linked investments retain their own values and automatically update the
+        // emergency-fund balance whenever holdings are refreshed.
+        if let linkedIDs = profile.emergencyFundLinkedInvestmentIDs {
+            let linkedIDSet = Set(linkedIDs)
+            let linkedValue = profile.investments
+                .filter { linkedIDSet.contains($0.id) }
+                .reduce(0.0) { $0 + $1.currentValue.safeFinite }
+            let manualAmount = profile.emergencyFundManualAmount
+                ?? profile.basicDetails.emergencyFundAmount
+            profile.basicDetails.emergencyFundAmount = (manualAmount + linkedValue).safeFinite
+        }
         
         var newAssets = profile.assets
         newAssets.stocksHoldingAmount = profile.investments.filter { $0.investmentType == .stocks }.map { $0.currentValue.safeFinite }.reduce(0, +)
@@ -1342,22 +1448,33 @@ final class AppStateManager {
         
         let efTarget = profile.basicDetails.monthlyIncome * 6.0
         let efMonths = efTarget > 0 ? ((profile.basicDetails.emergencyFundAmount / efTarget) * 6.0).safeFinite : 0
-        let investmentScore = min(100, max(0, (savingsRate * 0.5) + (efMonths * 10))).safeInt
+        let healthScore = FinancialAssessmentInsights.build(profile: profile, data: nil).overallScore.safeInt
         
         profile.financialHealthReport = AstraFinancialHealthReport(
             netWorth: netWorth,
             savingsRate: savingsRate,
             debtToIncomeRatio: dti,
-            investmentScore: investmentScore,
+            investmentScore: healthScore,
             emergencyFundMonths: efMonths
         )
         
-        // Sync goal currentAmount with dynamic total
+        // Sync goal currentAmount with dynamic total and detect goal achievement
         for i in 0..<profile.goals.count {
             let gid = profile.goals[i].id
             let linked = profile.investments.filter { $0.associatedGoalID == gid }
             let linkedTotal = linked.reduce(0.0) { $0 + $1.currentValue }
-            profile.goals[i].currentAmount = linkedTotal + profile.goals[i].manualSavingsContribution
+            let newAmount = linkedTotal + profile.goals[i].manualSavingsContribution
+            profile.goals[i].currentAmount = newAmount
+
+            // Goal Achievement Detection — transition to goalAchieved + Protection Mode
+            let target = profile.goals[i].targetAmount
+            let currentStatus = profile.goals[i].status
+            let notAlreadyAchieved = currentStatus != .goalAchieved && currentStatus != .protection
+                && currentStatus != .completed && currentStatus != .cancelled
+            if target > 0 && newAmount >= target && notAlreadyAchieved {
+                profile.goals[i].status = .goalAchieved
+                profile.goals[i].isProtectionModeEnabled = true
+            }
         }
         
         self.currentProfile = profile
@@ -1406,12 +1523,21 @@ final class AppStateManager {
     
     func addGoal(_ goal: AstraGoal) {
         if var profile = currentProfile {
-            profile.goals.append(goal)
+            let targetGoal: AstraGoal
+            if let index = profile.goals.firstIndex(where: { $0.isEquivalent(to: goal) }) {
+                let merged = profile.goals[index].merged(with: goal)
+                profile.goals[index] = merged
+                targetGoal = merged
+            } else {
+                profile.goals.append(goal)
+                targetGoal = goal
+            }
+            profile.goals = profile.goals.deduplicated()
             currentProfile = profile
             recalculateFinancials()
             Task {
                 if let session = try? await supabase.auth.session {
-                    _ = try? await SupabaseRepository.shared.saveGoal(goal, userId: session.user.id)
+                    _ = try? await SupabaseRepository.shared.saveGoal(targetGoal, userId: session.user.id)
                 }
             }
         }
@@ -1456,16 +1582,173 @@ final class AppStateManager {
             }
         }
     }
-    
+
+    // MARK: - Goal Lifecycle
+
+    /// Update a goal's status/protection fields and persist.
+    func updateGoalStatus(_ updatedGoal: AstraGoal) {
+        guard var profile = currentProfile,
+              let index = profile.goals.firstIndex(where: { $0.id == updatedGoal.id }) else { return }
+        profile.goals[index] = updatedGoal
+        currentProfile = profile
+        recalculateFinancials()
+        Task {
+            if let session = try? await supabase.auth.session {
+                _ = try? await SupabaseRepository.shared.saveGoal(updatedGoal, userId: session.user.id)
+            }
+        }
+    }
+
+    /// Dismiss goal achievement notification. Preserves goalAchieved status but marks banner dismissed.
+    func dismissGoalAchievementMessage(goalId: UUID) {
+        guard var profile = currentProfile,
+              let index = profile.goals.firstIndex(where: { $0.id == goalId }) else { return }
+        profile.goals[index].achievementMessageDismissed = true
+        currentProfile = profile
+        Task {
+            if let session = try? await supabase.auth.session {
+                _ = try? await SupabaseRepository.shared.saveGoal(profile.goals[index], userId: session.user.id)
+            }
+        }
+    }
+
+    // MARK: - Atomic Financial Transfers
+
+    /// Atomically transfer an amount FROM an investment TO cash (savings account).
+    /// Updates both source and destination in the same profile mutation and appends a TransferRecord.
+    /// Prevents double-counting — the same rupee cannot appear in both investment and cash.
+    func executeGoalWithdrawal(
+        goalId: UUID,
+        investmentId: UUID?,
+        amount: Double,
+        note: String? = nil
+    ) {
+        guard var profile = currentProfile, amount > 0 else { return }
+
+        // 1. Reduce the investment value (mark as withdrawn / reduce amount)
+        let goalName = profile.goals.first(where: { $0.id == goalId })?.goalName ?? "Goal"
+        if let investId = investmentId,
+           let invIdx = profile.investments.firstIndex(where: { $0.id == investId }) {
+            let currentVal = profile.investments[invIdx].currentValue
+            let remaining = max(0, currentVal - amount)
+            // Reflect the reduction via investmentAmount (for non-broker manual investments)
+            if !profile.investments[invIdx].isLinked {
+                profile.investments[invIdx].investmentAmount = max(0, profile.investments[invIdx].investmentAmount - amount)
+            }
+            profile.investments[invIdx].status = remaining <= 0 ? .withdrawn : .active
+        }
+
+        // 2. Increase cash (savings account)
+        profile.assets.savingsAccountAmount += amount
+
+        // 3. Update goal: mark as protection / completed and record protected cash
+        if let gIdx = profile.goals.firstIndex(where: { $0.id == goalId }) {
+            profile.goals[gIdx].protectedCashAmount += amount
+            profile.goals[gIdx].status = .protection
+        }
+
+        // 4. Append transfer record (audit trail, prevents double-count queries)
+        let transfer = FinancialTransferRecord(
+            fromEntity: "\(goalName) Investment",
+            toEntity: "Cash / Savings",
+            amount: amount,
+            transferType: .goalAchievementWithdrawal,
+            note: note
+        )
+        profile.safeTransferHistory.append(transfer)
+
+        currentProfile = profile
+        recalculateFinancials()
+
+        Task {
+            if let session = try? await supabase.auth.session {
+                _ = try? await SupabaseRepository.shared.syncFullProfile(profile, userId: session.user.id)
+            }
+        }
+    }
+
+    // MARK: - Monthly Performance Records
+
+    /// Record a monthly performance entry for an investment / goal without treating the return as a new contribution.
+    func recordMonthlyPerformance(
+        goalId: UUID? = nil,
+        investmentId: UUID? = nil,
+        period: String,
+        openingValue: Double,
+        closingValue: Double
+    ) {
+        guard var profile = currentProfile else { return }
+        let returnAmount = closingValue - openingValue
+        let returnPct = openingValue > 0 ? (returnAmount / openingValue) * 100 : 0
+        let record = InvestmentPerformanceRecord(
+            investmentId: investmentId,
+            goalId: goalId,
+            period: period,
+            openingValue: openingValue,
+            closingValue: closingValue,
+            returnAmount: returnAmount,
+            returnPercentage: returnPct
+        )
+        profile.safePerformanceRecords.append(record)
+        currentProfile = profile
+        // Sync async — performance records are non-critical path
+        Task {
+            if let session = try? await supabase.auth.session {
+                _ = try? await SupabaseRepository.shared.syncFullProfile(profile, userId: session.user.id)
+            }
+        }
+    }
+
+    /// Move a realized return FROM an investment TO cash atomically (no double-counting).
+    func realizeReturnToCash(recordId: UUID, investmentId: UUID, amount: Double) {
+        guard var profile = currentProfile, amount > 0 else { return }
+        let invName = profile.investments.first(where: { $0.id == investmentId })?.investmentName ?? "Investment"
+
+        // Reduce investment amount by realized return
+        if let invIdx = profile.investments.firstIndex(where: { $0.id == investmentId }),
+           !profile.investments[invIdx].isLinked {
+            profile.investments[invIdx].investmentAmount = max(0, profile.investments[invIdx].investmentAmount - amount)
+        }
+
+        // Increase cash (savings account)
+        profile.assets.savingsAccountAmount += amount
+
+        // Append transfer record
+        let transfer = FinancialTransferRecord(
+            fromEntity: invName,
+            toEntity: "Cash / Savings",
+            amount: amount,
+            transferType: .returnRealization
+        )
+        profile.safeTransferHistory.append(transfer)
+
+        currentProfile = profile
+        recalculateFinancials()
+        Task {
+            if let session = try? await supabase.auth.session {
+                _ = try? await SupabaseRepository.shared.syncFullProfile(profile, userId: session.user.id)
+            }
+        }
+    }
+
     func addInvestment(_ investment: AstraInvestment) {
         if var profile = currentProfile {
-            profile.investments.append(investment)
+            let targetInv: AstraInvestment
+            if let index = profile.investments.firstIndex(where: { $0.isEquivalent(to: investment) }) {
+                let merged = profile.investments[index].merged(with: investment)
+                profile.investments[index] = merged
+                targetInv = merged
+            } else {
+                profile.investments.append(investment)
+                targetInv = investment
+            }
+            profile.investments = profile.investments.deduplicated()
             currentProfile = profile
             recalculateFinancials()
             Task {
                 await syncMutualFundNAVs()
                 if let session = try? await supabase.auth.session {
-                    _ = try? await SupabaseRepository.shared.saveInvestment(investment, userId: session.user.id)
+                    _ = try? await SupabaseRepository.shared.saveInvestment(targetInv, userId: session.user.id)
                 }
             }
         }
@@ -1649,14 +1932,46 @@ final class AppStateManager {
             }
         }
     }
+
+    func updateEmergencyFund(manualAmount: Double, linkedInvestmentIDs: [UUID]) {
+        guard var profile = currentProfile else { return }
+
+        let uniqueLinkedIDs = Array(Set(linkedInvestmentIDs))
+        let linkedIDSet = Set(uniqueLinkedIDs)
+        let linkedValue = profile.investments
+            .filter { linkedIDSet.contains($0.id) }
+            .reduce(0.0) { $0 + $1.currentValue.safeFinite }
+
+        profile.emergencyFundManualAmount = max(0, manualAmount).safeFinite
+        profile.emergencyFundLinkedInvestmentIDs = uniqueLinkedIDs
+        profile.basicDetails.emergencyFundAmount = (max(0, manualAmount) + linkedValue).safeFinite
+        currentProfile = profile
+        recalculateFinancials()
+
+        Task {
+            if let session = try? await supabase.auth.session,
+               let profile = currentProfile {
+                try? await SupabaseRepository.shared.syncFullProfile(profile, userId: session.user.id)
+            }
+        }
+    }
     func addLoan(_ loan: AstraLoan) {
         if var profile = currentProfile {
-            profile.loans.append(loan)
+            // Upsert: merge if an equivalent loan already exists, otherwise append
+            let targetLoan: AstraLoan
+            if let existingIndex = profile.loans.firstIndex(where: { $0.isEquivalent(to: loan) }) {
+                targetLoan = profile.loans[existingIndex].merged(with: loan)
+                profile.loans[existingIndex] = targetLoan
+            } else {
+                targetLoan = loan
+                profile.loans.append(targetLoan)
+            }
+            profile.loans = profile.loans.deduplicated()
             currentProfile = profile
             recalculateFinancials()
             Task {
                 if let session = try? await supabase.auth.session {
-                    _ = try? await SupabaseRepository.shared.saveLoan(loan, userId: session.user.id)
+                    _ = try? await SupabaseRepository.shared.saveLoan(targetLoan, userId: session.user.id)
                 }
             }
         }
@@ -1705,12 +2020,21 @@ final class AppStateManager {
     
     func addInsurance(_ insurance: AstraInsurance) {
         if var profile = currentProfile {
-            profile.insurances.append(insurance)
+            // Upsert: merge if an equivalent policy already exists, otherwise append
+            let targetInsurance: AstraInsurance
+            if let existingIndex = profile.insurances.firstIndex(where: { $0.isEquivalent(to: insurance) }) {
+                targetInsurance = profile.insurances[existingIndex].merged(with: insurance)
+                profile.insurances[existingIndex] = targetInsurance
+            } else {
+                targetInsurance = insurance
+                profile.insurances.append(targetInsurance)
+            }
+            profile.insurances = profile.insurances.deduplicated()
             currentProfile = profile
             recalculateFinancials()
             Task {
                 if let session = try? await supabase.auth.session {
-                    _ = try? await SupabaseRepository.shared.saveInsurance(insurance, userId: session.user.id)
+                    _ = try? await SupabaseRepository.shared.saveInsurance(targetInsurance, userId: session.user.id)
                 }
             }
         }

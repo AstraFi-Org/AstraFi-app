@@ -31,18 +31,12 @@ class InvestmentPlannerEngine {
         plan1 = applyGoalBranding(to: plan1, goal: goalCategory,
                                   purpose: input.purposeOfInvestment)
 
-        var plan2: Plan2Result? = nil
-        if shouldGeneratePlan2(input: input, goal: goalCategory, health: healthCtx) {
-            let strategy = choosePlan2Strategy(input: input, goal: goalCategory, healthCtx: healthCtx)
-            plan2 = generatePlan2(input: input, risk: risk, liquidity: liquid,
-                                  strategy: strategy, healthCtx: healthCtx)
-            plan2 = plan2.map { applyPlan2Branding(to: $0, goal: goalCategory, strategy: strategy) }
-        }
+        let plan2Strategy = choosePlan2Strategy(input: input, goal: goalCategory, healthCtx: healthCtx)
+        let generatedPlan2 = generatePlan2(input: input, risk: risk, liquidity: liquid,
+                                           strategy: plan2Strategy, healthCtx: healthCtx)
+        let plan2 = applyPlan2Branding(to: generatedPlan2, goal: goalCategory, strategy: plan2Strategy)
 
-        var plan3: Plan3Result? = nil
-        if input.openToLoan && healthCtx.debtToIncomeRatio < 0.35 {
-             plan3 = generatePlan3(input: input, healthCtx: healthCtx)
-        }
+        let plan3 = generatePlan3(input: input, healthCtx: healthCtx)
 
         let tenure = Swift.max(1, Int(input.timePeriod) ?? 1)
         let saved = parseAmount(input.savedAmount)
@@ -152,7 +146,7 @@ class InvestmentPlannerEngine {
 
         return generatePlan2(input: customInput, risk: risk, liquidity: liquid,
                            strategy: strategy, healthCtx: healthCtx,
-                           emiFrequency: emiFrequency, interestType: interestType) ?? Plan2Result.empty()
+                           emiFrequency: emiFrequency, interestType: interestType)
     }
 
     private static func buildFinancialHealthContext(
@@ -473,7 +467,7 @@ class InvestmentPlannerEngine {
                                       strategy: Plan2Strategy,
                                       healthCtx: FinancialHealthContext,
                                       emiFrequency: EMIFrequency = .quarterly,
-                                      interestType: InterestType = .compounded) -> Plan2Result? {
+                                      interestType: InterestType = .compounded) -> Plan2Result {
         let saved  = parseAmount(input.savedAmount)
         let target = parseAmount(input.targetAmount)
         let amt    = parseAmount(input.amount)
@@ -690,10 +684,6 @@ class InvestmentPlannerEngine {
     private static func healthAdjustedSIPAmount(requested: Double, healthCtx: FinancialHealthContext) -> Double {
         if healthCtx.healthGrade == "D" { return Swift.min(requested, healthCtx.investableMonthly * 0.4) }
         return requested
-    }
-
-    private static func shouldGeneratePlan2(input: InvestmentPlanInputModel, goal: InvestmentGoalCategory, health: FinancialHealthContext) -> Bool {
-        return input.openToLoan && ![.travel, .emergency].contains(goal) && health.debtToIncomeRatio < 0.5
     }
 
     private static func choosePlan2Strategy(input: InvestmentPlanInputModel, goal: InvestmentGoalCategory, healthCtx: FinancialHealthContext) -> Plan2Strategy {
