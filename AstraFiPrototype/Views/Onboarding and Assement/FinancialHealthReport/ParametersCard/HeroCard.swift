@@ -335,20 +335,35 @@ struct HeroCard: View {
                 }
                 .frame(maxWidth: .infinity, alignment: .leading)
 
-                ZStack {
-                    Circle().trim(from: 0.1, to: 0.9)
-                        .stroke(Color(UIColor.systemFill), style: StrokeStyle(lineWidth: 7, lineCap: .round))
-                        .rotationEffect(.degrees(90))
-                    Circle().trim(from: 0.1, to: 0.1 + (score / 100) * 0.8)
-                        .stroke(scoreColor, style: StrokeStyle(lineWidth: 7, lineCap: .round))
-                        .rotationEffect(.degrees(90))
-                        .animation(.easeOut(duration: 1.4), value: score)
-                    VStack(spacing: 1) {
-                        Text("\(score.safeInt)").font(.title3).fontWeight(.black).foregroundStyle(scoreColor)
-                        Text(scoreLabel).font(.system(size: 9, weight: .semibold)).foregroundStyle(.secondary)
+                VStack(spacing: 6) {
+                    ZStack {
+                        Circle().trim(from: 0.1, to: 0.9)
+                            .stroke(Color(UIColor.systemFill), style: StrokeStyle(lineWidth: 6.5, lineCap: .round))
+                            .rotationEffect(.degrees(90))
+                        Circle().trim(from: 0.1, to: 0.1 + (score / 100) * 0.8)
+                            .stroke(scoreColor, style: StrokeStyle(lineWidth: 6.5, lineCap: .round))
+                            .rotationEffect(.degrees(90))
+                            .animation(.easeOut(duration: 1.4), value: score)
+                        Text("\(score.safeInt)")
+                            .font(.system(size: 24, weight: .black, design: .rounded))
+                            .foregroundStyle(scoreColor)
                     }
+                    .frame(width: 66, height: 66)
+
+                    Text(scoreLabel)
+                        .font(.system(size: 10, weight: .bold, design: .rounded))
+                        .foregroundStyle(scoreColor)
+                        .padding(.horizontal, 8)
+                        .padding(.vertical, 3.5)
+                        .background(scoreColor.opacity(0.12))
+                        .clipShape(Capsule())
+                        .overlay(
+                            Capsule()
+                                .stroke(scoreColor.opacity(0.25), lineWidth: 0.8)
+                        )
+                        .lineLimit(1)
+                        .minimumScaleFactor(0.85)
                 }
-                .frame(width: 76, height: 76)
             }
 
             Divider()

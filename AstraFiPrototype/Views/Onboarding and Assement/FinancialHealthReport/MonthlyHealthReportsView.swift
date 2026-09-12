@@ -307,6 +307,7 @@ struct HealthReportRow: View {
 }
 
 struct HealthReportDetailView: View {
+    @Environment(\.colorScheme) private var colorScheme
     @Environment(AppStateManager.self) var appState
     let report: AstraHealthAssessment
     @State private var navigateToVitals = false
@@ -394,7 +395,7 @@ struct HealthReportDetailView: View {
         }
         .navigationTitle(report.date.formatted(.dateTime.month(.wide).year()))
         .navigationBarTitleDisplayMode(.inline)
-        .background(AppTheme.appBackground(for: .light))
+        .background(AppTheme.appBackground(for: colorScheme).ignoresSafeArea())
         .navigationDestination(isPresented: $navigateToVitals) {
             if let insights = report.insights {
                 VitalsDetailSheet(
@@ -456,8 +457,8 @@ struct HealthReportDetailView: View {
             scoreRange(label: "Needs Work", range: "<70", color: .red)
         }
         .padding()
-        .background(Color(uiColor: .systemBackground)).cornerRadius(16)
-        .shadow(color: Color.black.opacity(0.05), radius: 8, x: 0, y: 2)
+        .background(AppTheme.cardBackground).cornerRadius(16)
+        .shadow(color: AppTheme.adaptiveShadow, radius: 8, x: 0, y: 2)
     }
 
     private func scoreRange(label: String, range: String, color: Color) -> some View {

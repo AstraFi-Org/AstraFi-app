@@ -297,12 +297,16 @@ struct InsuranceInsightCard: View {
     // MARK: - Not insured View
 
     private var uninsuredContent: some View {
-        VStack(alignment: .leading, spacing: 12) {
+        VStack(alignment: .leading, spacing: 14) {
             // Risk pills
             HStack(spacing: 8) {
-                riskPill(icon: "cross.fill",         color: AppTheme.vibrantRed,    text: "Medical risk")
-                riskPill(icon: "house.fill",         color: AppTheme.vibrantOrange, text: "Income gap")
-                riskPill(icon: "person.2.fill",      color: AppTheme.auraIndigo,    text: "Family exposed")
+                riskPill(icon: "cross.fill",    color: AppTheme.vibrantRed,    text: "Medical risk")
+                riskPill(icon: "house.fill",    color: AppTheme.vibrantOrange, text: "Income gap")
+                riskPill(
+                    icon: numDependents > 0 ? "person.2.fill" : "chart.line.downtrend.xyaxis",
+                    color: numDependents > 0 ? AppTheme.auraIndigo : AppTheme.vibrantRed,
+                    text: numDependents > 0 ? "Family exposed" : "Tax benefits"
+                )
             }
 
             // Key demerits
@@ -313,7 +317,7 @@ struct InsuranceInsightCard: View {
                     title: "Medical Costs Hit Your Savings",
                     detail: "A single hospitalisation in India can cost ₹2–10 lakh. Without health insurance, you drain your emergency fund or take on high-interest debt."
                 )
-                Divider().opacity(0.4)
+                Divider().opacity(0.35).padding(.vertical, 2)
                 demeritRow(
                     icon: "shield.slash.fill",
                     color: AppTheme.vibrantOrange,
@@ -321,7 +325,7 @@ struct InsuranceInsightCard: View {
                     detail: "If you're the primary earner, an accidental death or disability without a term plan leaves dependents financially exposed."
                 )
                 if numDependents > 0 {
-                    Divider().opacity(0.4)
+                    Divider().opacity(0.35).padding(.vertical, 2)
                     demeritRow(
                         icon: "person.2.fill",
                         color: AppTheme.auraIndigo,
@@ -329,7 +333,7 @@ struct InsuranceInsightCard: View {
                         detail: "With \(numDependents) dependent\(numDependents > 1 ? "s" : ""), the financial impact of an unforeseen event is magnified. A family floater health plan is the first step."
                     )
                 }
-                Divider().opacity(0.4)
+                Divider().opacity(0.35).padding(.vertical, 2)
                 demeritRow(
                     icon: "chart.line.downtrend.xyaxis",
                     color: AppTheme.vibrantRed,
@@ -339,17 +343,19 @@ struct InsuranceInsightCard: View {
             }
 
             // What to do hint
-            HStack(alignment: .top, spacing: 8) {
+            HStack(alignment: .top, spacing: 10) {
                 Image(systemName: "lightbulb.fill")
-                    .font(.system(size: 11))
+                    .font(.system(size: 13, weight: .semibold))
                     .foregroundStyle(AppTheme.auraGold)
-                    .padding(.top, 1)
-                Text("Start with a ₹5–10 lakh health plan and a term life cover of 10–15× your annual income  both combined cost less than ₹1,500/month for most people under 30.")
-                    .font(.system(size: 11, design: .rounded))
+                    .padding(.top, 2)
+                Text("Start with a ₹5–10 lakh health plan and a term life cover of 10–15× your annual income. Both combined cost less than ₹1,500/month for most people under 30.")
+                    .font(.system(size: 12, design: .rounded))
                     .foregroundStyle(.secondary)
+                    .lineSpacing(2)
                     .fixedSize(horizontal: false, vertical: true)
             }
-            .padding(10)
+            .padding(12)
+            .frame(maxWidth: .infinity, alignment: .leading)
             .background(AppTheme.auraGold.opacity(0.08))
             .clipShape(RoundedRectangle(cornerRadius: 10, style: .continuous))
         }
@@ -374,33 +380,37 @@ struct InsuranceInsightCard: View {
                 .font(.system(size: 10, weight: .semibold))
                 .foregroundStyle(color)
             Text(text)
-                .font(.system(size: 11, weight: .medium, design: .rounded))
-                .foregroundStyle(.primary.opacity(0.75))
+                .font(.system(size: 10.5, weight: .medium, design: .rounded))
+                .foregroundStyle(.primary.opacity(0.85))
+                .lineLimit(1)
+                .minimumScaleFactor(0.8)
         }
-        .padding(.horizontal, 10)
-        .padding(.vertical, 7)
+        .frame(maxWidth: .infinity)
+        .frame(height: 30)
         .background(color.opacity(0.08))
         .clipShape(Capsule())
         .overlay(Capsule().stroke(color.opacity(0.18), lineWidth: 1))
     }
 
     private func demeritRow(icon: String, color: Color, title: String, detail: String) -> some View {
-        HStack(alignment: .top, spacing: 10) {
+        HStack(alignment: .top, spacing: 12) {
             ZStack {
                 Circle()
                     .fill(color.opacity(0.12))
-                    .frame(width: 32, height: 32)
+                    .frame(width: 28, height: 28)
                 Image(systemName: icon)
-                    .font(.system(size: 13, weight: .semibold))
+                    .font(.system(size: 12, weight: .semibold))
                     .foregroundStyle(color)
             }
-            .padding(.top, 1)
+            .padding(.top, 2)
             VStack(alignment: .leading, spacing: 3) {
                 Text(title)
-                    .font(.system(size: 13, weight: .semibold, design: .rounded))
+                    .font(.system(size: 13.5, weight: .semibold, design: .rounded))
+                    .foregroundStyle(.primary)
                 Text(detail)
                     .font(.system(size: 12, design: .rounded))
                     .foregroundStyle(.secondary)
+                    .lineSpacing(2)
                     .fixedSize(horizontal: false, vertical: true)
             }
         }

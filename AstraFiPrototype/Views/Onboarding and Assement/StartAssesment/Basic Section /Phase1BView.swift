@@ -302,14 +302,9 @@ struct InvestmentAnalyseCard: View {
         VStack(alignment: .leading, spacing: 14) {
 
             // Header
-            HStack(spacing: 8) {
-                Image(systemName: "sparkles")
-                    .font(.system(size: 13, weight: .bold))
-                    .foregroundStyle(AppTheme.auraGold)
-                Text("That's smart thinking!")
-                    .font(.system(size: 15, weight: .bold, design: .rounded))
-                    .foregroundStyle(AppTheme.auraGreen)
-            }
+            Text("That's smart thinking!")
+                .font(.system(size: 15, weight: .bold, design: .rounded))
+                .foregroundStyle(AppTheme.auraGreen)
 
             // Message
             VStack(alignment: .leading, spacing: 6) {
@@ -319,13 +314,6 @@ struct InvestmentAnalyseCard: View {
                     .font(.system(size: 12, design: .rounded))
                     .foregroundStyle(.secondary)
                     .fixedSize(horizontal: false, vertical: true)
-            }
-
-            // 3 benefit pills
-            HStack(spacing: 8) {
-                benefitPill(icon: "chart.pie.fill",          color: AppTheme.auraIndigo,    text: "Diversification")
-                benefitPill(icon: "arrow.up.right",          color: AppTheme.auraGreen,     text: "Growth")
-                benefitPill(icon: "exclamationmark.triangle",color: AppTheme.vibrantOrange, text: "Risk alerts")
             }
 
             // Two side-by-side buttons
@@ -367,22 +355,6 @@ struct InvestmentAnalyseCard: View {
             RoundedRectangle(cornerRadius: 16, style: .continuous)
                 .stroke(AppTheme.auraGreen.opacity(0.20), lineWidth: 1)
         )
-    }
-
-    private func benefitPill(icon: String, color: Color, text: String) -> some View {
-        HStack(spacing: 5) {
-            Image(systemName: icon)
-                .font(.system(size: 10, weight: .semibold))
-                .foregroundStyle(color)
-            Text(text)
-                .font(.system(size: 11, weight: .medium, design: .rounded))
-                .foregroundStyle(.primary.opacity(0.75))
-        }
-        .padding(.horizontal, 9)
-        .padding(.vertical, 6)
-        .background(color.opacity(0.08))
-        .clipShape(Capsule())
-        .overlay(Capsule().stroke(color.opacity(0.18), lineWidth: 1))
     }
 }
 
@@ -515,14 +487,9 @@ struct EFInsightCard: View {
 
     var body: some View {
         VStack(alignment: .leading, spacing: 0) {
-            HStack(spacing: 8) {
-                Image(systemName: "sparkles")
-                    .font(.system(size: 13, weight: .bold))
-                    .foregroundStyle(AppTheme.auraGold)
-                Text("Emergency Fund Overview")
-                    .font(.system(size: 15, weight: .bold, design: .rounded))
-            }
-            .padding(.bottom, 16)
+            Text("Emergency Fund Overview")
+                .font(.system(size: 15, weight: .bold, design: .rounded))
+                .padding(.bottom, 16)
 
             HStack(spacing: 12) {
                 iconCircle("shield.lefthalf.filled", color: AppTheme.vibrantCyan)

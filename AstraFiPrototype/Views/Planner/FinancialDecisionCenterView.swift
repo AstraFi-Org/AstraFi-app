@@ -344,6 +344,7 @@ private struct FinancialReadinessMiniCard: View {
 // MARK: - Decision center detail
 
 struct FinancialDecisionCenterView: View {
+    @Environment(\.colorScheme) private var colorScheme
     @Environment(AppStateManager.self) private var appState
     @State private var aiInsight: String?
     @State private var isLoadingAIInsight = false
@@ -402,7 +403,7 @@ struct FinancialDecisionCenterView: View {
         }
         .navigationTitle("Decision Center")
         .navigationBarTitleDisplayMode(.inline)
-        .background(AppTheme.appBackground(for: .light))
+        .background(AppTheme.appBackground(for: colorScheme).ignoresSafeArea())
         .task { await loadAIInsight() }
     }
 
