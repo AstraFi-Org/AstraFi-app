@@ -384,9 +384,6 @@ struct CoreVitalsCard: View {
 
             // ── Section header
             HStack(spacing: 8) {
-                Image(systemName: "sparkles")
-                    .font(.system(size: 13, weight: .bold))
-                    .foregroundStyle(AppTheme.auraGold)
                 Text("Your Financial Snapshot")
                     .font(.system(size: 15, weight: .bold, design: .rounded))
                 Spacer()
