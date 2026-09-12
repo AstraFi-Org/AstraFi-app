@@ -10,6 +10,34 @@ final class AppStateManager {
     static let defaultTaxRate: Double = 0.0
 
     private var isSyncing = false
+
+    // The current Supabase profile schema stores the emergency-fund total but not
+    // its composition. Keep the composition per signed-in user so a profile reload
+    // cannot turn linked investments into manual cash.
+    private struct EmergencyFundComposition: Codable {
+        let manualAmount: Double
+        let linkedInvestmentIDs: [UUID]
+    }
+
+    private func emergencyFundCompositionKey(for userID: UUID) -> String {
+        "emergencyFundComposition.\(userID.uuidString)"
+    }
+
+    private func saveEmergencyFundComposition(_ composition: EmergencyFundComposition, userID: UUID) {
+        guard let data = try? JSONEncoder().encode(composition) else { return }
+        UserDefaults.standard.set(data, forKey: emergencyFundCompositionKey(for: userID))
+    }
+
+    private func applySavedEmergencyFundComposition(to profile: inout AstraUserProfile, userID: UUID) {
+        guard
+            let data = UserDefaults.standard.data(forKey: emergencyFundCompositionKey(for: userID)),
+            let composition = try? JSONDecoder().decode(EmergencyFundComposition.self, from: data)
+        else { return }
+
+        let validIDs = Set(profile.investments.map(\.id))
+        profile.emergencyFundManualAmount = composition.manualAmount
+        profile.emergencyFundLinkedInvestmentIDs = composition.linkedInvestmentIDs.filter { validIDs.contains($0) }
+    }
     
     var isLoading: Bool = true
     var isAssessmentSkipped: Bool = false
@@ -412,6 +440,7 @@ final class AppStateManager {
                             sanitizedProfile.investments = sanitizedProfile.investments.deduplicated()
                             sanitizedProfile.loans = sanitizedProfile.loans.deduplicated()
                             sanitizedProfile.insurances = sanitizedProfile.insurances.deduplicated()
+                            self.applySavedEmergencyFundComposition(to: &sanitizedProfile, userID: session.user.id)
                             self.currentProfile = sanitizedProfile
                             self.isAuthenticated = true
                             self.hasCompletedOnboarding = true
@@ -438,6 +467,7 @@ final class AppStateManager {
                     sanitizedProfile.investments = sanitizedProfile.investments.deduplicated()
                     sanitizedProfile.loans = sanitizedProfile.loans.deduplicated()
                     sanitizedProfile.insurances = sanitizedProfile.insurances.deduplicated()
+                    self.applySavedEmergencyFundComposition(to: &sanitizedProfile, userID: session.user.id)
                     self.currentProfile = sanitizedProfile
                     self.isAuthenticated = true
                     self.hasCompletedOnboarding = true
@@ -1951,6 +1981,10 @@ final class AppStateManager {
         Task {
             if let session = try? await supabase.auth.session,
                let profile = currentProfile {
+                self.saveEmergencyFundComposition(
+                    EmergencyFundComposition(manualAmount: max(0, manualAmount).safeFinite, linkedInvestmentIDs: uniqueLinkedIDs),
+                    userID: session.user.id
+                )
                 try? await SupabaseRepository.shared.syncFullProfile(profile, userId: session.user.id)
             }
         }

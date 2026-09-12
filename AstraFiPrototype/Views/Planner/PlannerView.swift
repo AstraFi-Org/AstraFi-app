@@ -147,6 +147,16 @@ struct PlannerView: View {
                 .environment(appState)
         }
         .sheet(isPresented: $showCompanyAnalyzer)  { CompanyAnalyzerView() }
+        .onAppear { includeEmergencyFundInvestmentsInGrowth() }
+        .onChange(of: profile?.emergencyFundLinkedInvestmentIDs ?? []) { _, _ in
+            includeEmergencyFundInvestmentsInGrowth()
+        }
+    }
+
+    private func includeEmergencyFundInvestmentsInGrowth() {
+        let linkedIDs = Set(profile?.emergencyFundLinkedInvestmentIDs ?? [])
+        guard !linkedIDs.isEmpty else { return }
+        plannerSelectedInvestmentIDs.formUnion(linkedIDs)
     }
 
     // MARK: - Extracted Sections (Fixes SwiftUI type-checking timeout)

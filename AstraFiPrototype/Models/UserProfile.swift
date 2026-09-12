@@ -480,6 +480,8 @@ enum AstraPaymentStatus: String, Codable, CaseIterable {
     case missed = "Missed"
     case pending = "Pending"
     case overdue = "Overdue"
+    case skipped = "Skipped"
+    case unknown = "Unknown"
 }
 
 enum AstraLoanType: String, Codable, CaseIterable {

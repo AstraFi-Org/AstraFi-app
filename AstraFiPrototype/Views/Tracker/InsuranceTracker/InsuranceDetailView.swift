@@ -19,11 +19,21 @@ struct InsuranceDetailView: View {
         return f
     }
 
+    private var analysis: InsuranceAnalysisResult? {
+        guard let profile = appState.currentProfile else { return nil }
+        return InsuranceAnalysisEngine.analyze(policy: activeInsurance, profile: profile)
+    }
+
     var body: some View {
         ScrollView {
 
                 VStack(spacing: 24) {
+                    if let analysis { insuranceHealthSection(analysis) }
                     headerCard
+                    if let analysis { attentionSection(analysis) }
+                    if let analysis, analysis.hasProtectionAnalysis { coverageSection(analysis) }
+                    if let analysis { premiumTrackerSection(analysis) }
+                    paymentHistorySection
                     premiumSection
 
                     if let life = activeInsurance.lifeDetails {
@@ -43,6 +53,8 @@ struct InsuranceDetailView: View {
                     }
 
                     datesSection
+                    if let analysis { financialImpactSection(analysis) }
+                    if let analysis { actionsSection(analysis) }
                 }
                 .padding(.horizontal)
             }
@@ -134,6 +146,124 @@ struct InsuranceDetailView: View {
         .background(AppTheme.cardBackground)
         .cornerRadius(20)
         .shadow(color: AppTheme.adaptiveShadow, radius: 10, x: 0, y: 5)
+    }
+
+    private func insuranceHealthSection(_ analysis: InsuranceAnalysisResult) -> some View {
+        VStack(alignment: .leading, spacing: 12) {
+            HStack {
+                VStack(alignment: .leading, spacing: 4) {
+                    Text("INSURANCE HEALTH").font(.caption.weight(.bold)).foregroundStyle(.white.opacity(0.75))
+                    Text(analysis.insuranceHealthScore.map { "\($0)/100" } ?? "Verification needed").font(.system(size: 30, weight: .bold)).foregroundStyle(.white)
+                    Text(analysis.insuranceHealthStatus.rawValue).font(.subheadline.weight(.semibold)).foregroundStyle(.white.opacity(0.9))
+                }
+                Spacer()
+                Image(systemName: "shield.checkered").font(.system(size: 30)).foregroundStyle(.white.opacity(0.9))
+            }
+            if !analysis.dataValidationWarnings.isEmpty {
+                Text(analysis.dataValidationWarnings[0]).font(.caption).foregroundStyle(.white.opacity(0.85))
+            }
+        }
+        .padding(20).background(AppTheme.accentGradient).clipShape(RoundedRectangle(cornerRadius: 20, style: .continuous))
+    }
+
+    private func attentionSection(_ analysis: InsuranceAnalysisResult) -> some View {
+        Group {
+            if !analysis.topIssues.isEmpty {
+                _DetailSection(title: "Attention Required", icon: "exclamationmark.triangle.fill") {
+                    VStack(alignment: .leading, spacing: 14) {
+                        ForEach(Array(analysis.topIssues.prefix(3))) { issue in
+                            VStack(alignment: .leading, spacing: 4) {
+                                Text(issue.title).font(.subheadline.weight(.bold)).foregroundStyle(issue.priority == .critical ? AppTheme.vibrantRed : AppTheme.vibrantOrange)
+                                Text(issue.detail).font(.subheadline).foregroundStyle(.secondary)
+                                Text(issue.nextStep).font(.caption).foregroundStyle(.secondary)
+                            }
+                            if issue.id != analysis.topIssues.prefix(3).last?.id { Divider() }
+                        }
+                    }
+                }
+            }
+        }
+    }
+
+    private func coverageSection(_ analysis: InsuranceAnalysisResult) -> some View {
+        _DetailSection(title: "Coverage Adequacy", icon: "shield.lefthalf.filled") {
+            VStack(spacing: 14) {
+                _DetailRow(icon: "shield.fill", label: "Current life cover", value: analysis.currentCoverage.toCurrency(), isBold: true)
+                _DetailRow(icon: "target", label: "Estimated protection need", value: (analysis.estimatedRequiredCoverage ?? 0).toCurrency())
+                _DetailRow(icon: "exclamationmark.triangle", label: "Potential gap", value: (analysis.protectionGap ?? 0).toCurrency(), isBold: true)
+                ProgressView(value: analysis.estimatedRequiredCoverage ?? 0 > 0 ? min(1, analysis.currentCoverage / (analysis.estimatedRequiredCoverage ?? 1)) : 0).tint(analysis.protectionGap ?? 0 > 0 ? AppTheme.vibrantOrange : AppTheme.auraGreen)
+                Text("Estimate uses income replacement, outstanding loans, a portion of unmet goals, and liquid protection. It is not regulated financial advice.").font(.caption).foregroundStyle(.secondary)
+            }
+        }
+    }
+
+    private func premiumTrackerSection(_ analysis: InsuranceAnalysisResult) -> some View {
+        _DetailSection(title: "Premium Tracker", icon: "calendar.badge.clock") {
+            VStack(spacing: 14) {
+                _DetailRow(icon: "indianrupeesign", label: "Monthly equivalent", value: analysis.monthlyPremiumEquivalent.toCurrency())
+                _DetailRow(icon: "chart.pie", label: "Affordability", value: analysis.premiumAffordabilityStatus.rawValue, isBold: true)
+                if let burden = analysis.premiumBurdenPercentage { _DetailRow(icon: "percent", label: "Premium burden", value: String(format: "%.1f%% of annual income", burden)) }
+                if let due = analysis.nextPremiumDue { _DetailRow(icon: "calendar", label: "Next due", value: "\(df.string(from: due))\(analysis.daysUntilPremiumDue.map { " • \($0)d" } ?? "")") }
+                if activeInsurance.payments.isEmpty { Text("Payment status not updated. AstraFi does not assume a premium was missed.").font(.caption).foregroundStyle(.secondary) }
+                if let due = analysis.nextPremiumDue {
+                    Menu {
+                        Button("Paid") { recordPayment(status: .paid, date: due) }
+                        Button("Pending") { recordPayment(status: .pending, date: due) }
+                        Button("Skipped") { recordPayment(status: .skipped, date: due) }
+                        Button("Unknown") { recordPayment(status: .unknown, date: due) }
+                    } label: {
+                        Label("Update payment status", systemImage: "checkmark.circle")
+                            .font(.subheadline.weight(.semibold)).foregroundStyle(AppTheme.auraIndigo)
+                    }
+                }
+            }
+        }
+    }
+
+    private var paymentHistorySection: some View {
+        _DetailSection(title: "Payment History", icon: "list.bullet.rectangle") {
+            VStack(spacing: 12) {
+                if activeInsurance.payments.isEmpty {
+                    Text("No payments have been recorded. Add a status only after checking your payment record.").font(.subheadline).foregroundStyle(.secondary)
+                } else {
+                    ForEach(activeInsurance.payments.sorted { $0.date > $1.date }) { payment in
+                        HStack {
+                            VStack(alignment: .leading, spacing: 2) { Text(df.string(from: payment.date)).font(.subheadline.weight(.semibold)); Text(payment.status.rawValue).font(.caption).foregroundStyle(.secondary) }
+                            Spacer(); Text(payment.amount.toCurrency()).font(.subheadline.weight(.bold))
+                        }
+                        if payment.id != activeInsurance.payments.sorted(by: { $0.date > $1.date }).last?.id { Divider() }
+                    }
+                }
+            }
+        }
+    }
+
+    private func recordPayment(status: AstraPaymentStatus, date: Date) {
+        var updated = activeInsurance
+        updated.payments.removeAll { Calendar.current.isDate($0.date, inSameDayAs: date) }
+        updated.payments.append(AstraInsurancePayment(date: date, amount: activeInsurance.annualPremium, status: status))
+        appState.updateInsurance(updated)
+    }
+
+    private func financialImpactSection(_ analysis: InsuranceAnalysisResult) -> some View {
+        _DetailSection(title: "Financial Impact", icon: "chart.line.uptrend.xyaxis") {
+            VStack(spacing: 14) {
+                _DetailRow(icon: "indianrupeesign", label: "Monthly premium equivalent", value: analysis.monthlyPremiumEquivalent.toCurrency())
+                if let remaining = analysis.goalImpact { _DetailRow(icon: "target", label: "Remaining monthly goal capacity", value: remaining.toCurrency()) }
+                Text("This treats insurance premiums as an obligation separate from investments when estimating available capacity.").font(.caption).foregroundStyle(.secondary)
+            }
+        }
+    }
+
+    private func actionsSection(_ analysis: InsuranceAnalysisResult) -> some View {
+        _DetailSection(title: "Recommended Actions", icon: "checklist") {
+            VStack(alignment: .leading, spacing: 12) {
+                if analysis.topIssues.isEmpty { Text("No immediate actions are recorded. Review this policy annually or when your responsibilities change.").font(.subheadline).foregroundStyle(.secondary) }
+                ForEach(Array(analysis.topIssues.prefix(4)).enumerated(), id: \.element.id) { index, action in
+                    HStack(alignment: .top, spacing: 10) { Text("\(index + 1)").font(.caption.weight(.bold)).foregroundStyle(.white).frame(width: 22, height: 22).background(AppTheme.auraIndigo).clipShape(Circle()); VStack(alignment: .leading, spacing: 2) { Text(action.title).font(.subheadline.weight(.semibold)); Text(action.nextStep).font(.caption).foregroundStyle(.secondary) } }
+                }
+            }
+        }
     }
 
     private var premiumSection: some View {
