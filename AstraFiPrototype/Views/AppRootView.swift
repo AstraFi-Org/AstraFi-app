@@ -41,8 +41,10 @@ struct AppRootView: View {
                 showingMonthlyAssessmentPrompt = false
                 showingMonthlyAssessment = true
             }
-            .presentationDetents([.height(380)])
+            .presentationDetents([.height(215)])
             .presentationDragIndicator(.visible)
+            .presentationBackground(AppTheme.cardBackground)
+            .presentationCornerRadius(28)
         }
         .fullScreenCover(isPresented: $showingMonthlyAssessment) {
             StartAssesmentView(
@@ -103,15 +105,6 @@ struct MonthlyAssessmentPromptSheet: View {
 
     var body: some View {
         VStack(spacing: 18) {
-            ZStack {
-                Circle()
-                    .fill(AppTheme.auraIndigo.opacity(0.12))
-                    .frame(width: 64, height: 64)
-                Image(systemName: "calendar.badge.clock")
-                    .font(.system(size: 28, weight: .semibold))
-                    .foregroundStyle(AppTheme.auraIndigo)
-            }
-
             VStack(spacing: 8) {
                 Text("Monthly assessment due")
                     .font(.system(size: 22, weight: .bold))
@@ -121,6 +114,7 @@ struct MonthlyAssessmentPromptSheet: View {
                     .multilineTextAlignment(.center)
                     .fixedSize(horizontal: false, vertical: true)
             }
+            .padding(.top, 6)
 
             HStack(spacing: 12) {
                 Button {
@@ -128,9 +122,9 @@ struct MonthlyAssessmentPromptSheet: View {
                 } label: {
                     Text("Later")
                         .font(.system(size: 16, weight: .semibold))
-                        .foregroundStyle(.primary)
+                        .foregroundStyle(AppTheme.auraIndigo)
                         .frame(maxWidth: .infinity)
-                        .frame(height: 54)
+                        .frame(height: 52)
                         .background(Color(uiColor: .secondarySystemBackground))
                         .clipShape(Capsule())
                 }
@@ -142,16 +136,14 @@ struct MonthlyAssessmentPromptSheet: View {
                         .font(.system(size: 16, weight: .semibold))
                         .foregroundStyle(.white)
                         .frame(maxWidth: .infinity)
-                        .frame(height: 54)
+                        .frame(height: 52)
                         .background(AppTheme.auraIndigo)
                         .clipShape(Capsule())
                 }
             }
-            .padding(.top, 6)
         }
-        .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .top)
         .padding(.horizontal, 24)
-        .padding(.top, 28)
-        .padding(.bottom, 20)
+        .padding(.top, 16)
+        .padding(.bottom, 12)
     }
 }
