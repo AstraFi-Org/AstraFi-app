@@ -85,7 +85,10 @@ struct InsuranceListView: View {
 
     private func metric(_ label: String, _ value: String, dark: Bool = false) -> some View { VStack(alignment: .leading, spacing: 3) { Text(label).font(.caption).foregroundStyle(dark ? Color.secondary : Color.white.opacity(0.72)); Text(value).font(.subheadline.weight(.bold)).foregroundStyle(dark ? Color.primary : Color.white) } }
     private func healthLabel(_ score: Int) -> String { score < 40 ? "Critical" : score < 60 ? "Needs Attention" : score < 75 ? "Review Recommended" : score < 90 ? "Good" : "Strong" }
-    private func policyKind(_ policy: AstraInsurance) -> String { policy.lifeDetails?.lifeInsuranceType.map { "\(policy.insuranceType.rawValue) / \($0)" } ?? "\(policy.insuranceType.rawValue) Insurance" }
+    private func policyKind(_ policy: AstraInsurance) -> String {
+        let kind = InsuranceAnalysisEngine.productKind(for: policy)
+        return "\(policy.insuranceType.rawValue) · \(kind.purposeLabel)"
+    }
     private func statusColor(_ status: InsuranceHealthStatus) -> Color { switch status { case .critical, .verificationRequired: AppTheme.vibrantRed; case .needsAttention, .reviewRecommended: AppTheme.vibrantOrange; case .good, .strong: AppTheme.auraGreen } }
     private func statusPill(_ text: String, color: Color) -> some View { Text(text).font(.caption2.weight(.bold)).foregroundStyle(color).padding(.horizontal, 8).padding(.vertical, 5).background(color.opacity(0.13)).clipShape(Capsule()) }
 }

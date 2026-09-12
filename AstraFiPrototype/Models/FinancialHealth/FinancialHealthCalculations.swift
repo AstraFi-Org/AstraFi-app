@@ -149,7 +149,12 @@ enum FinancialHealthCalculations {
             adultDependents: insights.adultDependents,
             childDependents: childDeps,
             totalProtectionCoverage: coverage,
-            insuranceAssessed: insuranceAssessed
+            insuranceAssessed: insuranceAssessed,
+            annualInsurancePremium: totalMonthlyInsurancePremium(profile: profile, data: data) * 12,
+            insurancePremiumToIncome: income > 0 ? (totalMonthlyInsurancePremium(profile: profile, data: data) * 12) / (income * 12) * 100 : nil,
+            insurancePremiumToSurplus: surplus > 0 ? (totalMonthlyInsurancePremium(profile: profile, data: data) / surplus) * 100 : nil,
+            estimatedProtectionNeed: profile.map { InsuranceAnalysisEngine.householdProtection(profile: $0).estimatedRequiredProtection },
+            lifeProtectionGap: profile.map { InsuranceAnalysisEngine.householdProtection(profile: $0).protectionGap }
         )
     }
 

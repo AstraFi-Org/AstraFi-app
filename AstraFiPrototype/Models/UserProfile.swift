@@ -515,6 +515,8 @@ enum AstraInsuranceType: String, Codable, CaseIterable {
     case termLifeInsurance = "Term Life"
     case criticalIllness = "Critical Illness"
     case ulip = "ULIP"
+    case personalAccident = "Personal Accident"
+    case property = "Property"
     case other = "Other"
 }
 
@@ -576,12 +578,17 @@ struct AstraLifeInsuranceDetails: Codable, Equatable {
 }
 
 struct AstraHealthInsuranceDetails: Codable, Equatable {
-    var planType: String? = nil 
+    var planType: String? = nil
     var coveredMembers: [AstraCoveredMember] = []
     var roomRentLimit: Double? = nil
     var prePostHospitalization: String? = nil
     var daycareProcedures: Bool = false
     var networkHospitalsCount: Int? = nil
+    var deductible: Double? = nil
+    var copayPercent: Double? = nil
+    var waitingPeriodMonths: Int? = nil
+    var noClaimBonus: Double? = nil
+    var coveredIllnesses: String? = nil
 }
 
 struct AstraMotorInsuranceDetails: Codable, Equatable {
@@ -609,6 +616,13 @@ struct AstraInsurance: Codable, Identifiable, Equatable {
     var addOnCost: Double = 0
 
     var premiumFrequency: AstraPremiumFrequency = .yearly
+    var installmentPremium: Double? = nil
+    var planName: String? = nil
+    var planNumber: String? = nil
+    var policyTermYears: Int? = nil
+    var premiumPayingTermYears: Int? = nil
+    var lastUpdated: Date? = nil
+    var hasPolicyDocument: Bool? = nil
 
     var lifeDetails: AstraLifeInsuranceDetails? = nil
     var healthDetails: AstraHealthInsuranceDetails? = nil
@@ -619,16 +633,17 @@ struct AstraInsurance: Codable, Identifiable, Equatable {
     var payments: [AstraInsurancePayment] = []
 
     var surrenderValue: Double? = nil
+    var paidUpValue: Double? = nil
     var lockInPeriodMonths: Int? = nil
+    var loanAvailable: Bool? = nil
     var maturityDate: Date? = nil
     var expectedMaturityAmount: Double? = nil
+    var userConfirmed: Bool? = nil
 
     var status: AstraPolicyStatus {
         let now = Date()
-        if let expiry = expiryDate, expiry < now {
-            return .lapsed
-        }
-
+        if let maturity = maturityDate, maturity < now { return .matured }
+        if let expiry = expiryDate, expiry < now { return .lapsed }
         return .active
     }
 }
@@ -1081,6 +1096,16 @@ extension AstraInsurance {
         if let surr = incoming.surrenderValue { result.surrenderValue = surr }
         if let mat = incoming.maturityDate { result.maturityDate = mat }
         if let expMat = incoming.expectedMaturityAmount { result.expectedMaturityAmount = expMat }
+        if let installment = incoming.installmentPremium { result.installmentPremium = installment }
+        if let planName = incoming.planName, !planName.isEmpty { result.planName = planName }
+        if let planNumber = incoming.planNumber, !planNumber.isEmpty { result.planNumber = planNumber }
+        if let term = incoming.policyTermYears { result.policyTermYears = term }
+        if let ppt = incoming.premiumPayingTermYears { result.premiumPayingTermYears = ppt }
+        if let updated = incoming.lastUpdated { result.lastUpdated = updated }
+        if let document = incoming.hasPolicyDocument { result.hasPolicyDocument = document }
+        if let paidUp = incoming.paidUpValue { result.paidUpValue = paidUp }
+        if let loan = incoming.loanAvailable { result.loanAvailable = loan }
+        if let confirmed = incoming.userConfirmed { result.userConfirmed = confirmed }
 
         var combinedClaims = self.claims
         for c in incoming.claims {

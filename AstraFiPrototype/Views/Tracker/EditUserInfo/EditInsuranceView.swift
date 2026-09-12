@@ -19,6 +19,12 @@ struct EditInsuranceView: View {
     @State private var taxesGST = ""
     @State private var addOnCost = ""
     @State private var premiumFreq: AstraPremiumFrequency = .yearly
+    @State private var planName = ""
+    @State private var planNumber = ""
+    @State private var policyTerm = ""
+    @State private var premiumPayingTerm = ""
+    @State private var installmentPremium = ""
+    @State private var hasPolicyDocument = false
 
     @State private var nomineeName = ""
     @State private var maturityBenefit = ""
@@ -27,6 +33,10 @@ struct EditInsuranceView: View {
 
     @State private var planType = "Individual"
     @State private var roomRentLimit = ""
+    @State private var deductible = ""
+    @State private var copayPercent = ""
+    @State private var waitingPeriodMonths = ""
+    @State private var coveredIllnesses = ""
     @State private var prePostHosp = ""
     @State private var daycareProc = true
     @State private var networkHosp = ""
@@ -38,42 +48,53 @@ struct EditInsuranceView: View {
     @State private var rsa = false
 
     @State private var surrenderValue = ""
+    @State private var paidUpValue = ""
     @State private var lockInPeriod = ""
     @State private var expectedMaturity = ""
 
     var body: some View {
         NavigationStack {
             Form {
-                Section(header: Text("Basic Details")) {
+                Section(header: Text("Policy Identity")) {
                     Picker("Insurance Type", selection: $type) {
                         ForEach(AstraInsuranceType.allCases, id: \.self) { t in Text(t.rawValue).tag(t) }
                     }
                     _EditInsField(title: "Provider / Insurer", text: $provider)
+                    _EditInsField(title: "Plan / Product Name", text: $planName)
+                    _EditInsField(title: "Plan Number", text: $planNumber, isNumber: true)
                     _EditInsField(title: "Policy Number", text: $policyNumber)
-                    _EditInsField(title: "Sum Assured (Cover)", text: $cover, isCurrency: true)
-                    _EditInsField(title: "Annual Premium", text: $premium, isCurrency: true)
                     DatePicker("Start Date", selection: $startDate, displayedComponents: .date)
-                    Toggle("Has Expiry Date", isOn: $hasExpiry)
+                    _EditInsField(title: "Policy Term (Years)", text: $policyTerm, isNumber: true)
+                    _EditInsField(title: "Premium Paying Term (Years)", text: $premiumPayingTerm, isNumber: true)
+                    Toggle("Has Expiry / Maturity Date", isOn: $hasExpiry)
                     if hasExpiry {
-                        DatePicker("Expiry Date", selection: $expiryDate, displayedComponents: .date)
+                        DatePicker("End Date", selection: $expiryDate, displayedComponents: .date)
                     }
                 }
 
-                Section(header: Text("Premium Breakdown")) {
-                    _EditInsField(title: "Base Premium", text: $basePremium, isCurrency: true)
-                    _EditInsField(title: "Taxes & GST", text: $taxesGST, isCurrency: true)
-                    _EditInsField(title: "Add-On / Rider Cost", text: $addOnCost, isCurrency: true)
+                Section(header: Text("Protection & Financial Data")) {
+                    _EditInsField(title: "Sum Assured / Cover", text: $cover, isCurrency: true)
                     Picker("Payment Frequency", selection: $premiumFreq) {
                         ForEach(AstraPremiumFrequency.allCases, id: \.self) { f in Text(f.rawValue).tag(f) }
                     }
+                    _EditInsField(title: "Installment Premium (Per Cycle)", text: $installmentPremium, isCurrency: true)
+                    _EditInsField(title: "Annualized Premium", text: $premium, isCurrency: true)
                 }
 
-                if type == .life || type == .termLifeInsurance || type == .ulip {
-                    Section(header: Text("Life Insurance Details")) {
+                Section(header: Text("Premium Breakdown (Optional)")) {
+                    _EditInsField(title: "Base Premium", text: $basePremium, isCurrency: true)
+                    _EditInsField(title: "Taxes & GST", text: $taxesGST, isCurrency: true)
+                    _EditInsField(title: "Add-On / Rider Cost", text: $addOnCost, isCurrency: true)
+                }
+
+                if type == .life || type == .termLifeInsurance || type == .ulip || type == .personalAccident {
+                    Section(header: Text("Life & Protection Details")) {
                         _EditInsField(title: "Nominee Name", text: $nomineeName)
                         _EditInsField(title: "Life Insurance Type", text: $lifeInsuranceTypeStr)
                         _EditInsField(title: "Death Benefit", text: $deathBenefit, isCurrency: true)
-                        _EditInsField(title: "Maturity Benefit", text: $maturityBenefit, isCurrency: true)
+                        if type != .termLifeInsurance {
+                            _EditInsField(title: "Maturity Benefit", text: $maturityBenefit, isCurrency: true)
+                        }
                     }
                 }
 
@@ -81,6 +102,10 @@ struct EditInsuranceView: View {
                     Section(header: Text("Health Insurance Details")) {
                         _EditInsField(title: "Plan Type", text: $planType)
                         _EditInsField(title: "Room Rent Limit", text: $roomRentLimit, isCurrency: true)
+                        _EditInsField(title: "Deductible", text: $deductible, isCurrency: true)
+                        _EditInsField(title: "Co-pay (%)", text: $copayPercent, isNumber: true)
+                        _EditInsField(title: "Waiting Period (Months)", text: $waitingPeriodMonths, isNumber: true)
+                        _EditInsField(title: "Covered Illnesses", text: $coveredIllnesses)
                         _EditInsField(title: "Pre/Post Hospitalization Terms", text: $prePostHosp)
                         _EditInsField(title: "Network Hospitals Count", text: $networkHosp, isNumber: true)
                         Toggle("Daycare Procedures Covered", isOn: $daycareProc)
@@ -97,10 +122,12 @@ struct EditInsuranceView: View {
                     }
                 }
 
-                Section(header: Text("Advanced (Optional)")) {
+                Section(header: Text("Liquidity & Verification")) {
                     _EditInsField(title: "Surrender Value", text: $surrenderValue, isCurrency: true)
+                    _EditInsField(title: "Paid-Up Value", text: $paidUpValue, isCurrency: true)
                     _EditInsField(title: "Lock-in Period (Months)", text: $lockInPeriod, isNumber: true)
                     _EditInsField(title: "Expected Maturity Amount", text: $expectedMaturity, isCurrency: true)
+                    Toggle("Policy Document Available", isOn: $hasPolicyDocument)
                 }
 
             }
@@ -119,9 +146,9 @@ struct EditInsuranceView: View {
                     Button(action: saveChanges) {
                         Image(systemName: "checkmark")
                             .font(.system(size: 16, weight: .bold))
-                            .foregroundColor(provider.isEmpty || cover.isEmpty || premium.isEmpty ? .gray : .blue)
+                            .foregroundColor(provider.isEmpty || cover.isEmpty || (premium.isEmpty && installmentPremium.isEmpty) ? .gray : .blue)
                     }
-                    .disabled(provider.isEmpty || cover.isEmpty || premium.isEmpty)
+                    .disabled(provider.isEmpty || cover.isEmpty || (premium.isEmpty && installmentPremium.isEmpty))
                 }
             }
         }
@@ -130,11 +157,17 @@ struct EditInsuranceView: View {
     private func loadPolicy() {
         type = insurance.insuranceType
         provider = insurance.provider
+        planName = insurance.planName ?? ""
+        planNumber = insurance.planNumber ?? ""
         policyNumber = insurance.policyNumber
         cover = "\(insurance.sumAssured.safeInt)"
         premium = "\(insurance.annualPremium.safeInt)"
+        if let installment = insurance.installmentPremium { installmentPremium = "\(installment.safeInt)" }
         startDate = insurance.startDate
-        if let exp = insurance.expiryDate { hasExpiry = true; expiryDate = exp }
+        if let exp = insurance.expiryDate ?? insurance.maturityDate { hasExpiry = true; expiryDate = exp }
+        if let term = insurance.policyTermYears { policyTerm = "\(term)" }
+        if let ppt = insurance.premiumPayingTermYears { premiumPayingTerm = "\(ppt)" }
+        hasPolicyDocument = insurance.hasPolicyDocument ?? false
 
         basePremium = "\(insurance.basePremium.safeInt)"
         taxesGST = "\(insurance.taxesGST.safeInt)"
@@ -151,6 +184,10 @@ struct EditInsuranceView: View {
         if let health = insurance.healthDetails {
             planType = health.planType ?? ""
             if let rrl = health.roomRentLimit { roomRentLimit = "\(rrl.safeInt)" }
+            if let ded = health.deductible { deductible = "\(ded.safeInt)" }
+            if let copay = health.copayPercent { copayPercent = "\(copay.safeInt)" }
+            if let wait = health.waitingPeriodMonths { waitingPeriodMonths = "\(wait)" }
+            coveredIllnesses = health.coveredIllnesses ?? ""
             prePostHosp = health.prePostHospitalization ?? ""
             if let nc = health.networkHospitalsCount { networkHosp = "\(nc)" }
             daycareProc = health.daycareProcedures
@@ -165,26 +202,44 @@ struct EditInsuranceView: View {
         }
 
         if let sv = insurance.surrenderValue { surrenderValue = "\(sv.safeInt)" }
+        if let pv = insurance.paidUpValue { paidUpValue = "\(pv.safeInt)" }
         if let lip = insurance.lockInPeriodMonths { lockInPeriod = "\(lip)" }
         if let em = insurance.expectedMaturityAmount { expectedMaturity = "\(em.safeInt)" }
     }
 
     private func saveChanges() {
+        let periods = InsuranceAnalysisEngine.periodsPerYear(premiumFreq)
+        let annualVal: Double
+        if let direct = Double(premium), direct > 0 {
+            annualVal = direct
+        } else if let inst = Double(installmentPremium), inst > 0 {
+            annualVal = periods > 0 ? inst * periods : inst
+        } else {
+            annualVal = insurance.annualPremium
+        }
+
         var updated = insurance
         updated.insuranceType = type
         updated.provider = provider
+        updated.planName = planName.isEmpty ? nil : planName
+        updated.planNumber = planNumber.isEmpty ? nil : planNumber
         updated.policyNumber = policyNumber
         updated.sumAssured = Double(cover) ?? insurance.sumAssured
-        updated.annualPremium = Double(premium) ?? insurance.annualPremium
+        updated.annualPremium = annualVal
+        updated.installmentPremium = Double(installmentPremium)
         updated.startDate = startDate
         updated.expiryDate = hasExpiry ? expiryDate : nil
+        updated.policyTermYears = Int(policyTerm)
+        updated.premiumPayingTermYears = Int(premiumPayingTerm)
+        updated.hasPolicyDocument = hasPolicyDocument
+        updated.lastUpdated = Date()
 
         updated.basePremium = Double(basePremium) ?? 0
         updated.taxesGST = Double(taxesGST) ?? 0
         updated.addOnCost = Double(addOnCost) ?? 0
         updated.premiumFrequency = premiumFreq
 
-        if type == .life || type == .termLifeInsurance || type == .ulip {
+        if type == .life || type == .termLifeInsurance || type == .ulip || type == .personalAccident {
             updated.lifeDetails = AstraLifeInsuranceDetails(
                 nomineeName: nomineeName.isEmpty ? nil : nomineeName,
                 maturityBenefit: Double(maturityBenefit),
@@ -199,7 +254,11 @@ struct EditInsuranceView: View {
                 roomRentLimit: Double(roomRentLimit),
                 prePostHospitalization: prePostHosp.isEmpty ? nil : prePostHosp,
                 daycareProcedures: daycareProc,
-                networkHospitalsCount: Int(networkHosp)
+                networkHospitalsCount: Int(networkHosp),
+                deductible: Double(deductible),
+                copayPercent: Double(copayPercent),
+                waitingPeriodMonths: Int(waitingPeriodMonths),
+                coveredIllnesses: coveredIllnesses.isEmpty ? nil : coveredIllnesses
             )
             updated.lifeDetails = nil
             updated.motorDetails = nil
@@ -208,6 +267,8 @@ struct EditInsuranceView: View {
                 vehicleModel: vehicleModel.isEmpty ? nil : vehicleModel,
                 vehicleNumber: vehicleNumber.isEmpty ? nil : vehicleNumber,
                 idv: Double(idv),
+                thirdPartyCoverage: true,
+                ownDamageCoverage: true,
                 zeroDep: zeroDep,
                 roadsideAssistance: rsa
             )
@@ -216,6 +277,7 @@ struct EditInsuranceView: View {
         }
 
         updated.surrenderValue = Double(surrenderValue)
+        updated.paidUpValue = Double(paidUpValue)
         updated.lockInPeriodMonths = Int(lockInPeriod)
         updated.expectedMaturityAmount = Double(expectedMaturity)
 

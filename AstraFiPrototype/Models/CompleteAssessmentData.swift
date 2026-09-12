@@ -174,13 +174,15 @@ extension CompleteAssessmentData {
             details.surrenderValue = numberString(insurance.surrenderValue ?? 0)
             details.expectedMaturityAmount = numberString(insurance.expectedMaturityAmount ?? 0)
             return .ulip(details)
-        case .life, .other:
+        case .personalAccident, .life, .other:
             var details = AssessmentInsuranceEntry.LifeDetails()
             details.nomineeName = insurance.lifeDetails?.nomineeName ?? ""
             details.maturityBenefit = numberString(insurance.lifeDetails?.maturityBenefit ?? 0)
             details.deathBenefit = numberString(insurance.lifeDetails?.deathBenefit ?? insurance.sumAssured)
             details.lifeInsuranceType = insurance.lifeDetails?.lifeInsuranceType ?? details.lifeInsuranceType
             return .life(details)
+        case .property:
+            return .travel(AssessmentInsuranceEntry.TravelDetails())
         }
     }
 

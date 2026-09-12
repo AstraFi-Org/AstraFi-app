@@ -12,6 +12,16 @@ struct AstraFiPrototypeApp: App {
                 .task {
                     Secrets.printConfigurationStatus()
                     await InvestmentIntelligenceRepository().warmHomeAssets()
+                    #if DEBUG
+                    let insuranceCases = InsuranceAnalysisVerification.run()
+                    let failed = insuranceCases.filter { !$0.passed }
+                    print("=== INSURANCE ANALYSIS VERIFICATION: \(insuranceCases.count) CASES ===")
+                    for res in insuranceCases {
+                        print("  \(res.passed ? "✅ PASS" : "❌ FAIL"): \(res.name) (\(res.detail))")
+                    }
+                    assert(failed.isEmpty, "InsuranceAnalysisVerification failed: \(failed.map { "\($0.name): \($0.detail)" })")
+                    assert(FinancialHealthScoringVerification.allPassed(), "FinancialHealthScoringVerification failed")
+                    #endif
                 }
                 .onOpenURL { url in
                     Task {
