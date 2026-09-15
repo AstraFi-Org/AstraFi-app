@@ -321,10 +321,10 @@ struct InvestmentOverviewView: View {
                         Label("\(losers.count) Losing", systemImage: "arrow.down.right")
                             .font(.caption).fontWeight(.semibold).foregroundColor(.red)
                     }
-                    Image(systemName: "chevron.down")
+                    Image(systemName: "chevron.up")
                         .font(.caption).fontWeight(.semibold)
                         .foregroundColor(.secondary)
-                        .rotationEffect(.degrees(isBreakdownExpanded ? 0 : -90))
+                        .rotationEffect(.degrees(isBreakdownExpanded ? 0 : -180))
                         .animation(.spring(response: 0.35, dampingFraction: 0.8), value: isBreakdownExpanded)
                         .padding(.leading, 6)
                 }
