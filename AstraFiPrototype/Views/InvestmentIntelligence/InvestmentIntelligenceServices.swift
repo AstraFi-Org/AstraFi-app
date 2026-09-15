@@ -125,6 +125,11 @@ final class AMFIService {
         return await MainActor.run { service.searchSchemes(query: query) }
     }
 
+    func schemesByCategory(_ category: String? = nil, limit: Int = 100) async -> [MFScheme] {
+        await service.fetchMFData()
+        return await MainActor.run { service.schemesByCategory(category, limit: limit) }
+    }
+
     func scheme(code: String) async -> MFScheme? {
         await service.fetchMFData()
         return await MainActor.run { service.getScheme(by: code) }
@@ -437,14 +442,32 @@ final class SearchService {
         async let funds = amfiService.searchSchemes(query: query)
         async let gold = stockService.searchGoldETFs(query: query)
 
-        let stockAssets = await enrichedStockAssets(from: Array(stocks.prefix(8)))
-        let fundAssets = await funds.prefix(8).map { fundAsset(from: $0) }
-        let goldAssets = await enrichedGoldAssets(from: Array(gold.prefix(4)))
+        let stockAssets = await enrichedStockAssets(from: Array(stocks.prefix(25)))
+        let fundAssets = await funds.prefix(30).map { fundAsset(from: $0) }
+        let goldAssets = await enrichedGoldAssets(from: Array(gold.prefix(15)))
 
         return stockAssets + fundAssets + goldAssets
     }
 
-    private func enrichedStockAssets(from stocks: [AstraStock]) async -> [InvestmentSummaryAsset] {
+    func searchStocksOnly(query: String) async -> [InvestmentSummaryAsset] {
+        guard query.trimmingCharacters(in: .whitespacesAndNewlines).count >= 2 else { return [] }
+        let stocks = await stockService.searchStocks(query: query)
+        return await enrichedStockAssets(from: Array(stocks.prefix(50)))
+    }
+
+    func searchFundsOnly(query: String) async -> [InvestmentSummaryAsset] {
+        guard query.trimmingCharacters(in: .whitespacesAndNewlines).count >= 2 else { return [] }
+        let funds = await amfiService.searchSchemes(query: query)
+        return funds.prefix(80).map { fundAsset(from: $0) }
+    }
+
+    func searchGoldETFsOnly(query: String) async -> [InvestmentSummaryAsset] {
+        guard query.trimmingCharacters(in: .whitespacesAndNewlines).count >= 2 else { return [] }
+        let gold = await stockService.searchGoldETFs(query: query)
+        return await enrichedGoldAssets(from: Array(gold.prefix(30)))
+    }
+
+    func enrichedStockAssets(from stocks: [AstraStock]) async -> [InvestmentSummaryAsset] {
         await withTaskGroup(of: InvestmentSummaryAsset.self) { group in
             for stock in stocks {
                 group.addTask {
@@ -467,7 +490,7 @@ final class SearchService {
         }
     }
 
-    private func enrichedGoldAssets(from stocks: [AstraStock]) async -> [InvestmentSummaryAsset] {
+    func enrichedGoldAssets(from stocks: [AstraStock]) async -> [InvestmentSummaryAsset] {
         await withTaskGroup(of: InvestmentSummaryAsset.self) { group in
             for stock in stocks {
                 group.addTask {
@@ -712,7 +735,11 @@ final class InvestmentIntelligenceRepository {
         async let stocks = loadStocks()
         async let funds = loadFunds()
         async let gold = loadGoldETFs()
-        return await (stocks, funds, gold)
+        let (rawStocks, rawFunds, rawGold) = await (stocks, funds, gold)
+        let rotatedStocks = InvestmentRecommendationEngine.shared.rotateDaily(items: rawStocks)
+        let rotatedFunds = InvestmentRecommendationEngine.shared.rotateDaily(items: rawFunds)
+        let rotatedGold = InvestmentRecommendationEngine.shared.rotateDaily(items: rawGold)
+        return (rotatedStocks, rotatedFunds, rotatedGold)
     }
 
     func detail(for asset: InvestmentSummaryAsset) async -> InvestmentDetailSnapshot {
@@ -726,8 +753,35 @@ final class InvestmentIntelligenceRepository {
         }
     }
 
+    func categoryAssets(kind: IntelligenceAssetKind, filter: String? = nil) async -> [InvestmentSummaryAsset] {
+        switch kind {
+        case .stock:
+            let all = await loadStocks()
+            guard let filter, filter != "All", !filter.isEmpty else { return all }
+            return all.filter { $0.sector.localizedCaseInsensitiveContains(filter) }
+        case .mutualFund:
+            let schemes = await amfiService.schemesByCategory(filter, limit: 100)
+            return schemes.map { SearchService.fundAsset(from: $0) }
+        case .goldETF:
+            return await loadGoldETFs()
+        }
+    }
+
+    func searchCategory(kind: IntelligenceAssetKind, query: String) async -> [InvestmentSummaryAsset] {
+        let searcher = SearchService(stockService: stockService, amfiService: amfiService)
+        switch kind {
+        case .stock:
+            return await searcher.searchStocksOnly(query: query)
+        case .mutualFund:
+            return await searcher.searchFundsOnly(query: query)
+        case .goldETF:
+            return await searcher.searchGoldETFsOnly(query: query)
+        }
+    }
+
     private func loadStocks() async -> [InvestmentSummaryAsset] {
         let seeds: [(symbol: String, name: String, sector: String)] = [
+            ("RADICO.NS", "Radico Khaitan", "Beverages"),
             ("RELIANCE.NS", "Reliance Industries", "Energy"),
             ("TCS.NS", "Tata Consultancy Services", "IT"),
             ("HDFCBANK.NS", "HDFC Bank", "Banking"),
@@ -749,7 +803,51 @@ final class InvestmentIntelligenceRepository {
             ("HCLTECH.NS", "HCL Technologies", "IT"),
             ("WIPRO.NS", "Wipro", "IT"),
             ("TATASTEEL.NS", "Tata Steel", "Metals"),
-            ("JSWSTEEL.NS", "JSW Steel", "Metals")
+            ("JSWSTEEL.NS", "JSW Steel", "Metals"),
+            ("TITAN.NS", "Titan Company", "Consumer"),
+            ("ZOMATO.NS", "Zomato", "Consumer"),
+            ("TRENT.NS", "Trent", "Retail"),
+            ("TATAPOWER.NS", "Tata Power", "Energy"),
+            ("BEL.NS", "Bharat Electronics", "Defense"),
+            ("HAL.NS", "Hindustan Aeronautics", "Defense"),
+            ("JIOFIN.NS", "Jio Financial Services", "Financials"),
+            ("ADANIENT.NS", "Adani Enterprises", "Conglomerate"),
+            ("ADANIPORTS.NS", "Adani Ports", "Infrastructure"),
+            ("BAJAJ-AUTO.NS", "Bajaj Auto", "Automobile"),
+            ("COALINDIA.NS", "Coal India", "Energy"),
+            ("DLF.NS", "DLF", "Real Estate"),
+            ("POLYCAB.NS", "Polycab India", "Industrials"),
+            ("VBL.NS", "Varun Beverages", "Beverages"),
+            ("MCDOWELL-N.NS", "United Spirits", "Beverages"),
+            ("NESTLEIND.NS", "Nestle India", "FMCG"),
+            ("BRITANNIA.NS", "Britannia Industries", "FMCG"),
+            ("CIPLA.NS", "Cipla", "Healthcare"),
+            ("DRREDDY.NS", "Dr Reddy's Laboratories", "Healthcare"),
+            ("DIVISLAB.NS", "Divi's Laboratories", "Healthcare"),
+            ("APOLLOHOSP.NS", "Apollo Hospitals", "Healthcare"),
+            ("EICHERMOT.NS", "Eicher Motors", "Automobile"),
+            ("GRASIM.NS", "Grasim Industries", "Materials"),
+            ("TECHM.NS", "Tech Mahindra", "IT"),
+            ("INDUSINDBK.NS", "IndusInd Bank", "Banking"),
+            ("FEDERALBNK.NS", "Federal Bank", "Banking"),
+            ("PNB.NS", "Punjab National Bank", "Banking"),
+            ("BANKBARODA.NS", "Bank of Baroda", "Banking"),
+            ("INDIGO.NS", "InterGlobe Aviation", "Aviation"),
+            ("IOC.NS", "Indian Oil", "Energy"),
+            ("BPCL.NS", "Bharat Petroleum", "Energy"),
+            ("ONGC.NS", "Oil & Natural Gas Corp", "Energy"),
+            ("GAIL.NS", "GAIL (India)", "Energy"),
+            ("HINDALCO.NS", "Hindalco Industries", "Metals"),
+            ("VEDL.NS", "Vedanta", "Metals"),
+            ("HAVELLS.NS", "Havells India", "Consumer"),
+            ("SIEMENS.NS", "Siemens", "Industrials"),
+            ("ABB.NS", "ABB India", "Industrials"),
+            ("AAPL", "Apple Inc", "US Tech"),
+            ("MSFT", "Microsoft Corp", "US Tech"),
+            ("GOOGL", "Alphabet Inc", "US Tech"),
+            ("AMZN", "Amazon.com", "US Tech"),
+            ("NVDA", "NVIDIA Corp", "US Tech"),
+            ("TSLA", "Tesla Inc", "US Tech")
         ]
 
         return await withTaskGroup(of: InvestmentSummaryAsset.self) { group in
@@ -759,7 +857,7 @@ final class InvestmentIntelligenceRepository {
                     let stock = AstraStock(
                         symbol: seed.symbol,
                         name: quote?.name == seed.symbol ? seed.name : quote?.name ?? seed.name,
-                        exchange: quote?.exchange ?? "NSE",
+                        exchange: quote?.exchange ?? (seed.symbol.hasSuffix(".NS") ? "NSE" : "NASDAQ"),
                         currentPrice: quote?.currentPrice ?? 0,
                         priceChange: quote?.priceChange ?? 0,
                         priceChangePercentage: quote?.priceChangePercentage ?? 0
@@ -776,10 +874,9 @@ final class InvestmentIntelligenceRepository {
 
     private func loadFunds() async -> [InvestmentSummaryAsset] {
         let schemes = await amfiService.schemes()
-        // We need 20+ funds. We'll grab the first 25 valid equity schemes.
         let topSchemes = schemes
             .filter { $0.name.localizedCaseInsensitiveContains("Direct") || $0.name.localizedCaseInsensitiveContains("Growth") }
-            .prefix(25)
+            .prefix(50)
         
         return await withTaskGroup(of: InvestmentSummaryAsset.self) { group in
             for scheme in topSchemes {
@@ -795,7 +892,6 @@ final class InvestmentIntelligenceRepository {
 
             var assets: [InvestmentSummaryAsset] = []
             for await asset in group { assets.append(asset) }
-            // Sort by 1-year return descending
             return assets.sorted { ($0.oneYearReturn ?? 0) > ($1.oneYearReturn ?? 0) }
         }
     }
@@ -808,21 +904,24 @@ final class InvestmentIntelligenceRepository {
             ("ICICIGOLD.NS", "ICICI Prudential Gold ETF"),
             ("KOTAKGOLD.NS", "Kotak Gold ETF"),
             ("AXISGOLD.NS", "Axis Gold ETF"),
+            ("TATAGOLD.NS", "Tata Gold ETF"),
             ("ADITYAGOLD.NS", "Aditya Birla Gold ETF"),
             ("IDBIGOLD.NS", "IDBI Gold ETF"),
             ("INVESCOGOLD.NS", "Invesco India Gold ETF"),
             ("QUANTUMGOLD.NS", "Quantum Gold Fund"),
             ("UTIGOLDETF.NS", "UTI Gold ETF"),
+            ("DSPGOLDETF.NS", "DSP Gold ETF"),
             ("BSLGOLDETF.NS", "BSL Gold ETF"),
             ("CANROBGOLD.NS", "Canara Robeco Gold ETF"),
             ("RELGOLD.NS", "Religare Gold ETF"),
             ("LICNETFGOLD.NS", "LIC MF Gold ETF"),
             ("MAGMAGOLD.NS", "Magma Gold ETF"),
-            ("RELIGAREGO.NS", "Religare Gold"),
-            ("SAHARAGOLD.NS", "Sahara Gold ETF"),
-            ("SYNDGOLD.NS", "Syndicate Gold ETF"),
-            ("TATAGOLD.NS", "Tata Gold ETF"),
-            ("EBIXGOLD.NS", "Ebix Gold ETF")
+            ("SILVERBEES.NS", "Nippon India Silver BeES"),
+            ("HDFCSILVER.NS", "HDFC Silver ETF"),
+            ("ICICISILVE.NS", "ICICI Prudential Silver ETF"),
+            ("TATASILV.NS", "Tata Silver ETF"),
+            ("SETFSILV.NS", "SBI Silver ETF"),
+            ("AXISSILVER.NS", "Axis Silver ETF")
         ]
 
         return await withTaskGroup(of: InvestmentSummaryAsset.self) { group in

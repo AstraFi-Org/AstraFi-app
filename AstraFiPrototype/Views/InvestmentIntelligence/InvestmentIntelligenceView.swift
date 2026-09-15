@@ -93,7 +93,7 @@ struct InvestmentIntelligenceView: View {
                         .background(AppTheme.cardBackground)
                         .clipShape(RoundedRectangle(cornerRadius: 20, style: .continuous))
                     } else {
-                        ForEach(assets.prefix(6)) { asset in
+                        ForEach(assets.prefix(12)) { asset in
                             NavigationLink(destination: InvestmentIntelligenceDetailView(asset: asset)) {
                                 InvestmentSummaryCard(asset: asset)
                                     .matchedGeometryEffect(id: asset.id, in: cardNamespace)
@@ -975,27 +975,72 @@ private struct ChartSummaryRow: View {
 struct InvestmentCategoryListView: View {
     @Environment(\.colorScheme) private var colorScheme
     let title: String
-    let assets: [InvestmentSummaryAsset]
-    @State private var searchText = ""
+    let kind: IntelligenceAssetKind
+    @State private var viewModel: InvestmentCategoryListViewModel
 
-    private var filteredAssets: [InvestmentSummaryAsset] {
-        if searchText.isEmpty {
-            return assets
+    init(title: String, assets: [InvestmentSummaryAsset]) {
+        self.title = title
+        let resolvedKind: IntelligenceAssetKind
+        if title.localizedCaseInsensitiveContains("fund") {
+            resolvedKind = .mutualFund
+        } else if title.localizedCaseInsensitiveContains("gold") || title.localizedCaseInsensitiveContains("etf") {
+            resolvedKind = .goldETF
+        } else {
+            resolvedKind = .stock
         }
-        return assets.filter {
-            $0.name.localizedCaseInsensitiveContains(searchText) ||
-            $0.symbol.localizedCaseInsensitiveContains(searchText)
-        }
+        self.kind = resolvedKind
+        _viewModel = State(initialValue: InvestmentCategoryListViewModel(kind: resolvedKind, initialAssets: assets))
     }
 
     var body: some View {
         ScrollView(showsIndicators: false) {
-            LazyVStack(spacing: 10) {
-                if filteredAssets.isEmpty {
-                    ContentUnavailableView("No matches", systemImage: "magnifyingglass", description: Text("Could not find any \(title.lowercased()) matching your search."))
-                        .padding(.top, 40)
+            LazyVStack(spacing: 14) {
+                // Category filter chips when not actively searching
+                if viewModel.searchText.trimmingCharacters(in: .whitespacesAndNewlines).count < 2 {
+                    ScrollView(.horizontal, showsIndicators: false) {
+                        HStack(spacing: 8) {
+                            ForEach(viewModel.availableFilters, id: \.self) { filter in
+                                Button {
+                                    Task { await viewModel.selectFilter(filter) }
+                                } label: {
+                                    Text(filter)
+                                        .font(.system(size: 13, weight: .semibold))
+                                        .padding(.horizontal, 14)
+                                        .padding(.vertical, 8)
+                                        .background(viewModel.selectedFilter == filter ? kind.accent : AppTheme.cardBackground)
+                                        .foregroundStyle(viewModel.selectedFilter == filter ? .white : .primary)
+                                        .clipShape(Capsule())
+                                        .overlay(
+                                            Capsule()
+                                                .stroke(viewModel.selectedFilter == filter ? Color.clear : Color.secondary.opacity(0.2), lineWidth: 1)
+                                        )
+                                }
+                                .buttonStyle(.plain)
+                            }
+                        }
+                    }
+                    .padding(.top, 4)
+                }
+
+                // Loading or searching indicator
+                if viewModel.isSearching || (viewModel.isLoading && viewModel.displayAssets.isEmpty) {
+                    HStack(spacing: 10) {
+                        ProgressView()
+                            .controlSize(.small)
+                        Text(viewModel.isSearching ? "Searching all \(title.lowercased())..." : "Loading \(title.lowercased())...")
+                            .font(.system(size: 13, weight: .medium))
+                            .foregroundStyle(.secondary)
+                    }
+                    .padding(.top, 24)
+                } else if viewModel.displayAssets.isEmpty {
+                    ContentUnavailableView(
+                        "No matches",
+                        systemImage: "magnifyingglass",
+                        description: Text("Could not find any \(title.lowercased()) matching your search.")
+                    )
+                    .padding(.top, 40)
                 } else {
-                    ForEach(filteredAssets) { asset in
+                    ForEach(viewModel.displayAssets) { asset in
                         NavigationLink(destination: InvestmentIntelligenceDetailView(asset: asset)) {
                             SearchResultRow(asset: asset)
                         }
@@ -1004,12 +1049,18 @@ struct InvestmentCategoryListView: View {
                 }
             }
             .padding(.horizontal, AppTheme.auraPadding)
-            .padding(.vertical, 20)
+            .padding(.vertical, 16)
         }
         .background(AppTheme.appBackground(for: colorScheme))
         .navigationTitle(title)
         .navigationBarTitleDisplayMode(.inline)
-        .searchable(text: $searchText, placement: .navigationBarDrawer(displayMode: .always), prompt: "Search \(title.lowercased())")
+        .searchable(text: $viewModel.searchText, placement: .navigationBarDrawer(displayMode: .always), prompt: "Search all \(title.lowercased())")
+        .task {
+            await viewModel.load()
+        }
+        .onChange(of: viewModel.searchText) { _, _ in
+            Task { await viewModel.performSearch() }
+        }
     }
 }
 

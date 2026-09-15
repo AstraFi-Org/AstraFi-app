@@ -29,7 +29,99 @@ class StockService {
         AstraStock(symbol: "BAJFINANCE.NS", name: "Bajaj Finance Ltd", exchange: "NSE", currentPrice: 0, priceChange: 0, priceChangePercentage: 0),
         AstraStock(symbol: "BHARTIARTL.NS", name: "Bharti Airtel Ltd", exchange: "NSE", currentPrice: 0, priceChange: 0, priceChangePercentage: 0),
         AstraStock(symbol: "HINDUNILVR.NS", name: "Hindustan Unilever Ltd", exchange: "NSE", currentPrice: 0, priceChange: 0, priceChangePercentage: 0),
-        AstraStock(symbol: "AAPL", name: "Apple Inc", exchange: "NASDAQ", currentPrice: 185.20, priceChange: 1.25, priceChangePercentage: 0.68)
+        AstraStock(symbol: "ITC.NS", name: "ITC Ltd", exchange: "NSE", currentPrice: 0, priceChange: 0, priceChangePercentage: 0),
+        AstraStock(symbol: "SBIN.NS", name: "State Bank of India", exchange: "NSE", currentPrice: 0, priceChange: 0, priceChangePercentage: 0),
+        AstraStock(symbol: "LT.NS", name: "Larsen & Toubro Ltd", exchange: "NSE", currentPrice: 0, priceChange: 0, priceChangePercentage: 0),
+        AstraStock(symbol: "KOTAKBANK.NS", name: "Kotak Mahindra Bank", exchange: "NSE", currentPrice: 0, priceChange: 0, priceChangePercentage: 0),
+        AstraStock(symbol: "AXISBANK.NS", name: "Axis Bank Ltd", exchange: "NSE", currentPrice: 0, priceChange: 0, priceChangePercentage: 0),
+        AstraStock(symbol: "ASIANPAINT.NS", name: "Asian Paints Ltd", exchange: "NSE", currentPrice: 0, priceChange: 0, priceChangePercentage: 0),
+        AstraStock(symbol: "MARUTI.NS", name: "Maruti Suzuki India Ltd", exchange: "NSE", currentPrice: 0, priceChange: 0, priceChangePercentage: 0),
+        AstraStock(symbol: "TATAMOTORS.NS", name: "Tata Motors Ltd", exchange: "NSE", currentPrice: 0, priceChange: 0, priceChangePercentage: 0),
+        AstraStock(symbol: "M&M.NS", name: "Mahindra & Mahindra Ltd", exchange: "NSE", currentPrice: 0, priceChange: 0, priceChangePercentage: 0),
+        AstraStock(symbol: "HCLTECH.NS", name: "HCL Technologies Ltd", exchange: "NSE", currentPrice: 0, priceChange: 0, priceChangePercentage: 0),
+        AstraStock(symbol: "WIPRO.NS", name: "Wipro Ltd", exchange: "NSE", currentPrice: 0, priceChange: 0, priceChangePercentage: 0),
+        AstraStock(symbol: "TATASTEEL.NS", name: "Tata Steel Ltd", exchange: "NSE", currentPrice: 0, priceChange: 0, priceChangePercentage: 0),
+        AstraStock(symbol: "JSWSTEEL.NS", name: "JSW Steel Ltd", exchange: "NSE", currentPrice: 0, priceChange: 0, priceChangePercentage: 0),
+        AstraStock(symbol: "SUNPHARMA.NS", name: "Sun Pharmaceutical Industries", exchange: "NSE", currentPrice: 0, priceChange: 0, priceChangePercentage: 0),
+        AstraStock(symbol: "TITAN.NS", name: "Titan Company Ltd", exchange: "NSE", currentPrice: 0, priceChange: 0, priceChangePercentage: 0),
+        AstraStock(symbol: "ULTRACEMCO.NS", name: "UltraTech Cement Ltd", exchange: "NSE", currentPrice: 0, priceChange: 0, priceChangePercentage: 0),
+        AstraStock(symbol: "NTPC.NS", name: "NTPC Ltd", exchange: "NSE", currentPrice: 0, priceChange: 0, priceChangePercentage: 0),
+        AstraStock(symbol: "POWERGRID.NS", name: "Power Grid Corp of India", exchange: "NSE", currentPrice: 0, priceChange: 0, priceChangePercentage: 0),
+        AstraStock(symbol: "TATAPOWER.NS", name: "Tata Power Co Ltd", exchange: "NSE", currentPrice: 0, priceChange: 0, priceChangePercentage: 0),
+        AstraStock(symbol: "ZOMATO.NS", name: "Zomato Ltd", exchange: "NSE", currentPrice: 0, priceChange: 0, priceChangePercentage: 0),
+        AstraStock(symbol: "TRENT.NS", name: "Trent Ltd", exchange: "NSE", currentPrice: 0, priceChange: 0, priceChangePercentage: 0),
+        AstraStock(symbol: "BEL.NS", name: "Bharat Electronics Ltd", exchange: "NSE", currentPrice: 0, priceChange: 0, priceChangePercentage: 0),
+        AstraStock(symbol: "HAL.NS", name: "Hindustan Aeronautics Ltd", exchange: "NSE", currentPrice: 0, priceChange: 0, priceChangePercentage: 0),
+        AstraStock(symbol: "JIOFIN.NS", name: "Jio Financial Services Ltd", exchange: "NSE", currentPrice: 0, priceChange: 0, priceChangePercentage: 0),
+        AstraStock(symbol: "ADANIENT.NS", name: "Adani Enterprises Ltd", exchange: "NSE", currentPrice: 0, priceChange: 0, priceChangePercentage: 0),
+        AstraStock(symbol: "ADANIPORTS.NS", name: "Adani Ports & SEZ Ltd", exchange: "NSE", currentPrice: 0, priceChange: 0, priceChangePercentage: 0),
+        AstraStock(symbol: "BAJAJ-AUTO.NS", name: "Bajaj Auto Ltd", exchange: "NSE", currentPrice: 0, priceChange: 0, priceChangePercentage: 0),
+        AstraStock(symbol: "COALINDIA.NS", name: "Coal India Ltd", exchange: "NSE", currentPrice: 0, priceChange: 0, priceChangePercentage: 0),
+        AstraStock(symbol: "DLF.NS", name: "DLF Ltd", exchange: "NSE", currentPrice: 0, priceChange: 0, priceChangePercentage: 0),
+        AstraStock(symbol: "POLYCAB.NS", name: "Polycab India Ltd", exchange: "NSE", currentPrice: 0, priceChange: 0, priceChangePercentage: 0),
+        AstraStock(symbol: "VBL.NS", name: "Varun Beverages Ltd", exchange: "NSE", currentPrice: 0, priceChange: 0, priceChangePercentage: 0),
+        AstraStock(symbol: "MCDOWELL-N.NS", name: "United Spirits Ltd", exchange: "NSE", currentPrice: 0, priceChange: 0, priceChangePercentage: 0),
+        AstraStock(symbol: "NESTLEIND.NS", name: "Nestle India Ltd", exchange: "NSE", currentPrice: 0, priceChange: 0, priceChangePercentage: 0),
+        AstraStock(symbol: "BRITANNIA.NS", name: "Britannia Industries Ltd", exchange: "NSE", currentPrice: 0, priceChange: 0, priceChangePercentage: 0),
+        AstraStock(symbol: "CIPLA.NS", name: "Cipla Ltd", exchange: "NSE", currentPrice: 0, priceChange: 0, priceChangePercentage: 0),
+        AstraStock(symbol: "DRREDDY.NS", name: "Dr Reddy's Laboratories Ltd", exchange: "NSE", currentPrice: 0, priceChange: 0, priceChangePercentage: 0),
+        AstraStock(symbol: "DIVISLAB.NS", name: "Divi's Laboratories Ltd", exchange: "NSE", currentPrice: 0, priceChange: 0, priceChangePercentage: 0),
+        AstraStock(symbol: "APOLLOHOSP.NS", name: "Apollo Hospitals Enterprise", exchange: "NSE", currentPrice: 0, priceChange: 0, priceChangePercentage: 0),
+        AstraStock(symbol: "EICHERMOT.NS", name: "Eicher Motors Ltd", exchange: "NSE", currentPrice: 0, priceChange: 0, priceChangePercentage: 0),
+        AstraStock(symbol: "GRASIM.NS", name: "Grasim Industries Ltd", exchange: "NSE", currentPrice: 0, priceChange: 0, priceChangePercentage: 0),
+        AstraStock(symbol: "TECHM.NS", name: "Tech Mahindra Ltd", exchange: "NSE", currentPrice: 0, priceChange: 0, priceChangePercentage: 0),
+        AstraStock(symbol: "INDUSINDBK.NS", name: "IndusInd Bank Ltd", exchange: "NSE", currentPrice: 0, priceChange: 0, priceChangePercentage: 0),
+        AstraStock(symbol: "FEDERALBNK.NS", name: "Federal Bank Ltd", exchange: "NSE", currentPrice: 0, priceChange: 0, priceChangePercentage: 0),
+        AstraStock(symbol: "PNB.NS", name: "Punjab National Bank", exchange: "NSE", currentPrice: 0, priceChange: 0, priceChangePercentage: 0),
+        AstraStock(symbol: "BANKBARODA.NS", name: "Bank of Baroda", exchange: "NSE", currentPrice: 0, priceChange: 0, priceChangePercentage: 0),
+        AstraStock(symbol: "INDIGO.NS", name: "InterGlobe Aviation (IndiGo)", exchange: "NSE", currentPrice: 0, priceChange: 0, priceChangePercentage: 0),
+        AstraStock(symbol: "IOC.NS", name: "Indian Oil Corp Ltd", exchange: "NSE", currentPrice: 0, priceChange: 0, priceChangePercentage: 0),
+        AstraStock(symbol: "BPCL.NS", name: "Bharat Petroleum Corp Ltd", exchange: "NSE", currentPrice: 0, priceChange: 0, priceChangePercentage: 0),
+        AstraStock(symbol: "ONGC.NS", name: "Oil & Natural Gas Corp", exchange: "NSE", currentPrice: 0, priceChange: 0, priceChangePercentage: 0),
+        AstraStock(symbol: "GAIL.NS", name: "GAIL (India) Ltd", exchange: "NSE", currentPrice: 0, priceChange: 0, priceChangePercentage: 0),
+        AstraStock(symbol: "HINDALCO.NS", name: "Hindalco Industries Ltd", exchange: "NSE", currentPrice: 0, priceChange: 0, priceChangePercentage: 0),
+        AstraStock(symbol: "VEDL.NS", name: "Vedanta Ltd", exchange: "NSE", currentPrice: 0, priceChange: 0, priceChangePercentage: 0),
+        AstraStock(symbol: "HAVELLS.NS", name: "Havells India Ltd", exchange: "NSE", currentPrice: 0, priceChange: 0, priceChangePercentage: 0),
+        AstraStock(symbol: "SIEMENS.NS", name: "Siemens Ltd", exchange: "NSE", currentPrice: 0, priceChange: 0, priceChangePercentage: 0),
+        AstraStock(symbol: "ABB.NS", name: "ABB India Ltd", exchange: "NSE", currentPrice: 0, priceChange: 0, priceChangePercentage: 0),
+        AstraStock(symbol: "RECLTD.NS", name: "REC Ltd", exchange: "NSE", currentPrice: 0, priceChange: 0, priceChangePercentage: 0),
+        AstraStock(symbol: "PFC.NS", name: "Power Finance Corp Ltd", exchange: "NSE", currentPrice: 0, priceChange: 0, priceChangePercentage: 0),
+        AstraStock(symbol: "MUTHOOTFIN.NS", name: "Muthoot Finance Ltd", exchange: "NSE", currentPrice: 0, priceChange: 0, priceChangePercentage: 0),
+        AstraStock(symbol: "CHOLAFIN.NS", name: "Cholamandalam Investment", exchange: "NSE", currentPrice: 0, priceChange: 0, priceChangePercentage: 0),
+        AstraStock(symbol: "NAUKRI.NS", name: "Info Edge (India) Ltd", exchange: "NSE", currentPrice: 0, priceChange: 0, priceChangePercentage: 0),
+        AstraStock(symbol: "NYKAA.NS", name: "FSN E-Commerce (Nykaa)", exchange: "NSE", currentPrice: 0, priceChange: 0, priceChangePercentage: 0),
+        AstraStock(symbol: "PAYTM.NS", name: "One97 Communications (Paytm)", exchange: "NSE", currentPrice: 0, priceChange: 0, priceChangePercentage: 0),
+        AstraStock(symbol: "POLICYBZR.NS", name: "PB Fintech Ltd (PolicyBazaar)", exchange: "NSE", currentPrice: 0, priceChange: 0, priceChangePercentage: 0),
+        AstraStock(symbol: "BSE.NS", name: "BSE Ltd", exchange: "NSE", currentPrice: 0, priceChange: 0, priceChangePercentage: 0),
+        AstraStock(symbol: "CDSL.NS", name: "Central Depository Services", exchange: "NSE", currentPrice: 0, priceChange: 0, priceChangePercentage: 0),
+        AstraStock(symbol: "AAPL", name: "Apple Inc", exchange: "NASDAQ", currentPrice: 185.20, priceChange: 1.25, priceChangePercentage: 0.68),
+        AstraStock(symbol: "MSFT", name: "Microsoft Corporation", exchange: "NASDAQ", currentPrice: 0, priceChange: 0, priceChangePercentage: 0),
+        AstraStock(symbol: "GOOGL", name: "Alphabet Inc", exchange: "NASDAQ", currentPrice: 0, priceChange: 0, priceChangePercentage: 0),
+        AstraStock(symbol: "AMZN", name: "Amazon.com Inc", exchange: "NASDAQ", currentPrice: 0, priceChange: 0, priceChangePercentage: 0),
+        AstraStock(symbol: "NVDA", name: "NVIDIA Corporation", exchange: "NASDAQ", currentPrice: 0, priceChange: 0, priceChangePercentage: 0),
+        AstraStock(symbol: "TSLA", name: "Tesla Inc", exchange: "NASDAQ", currentPrice: 0, priceChange: 0, priceChangePercentage: 0)
+    ]
+
+    private var mockGoldETFs: [AstraStock] = [
+        AstraStock(symbol: "GOLDBEES.NS", name: "Nippon India ETF Gold BeES", exchange: "NSE", currentPrice: 0, priceChange: 0, priceChangePercentage: 0),
+        AstraStock(symbol: "HDFCGOLD.NS", name: "HDFC Gold ETF", exchange: "NSE", currentPrice: 0, priceChange: 0, priceChangePercentage: 0),
+        AstraStock(symbol: "SETFGOLD.NS", name: "SBI Gold ETF", exchange: "NSE", currentPrice: 0, priceChange: 0, priceChangePercentage: 0),
+        AstraStock(symbol: "ICICIGOLD.NS", name: "ICICI Prudential Gold ETF", exchange: "NSE", currentPrice: 0, priceChange: 0, priceChangePercentage: 0),
+        AstraStock(symbol: "KOTAKGOLD.NS", name: "Kotak Gold ETF", exchange: "NSE", currentPrice: 0, priceChange: 0, priceChangePercentage: 0),
+        AstraStock(symbol: "AXISGOLD.NS", name: "Axis Gold ETF", exchange: "NSE", currentPrice: 0, priceChange: 0, priceChangePercentage: 0),
+        AstraStock(symbol: "TATAGOLD.NS", name: "Tata Gold ETF", exchange: "NSE", currentPrice: 0, priceChange: 0, priceChangePercentage: 0),
+        AstraStock(symbol: "ADITYAGOLD.NS", name: "Aditya Birla Sun Life Gold ETF", exchange: "NSE", currentPrice: 0, priceChange: 0, priceChangePercentage: 0),
+        AstraStock(symbol: "QUANTUMGOLD.NS", name: "Quantum Gold Fund", exchange: "NSE", currentPrice: 0, priceChange: 0, priceChangePercentage: 0),
+        AstraStock(symbol: "UTIGOLDETF.NS", name: "UTI Gold ETF", exchange: "NSE", currentPrice: 0, priceChange: 0, priceChangePercentage: 0),
+        AstraStock(symbol: "DSPGOLDETF.NS", name: "DSP Gold ETF", exchange: "NSE", currentPrice: 0, priceChange: 0, priceChangePercentage: 0),
+        AstraStock(symbol: "INVESCGOLD.NS", name: "Invesco India Gold ETF", exchange: "NSE", currentPrice: 0, priceChange: 0, priceChangePercentage: 0),
+        AstraStock(symbol: "LICNETFGOLD.NS", name: "LIC MF Gold ETF", exchange: "NSE", currentPrice: 0, priceChange: 0, priceChangePercentage: 0),
+        AstraStock(symbol: "CANROBGOLD.NS", name: "Canara Robeco Gold ETF", exchange: "NSE", currentPrice: 0, priceChange: 0, priceChangePercentage: 0),
+        AstraStock(symbol: "SILVERBEES.NS", name: "Nippon India ETF Silver BeES", exchange: "NSE", currentPrice: 0, priceChange: 0, priceChangePercentage: 0),
+        AstraStock(symbol: "HDFCSILVER.NS", name: "HDFC Silver ETF", exchange: "NSE", currentPrice: 0, priceChange: 0, priceChangePercentage: 0),
+        AstraStock(symbol: "ICICISILVE.NS", name: "ICICI Prudential Silver ETF", exchange: "NSE", currentPrice: 0, priceChange: 0, priceChangePercentage: 0),
+        AstraStock(symbol: "TATASILV.NS", name: "Tata Silver ETF", exchange: "NSE", currentPrice: 0, priceChange: 0, priceChangePercentage: 0),
+        AstraStock(symbol: "SETFSILV.NS", name: "SBI Silver ETF", exchange: "NSE", currentPrice: 0, priceChange: 0, priceChangePercentage: 0)
     ]
 
     private func toFinnhubSymbol(_ symbol: String) -> String {
@@ -51,15 +143,21 @@ class StockService {
         guard trimmedQuery.count >= 2 else { return [] }
 
         let localResults = searchLocalStocks(query: trimmedQuery)
-        let yahooResults = await searchYahooStocks(query: trimmedQuery)
-        let finnhubResults = apiKey.isEmpty ? [] : await searchFinnhubStocks(query: trimmedQuery)
+        async let yahooResults = searchYahooStocks(query: trimmedQuery)
+        async let finnhubResults = apiKey.isEmpty ? [] : searchFinnhubStocks(query: trimmedQuery)
+        async let fmpResults = searchFMPStocks(query: trimmedQuery)
 
-        return mergeSearchResults([localResults, yahooResults, finnhubResults])
+        return mergeSearchResults([localResults, await yahooResults, await finnhubResults, await fmpResults])
     }
 
     func searchGoldETFs(query: String) async -> [AstraStock] {
         let trimmedQuery = query.trimmingCharacters(in: .whitespacesAndNewlines)
         guard trimmedQuery.count >= 2 else { return [] }
+
+        let localGold = mockGoldETFs.filter {
+            let searchable = "\($0.symbol) \($0.name)".lowercased()
+            return searchable.contains(trimmedQuery.lowercased())
+        }
 
         let remoteResults = await searchStocks(query: trimmedQuery)
         let q = trimmedQuery.lowercased()
@@ -69,11 +167,23 @@ class StockService {
             let isGoldETF = searchable.contains("gold") ||
                 searchable.contains("goldbees") ||
                 searchable.contains("setfgold") ||
-                q.contains("gold")
-            return isIndianListing && isGoldETF
+                searchable.contains("silver") ||
+                searchable.contains("silverbees") ||
+                searchable.contains("etf") ||
+                q.contains("gold") ||
+                q.contains("silver")
+            return (isIndianListing || stock.exchange == "Market") && isGoldETF
         }
 
-        return filteredResults
+        return mergeSearchResults([localGold, filteredResults])
+    }
+
+    func allKnownStocks() -> [AstraStock] {
+        mockStocks
+    }
+
+    func allKnownGoldETFs() -> [AstraStock] {
+        mockGoldETFs
     }
 
     func searchCryptoSymbols(query: String) async -> [AstraStock] {
@@ -146,7 +256,7 @@ class StockService {
 
     private func searchYahooStocks(query: String) async -> [AstraStock] {
         guard let encodedQuery = query.addingPercentEncoding(withAllowedCharacters: .urlQueryAllowed),
-              let url = URL(string: "https://query1.finance.yahoo.com/v1/finance/search?q=\(encodedQuery)&quotesCount=20&newsCount=0&enableFuzzyQuery=true&quotesQueryId=tss_match_phrase_query") else {
+              let url = URL(string: "https://query1.finance.yahoo.com/v1/finance/search?q=\(encodedQuery)&quotesCount=50&newsCount=0&enableFuzzyQuery=true&quotesQueryId=tss_match_phrase_query") else {
             return []
         }
 
@@ -172,6 +282,24 @@ class StockService {
         } catch {
             print("Yahoo Search Error: \(error)")
             return []
+        }
+    }
+
+    private func searchFMPStocks(query: String) async -> [AstraStock] {
+        guard !Secrets.fmpApiKey.isEmpty else { return [] }
+        let results = await FMPService.shared.search(query: query)
+        return results.compactMap { item in
+            guard let rawSymbol = item.symbol, !rawSymbol.isEmpty else { return nil }
+            let symbol = normalizeSearchSymbol(rawSymbol, exchangeHint: item.exchangeShortName ?? item.stockExchange ?? "")
+            guard !symbol.isEmpty else { return nil }
+            return AstraStock(
+                symbol: symbol,
+                name: item.name ?? symbol,
+                exchange: exchangeName(for: symbol, fallback: item.exchangeShortName ?? item.stockExchange ?? "Market"),
+                currentPrice: 0,
+                priceChange: 0,
+                priceChangePercentage: 0
+            )
         }
     }
 

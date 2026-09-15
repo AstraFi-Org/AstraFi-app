@@ -128,3 +128,96 @@ enum InvestmentDetailTab: String, CaseIterable, Identifiable {
         }
     }
 }
+
+@Observable
+final class InvestmentCategoryListViewModel {
+    let kind: IntelligenceAssetKind
+    var initialAssets: [InvestmentSummaryAsset]
+    var categoryAssets: [InvestmentSummaryAsset] = []
+    var searchResults: [InvestmentSummaryAsset] = []
+    var selectedFilter: String = "All"
+    var searchText: String = ""
+    var isLoading = false
+    var isSearching = false
+
+    private let repository: InvestmentIntelligenceRepository
+    @ObservationIgnored private var searchGeneration = 0
+
+    var availableFilters: [String] {
+        switch kind {
+        case .stock:
+            return ["All", "Banking", "IT", "Automobile", "FMCG", "Healthcare", "Energy", "Metals", "Consumer", "Beverages", "US Tech"]
+        case .mutualFund:
+            return ["All", "Large Cap", "Mid Cap", "Small Cap", "Flexi Cap", "Index Fund", "ELSS", "Debt"]
+        case .goldETF:
+            return ["All", "Gold", "Silver"]
+        }
+    }
+
+    var displayAssets: [InvestmentSummaryAsset] {
+        let query = searchText.trimmingCharacters(in: .whitespacesAndNewlines)
+        if query.count >= 2 {
+            return searchResults
+        }
+
+        let baseList = categoryAssets.isEmpty ? initialAssets : categoryAssets
+        if selectedFilter == "All" {
+            return baseList
+        }
+
+        switch kind {
+        case .stock:
+            return baseList.filter { $0.sector.localizedCaseInsensitiveContains(selectedFilter) }
+        case .mutualFund:
+            return baseList.filter { $0.sector.localizedCaseInsensitiveContains(selectedFilter) }
+        case .goldETF:
+            return baseList.filter { $0.name.localizedCaseInsensitiveContains(selectedFilter) || $0.symbol.localizedCaseInsensitiveContains(selectedFilter) }
+        }
+    }
+
+    init(kind: IntelligenceAssetKind, initialAssets: [InvestmentSummaryAsset] = [], repository: InvestmentIntelligenceRepository = InvestmentIntelligenceRepository()) {
+        self.kind = kind
+        self.initialAssets = initialAssets
+        self.categoryAssets = initialAssets
+        self.repository = repository
+    }
+
+    func load() async {
+        guard !isLoading else { return }
+        isLoading = true
+        defer { isLoading = false }
+
+        let assets = await repository.categoryAssets(kind: kind, filter: selectedFilter == "All" ? nil : selectedFilter)
+        categoryAssets = assets
+    }
+
+    func selectFilter(_ filter: String) async {
+        selectedFilter = filter
+        if kind == .mutualFund && searchText.isEmpty {
+            isLoading = true
+            defer { isLoading = false }
+            categoryAssets = await repository.categoryAssets(kind: kind, filter: filter == "All" ? nil : filter)
+        }
+    }
+
+    func performSearch() async {
+        let trimmed = searchText.trimmingCharacters(in: .whitespacesAndNewlines)
+        searchGeneration += 1
+        let generation = searchGeneration
+
+        guard trimmed.count >= 2 else {
+            searchResults = []
+            isSearching = false
+            return
+        }
+
+        isSearching = true
+        let results = await repository.searchCategory(kind: kind, query: trimmed)
+
+        guard generation == searchGeneration,
+              searchText.trimmingCharacters(in: .whitespacesAndNewlines) == trimmed else { return }
+        searchResults = results
+        isSearching = false
+    }
+}
+
