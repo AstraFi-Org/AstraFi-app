@@ -57,11 +57,11 @@ struct Secrets {
     private static func localSwiftFallbackValue(for key: String) -> String {
         switch key {
         case "FINNHUB_API_KEY":
-            return ""
+            return "d8tll89r01qhcnk4jsb0d8tll89r01qhcnk4jsbg"
         case "FMP_API_KEY":
-            return ""
+            return "rvHQYn8dDROZgjUJiTTEQION39yV7p3f"
         case "OPENROUTER_API_KEY":
-            return ""
+            return "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"
         case "OPENROUTER_ENDPOINT":
             return "https://openrouter.ai/api/v1/chat/completions"
         default:

@@ -116,14 +116,16 @@ class MFService {
     }
 
     func searchSchemes(query: String) -> [MFScheme] {
+        searchSchemes(query: query, maxLimit: 100)
+    }
+
+    func searchSchemes(query: String, maxLimit: Int) -> [MFScheme] {
         let search = Self.normalizedSearchTerms(query)
         guard !search.terms.isEmpty else { return [] }
 
-        // Precompute to reduce repeated property lookups
         let searchCompact = search.compact
         let searchTerms = search.terms
 
-        // 1) Filter candidates explicitly
         var candidates: [(scheme: MFScheme, name: (terms: [String], words: [String], compact: String))] = []
         for scheme in allSchemes {
             let name = Self.normalizedSearchTerms(scheme.name, removeGenericTerms: false)
@@ -139,7 +141,6 @@ class MFService {
             }
         }
 
-        // 2) Score candidates in a clear loop
         var scored: [(scheme: MFScheme, score: Int)] = []
         for (scheme, name) in candidates {
             var score = 0
@@ -148,7 +149,6 @@ class MFService {
             } else if name.compact.contains(searchCompact) {
                 score += 80
             }
-            // Add 10 for each term that matches a word prefix
             for term in searchTerms {
                 var matchedPrefix = false
                 for w in name.words {
@@ -162,7 +162,6 @@ class MFService {
             scored.append((scheme, score))
         }
 
-        // 3) Sort deterministically by score then name
         scored.sort { lhs, rhs in
             if lhs.score == rhs.score {
                 return lhs.scheme.name.localizedCaseInsensitiveCompare(rhs.scheme.name) == .orderedAscending
@@ -170,15 +169,41 @@ class MFService {
             return lhs.score > rhs.score
         }
 
-        // 4) Return top 15 schemes
         var result: [MFScheme] = []
-        let limit = min(15, scored.count)
+        let limit = min(maxLimit, scored.count)
         if limit > 0 {
             for i in 0..<limit {
                 result.append(scored[i].scheme)
             }
         }
         return result
+    }
+
+    func schemesByCategory(_ category: String? = nil, limit: Int = 100) -> [MFScheme] {
+        let directGrowth = allSchemes.filter {
+            let n = $0.name.lowercased()
+            return n.contains("direct") || n.contains("growth")
+        }
+        let pool = directGrowth.isEmpty ? allSchemes : directGrowth
+
+        guard let category, category != "All", !category.isEmpty else {
+            return Array(pool.prefix(limit))
+        }
+
+        let catLower = category.lowercased()
+        let filtered = pool.filter { scheme in
+            let name = scheme.name.lowercased()
+            if catLower.contains("small") { return name.contains("small") }
+            if catLower.contains("mid") { return name.contains("mid") && !name.contains("small") }
+            if catLower.contains("large") { return name.contains("large") || name.contains("top 100") || name.contains("bluechip") }
+            if catLower.contains("flexi") { return name.contains("flexi") || name.contains("multi cap") }
+            if catLower.contains("index") { return name.contains("index") || name.contains("nifty") || name.contains("sensex") }
+            if catLower.contains("elss") || catLower.contains("tax") { return name.contains("elss") || name.contains("tax") }
+            if catLower.contains("debt") || catLower.contains("bond") { return name.contains("debt") || name.contains("bond") || name.contains("liquid") || name.contains("gilt") }
+            if catLower.contains("gold") { return name.contains("gold") }
+            return name.contains(catLower)
+        }
+        return Array(filtered.prefix(limit))
     }
 
     private static func normalizedSearchTerms(_ value: String, removeGenericTerms: Bool = true) -> (terms: [String], words: [String], compact: String) {

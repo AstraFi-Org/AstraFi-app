@@ -30,6 +30,16 @@ final class FMPService {
         return rows.first?.peersList ?? []
     }
 
+    func search(query: String) async -> [FMPSearchResult] {
+        do {
+            let results: [FMPSearchResult] = try await requestArray(path: "search", query: ["query": query, "limit": "30"])
+            return results
+        } catch {
+            print("FMP search error: \(error)")
+            return []
+        }
+    }
+
     private func requestArray<T: Decodable>(path: String, query: [String: String] = [:]) async throws -> [T] {
         guard !apiKey.isEmpty else {
             print("FMP request skipped for /\(path): FMP_API_KEY missing")
@@ -124,3 +134,12 @@ struct FMPPeersResponse: Decodable {
     let symbol: String?
     let peersList: [String]?
 }
+
+struct FMPSearchResult: Decodable {
+    let symbol: String?
+    let name: String?
+    let currency: String?
+    let stockExchange: String?
+    let exchangeShortName: String?
+}
+

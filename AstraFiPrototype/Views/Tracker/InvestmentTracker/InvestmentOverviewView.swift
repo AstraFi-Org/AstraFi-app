@@ -57,6 +57,7 @@ struct InvestmentOverviewView: View {
 
     @State private var chartMode: ChartMode = .monthly
     @State private var showingAddInvestment = false
+    @State private var isBreakdownExpanded = true
 
     // ── Profile helpers
     private var monthlyIncome:   Double { appState.currentProfile?.basicDetails.monthlyIncomeAfterTax ?? 0 }
@@ -302,30 +303,50 @@ struct InvestmentOverviewView: View {
 
     private var portfolioBreakdown: some View {
         VStack(spacing: 0) {
-            HStack {
-                Text("Investment Breakdown").font(.subheadline).fontWeight(.semibold)
-                Spacer()
-                if !gainers.isEmpty {
-                    Label("\(gainers.count) Gaining", systemImage: "arrow.up.right")
-                        .font(.caption).fontWeight(.semibold).foregroundColor(.green)
+            // Header row with expand/collapse toggle
+            Button {
+                withAnimation(.spring(response: 0.35, dampingFraction: 0.8)) {
+                    isBreakdownExpanded.toggle()
                 }
-                if !losers.isEmpty {
-                    Label("\(losers.count) Losing", systemImage: "arrow.down.right")
-                        .font(.caption).fontWeight(.semibold).foregroundColor(.red)
+            } label: {
+                HStack {
+                    Text("Investment Breakdown").font(.subheadline).fontWeight(.semibold)
+                        .foregroundColor(.primary)
+                    Spacer()
+                    if !gainers.isEmpty {
+                        Label("\(gainers.count) Gaining", systemImage: "arrow.up.right")
+                            .font(.caption).fontWeight(.semibold).foregroundColor(.green)
+                    }
+                    if !losers.isEmpty {
+                        Label("\(losers.count) Losing", systemImage: "arrow.down.right")
+                            .font(.caption).fontWeight(.semibold).foregroundColor(.red)
+                    }
+                    Image(systemName: "chevron.up")
+                        .font(.caption).fontWeight(.semibold)
+                        .foregroundColor(.secondary)
+                        .rotationEffect(.degrees(isBreakdownExpanded ? 0 : -180))
+                        .animation(.spring(response: 0.35, dampingFraction: 0.8), value: isBreakdownExpanded)
+                        .padding(.leading, 6)
                 }
+                .padding(.horizontal, 20).padding(.vertical, 14)
             }
-            .padding(.horizontal, 20).padding(.vertical, 14)
+            .buttonStyle(.plain)
 
-            if !gainers.isEmpty {
-                sectionLabel("Performing Well", color: .green)
-                VStack(spacing: 8) { ForEach(gainers) { PortfolioBreakdownRow(item: $0) } }.padding(.horizontal, 20)
-            }
-            if !losers.isEmpty {
-                sectionLabel("Under-performing", color: .red).padding(.top, gainers.isEmpty ? 0 : 14)
-                VStack(spacing: 8) { ForEach(losers) { PortfolioBreakdownRow(item: $0) } }.padding(.horizontal, 20)
+            if isBreakdownExpanded {
+                VStack(spacing: 0) {
+                    if !gainers.isEmpty {
+                        sectionLabel("Performing Well", color: .green)
+                        VStack(spacing: 8) { ForEach(gainers) { PortfolioBreakdownRow(item: $0) } }.padding(.horizontal, 20)
+                    }
+                    if !losers.isEmpty {
+                        sectionLabel("Under-performing", color: .red).padding(.top, gainers.isEmpty ? 0 : 14)
+                        VStack(spacing: 8) { ForEach(losers) { PortfolioBreakdownRow(item: $0) } }.padding(.horizontal, 20)
+                    }
+                }
+                .transition(.opacity.combined(with: .move(edge: .top)))
             }
         }
-        .padding(.bottom, 20)
+        .padding(.bottom, isBreakdownExpanded ? 20 : 4)
     }
 
     private func sectionLabel(_ text: String, color: Color) -> some View {
