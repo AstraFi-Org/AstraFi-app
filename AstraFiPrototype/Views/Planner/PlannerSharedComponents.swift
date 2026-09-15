@@ -60,6 +60,8 @@ struct InvestmentTableRow: View {
     let asset: PortfolioAsset
     let invested: String
     let expected: String
+    var growthText: String? = nil
+    var sourceURL: String? = nil
 
     var body: some View {
         HStack(spacing: 4) {
@@ -76,11 +78,27 @@ struct InvestmentTableRow: View {
                 .foregroundColor(.primary)
                 .frame(width: 70, alignment: .trailing)
             
-            // Role
-            Text(asset.role)
-                .font(.system(size: 10))
-                .foregroundColor(.secondary)
+            // Growth% (or Role fallback)
+            if let growth = growthText {
+                HStack(spacing: 2) {
+                    Text(growth)
+                        .font(.system(size: 11, weight: .bold))
+                        .foregroundColor(.green)
+                    if let urlStr = sourceURL, !urlStr.isEmpty, let url = URL(string: urlStr) {
+                        Link(destination: url) {
+                            Image(systemName: "arrow.up.right")
+                                .font(.system(size: 8, weight: .bold))
+                                .foregroundColor(.blue.opacity(0.8))
+                        }
+                    }
+                }
                 .frame(width: 80, alignment: .trailing)
+            } else {
+                Text(asset.role)
+                    .font(.system(size: 10))
+                    .foregroundColor(.secondary)
+                    .frame(width: 80, alignment: .trailing)
+            }
             
             // Risk Tag
             Text(riskText(asset.riskLevel))
@@ -99,6 +117,7 @@ struct InvestmentTableRow: View {
 
 struct AllAssetsInfoSheet: View {
     let assets: [PortfolioAsset]
+    var selectedHistoricalYears: Int = 10
     @Environment(\.dismiss) var dismiss
     @Environment(\.colorScheme) var colorScheme
 
@@ -124,13 +143,15 @@ struct AllAssetsInfoSheet: View {
                                             .foregroundColor(riskColor(asset.riskLevel))
                                             .cornerRadius(6)
                                         
-                                        Text(asset.role)
-                                            .font(.system(size: 10, weight: .bold))
-                                            .padding(.horizontal, 8)
-                                            .padding(.vertical, 4)
-                                            .background(Color.blue.opacity(0.05))
-                                            .foregroundColor(.blue)
-                                            .cornerRadius(6)
+                                        if !asset.role.isEmpty {
+                                            Text(asset.role)
+                                                .font(.system(size: 10, weight: .bold))
+                                                .padding(.horizontal, 8)
+                                                .padding(.vertical, 4)
+                                                .background(Color.blue.opacity(0.08))
+                                                .foregroundColor(.blue)
+                                                .cornerRadius(6)
+                                        }
                                     }
                                 }
                                 Spacer()
@@ -152,6 +173,59 @@ struct AllAssetsInfoSheet: View {
                                 }
                                 
                                 infoSection(title: "Why it is included in your plan", content: asset.whyIncluded, icon: "target")
+                                
+                                // Authentic Historical Performance & Source
+                                if asset.returns5Y > 0 || asset.returns10Y > 0 || asset.returns15Y > 0 {
+                                    VStack(alignment: .leading, spacing: 10) {
+                                        HStack(spacing: 8) {
+                                            Image(systemName: "chart.line.uptrend.xyaxis.circle.fill")
+                                                .foregroundColor(.green)
+                                                .font(.system(size: 14))
+                                            Text("Historical Annualized Return (CAGR)")
+                                                .font(.subheadline)
+                                                .fontWeight(.bold)
+                                        }
+                                        
+                                        HStack(spacing: 8) {
+                                            historicalReturnPill(period: "5Y", returnVal: asset.returns5Y, isSelected: selectedHistoricalYears == 5)
+                                            historicalReturnPill(period: "10Y", returnVal: asset.returns10Y, isSelected: selectedHistoricalYears == 10)
+                                            historicalReturnPill(period: "15Y", returnVal: asset.returns15Y, isSelected: selectedHistoricalYears == 15)
+                                        }
+                                        
+                                        if !asset.benchmarkIndex.isEmpty {
+                                            HStack(alignment: .top, spacing: 4) {
+                                                Text("Benchmark:")
+                                                    .font(.system(size: 11, weight: .semibold))
+                                                    .foregroundColor(.secondary)
+                                                Text(asset.benchmarkIndex)
+                                                    .font(.system(size: 11, weight: .medium))
+                                                    .foregroundColor(.primary)
+                                            }
+                                            .padding(.top, 2)
+                                        }
+                                        
+                                        if !asset.sourceURL.isEmpty, let url = URL(string: asset.sourceURL) {
+                                            Link(destination: url) {
+                                                HStack(spacing: 4) {
+                                                    Text("Verified Source: \(asset.sourceName.isEmpty ? "Official Index" : asset.sourceName)")
+                                                        .font(.system(size: 11, weight: .semibold))
+                                                    Image(systemName: "arrow.up.right")
+                                                        .font(.system(size: 9))
+                                                }
+                                                .foregroundColor(.blue)
+                                            }
+                                            .padding(.top, 2)
+                                        }
+                                    }
+                                    .padding(14)
+                                    .frame(maxWidth: .infinity, alignment: .leading)
+                                    .background(Color.green.opacity(0.04))
+                                    .cornerRadius(12)
+                                    .overlay(
+                                        RoundedRectangle(cornerRadius: 12)
+                                            .stroke(Color.green.opacity(0.2), lineWidth: 1)
+                                    )
+                                }
                                 
                                 // Example Card
                                 if !asset.fundExamples.isEmpty {
@@ -200,6 +274,21 @@ struct AllAssetsInfoSheet: View {
                 }
             }
         }
+    }
+    
+    private func historicalReturnPill(period: String, returnVal: Double, isSelected: Bool) -> some View {
+        VStack(spacing: 2) {
+            Text(period)
+                .font(.system(size: 10, weight: .semibold))
+                .foregroundColor(isSelected ? .white : .secondary)
+            Text("+\(String(format: "%.1f", returnVal))%")
+                .font(.system(size: 12, weight: .bold))
+                .foregroundColor(isSelected ? .white : .green)
+        }
+        .frame(maxWidth: .infinity)
+        .padding(.vertical, 6)
+        .background(isSelected ? Color.blue : Color.secondary.opacity(0.08))
+        .cornerRadius(8)
     }
     
     private func infoSection(title: String, content: String, icon: String) -> some View {

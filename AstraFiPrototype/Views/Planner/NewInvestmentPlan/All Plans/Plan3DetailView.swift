@@ -47,13 +47,24 @@ struct Plan3DetailView: View {
         return lumpsum + totalEMIs
     }
 
+    private var currentPortfolio: PortfolioBlueprint? {
+        switch selectedScenario {
+        case "Conservative":
+            return activeResult.conservativePortfolio ?? activeResult.portfolio
+        case "Aggressive":
+            return activeResult.aggressivePortfolio ?? activeResult.portfolio
+        default:
+            return activeResult.moderatePortfolio ?? activeResult.portfolio
+        }
+    }
+
     private var planAssets: [PortfolioAsset] {
-        guard let p = activeResult.portfolio else { return [] }
+        guard let p = currentPortfolio else { return [] }
         let loanAmt = activeResult.loanAmount
         return p.allocations.map { allocation in
             let invested = loanAmt * (allocation.percentage / 100)
             // Growth is proportional across assets in this simple model
-            let growthRatio = currentStrategy.finalValue / loanAmt
+            let growthRatio = currentStrategy.finalValue / Swift.max(1, loanAmt)
             let expectedVal = invested * growthRatio
             
             return PortfolioAsset(
@@ -62,7 +73,17 @@ struct Plan3DetailView: View {
                 monthlyInvestment: invested,
                 expectedValue: expectedVal,
                 riskLevel: allocation.riskLevel,
-                role: allocation.role
+                role: allocation.role,
+                description: allocation.description,
+                fundExamples: allocation.fundExamples,
+                howItWorks: allocation.howItWorks,
+                whyIncluded: allocation.whyIncluded,
+                returns5Y: allocation.returns5Y,
+                returns10Y: allocation.returns10Y,
+                returns15Y: allocation.returns15Y,
+                benchmarkIndex: allocation.benchmarkIndex,
+                sourceName: allocation.sourceName,
+                sourceURL: allocation.sourceURL
             )
         }
     }
@@ -122,6 +143,9 @@ struct Plan3DetailView: View {
             Button("Got It", role: .cancel) { }
         } message: {
             Text("This projection replays weighted monthly benchmark returns from the selected historical period. It is reproducible, but it is still educational and future returns can differ.")
+        }
+        .sheet(isPresented: $showingAllAssetsInfo) {
+            AllAssetsInfoSheet(assets: planAssets, selectedHistoricalYears: historicalPeriodYears)
         }
     }
 
@@ -331,7 +355,7 @@ struct Plan3DetailView: View {
                 HStack(spacing: 4) {
                     Text("Asset Category").font(.system(size: 10, weight: .bold)).foregroundColor(.secondary).frame(maxWidth: .infinity, alignment: .leading)
                     Text("Allocation").font(.system(size: 10, weight: .bold)).foregroundColor(.secondary).frame(width: 70, alignment: .trailing)
-                    Text("Role").font(.system(size: 10, weight: .bold)).foregroundColor(.secondary).frame(width: 80, alignment: .trailing)
+                    Text("Growth (\(historicalPeriodYears)Y)").font(.system(size: 10, weight: .bold)).foregroundColor(.secondary).frame(width: 80, alignment: .trailing)
                     Text("Risk").font(.system(size: 10, weight: .bold)).foregroundColor(.secondary).frame(width: 50, alignment: .trailing)
                 }
                 .padding(.horizontal, 16)
@@ -341,15 +365,46 @@ struct Plan3DetailView: View {
                 // Table Content
                 VStack(spacing: 0) {
                     ForEach(planAssets) { asset in
-                        InvestmentTableRow(asset: asset,
-                                           invested: "₹\(formatL(asset.monthlyInvestment))",
-                                           expected: "₹\(formatL(asset.expectedValue))")
-                            .padding(.horizontal, 12)
+                        let growthVal = asset.historicalGrowth(years: historicalPeriodYears)
+                        InvestmentTableRow(
+                            asset: asset,
+                            invested: "₹\(formatL(asset.monthlyInvestment))",
+                            expected: "₹\(formatL(asset.expectedValue))",
+                            growthText: "+\(String(format: "%.1f", growthVal))%",
+                            sourceURL: asset.sourceURL
+                        )
+                        .padding(.horizontal, 12)
                         
                         if asset.id != planAssets.last?.id {
                             Divider().padding(.horizontal, 16)
                         }
                     }
+                    Divider()
+                    
+                    // Authentic Benchmark Source Attribution
+                    HStack(spacing: 6) {
+                        Image(systemName: "checkmark.seal.fill")
+                            .foregroundColor(.blue)
+                            .font(.system(size: 11))
+                        Text("Authentic \(historicalPeriodYears)Y CAGR benchmark returns.")
+                            .font(.system(size: 10))
+                            .foregroundColor(.secondary)
+                        Spacer()
+                        Link(destination: URL(string: "https://www.nseindia.com")!) {
+                            HStack(spacing: 2) {
+                                Text("Source: NSE & AMFI")
+                                    .font(.system(size: 10, weight: .semibold))
+                                    .foregroundColor(.blue)
+                                Image(systemName: "arrow.up.right")
+                                    .font(.system(size: 8, weight: .semibold))
+                                    .foregroundColor(.blue)
+                            }
+                        }
+                    }
+                    .padding(.horizontal, 16)
+                    .padding(.vertical, 8)
+                    .background(Color.blue.opacity(0.03))
+                    
                     Divider()
                     
                     // Strategy Insight Card (Footer)
@@ -372,8 +427,8 @@ struct Plan3DetailView: View {
                 .shadow(color: AppTheme.adaptiveShadow.opacity(0.1), radius: 10)
             }
         }
-        .padding(20)                          // ← add this
-        .background(AppTheme.cardBackground)  // ← add this
+        .padding(20)
+        .background(AppTheme.cardBackground)
         .cornerRadius(20)
     }
 
@@ -462,7 +517,7 @@ struct Plan3DetailView: View {
                 Text("Expected Market ROI")
                     .font(.caption)
                     .foregroundColor(.secondary)
-                Text("\(String(format: "%.1f", activeResult.portfolio?.blendedCAGR ?? 0))%")
+                Text("\(String(format: "%.1f", currentPortfolio?.blendedCAGR ?? activeResult.portfolio?.blendedCAGR ?? 0))%")
                     .font(.headline)
                     .foregroundColor(.blue)
             }
