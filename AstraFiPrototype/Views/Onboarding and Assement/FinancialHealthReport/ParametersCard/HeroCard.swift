@@ -38,9 +38,8 @@ private struct RadarChartInfoSheet: View {
         NavigationStack {
             ScrollView {
                 VStack(spacing: 0) {
-                    // ── Hero header ──
+                    // ── Header ──
                     headerBanner
-                        .padding(.bottom, 24)
 
                     // ── Parameter cards ──
                     VStack(spacing: 14) {
@@ -165,26 +164,20 @@ private struct RadarChartInfoSheet: View {
 
     // MARK: - Header banner
     private var headerBanner: some View {
-        VStack(spacing: 10) {
-            Image(systemName: "pentagon.fill")
-                .font(.system(size: 36))
-                .foregroundStyle(
-                    LinearGradient(colors: [Color(hex: "#007AFF"), Color(hex: "#BF5AF2")],
-                                   startPoint: .topLeading, endPoint: .bottomTrailing)
-                )
-                .padding(.top, 28)
+        VStack(alignment: .leading, spacing: 6) {
+            Text("SCORING METHODOLOGY")
+                .font(.footnote.weight(.semibold))
+                .foregroundStyle(.secondary)
 
-            Text("How your scores are calculated")
-                .font(.title3).bold()
-
-            Text("Each dimension is scored 0 – 10 from your financial inputs and Indian personal finance benchmarks.")
+            Text("Each pillar is scored 0 – 10 and weighted toward your 100-point total health score.")
                 .font(.subheadline)
                 .foregroundStyle(.secondary)
-                .multilineTextAlignment(.center)
-                .lineSpacing(3)
-                .padding(.horizontal, 28)
-                .padding(.bottom, 8)
+                .lineSpacing(2)
         }
+        .frame(maxWidth: .infinity, alignment: .leading)
+        .padding(.horizontal, 16)
+        .padding(.top, 16)
+        .padding(.bottom, 16)
     }
 
     // MARK: - Parameter card builder

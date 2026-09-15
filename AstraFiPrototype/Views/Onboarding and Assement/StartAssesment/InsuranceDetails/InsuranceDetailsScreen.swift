@@ -22,22 +22,15 @@ struct InsuranceDetailsScreen: View {
             Color(.systemGroupedBackground).ignoresSafeArea()
 
             VStack(spacing: 0) {
+                AssessmentProgressHeader(
+                    progress: 0.9,
+                    title: "Insurance & Protection",
+                    subtitle: "Your coverage keeps your family and finances safe."
+                )
+                .padding(.top, 16).padding(.horizontal, 20).padding(.bottom, 12)
+
                 ScrollView(showsIndicators: false) {
                     VStack(spacing: 0) {
-
-                        // ── Page header
-                        VStack(alignment: .leading, spacing: 6) {
-                            Text("Insurance & Protection")
-                                .font(.system(size: 28, weight: .bold))
-                            Text("Your coverage keeps your family and finances safe.")
-                                .font(.system(size: 15, design: .rounded))
-                                .foregroundStyle(.secondary)
-                                .fixedSize(horizontal: false, vertical: true)
-                        }
-                        .frame(maxWidth: .infinity, alignment: .leading)
-                        .padding(.horizontal, 20)
-                        .padding(.top, 24)
-                        .padding(.bottom, 24)
 
                     // ── Your Insurance Status
                     sectionCard {
@@ -208,12 +201,6 @@ struct InsuranceDetailsScreen: View {
                 .animation(.spring(response: 0.45, dampingFraction: 0.8), value: data.areDependentsInsured)
                 .animation(.spring(response: 0.3, dampingFraction: 0.75), value: data.insuranceEntries.first?.coverAmount)
                 .animation(.spring(response: 0.3, dampingFraction: 0.75), value: data.numberOfDependents)
-                .safeAreaInset(edge: .top, spacing: 0) {
-                    AssessmentProgressBar(progress: 0.9)
-                        .padding(.horizontal, 20)
-                        .padding(.vertical, 10)
-                        .background(Color(.systemGroupedBackground))
-                }
 
                 AssessmentFooterButton(label: "See My Report", enabled: true, isLast: true) {
                     data.hasCompletedInsuranceStep = true
