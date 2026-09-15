@@ -156,12 +156,15 @@ class InvestmentPlannerEngine {
         let income: Double = profile?.basicDetails.monthlyIncomeAfterTax ?? Swift.max(input.monthlyIncome, 1.0)
         let expenses: Double = profile?.basicDetails.monthlyExpenses ?? (income * 0.45)
         let emiLoad: Double = profile?.loans.reduce(0.0) { $0 + $1.calculatedEMI } ?? input.existingEMIs
+        // Insurance is a recurring protection cost, not an investment allocation.
+        // Keep it out of safe capacity before evaluating a new investment plan.
+        let insuranceLoad: Double = profile?.insurances.reduce(0.0) { $0 + max(0, $1.annualPremium) / 12 } ?? 0
         let emergFund: Double = profile?.basicDetails.emergencyFundAmount ?? 0.0
         let netWorth: Double = profile?.financialHealthReport?.netWorth ?? 0.0
         let investScore: Int = profile?.financialHealthReport?.investmentScore ?? 50
 
         let dti = income > 0 ? emiLoad / income : 0
-        let surplus = income - expenses - emiLoad
+        let surplus = income - expenses - emiLoad - insuranceLoad
         let investable = Swift.max(0.0, surplus * 0.9)
         let emergMonths = expenses > 0 ? emergFund / expenses : 0
 

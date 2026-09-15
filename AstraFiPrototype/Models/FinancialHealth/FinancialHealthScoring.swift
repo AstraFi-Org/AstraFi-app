@@ -176,10 +176,12 @@ enum FinancialHealthScoring {
             lifeScore = dependents > 0 ? 0.15 : 0.55
         }
 
-        let recommendedCover = snapshot.grossMonthlyIncome * 12 * FinancialHealthWeights.recommendedLifeCoverMultiple
+        let targetCover = (snapshot.estimatedProtectionNeed != nil && (snapshot.estimatedProtectionNeed ?? 0) > 0)
+            ? snapshot.estimatedProtectionNeed!
+            : (snapshot.grossMonthlyIncome * 12 * FinancialHealthWeights.recommendedLifeCoverMultiple)
         let coverageScore: Double
-        if recommendedCover > 0, dependents > 0 {
-            coverageScore = FinancialHealthCalculations.clamp(snapshot.totalProtectionCoverage / recommendedCover)
+        if targetCover > 0, dependents > 0 {
+            coverageScore = FinancialHealthCalculations.clamp(snapshot.totalProtectionCoverage / targetCover)
         } else if snapshot.totalProtectionCoverage > 0 {
             coverageScore = 0.80
         } else if snapshot.hasHealthInsurance || snapshot.hasLifeInsurance {

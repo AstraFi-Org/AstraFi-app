@@ -77,8 +77,10 @@ struct DashboardView: View {
                 showingMonthlyAssessmentPrompt = false
                 showingMonthlyAssessment = true
             }
-            .presentationDetents([.height(380)])
+            .presentationDetents([.height(215)])
             .presentationDragIndicator(.visible)
+            .presentationBackground(AppTheme.cardBackground)
+            .presentationCornerRadius(28)
         }
         .fullScreenCover(isPresented: $showingMonthlyAssessment) {
             StartAssesmentView(

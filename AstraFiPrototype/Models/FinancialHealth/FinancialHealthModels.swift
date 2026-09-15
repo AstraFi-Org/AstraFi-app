@@ -173,6 +173,11 @@ struct FinancialHealthSnapshot: Hashable {
     var childDependents: Int
     var totalProtectionCoverage: Double
     var insuranceAssessed: Bool
+    var annualInsurancePremium: Double = 0
+    var insurancePremiumToIncome: Double? = nil
+    var insurancePremiumToSurplus: Double? = nil
+    var estimatedProtectionNeed: Double? = nil
+    var lifeProtectionGap: Double? = nil
 
     var lowInvestmentBufferMonths: Double { 6.0 }
 }

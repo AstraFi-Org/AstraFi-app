@@ -313,12 +313,15 @@ enum FinancialHealthDiagnostics {
 
     private static func protection(_ snapshot: FinancialHealthSnapshot, _ score: FinancialHealthScoring.ParameterScore, overall: Double) -> FinancialHealthParameterResult {
         let dependents = snapshot.adultDependents + snapshot.childDependents
-        let metrics = [
+        var metrics = [
             FinancialHealthMetric(id: "health", label: "Health Insurance", value: snapshot.hasHealthInsurance ? "Available" : (score.isAssessed ? "Missing" : "Not assessed")),
             FinancialHealthMetric(id: "life", label: "Life Insurance", value: snapshot.hasLifeInsurance ? "Available" : (score.isAssessed ? "Missing" : "Not assessed")),
             FinancialHealthMetric(id: "deps", label: "Dependents", value: "\(dependents)"),
             FinancialHealthMetric(id: "cover", label: "Coverage", value: snapshot.totalProtectionCoverage > 0 ? snapshot.totalProtectionCoverage.toCurrency(compact: true) : "—")
         ]
+        if snapshot.annualInsurancePremium > 0 {
+            metrics.append(FinancialHealthMetric(id: "premium", label: "Annual Premium", value: snapshot.annualInsurancePremium.toCurrency(compact: true)))
+        }
 
         let why: String
         let impact: String
@@ -329,6 +332,16 @@ enum FinancialHealthDiagnostics {
             impact = "Without coverage information, family financial risk from health or income disruption cannot be estimated."
             action = "Add health and life protection details to complete this assessment."
             reason = "Protection information is needed."
+        } else if let surplusBurden = snapshot.insurancePremiumToSurplus, surplusBurden > 35 {
+            why = "Annual insurance premiums account for \(Int(surplusBurden.rounded()))% of your monthly surplus."
+            impact = "Less money remains available for emergency savings and investment goals."
+            action = "Review whether policy premiums fit comfortably into your ongoing monthly surplus."
+            reason = "Insurance premium is putting pressure on your monthly surplus."
+        } else if let gap = snapshot.lifeProtectionGap, gap > 0, dependents > 0 {
+            why = "Recorded household life cover is \(gap.toCurrency(compact: true)) below your estimated family requirement."
+            impact = "Dependents could face income replacement risk."
+            action = "Review additional life protection options to cover your family's financial needs."
+            reason = "Your family may have a protection gap."
         } else if snapshot.hasHealthInsurance && snapshot.hasLifeInsurance {
             why = "Core health and life protection is present\(dependents > 0 ? " and dependents are recorded" : "")."
             impact = "Existing cover can reduce the financial effect of a major health or income-related disruption."

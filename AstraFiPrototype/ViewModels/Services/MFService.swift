@@ -383,3 +383,4 @@ struct MFHistoryPoint: Codable {
     let date: String
     let nav: String
 }
+

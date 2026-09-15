@@ -63,10 +63,19 @@ enum FinancialHealthCalculations {
         return 0
     }
 
+    static func totalMonthlyInsurancePremium(profile: AstraUserProfile?, data: CompleteAssessmentData?) -> Double {
+        if let data {
+            return data.insuranceEntries.reduce(0) { $0 + parseNumber($1.annualPremium) / 12 }
+        }
+        return profile?.insurances.reduce(0) { $0 + max(0, $1.annualPremium) / 12 } ?? 0
+    }
+
     static func snapshot(from insights: FinancialAssessmentInsights, profile: AstraUserProfile?, data: CompleteAssessmentData?) -> FinancialHealthSnapshot {
         let income = insights.monthlyIncome
         let expenses = insights.monthlyExpenses
-        let surplus = income - expenses
+        // Insurance premiums are obligations, not investments: deduct them before
+        // presenting a safe monthly surplus for goals and investment planning.
+        let surplus = income - expenses - totalMonthlyInsurancePremium(profile: profile, data: data)
         let expenseRatio = income > 0 ? expenses / income : 0
         let savingsRate = income > 0 ? surplus / income : 0
         let emiFromLoans = totalMonthlyEMI(profile: profile, data: data)
@@ -140,7 +149,12 @@ enum FinancialHealthCalculations {
             adultDependents: insights.adultDependents,
             childDependents: childDeps,
             totalProtectionCoverage: coverage,
-            insuranceAssessed: insuranceAssessed
+            insuranceAssessed: insuranceAssessed,
+            annualInsurancePremium: totalMonthlyInsurancePremium(profile: profile, data: data) * 12,
+            insurancePremiumToIncome: income > 0 ? (totalMonthlyInsurancePremium(profile: profile, data: data) * 12) / (income * 12) * 100 : nil,
+            insurancePremiumToSurplus: surplus > 0 ? (totalMonthlyInsurancePremium(profile: profile, data: data) / surplus) * 100 : nil,
+            estimatedProtectionNeed: profile.map { InsuranceAnalysisEngine.householdProtection(profile: $0).estimatedRequiredProtection },
+            lifeProtectionGap: profile.map { InsuranceAnalysisEngine.householdProtection(profile: $0).protectionGap }
         )
     }
 

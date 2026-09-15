@@ -809,6 +809,7 @@ struct EducationExpenseSheet: View {
     let lifestyle: LifestyleOption
     let accentColor: Color
     @Environment(\.dismiss) var dismiss
+    @Environment(\.colorScheme) private var colorScheme
 
     private var multiplier: Double {
         switch lifestyle {
@@ -876,7 +877,7 @@ struct EducationExpenseSheet: View {
                 }
                 .padding(.top, 24)
             }
-            .background(AppTheme.darkBackground)
+            .background(AppTheme.appBackground(for: colorScheme))
             .toolbar {
                 ToolbarItem(placement: .topBarTrailing) {
                     Button("Done") { dismiss() }

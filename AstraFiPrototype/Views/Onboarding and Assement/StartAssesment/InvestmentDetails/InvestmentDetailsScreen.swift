@@ -1,5 +1,4 @@
 import SwiftUI
-internal import UniformTypeIdentifiers
 
 struct InvestmentDetailsScreen: View {
     @Bindable var data: CompleteAssessmentData
@@ -8,9 +7,6 @@ struct InvestmentDetailsScreen: View {
     @Environment(AppStateManager.self) private var appState
     @Environment(\.dismiss) private var dismiss
     @State private var goNext        = false
-    @State private var selectedFile: String?
-    @State private var showFilePicker = false
-    @State private var importViewModel = ImportViewModel()
     
     @State private var mfSearchResults: [MFScheme] = []
     @State private var showSuggestions = false
@@ -43,24 +39,6 @@ struct InvestmentDetailsScreen: View {
                     .padding(.top, 16).padding(.horizontal, 20).padding(.bottom, 12)
                 
                 Form {
-                    Section(header: Text("Import Investments"), footer: Text("Upload your NSDL/CDSL CAS (PDF) or an Excel export (CSV) to automatically estimate your net worth.")) {
-                        if importViewModel.isLoading {
-                            HStack {
-                                Spacer()
-                                ProgressView("Analyzing Document...")
-                                Spacer()
-                            }
-                        } else {
-                            Button {
-                                showFilePicker = true
-                            } label: {
-                                Label(selectedFile ?? "Tap to upload PDF/CSV", systemImage: "doc.badge.arrow.up.fill")
-                            }
-                            if let error = importViewModel.errorMessage {
-                                Text(error).font(.caption).foregroundStyle(.red)
-                            }
-                        }
-                    }
 
                     Section {
                         VStack(alignment: .leading, spacing: 12) {
@@ -356,32 +334,6 @@ struct InvestmentDetailsScreen: View {
         }
         .navigationDestination(isPresented: $goNext) {
             LoanDetailsScreen(data: data, onSaveComplete: onSaveComplete)
-        }
-        .fileImporter(
-            isPresented: $showFilePicker,
-            allowedContentTypes: [UTType.pdf, UTType.commaSeparatedText],
-            allowsMultipleSelection: false
-        ) { result in
-            if case .success(let urls) = result, let url = urls.first {
-                selectedFile = url.lastPathComponent
-                Task {
-                    await importViewModel.processPDF(at: url)
-                }
-            }
-        }
-        .sheet(isPresented: $importViewModel.showReviewList) {
-            ParsedInvestmentListView(
-                investments: $importViewModel.parsedInvestments,
-                onConfirm: {
-                    let newEntries = importViewModel.generateImportEntries()
-                    withAnimation {
-                        data.investmentEntries.append(contentsOf: newEntries)
-                    }
-                },
-                onCancel: {
-                    importViewModel.reset()
-                }
-            )
         }
         .sheet(isPresented: $showingStockSearch) {
             StockSearchView(selectedStock: .constant(nil)) { stock in

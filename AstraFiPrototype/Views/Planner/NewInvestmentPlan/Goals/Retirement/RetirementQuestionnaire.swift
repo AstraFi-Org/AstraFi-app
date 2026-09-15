@@ -489,6 +489,7 @@ struct InsightRow: View {
 struct LifestyleExpenseSheet: View {
     let preference: String
     @Environment(\.dismiss) var dismiss
+    @Environment(\.colorScheme) private var colorScheme
 
     var body: some View {
         NavigationStack {
@@ -527,7 +528,7 @@ struct LifestyleExpenseSheet: View {
                 }
                 .padding(20)
             }
-            .background(AppTheme.darkBackground)
+            .background(AppTheme.appBackground(for: colorScheme))
             .navigationTitle("\(preference) Lifestyle")
             .navigationBarTitleDisplayMode(.inline)
             .toolbar {
