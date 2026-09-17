@@ -25,6 +25,20 @@ struct PortfolioAsset: Identifiable, Codable, Equatable {
     var fundExamples: [String] = []
     var howItWorks: String = ""
     var whyIncluded: String = ""
+    var returns5Y: Double = 0
+    var returns10Y: Double = 0
+    var returns15Y: Double = 0
+    var benchmarkIndex: String = ""
+    var sourceName: String = ""
+    var sourceURL: String = ""
+
+    func historicalGrowth(years: Int) -> Double {
+        switch years {
+        case 5: return returns5Y
+        case 15: return returns15Y
+        default: return returns10Y
+        }
+    }
 }
 
 struct AssetAllocation: Identifiable, Codable, Equatable {
@@ -38,8 +52,14 @@ struct AssetAllocation: Identifiable, Codable, Equatable {
     var fundExamples: [String] = []
     var howItWorks: String = ""
     var whyIncluded: String = ""
+    var returns5Y: Double = 0
+    var returns10Y: Double = 0
+    var returns15Y: Double = 0
+    var benchmarkIndex: String = ""
+    var sourceName: String = ""
+    var sourceURL: String = ""
 
-    init(id: UUID = UUID(), name: String, percentage: Double, expectedCAGR: Double, riskLevel: AstraRiskLevel, role: String = "", description: String = "", fundExamples: [String] = [], howItWorks: String = "", whyIncluded: String = "") {
+    init(id: UUID = UUID(), name: String, percentage: Double, expectedCAGR: Double, riskLevel: AstraRiskLevel, role: String = "", description: String = "", fundExamples: [String] = [], howItWorks: String = "", whyIncluded: String = "", returns5Y: Double = 0, returns10Y: Double = 0, returns15Y: Double = 0, benchmarkIndex: String = "", sourceName: String = "", sourceURL: String = "") {
         self.id = id
         self.name = name
         self.percentage = percentage
@@ -50,6 +70,20 @@ struct AssetAllocation: Identifiable, Codable, Equatable {
         self.fundExamples = fundExamples
         self.howItWorks = howItWorks
         self.whyIncluded = whyIncluded
+        self.returns5Y = returns5Y
+        self.returns10Y = returns10Y
+        self.returns15Y = returns15Y
+        self.benchmarkIndex = benchmarkIndex
+        self.sourceName = sourceName
+        self.sourceURL = sourceURL
+    }
+
+    func historicalGrowth(years: Int) -> Double {
+        switch years {
+        case 5: return returns5Y
+        case 15: return returns15Y
+        default: return returns10Y
+        }
     }
 }
 
@@ -154,7 +188,13 @@ struct Plan1Result: Codable, Equatable {
                 description: allocation.description,
                 fundExamples: allocation.fundExamples,
                 howItWorks: allocation.howItWorks,
-                whyIncluded: allocation.whyIncluded
+                whyIncluded: allocation.whyIncluded,
+                returns5Y: allocation.returns5Y,
+                returns10Y: allocation.returns10Y,
+                returns15Y: allocation.returns15Y,
+                benchmarkIndex: allocation.benchmarkIndex,
+                sourceName: allocation.sourceName,
+                sourceURL: allocation.sourceURL
             )
         }
     }
@@ -248,6 +288,9 @@ struct Plan3Result: Codable, Equatable {
     var recommendationReason: String
     var scenarios: [PlanScenario]
     var portfolio: PortfolioBlueprint?
+    var conservativePortfolio: PortfolioBlueprint?
+    var moderatePortfolio: PortfolioBlueprint?
+    var aggressivePortfolio: PortfolioBlueprint?
 
     static func empty() -> Plan3Result {
         let emptyStrategy = LeveragedStrategyResult(name: "", description: "", finalValue: 0, totalEMIPaid: 0, netProfit: 0, breakEvenReturn: 0, riskLevel: "", riskFlags: [], survivalDuration: nil, yearlyBreakdown: [])
@@ -255,7 +298,10 @@ struct Plan3Result: Codable, Equatable {
                             conservative: emptyStrategy, moderate: emptyStrategy, aggressive: emptyStrategy,
                             recommendedStrategy: "", recommendationReason: "",
                             scenarios: [],
-                            portfolio: nil)
+                            portfolio: nil,
+                            conservativePortfolio: nil,
+                            moderatePortfolio: nil,
+                            aggressivePortfolio: nil)
     }
 }
 
