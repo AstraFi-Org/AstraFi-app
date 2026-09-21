@@ -154,27 +154,68 @@ final class AMFIService {
 final class CompanyProfileService {
     private let finnhub: FinnhubService
     private let fmpService: FMPService
+    private let intelligenceStore: CompanyIntelligenceStore
 
-    init(finnhub: FinnhubService = .shared, fmpService: FMPService = .shared) {
+    init(
+        finnhub: FinnhubService = .shared,
+        fmpService: FMPService = .shared,
+        intelligenceStore: CompanyIntelligenceStore = .shared
+    ) {
         self.finnhub = finnhub
         self.fmpService = fmpService
+        self.intelligenceStore = intelligenceStore
     }
 
     func fetch(symbol: String) async -> CompanyProfileSnapshot? {
+        let marketContext = SecurityMarketContext.forSymbol(symbol)
+
+        // 1. Check verified knowledge repository first
+        if let verified = intelligenceStore.profile(for: symbol) {
+            // Check if remote provider has a logo
+            var logoURL: URL? = nil
+            if let remote = try? await finnhub.companyProfile(symbol: symbol), let logo = remote.logo {
+                logoURL = URL(string: logo)
+            }
+
+            return CompanyProfileSnapshot(
+                name: verified.companyName,
+                ticker: verified.symbol,
+                sector: verified.sector,
+                industry: verified.industry,
+                country: verified.country,
+                exchange: verified.exchange,
+                logoURL: logoURL,
+                description: verified.whatItDoes,
+                whatItDoes: verified.whatItDoes,
+                operatingSegments: verified.operatingSegments,
+                productsAndPlatforms: verified.productsAndPlatforms,
+                revenueModel: verified.revenueModel,
+                targetMarkets: verified.targetMarkets,
+                secularGrowthDrivers: verified.secularGrowthDrivers,
+                keyBusinessRisks: verified.keyBusinessRisks,
+                keyMetricsToMonitor: verified.keyMetricsToMonitor,
+                isVerifiedProfile: true
+            )
+        }
+
+        // 2. Try FMP remote profile
         if let profile = try? await fmpService.profile(symbol: symbol),
            hasFMPProfileData(profile) {
             return CompanyProfileSnapshot(
                 name: profile.companyName ?? symbol,
                 ticker: profile.symbol ?? symbol,
                 sector: profile.sector ?? "Market",
-                industry: profile.industry ?? profile.sector ?? "Unknown",
-                country: "Unknown",
-                exchange: symbol.uppercased().hasSuffix(".NS") ? "NSE" : "Market",
+                industry: profile.industry ?? profile.sector ?? "General Equities",
+                country: marketContext.country,
+                exchange: marketContext.exchange,
                 logoURL: nil,
-                description: profile.description ?? "Provider profile text is unavailable for this company."
+                description: profile.description ?? "Operational profile not provided by data provider.",
+                whatItDoes: profile.description,
+                isVerifiedProfile: false
             )
         }
 
+        // 3. Try Finnhub remote profile
         do {
             let profile = try await finnhub.companyProfile(symbol: symbol)
             let hasProfileData = [
@@ -190,15 +231,22 @@ final class CompanyProfileService {
             }
             guard hasProfileData else { return nil }
 
+            let industry = profile.finnhubIndustry ?? "General Equities"
+            let country = profile.country ?? marketContext.country
+            let exchange = profile.exchange ?? marketContext.exchange
+            let desc = "\(profile.name ?? symbol) operates in \(industry). Review revenue, operating margins, balance sheet debt, and competitor landscape before making investment decisions."
+
             return CompanyProfileSnapshot(
                 name: profile.name ?? symbol,
                 ticker: profile.ticker ?? symbol,
-                sector: profile.finnhubIndustry ?? "Market",
-                industry: profile.finnhubIndustry ?? "Unknown",
-                country: profile.country ?? "Unknown",
-                exchange: profile.exchange ?? "Market",
+                sector: industry,
+                industry: industry,
+                country: country,
+                exchange: exchange,
                 logoURL: URL(string: profile.logo ?? ""),
-                description: "This company operates in \(profile.finnhubIndustry ?? "its industry"). Review revenue, margins, debt and competition before making investment decisions."
+                description: desc,
+                whatItDoes: desc,
+                isVerifiedProfile: false
             )
         } catch {
             return nil
@@ -413,12 +461,21 @@ final class RecommendationService {
     func fetch(symbol: String) async -> [RecommendationTrend] {
         do {
             guard let latest = try await finnhub.recommendationTrends(symbol: symbol).first else { return [] }
+            let sb = latest.strongBuy ?? 0
+            let b = latest.buy ?? 0
+            let h = latest.hold ?? 0
+            let s = latest.sell ?? 0
+            let ss = latest.strongSell ?? 0
+            let total = sb + b + h + s + ss
+            let pct: (Int) -> Double? = { count in
+                total > 0 ? (Double(count) / Double(total)) * 100 : nil
+            }
             return [
-                RecommendationTrend(label: "Strong Buy", count: latest.strongBuy ?? 0),
-                RecommendationTrend(label: "Buy", count: latest.buy ?? 0),
-                RecommendationTrend(label: "Hold", count: latest.hold ?? 0),
-                RecommendationTrend(label: "Sell", count: latest.sell ?? 0),
-                RecommendationTrend(label: "Strong Sell", count: latest.strongSell ?? 0)
+                RecommendationTrend(label: "Strong Buy", count: sb, percentage: pct(sb)),
+                RecommendationTrend(label: "Buy", count: b, percentage: pct(b)),
+                RecommendationTrend(label: "Hold", count: h, percentage: pct(h)),
+                RecommendationTrend(label: "Sell", count: s, percentage: pct(s)),
+                RecommendationTrend(label: "Strong Sell", count: ss, percentage: pct(ss))
             ]
         } catch {
             return []
@@ -688,6 +745,42 @@ private actor InvestmentIntelligenceHomeAssetCache {
     func warm(repository: InvestmentIntelligenceRepository) async {
         _ = await assets(repository: repository)
     }
+
+    /// Called by the background live-price refresh to patch cached asset prices.
+    func updateLivePrices(stocks: [InvestmentSummaryAsset], gold: [InvestmentSummaryAsset]) {
+        guard var current = cachedAssets else { return }
+        // Merge refreshed stock prices into cached list (match by symbol)
+        if !stocks.isEmpty {
+            let priceMap = Dictionary(uniqueKeysWithValues: stocks.map { ($0.symbol, $0) })
+            current.stocks = current.stocks.map { asset in
+                if let updated = priceMap[asset.symbol], updated.currentValue ?? 0 > 0 {
+                    var patched = asset
+                    patched.currentValue = updated.currentValue
+                    patched.dailyChange = updated.dailyChange
+                    return patched
+                }
+                return asset
+            }
+        }
+        if !gold.isEmpty {
+            let priceMap = Dictionary(uniqueKeysWithValues: gold.map { ($0.symbol, $0) })
+            current.gold = current.gold.map { asset in
+                if let updated = priceMap[asset.symbol], updated.currentValue ?? 0 > 0 {
+                    var patched = asset
+                    patched.currentValue = updated.currentValue
+                    patched.dailyChange = updated.dailyChange
+                    return patched
+                }
+                return asset
+            }
+        }
+        cachedAssets = current
+    }
+
+    func invalidate() {
+        cachedAssets = nil
+        loadingTask = nil
+    }
 }
 
 final class InvestmentIntelligenceRepository {
@@ -731,15 +824,223 @@ final class InvestmentIntelligenceRepository {
         await InvestmentIntelligenceHomeAssetCache.shared.warm(repository: self)
     }
 
+    /// Returns home assets.  First call builds static placeholder data instantly from
+    /// the seed lists (< 5 ms), caches it, then fires a background task to refresh
+    /// live prices so the UI can update without blocking the initial render.
     fileprivate func fetchHomeAssetsFresh() async -> InvestmentHomeAssets {
-        async let stocks = loadStocks()
-        async let funds = loadFunds()
-        async let gold = loadGoldETFs()
-        let (rawStocks, rawFunds, rawGold) = await (stocks, funds, gold)
-        let rotatedStocks = InvestmentRecommendationEngine.shared.rotateDaily(items: rawStocks)
-        let rotatedFunds = InvestmentRecommendationEngine.shared.rotateDaily(items: rawFunds)
-        let rotatedGold = InvestmentRecommendationEngine.shared.rotateDaily(items: rawGold)
-        return (rotatedStocks, rotatedFunds, rotatedGold)
+        // 1. Build static assets immediately from seeds (no network)
+        let staticStocks = buildStaticStocks()
+        let staticFunds  = buildStaticFunds()
+        let staticGold   = buildStaticGoldETFs()
+
+        let rotated = (
+            InvestmentRecommendationEngine.shared.rotateDaily(items: staticStocks),
+            InvestmentRecommendationEngine.shared.rotateDaily(items: staticFunds),
+            InvestmentRecommendationEngine.shared.rotateDaily(items: staticGold)
+        )
+
+        // 2. Fire background refresh for live prices — callers update via
+        //    refreshLivePrices(stocks:gold:) once network calls resolve.
+        Task.detached(priority: .background) {
+            await self.refreshLivePrices()
+        }
+
+        return (rotated.0, rotated.1, rotated.2)
+    }
+
+    /// Builds stock assets from seed list without any network calls.
+    private func buildStaticStocks() -> [InvestmentSummaryAsset] {
+        let seeds: [(symbol: String, name: String, sector: String, approxPrice: Double)] = [
+            ("RELIANCE.NS", "Reliance Industries", "Energy", 2850),
+            ("TCS.NS", "Tata Consultancy Services", "IT", 3950),
+            ("HDFCBANK.NS", "HDFC Bank", "Banking", 1750),
+            ("INFY.NS", "Infosys", "IT", 1820),
+            ("ICICIBANK.NS", "ICICI Bank", "Banking", 1280),
+            ("HINDUNILVR.NS", "Hindustan Unilever", "FMCG", 2680),
+            ("BHARTIARTL.NS", "Bharti Airtel", "Telecom", 1850),
+            ("SUNPHARMA.NS", "Sun Pharma", "Healthcare", 1920),
+            ("ITC.NS", "ITC", "FMCG", 480),
+            ("SBIN.NS", "State Bank of India", "Banking", 820),
+            ("LT.NS", "Larsen & Toubro", "Construction", 3650),
+            ("BAJFINANCE.NS", "Bajaj Finance", "Financials", 6800),
+            ("ASIANPAINT.NS", "Asian Paints", "Consumer", 2850),
+            ("KOTAKBANK.NS", "Kotak Mahindra Bank", "Banking", 1920),
+            ("AXISBANK.NS", "Axis Bank", "Banking", 1150),
+            ("MARUTI.NS", "Maruti Suzuki", "Automobile", 12800),
+            ("TATAMOTORS.NS", "Tata Motors", "Automobile", 980),
+            ("HCLTECH.NS", "HCL Technologies", "IT", 1850),
+            ("WIPRO.NS", "Wipro", "IT", 570),
+            ("TITAN.NS", "Titan Company", "Consumer", 3580),
+            ("ZOMATO.NS", "Zomato", "Consumer", 245),
+            ("BEL.NS", "Bharat Electronics", "Defense", 310),
+            ("HAL.NS", "Hindustan Aeronautics", "Defense", 4850),
+            ("ADANIENT.NS", "Adani Enterprises", "Conglomerate", 2850),
+            ("BAJAJ-AUTO.NS", "Bajaj Auto", "Automobile", 9500),
+            ("EICHERMOT.NS", "Eicher Motors", "Automobile", 4900),
+            ("APOLLOHOSP.NS", "Apollo Hospitals", "Healthcare", 6900),
+            ("TRENT.NS", "Trent", "Retail", 6500),
+            ("DRREDDY.NS", "Dr Reddy's Laboratories", "Healthcare", 6200),
+            ("CIPLA.NS", "Cipla", "Healthcare", 1680),
+            ("AAPL", "Apple Inc", "US Tech", 193),
+            ("MSFT", "Microsoft Corp", "US Tech", 415),
+            ("GOOGL", "Alphabet Inc", "US Tech", 178),
+            ("NVDA", "NVIDIA Corp", "US Tech", 875),
+            ("TSLA", "Tesla Inc", "US Tech", 185),
+            ("AMZN", "Amazon.com", "US Tech", 185)
+        ]
+        return seeds.map { seed in
+            let stock = AstraStock(
+                symbol: seed.symbol,
+                name: seed.name,
+                exchange: seed.symbol.hasSuffix(".NS") ? "NSE" : "NASDAQ",
+                currentPrice: seed.approxPrice,
+                priceChange: 0,
+                priceChangePercentage: 0
+            )
+            return SearchService.stockAsset(from: stock, sector: seed.sector)
+        }
+    }
+
+    /// Builds fund assets from the MutualFundIntelligenceStore without any network calls.
+    private func buildStaticFunds() -> [InvestmentSummaryAsset] {
+        let seeds: [(code: String, name: String, category: String, nav: Double)] = [
+            ("122639", "Parag Parikh Flexi Cap Fund - Direct Plan - Growth", "Flexi Cap Fund", 78.5),
+            ("118778", "Nippon India Small Cap Fund - Direct Plan - Growth", "Small Cap Fund", 145.2),
+            ("119292", "HDFC Mid-Cap Opportunities Fund - Direct Plan - Growth", "Mid Cap Fund", 112.8),
+            ("120503", "Quant Small Cap Fund - Direct Plan - Growth", "Small Cap Fund", 285.4),
+            ("118989", "Mirae Asset Large Cap Fund - Direct Plan - Growth", "Large Cap Fund", 115.6),
+            ("119598", "SBI Bluechip Fund - Direct Plan - Growth", "Large Cap Fund", 78.9),
+            ("125354", "Axis Bluechip Fund - Direct Plan - Growth", "Large Cap Fund", 58.3),
+            ("120716", "UTI Nifty 50 Index Fund - Direct Plan - Growth", "Index Fund", 148.5)
+        ]
+        return seeds.map { seed in
+            let profile = MutualFundIntelligenceStore.shared.profile(for: seed.code)
+            var asset = InvestmentSummaryAsset(
+                id: seed.code,
+                kind: .mutualFund,
+                symbol: seed.code,
+                name: profile?.shortName ?? seed.name.components(separatedBy: " ").prefix(4).joined(separator: " "),
+                sector: profile?.category ?? seed.category,
+                currentValue: seed.nav,
+                dailyChange: nil,
+                oneYearReturn: profile?.return1Y,
+                riskLevel: profile?.riskLevel ?? .moderate,
+                sparkline: [],
+                metadata: "AMFI"
+            )
+            return asset
+        }
+    }
+
+    /// Builds Gold ETF assets from GoldETFIntelligenceStore without any network calls.
+    private func buildStaticGoldETFs() -> [InvestmentSummaryAsset] {
+        let seeds: [(symbol: String, name: String, approxPrice: Double)] = [
+            ("GOLDBEES.NS", "Nippon India Gold ETF", 680),
+            ("HDFCGOLD.NS", "HDFC Gold ETF", 68),
+            ("SETFGOLD.NS", "SBI Gold ETF", 67),
+            ("ICICIGOLD.NS", "ICICI Prudential Gold ETF", 68),
+            ("KOTAKGOLD.NS", "Kotak Gold ETF", 68),
+            ("SILVERBEES.NS", "Nippon India Silver ETF", 102),
+            ("HDFCSILVER.NS", "HDFC Silver ETF", 10),
+            ("ICICISILVE.NS", "ICICI Prudential Silver ETF", 10)
+        ]
+        return seeds.map { seed in
+            let verified = GoldETFIntelligenceStore.shared.profile(for: seed.symbol)
+            let stock = AstraStock(
+                symbol: seed.symbol,
+                name: verified?.fundName ?? seed.name,
+                exchange: "NSE",
+                currentPrice: seed.approxPrice,
+                priceChange: 0,
+                priceChangePercentage: 0
+            )
+            return SearchService.goldAsset(from: stock)
+        }
+    }
+
+    /// Background refresh — updates live prices after initial static render.
+    /// Called as a detached Task so it never blocks the home screen.
+    func refreshLivePrices() async {
+        // Limit to top-20 stocks to avoid Finnhub rate limits (60 calls/min free tier)
+        let stockSeeds: [(String, String, String)] = [
+            ("RELIANCE.NS", "Reliance Industries", "Energy"),
+            ("TCS.NS", "Tata Consultancy Services", "IT"),
+            ("HDFCBANK.NS", "HDFC Bank", "Banking"),
+            ("INFY.NS", "Infosys", "IT"),
+            ("ICICIBANK.NS", "ICICI Bank", "Banking"),
+            ("BHARTIARTL.NS", "Bharti Airtel", "Telecom"),
+            ("BAJFINANCE.NS", "Bajaj Finance", "Financials"),
+            ("AXISBANK.NS", "Axis Bank", "Banking"),
+            ("MARUTI.NS", "Maruti Suzuki", "Automobile"),
+            ("TATAMOTORS.NS", "Tata Motors", "Automobile"),
+            ("HCLTECH.NS", "HCL Technologies", "IT"),
+            ("AAPL", "Apple Inc", "US Tech"),
+            ("MSFT", "Microsoft Corp", "US Tech"),
+            ("GOOGL", "Alphabet Inc", "US Tech"),
+            ("NVDA", "NVIDIA Corp", "US Tech"),
+            ("TSLA", "Tesla Inc", "US Tech"),
+            ("TITAN.NS", "Titan Company", "Consumer"),
+            ("ZOMATO.NS", "Zomato", "Consumer"),
+            ("BEL.NS", "Bharat Electronics", "Defense"),
+            ("APOLLOHOSP.NS", "Apollo Hospitals", "Healthcare")
+        ]
+        let goldSeeds = ["GOLDBEES.NS", "HDFCGOLD.NS", "SETFGOLD.NS", "ICICIGOLD.NS", "KOTAKGOLD.NS"]
+
+        // Fetch in small batches to stay under Finnhub rate limit
+        var refreshedStocks: [InvestmentSummaryAsset] = []
+        for chunk in stride(from: 0, to: stockSeeds.count, by: 5) {
+            let batch = Array(stockSeeds[chunk..<min(chunk + 5, stockSeeds.count)])
+            let batchAssets = await withTaskGroup(of: InvestmentSummaryAsset.self) { group in
+                for seed in batch {
+                    group.addTask {
+                        let quote = await self.stockService.fetchPrice(symbol: seed.0)
+                        let stock = AstraStock(
+                            symbol: seed.0,
+                            name: quote?.name == seed.0 ? seed.1 : quote?.name ?? seed.1,
+                            exchange: quote?.exchange ?? (seed.0.hasSuffix(".NS") ? "NSE" : "NASDAQ"),
+                            currentPrice: quote?.currentPrice ?? 0,
+                            priceChange: quote?.priceChange ?? 0,
+                            priceChangePercentage: quote?.priceChangePercentage ?? 0
+                        )
+                        return SearchService.stockAsset(from: stock, sector: seed.2)
+                    }
+                }
+                var results: [InvestmentSummaryAsset] = []
+                for await r in group { results.append(r) }
+                return results
+            }
+            refreshedStocks.append(contentsOf: batchAssets)
+            // Small delay between batches to avoid rate limiting
+            try? await Task.sleep(nanoseconds: 500_000_000) // 0.5s
+        }
+
+        let refreshedGold = await withTaskGroup(of: InvestmentSummaryAsset.self) { group in
+            for sym in goldSeeds {
+                group.addTask {
+                    let name = GoldETFIntelligenceStore.shared.profile(for: sym)?.fundName ?? sym
+                    let quote = await self.stockService.fetchPrice(symbol: sym)
+                    let stock = AstraStock(
+                        symbol: sym, name: quote?.name == sym ? name : quote?.name ?? name,
+                        exchange: "NSE",
+                        currentPrice: quote?.currentPrice ?? 0,
+                        priceChange: quote?.priceChange ?? 0,
+                        priceChangePercentage: quote?.priceChangePercentage ?? 0
+                    )
+                    return SearchService.goldAsset(from: stock)
+                }
+            }
+            var results: [InvestmentSummaryAsset] = []
+            for await r in group { results.append(r) }
+            return results
+        }
+
+        // Update the cache with refreshed prices so next load() call gets live data
+        if !refreshedStocks.isEmpty || !refreshedGold.isEmpty {
+            await InvestmentIntelligenceHomeAssetCache.shared.updateLivePrices(
+                stocks: refreshedStocks,
+                gold: refreshedGold
+            )
+        }
     }
 
     func detail(for asset: InvestmentSummaryAsset) async -> InvestmentDetailSnapshot {
@@ -978,18 +1279,43 @@ final class InvestmentIntelligenceRepository {
     private func mutualFundDetail(for asset: InvestmentSummaryAsset) async -> InvestmentDetailSnapshot {
         let scheme = await amfiService.scheme(code: asset.symbol)
         let chart = await amfiService.navHistory(schemeCode: asset.symbol)
-        let fund = MutualFundSnapshot(
+
+        // Look up verified profile — first by schemeCode, then by name
+        let verified = MutualFundIntelligenceStore.shared.profile(for: asset.symbol)
+            ?? MutualFundIntelligenceStore.shared.profile(matching: asset.name)
+
+        var fund = MutualFundSnapshot(
             schemeCode: asset.symbol,
-            schemeName: scheme?.name ?? asset.name,
-            fundHouse: scheme?.name.components(separatedBy: " ").prefix(2).joined(separator: " ") ?? "Fund House",
-            category: asset.sector,
+            schemeName: verified?.schemeName ?? scheme?.name ?? asset.name,
+            fundHouse: verified?.fundHouse ?? scheme?.name.components(separatedBy: " ").prefix(2).joined(separator: " ") ?? "Fund House",
+            category: verified?.category ?? asset.sector,
             currentNAV: scheme?.nav ?? asset.currentValue ?? 0,
             assetClass: asset.sector == "Gold Fund" ? "Commodity" : "Equity / Hybrid",
-            fundType: asset.sector,
+            fundType: verified?.subCategory ?? asset.sector,
             lastUpdated: scheme?.date ?? asset.metadata,
-            oneYearReturn: oneYearReturn(from: chart),
-            riskLevel: asset.riskLevel
+            oneYearReturn: verified?.return1Y ?? oneYearReturn(from: chart),
+            riskLevel: verified?.riskLevel ?? asset.riskLevel,
+            verifiedProfile: verified
         )
+
+        // If verified profile has better 1Y data, use it; else use computed
+        if fund.oneYearReturn == nil, let from = chart.first?.value, let to = chart.last?.value, from > 0 {
+            fund.oneYearReturn = ((to - from) / from) * 100
+        }
+
+        // Build insights — use verified AI insights if available
+        let baseInsights = insightEngine.insights(asset: asset, financials: nil, recommendations: [])
+        let verifiedInsights: [InvestmentInsight] = verified?.aiInsights.enumerated().map { idx, text in
+            let tagEnd = text.firstIndex(of: "]").map { text.index(after: $0) }
+            let clean = tagEnd.map { String(text[text.index(after: text.startIndex)...$0].dropLast()) } ?? ""
+            let body = tagEnd.map { String(text[$0...]).trimmingCharacters(in: .whitespaces) } ?? text
+            return InvestmentInsight(
+                title: clean.isEmpty ? "Fund Insight" : clean,
+                explanation: body,
+                systemImage: idx % 5 == 0 ? "chart.pie.fill" : idx % 5 == 1 ? "person.fill" : idx % 5 == 2 ? "building.2.fill" : idx % 5 == 3 ? "indianrupeesign.circle.fill" : "lightbulb.fill",
+                color: [AppTheme.auraGreen, AppTheme.auraIndigo, AppTheme.auraPurple, AppTheme.vibrantOrange, AppTheme.auraMint][idx % 5]
+            )
+        } ?? []
 
         return InvestmentDetailSnapshot(
             asset: asset,
@@ -1001,7 +1327,7 @@ final class InvestmentIntelligenceRepository {
             competitors: [],
             news: [],
             recommendations: [],
-            insights: insightEngine.insights(asset: asset, financials: nil, recommendations: []),
+            insights: verifiedInsights.isEmpty ? baseInsights : verifiedInsights,
             aiInsight: nil,
             faqs: faqService.faqs()
         )
@@ -1009,17 +1335,37 @@ final class InvestmentIntelligenceRepository {
 
     private func goldETFDetail(for asset: InvestmentSummaryAsset) async -> InvestmentDetailSnapshot {
         let chart = await stockChart(symbol: asset.symbol)
+
+        // Look up verified profile
+        let verified = GoldETFIntelligenceStore.shared.profile(for: asset.symbol)
+            ?? GoldETFIntelligenceStore.shared.profile(matching: asset.name)
+
         let snapshot = GoldETFSnapshot(
-            fundName: asset.name,
+            fundName: verified?.fundName ?? asset.name,
             symbol: asset.symbol,
             currentPrice: asset.currentValue,
             nav: asset.currentValue,
-            trackingError: "Review factsheet",
-            expenseRatio: "AMC disclosed",
-            fundHouse: asset.name.components(separatedBy: " ").prefix(2).joined(separator: " "),
-            riskLevel: .moderate,
-            category: "Gold ETF"
+            trackingError: verified?.trackingError ?? "Review AMC factsheet",
+            expenseRatio: verified?.expenseRatio ?? "Review AMC factsheet",
+            fundHouse: verified?.fundHouse ?? asset.name.components(separatedBy: " ").prefix(2).joined(separator: " "),
+            riskLevel: verified?.riskLevel ?? .moderate,
+            category: verified != nil ? (verified!.symbol.contains("SILVER") ? "Silver ETF" : "Gold ETF") : "Gold ETF",
+            verifiedProfile: verified
         )
+
+        // Build insights from verified store
+        let baseInsights = insightEngine.insights(asset: asset, financials: nil, recommendations: [])
+        let verifiedInsights: [InvestmentInsight] = verified?.aiInsights.enumerated().map { idx, text in
+            let tagEnd = text.firstIndex(of: "]").map { text.index(after: $0) }
+            let clean = tagEnd.map { String(text[text.index(after: text.startIndex)...$0].dropLast()) } ?? ""
+            let body = tagEnd.map { String(text[$0...]).trimmingCharacters(in: .whitespaces) } ?? text
+            return InvestmentInsight(
+                title: clean.isEmpty ? "ETF Insight" : clean,
+                explanation: body,
+                systemImage: idx % 4 == 0 ? "circle.hexagongrid.fill" : idx % 4 == 1 ? "building.2.fill" : idx % 4 == 2 ? "chart.line.uptrend.xyaxis" : "lightbulb.fill",
+                color: [AppTheme.auraGold, AppTheme.auraMint, AppTheme.auraIndigo, AppTheme.vibrantOrange][idx % 4]
+            )
+        } ?? []
 
         return InvestmentDetailSnapshot(
             asset: asset,
@@ -1031,7 +1377,7 @@ final class InvestmentIntelligenceRepository {
             competitors: [],
             news: [],
             recommendations: [],
-            insights: insightEngine.insights(asset: asset, financials: nil, recommendations: []),
+            insights: verifiedInsights.isEmpty ? baseInsights : verifiedInsights,
             aiInsight: nil,
             faqs: faqService.faqs()
         )

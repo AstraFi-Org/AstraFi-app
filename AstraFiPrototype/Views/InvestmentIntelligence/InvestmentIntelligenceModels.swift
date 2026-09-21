@@ -76,6 +76,15 @@ struct CompanyProfileSnapshot: Equatable {
     var exchange: String
     var logoURL: URL?
     var description: String
+    var whatItDoes: String? = nil
+    var operatingSegments: [BusinessSegment] = []
+    var productsAndPlatforms: [String] = []
+    var revenueModel: [String] = []
+    var targetMarkets: [String] = []
+    var secularGrowthDrivers: [String] = []
+    var keyBusinessRisks: [String] = []
+    var keyMetricsToMonitor: [String] = []
+    var isVerifiedProfile: Bool = false
 }
 
 struct CompanyFinancialSnapshot: Equatable {
@@ -95,12 +104,14 @@ struct CompanyFinancialSnapshot: Equatable {
     var debtRatio: Double?
     var quarterlyGrowth: Double?
     var historicalGrowth: Double?
+    var measurementPeriod: String? = "TTM (Trailing 12M)"
 }
 
 struct RecommendationTrend: Identifiable, Equatable {
     let id = UUID()
     let label: String
     let count: Int
+    var percentage: Double? = nil
 }
 
 struct InvestmentNewsItem: Identifiable, Equatable {
@@ -132,6 +143,8 @@ struct MutualFundSnapshot: Equatable {
     var lastUpdated: String
     var oneYearReturn: Double?
     var riskLevel: IntelligenceRiskLevel
+    // Verified intelligence (nil if not in store)
+    var verifiedProfile: VerifiedMutualFundProfile? = nil
 }
 
 struct GoldETFSnapshot: Equatable {
@@ -144,6 +157,8 @@ struct GoldETFSnapshot: Equatable {
     var fundHouse: String
     var riskLevel: IntelligenceRiskLevel
     var category: String
+    // Verified intelligence (nil if not in store)
+    var verifiedProfile: VerifiedGoldETFProfile? = nil
 }
 
 struct InvestmentFAQ: Identifiable, Equatable {
@@ -221,5 +236,15 @@ extension Double {
 
     var percentText: String {
         String(format: "%.2f%%", self)
+    }
+
+    func formattedCurrency(for symbol: String, exchange: String? = nil, country: String? = nil) -> String {
+        let context = SecurityMarketContext.forSymbol(symbol, exchange: exchange, country: country)
+        return context.formatPrice(self)
+    }
+
+    func formattedMarketCap(for symbol: String, exchange: String? = nil, country: String? = nil) -> String {
+        let context = SecurityMarketContext.forSymbol(symbol, exchange: exchange, country: country)
+        return context.formatMarketCap(self)
     }
 }

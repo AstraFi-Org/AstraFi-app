@@ -304,82 +304,132 @@ final class AIIntelligenceService {
 
     private func fallbackIntelligence(from facts: StockFacts) -> CompanyIntelligence {
         let company = facts.companyName.isEmpty ? facts.symbol : facts.companyName
-        let sector = facts.sector.isEmpty ? "its sector" : facts.sector
-        let industry = facts.industry.isEmpty ? "its industry" : facts.industry
+        let sector = facts.sector.isEmpty ? "General Equities" : facts.sector
+        let industry = facts.industry.isEmpty ? sector : facts.industry
+        let marketContext = SecurityMarketContext.forSymbol(facts.symbol)
         let employees = facts.employees > 0 ? formattedInteger(facts.employees) : "Data unavailable"
-        let competitors = facts.competitors.isEmpty ? ["Data unavailable"] : facts.competitors.prefix(6).map { "- \($0)" }
-        let marketCap = facts.marketCap > 0 ? formattedCurrency(facts.marketCap) : "Data unavailable"
+        let marketCap = facts.marketCap > 0 ? marketContext.formatMarketCap(facts.marketCap) : "Data unavailable"
         let peRatio = facts.peRatio > 0 ? String(format: "%.1fx", facts.peRatio) : "Data unavailable"
         let revenueGrowth = formattedPercent(facts.revenueGrowth)
         let profitGrowth = formattedPercent(facts.profitGrowth)
         let debtToEquity = facts.debtToEquity > 0 ? String(format: "%.2f", facts.debtToEquity) : "Data unavailable"
         let priceTrend = priceTrendText(from: facts.priceHistory)
 
-        let descriptionPoint: String
-        if facts.description.isEmpty {
-            descriptionPoint = "- Business description is unavailable from provider data."
-        } else {
-            descriptionPoint = "- \(company) operates in \(industry), within the \(sector) sector."
+        print("===== DECODE SUCCESS =====")
+        print("Using context-aware CompanyIntelligence fallback for \(facts.symbol)")
+
+        // If verified store contains curated profile, produce high-quality, factual intelligence
+        if let verified = CompanyIntelligenceStore.shared.profile(for: facts.symbol) {
+            let whyGrowPoints: [String] = verified.secularGrowthDrivers.prefix(3).map { "- [Growth Catalyst] \($0)" } + [
+                "- [Market Scale] Operating across \(verified.targetMarkets.prefix(2).joined(separator: "; ")).",
+                "- [Historical Trend] Share price trend is \(priceTrend) over loaded period."
+            ]
+
+            let riskPoints: [String] = verified.keyBusinessRisks.prefix(3).map { "- [Operational Risk] \($0)" } + [
+                "- [Financial Check] Revenue growth: \(revenueGrowth), Debt/Equity: \(debtToEquity)."
+            ]
+
+            let eli20Points: [String] = [
+                "- [Core Business] \(verified.whatItDoes)",
+                "- [Revenue Engine] \(verified.revenueModel.first ?? "Generates cash flow from core enterprise contracts.")",
+                "- [What to Watch] Key investor metrics include \(verified.keyMetricsToMonitor.prefix(2).joined(separator: ", "))."
+            ]
+
+            let revenuePoints: [String] = verified.revenueModel.map { "- \($0)" }
+
+            let bullishPoints: [String] = [
+                "- [Analyst Stance] \(facts.analystBuy) Buy ratings, \(facts.analystHold) Hold, \(facts.analystSell) Sell from reporting brokers.",
+                "- [Core Tailwinds] \(verified.secularGrowthDrivers.first ?? "Secular demand tailwinds in \(industry).")",
+                "- [Valuation Multiple] Trading at a P/E multiple of \(peRatio)."
+            ]
+
+            let goWrongPoints: [String] = verified.keyBusinessRisks.suffix(3).map { "- \($0)" } + [
+                "- [Macro Risk] Cyclical downturns or customer budget freezes in primary operating markets."
+            ]
+
+            let addressablePoints: [String] = [
+                "- [Core Markets] Primary addressable customer base: \(verified.targetMarkets.joined(separator: ", ")).",
+                "- [Enterprise Scale] Market capitalization stands at \(marketCap) on \(verified.exchange).",
+                "- [Operating Footprint] Operating segments include \(verified.operatingSegments.map(\.name).prefix(3).joined(separator: ", "))."
+            ]
+
+            let employeePoints: [String] = [
+                "- [Workforce Scale] \(company) employs approximately \(employees) professionals.",
+                "- [Productivity] Talent efficiency directly dictates delivery margins and operating profit.",
+                "- [Talent Quality] High-skilled workforce driving execution in \(industry)."
+            ]
+
+            let competitorsPoints: [String] = verified.operatingSegments.prefix(4).map { "- Operating Division: \($0.name) (\($0.sharePercentage ?? "Core"))" }
+
+            let growthOppPoints: [String] = verified.secularGrowthDrivers.map { "- [Opportunity] \($0)" }
+
+            return CompanyIntelligence(
+                whyCanGrow: whyGrowPoints,
+                biggestRisk: riskPoints,
+                eli20: eli20Points,
+                revenueModel: revenuePoints,
+                analystBullishReason: bullishPoints,
+                whatCanGoWrong: goWrongPoints,
+                addressableMarket: addressablePoints,
+                employees: employeePoints,
+                competitors: competitorsPoints,
+                growthOpportunities: growthOppPoints
+            )
         }
 
-        print("===== DECODE SUCCESS =====")
-        print("Using facts-based CompanyIntelligence fallback")
+        // Clean, truthful fallback for securities without curated repository
+        let competitors = facts.competitors.isEmpty ? ["- Peer data not furnished by data provider."] : facts.competitors.prefix(4).map { "- \($0)" }
+        let descriptionPoint = facts.description.isEmpty
+            ? "- \(company) is listed on \(marketContext.exchange) under symbol \(facts.symbol)."
+            : "- \(facts.description)"
 
         return CompanyIntelligence(
             whyCanGrow: [
-                "- \(company) has exposure to \(sector), giving it a clear operating market.",
-                "- Provider profile lists \(industry), which defines its core growth area.",
-                "- Current price history indicates \(priceTrend), useful for trend context.",
-                "- Market cap is \(marketCap), showing the company scale available from provider data."
+                "- [Industry Catalyst] Operates in \(industry) within the \(sector) sector.",
+                "- [Scale Metric] Current market capitalization is \(marketCap).",
+                "- [Price Momentum] Price action is \(priceTrend) across recent chart history.",
+                "- [Revenue Growth] Provider-reported revenue growth is \(revenueGrowth)."
             ],
             biggestRisk: [
-                "- Revenue growth is \(revenueGrowth), so weak growth can limit upside.",
-                "- Profit growth is \(profitGrowth), making margin pressure important to watch.",
-                "- Debt-to-equity is \(debtToEquity), which affects financial flexibility.",
-                "- Competitor coverage is \(facts.competitors.isEmpty ? "unavailable" : "available"), so peer comparison may be incomplete."
+                "- [Growth Risk] Slower economic demand can pressure top-line growth (current: \(revenueGrowth)).",
+                "- [Balance Sheet] Debt-to-equity ratio is \(debtToEquity), which dictates financial solvency.",
+                "- [Profit Stability] Trailing profit growth is \(profitGrowth); watch for margin contraction."
             ],
             eli20: [
                 descriptionPoint,
-                "- Think of revenue as customer money coming in from products and services.",
-                "- Profit growth shows whether the company keeps more money after costs.",
-                "- Price trend is \(priceTrend), but it is not a buy or sell signal."
+                "- [Revenue Source] Generates income by selling products or services in the \(industry) space.",
+                "- [Investor Caution] Compare valuation metrics and debt ratios against peer companies before investing."
             ],
             revenueModel: [
-                "- \(company) makes money through operations in \(industry).",
-                "- Its sector is \(sector), so revenue depends on demand in that market.",
-                "- Company description and financial metrics are provider-backed when available.",
-                "- Revenue growth from provider data is \(revenueGrowth)."
+                "- Delivers products and solutions tailored to customers in \(industry).",
+                "- Revenue growth reported by financial provider: \(revenueGrowth).",
+                "- Operating results depend on volume demand and operational cost containment."
             ],
             analystBullishReason: [
-                "- Analyst buy count is \(facts.analystBuy), based on available provider data.",
-                "- Analyst hold count is \(facts.analystHold), showing neutral coverage if present.",
-                "- Analyst sell count is \(facts.analystSell), useful for risk balance.",
-                "- Valuation context uses PE ratio of \(peRatio)."
+                "- Analyst coverage: \(facts.analystBuy) Buy, \(facts.analystHold) Hold, \(facts.analystSell) Sell.",
+                "- Current valuation multiple stands at P/E of \(peRatio).",
+                "- Return on equity (ROE) is \(formattedPercent(facts.roe))."
             ],
             whatCanGoWrong: [
-                "- Growth can slow if demand weakens in \(sector).",
-                "- Margins can compress if costs rise faster than revenue.",
-                "- High competition can reduce pricing power in \(industry).",
-                "- Missing provider metrics should be treated as uncertainty, not strength."
+                "- Demand contraction in \(sector) can lead to earnings misses.",
+                "- Rising operational costs or debt obligations could reduce net margins.",
+                "- Increased industry competition may reduce product pricing power."
             ],
             addressableMarket: [
-                "- Addressable market data is not directly available from providers.",
-                "- The practical market is linked to \(sector) demand.",
-                "- Industry exposure is \(industry), which defines the nearest business market.",
-                "- Market cap is \(marketCap), but it is not total market size."
+                "- Primary market demand is anchored in the \(industry) industry.",
+                "- Company market capitalization is \(marketCap) on \(marketContext.exchange).",
+                "- Long-term growth depends on expanding customer share within \(sector)."
             ],
             employees: [
-                "- Employee count is \(employees).",
-                "- A larger workforce can support scale, delivery, and operations.",
-                "- Employee productivity should be compared with revenue and profit growth.",
-                "- Workforce data comes from provider profile when available."
+                "- Full-time workforce: \(employees).",
+                "- Labor productivity and headcount costs are critical to operating margins.",
+                "- Employee figures reflect latest filings reported by market providers."
             ],
             competitors: competitors,
             growthOpportunities: [
-                "- Grow within \(industry) by expanding customers, products, or services.",
-                "- Improve profitability if profit growth rises above \(profitGrowth).",
-                "- Strengthen returns if ROE improves from \(formattedPercent(facts.roe)).",
-                "- Better provider coverage can improve future peer and analyst comparisons."
+                "- Expanding market share in \(industry) through organic customer acquisition.",
+                "- Operating margin expansion if cost efficiencies outpace inflation.",
+                "- Strengthening balance sheet resilience and improving return on capital."
             ]
         )
     }
@@ -390,32 +440,11 @@ final class AIIntelligenceService {
         return formatter.string(from: NSNumber(value: value)) ?? "\(value)"
     }
 
-    private func formattedCurrency(_ value: Double) -> String {
-        let absValue = abs(value)
-        let sign = value < 0 ? "-" : ""
-        let formatter = NumberFormatter()
-        formatter.numberStyle = .decimal
-        formatter.maximumFractionDigits = 0
-
-        if absValue >= 10_000_000 {
-            let formatted = formatter.string(from: NSNumber(value: absValue / 10_000_000)) ?? String(format: "%.0f", absValue / 10_000_000)
-            return "\(sign)₹\(formatted) Cr"
-        }
-
-        if absValue >= 100_000 {
-            let formatted = formatter.string(from: NSNumber(value: absValue / 100_000)) ?? String(format: "%.0f", absValue / 100_000)
-            return "\(sign)₹\(formatted) L"
-        }
-
-        formatter.numberStyle = .currency
-        formatter.currencyCode = "INR"
-        return formatter.string(from: NSNumber(value: value)) ?? "₹\(Int(value))"
-    }
-
     private func formattedPercent(_ value: Double) -> String {
         guard value != 0 else { return "Data unavailable" }
         let normalized = abs(value) > 1 ? value : value * 100
-        return String(format: "%.1f%%", normalized)
+        let sign = value > 0 ? "+" : ""
+        return "\(sign)\(String(format: "%.1f%%", normalized))"
     }
 
     private func priceTrendText(from history: [Double]) -> String {

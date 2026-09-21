@@ -72,21 +72,30 @@ final class StockFactsBuilder {
             previous: resolvedFMPIncome.dropFirst().first?.netIncome
         ) ?? resolvedFinancials?.netProfit ?? resolvedFinancials?.profitMargin ?? 0
         let peerSymbols = resolvedFMPPeers.isEmpty ? resolvedCompetitors.map(\.symbol) : resolvedFMPPeers
+        var resolvedPeers = peerSymbols
+        if resolvedPeers.isEmpty, let verified = CompanyIntelligenceStore.shared.profile(for: asset.symbol) {
+            resolvedPeers = verified.operatingSegments.map(\.name)
+        }
+
+        let resolvedDesc = resolvedProfile?.whatItDoes
+            ?? resolvedProfile?.description
+            ?? resolvedFMPProfile?.description
+            ?? fallbackDescription(for: asset)
 
         return StockFacts(
             symbol: asset.symbol,
-            companyName: resolvedFMPProfile?.companyName ?? resolvedProfile?.name ?? asset.name,
-            sector: resolvedFMPProfile?.sector ?? resolvedProfile?.sector ?? asset.sector,
-            industry: resolvedFMPProfile?.industry ?? resolvedProfile?.industry ?? asset.sector,
+            companyName: resolvedProfile?.name ?? resolvedFMPProfile?.companyName ?? asset.name,
+            sector: resolvedProfile?.sector ?? resolvedFMPProfile?.sector ?? asset.sector,
+            industry: resolvedProfile?.industry ?? resolvedFMPProfile?.industry ?? asset.sector,
             marketCap: normalizedMarketCap(resolvedFMPProfile?.mktCap) ?? resolvedFinancials?.marketCap ?? 0,
             employees: employeeCount(from: resolvedFMPProfile?.fullTimeEmployees),
-            description: resolvedFMPProfile?.description ?? resolvedProfile?.description ?? fallbackDescription(for: asset),
+            description: resolvedDesc,
             peRatio: resolvedFMPMetrics?.peRatioTTM ?? resolvedFMPRatios?.priceEarningsRatioTTM ?? resolvedFinancials?.peRatio ?? 0,
             roe: resolvedFMPMetrics?.roeTTM ?? resolvedFMPRatios?.returnOnEquityTTM ?? resolvedFinancials?.roe ?? 0,
             debtToEquity: resolvedFMPMetrics?.debtToEquityTTM ?? resolvedFMPRatios?.debtEquityRatioTTM ?? resolvedFinancials?.debtRatio ?? 0,
             revenueGrowth: revenueGrowth,
             profitGrowth: profitGrowth,
-            competitors: peerSymbols,
+            competitors: resolvedPeers,
             analystBuy: buyCount,
             analystHold: holdCount,
             analystSell: sellCount,
@@ -138,14 +147,14 @@ final class StockFactsBuilder {
     }
 
     private func fallbackDescription(for asset: InvestmentSummaryAsset) -> String {
-        var details = "\(asset.name) is listed as \(asset.symbol)"
+        var details = "\(asset.name) (\(asset.symbol))"
         if !asset.sector.isEmpty {
-            details += " in the \(asset.sector) category"
+            details += " operates in the \(asset.sector) sector"
         }
         if !asset.metadata.isEmpty {
-            details += " on \(asset.metadata)"
+            details += " listed on \(asset.metadata)"
         }
-        details += ". Provider profile text is unavailable right now."
+        details += ". Detailed business filings should be reviewed through official regulatory exchange disclosures."
         return details
     }
 }

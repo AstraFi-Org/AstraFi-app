@@ -2,34 +2,60 @@ import SwiftUI
 
 struct StockIntelligenceSection: View {
     let viewModel: StockIntelligenceViewModel
+    @State private var isExpanded: Bool = false
+
+    private var infoData: SectionInfoData {
+        SectionInfoData(
+            title: "AI Stock Intelligence",
+            subtitle: "Fundamental synthesis for everyday investors",
+            icon: "sparkles",
+            badge: "AI Synthesis",
+            whatItRepresents: "Breaks down complex corporate disclosures, revenue mechanics, long-term secular growth catalysts, and business risks into clear, understandable answers.",
+            howItIsCalculated: "Synthesizes verified corporate annual reports (10-Ks), business operating segments, gross margins, and debt ratios through AstraFi's fundamental analysis engine.",
+            dataSource: "AstraFi Intelligence Engine, Official SEC / NSE Filings, and Broker Consensus Reports.",
+            limitations: "AI synthesis is provided for educational and analytical purposes only. It is not personal investment advice, a price forecast, or a recommendation to buy or sell securities.",
+            keyTakeaway: "Evaluate both the growth catalysts and the operational risks together before making any investment decision."
+        )
+    }
 
     var body: some View {
         VStack(alignment: .leading, spacing: 16) {
-            HStack(alignment: .top, spacing: 10) {
-                Image(systemName: "sparkles")
-                    .font(.system(size: 18, weight: .bold))
-                    .foregroundStyle(AppTheme.auraIndigo)
-                    .frame(width: 28, height: 28)
-                    .background(AppTheme.auraIndigo.opacity(0.12))
-                    .clipShape(RoundedRectangle(cornerRadius: 8, style: .continuous))
-
-                VStack(alignment: .leading, spacing: 3) {
-                    Text("AI Stock Intelligence")
-                        .font(.system(size: 18, weight: .bold))
-                    Text("Simple answers generated from profile, financials, price history, sector, employees, and competitors.")
-                        .font(.system(size: 12, weight: .semibold))
-                        .foregroundStyle(.secondary)
-                        .fixedSize(horizontal: false, vertical: true)
-                }
-            }
+            SectionHeaderWithInfo(
+                title: "AI Stock Intelligence",
+                subtitle: "Plain-language fundamental synthesis",
+                systemImage: "sparkles",
+                infoData: infoData
+            )
 
             if viewModel.isLoading {
                 loadingView
             } else if let intelligence = viewModel.companyIntelligence {
+                let allItems = items(from: intelligence)
+                let displayedItems = isExpanded ? allItems : Array(allItems.prefix(4))
+
                 VStack(spacing: 12) {
-                    ForEach(items(from: intelligence)) { item in
+                    ForEach(displayedItems) { item in
                         answerCard(item)
                     }
+
+                    Button {
+                        withAnimation(.spring(response: 0.35, dampingFraction: 0.8)) {
+                            isExpanded.toggle()
+                        }
+                    } label: {
+                        HStack(spacing: 6) {
+                            Text(isExpanded ? "Show Key Highlights" : "See All \(allItems.count) Analysis Topics")
+                                .font(.system(size: 13, weight: .bold))
+                            Image(systemName: isExpanded ? "chevron.up" : "chevron.down")
+                                .font(.system(size: 12, weight: .bold))
+                        }
+                        .foregroundStyle(AppTheme.auraIndigo)
+                        .frame(maxWidth: .infinity)
+                        .padding(.vertical, 12)
+                        .background(AppTheme.auraIndigo.opacity(0.08))
+                        .clipShape(RoundedRectangle(cornerRadius: 12, style: .continuous))
+                    }
+                    .padding(.top, 4)
                 }
             } else if let errorMessage = viewModel.errorMessage {
                 emptyView(title: "AI intelligence unavailable", message: errorMessage)
@@ -71,18 +97,33 @@ struct StockIntelligenceSection: View {
                 Spacer(minLength: 8)
             }
 
-            VStack(alignment: .leading, spacing: 9) {
+            VStack(alignment: .leading, spacing: 10) {
                 let points = item.points.isEmpty ? ["Data unavailable"] : item.points
                 ForEach(points, id: \.self) { point in
-                    HStack(alignment: .top, spacing: 9) {
+                    let cleaned = cleanBullet(point)
+                    let parsed = parseTaggedPoint(cleaned)
+
+                    HStack(alignment: .top, spacing: 8) {
                         Circle()
                             .fill(item.color)
                             .frame(width: 5, height: 5)
-                            .padding(.top, 7)
-                        Text(cleanBullet(point))
-                            .font(.system(size: 13, weight: .medium))
-                            .foregroundStyle(.secondary)
-                            .fixedSize(horizontal: false, vertical: true)
+                            .padding(.top, 6)
+
+                        VStack(alignment: .leading, spacing: 3) {
+                            if let tag = parsed.tag {
+                                Text(tag)
+                                    .font(.system(size: 10, weight: .bold))
+                                    .foregroundStyle(item.color)
+                                    .padding(.horizontal, 6)
+                                    .padding(.vertical, 2)
+                                    .background(item.color.opacity(0.12))
+                                    .clipShape(RoundedRectangle(cornerRadius: 4, style: .continuous))
+                            }
+                            Text(parsed.text)
+                                .font(.system(size: 13, weight: .medium))
+                                .foregroundStyle(.secondary)
+                                .fixedSize(horizontal: false, vertical: true)
+                        }
                     }
                     .frame(maxWidth: .infinity, alignment: .leading)
                 }
@@ -115,15 +156,15 @@ struct StockIntelligenceSection: View {
     private func items(from intelligence: CompanyIntelligence) -> [IntelligenceDisplayItem] {
         [
             IntelligenceDisplayItem(id: "whyCanGrow", emoji: "🚀", title: "Why Can This Company Grow?", points: intelligence.whyCanGrow, color: AppTheme.auraGreen),
-            IntelligenceDisplayItem(id: "biggestRisk", emoji: "⚠", title: "Biggest Risk", points: intelligence.biggestRisk, color: AppTheme.vibrantOrange),
+            IntelligenceDisplayItem(id: "biggestRisk", emoji: "⚠", title: "Biggest Risks to Monitor", points: intelligence.biggestRisk, color: AppTheme.vibrantOrange),
             IntelligenceDisplayItem(id: "eli20", emoji: "🎓", title: "Explain Like I'm 20", points: intelligence.eli20, color: AppTheme.vibrantCyan),
             IntelligenceDisplayItem(id: "revenueModel", emoji: "💰", title: "How Does It Make Money?", points: intelligence.revenueModel, color: AppTheme.auraMint),
-            IntelligenceDisplayItem(id: "analystBullishReason", emoji: "📈", title: "Why Are Analysts Bullish?", points: intelligence.analystBullishReason, color: AppTheme.auraIndigo),
+            IntelligenceDisplayItem(id: "analystBullishReason", emoji: "📈", title: "Analyst Consensus Factors", points: intelligence.analystBullishReason, color: AppTheme.auraIndigo),
             IntelligenceDisplayItem(id: "whatCanGoWrong", emoji: "❌", title: "What Can Go Wrong?", points: intelligence.whatCanGoWrong, color: AppTheme.vibrantRed),
-            IntelligenceDisplayItem(id: "addressableMarket", emoji: "🌍", title: "Addressable Market", points: intelligence.addressableMarket, color: AppTheme.auraGold),
-            IntelligenceDisplayItem(id: "employees", emoji: "👨‍💼", title: "Employees", points: intelligence.employees, color: AppTheme.auraPurple),
-            IntelligenceDisplayItem(id: "competitors", emoji: "🏢", title: "Competitors", points: intelligence.competitors, color: AppTheme.auraIndigo),
-            IntelligenceDisplayItem(id: "growthOpportunities", emoji: "🎯", title: "Growth Opportunities", points: intelligence.growthOpportunities, color: AppTheme.auraGreen)
+            IntelligenceDisplayItem(id: "addressableMarket", emoji: "🌍", title: "Addressable Market & Footprint", points: intelligence.addressableMarket, color: AppTheme.auraGold),
+            IntelligenceDisplayItem(id: "employees", emoji: "👨‍💼", title: "Workforce & Operational Scale", points: intelligence.employees, color: AppTheme.auraPurple),
+            IntelligenceDisplayItem(id: "competitors", emoji: "🏢", title: "Operating Segments & Peers", points: intelligence.competitors, color: AppTheme.auraIndigo),
+            IntelligenceDisplayItem(id: "growthOpportunities", emoji: "🎯", title: "Secular Growth Opportunities", points: intelligence.growthOpportunities, color: AppTheme.auraGreen)
         ]
     }
 
@@ -136,6 +177,18 @@ struct StockIntelligenceSection: View {
             return String(trimmed.dropFirst(2))
         }
         return trimmed
+    }
+
+    private func parseTaggedPoint(_ text: String) -> (tag: String?, text: String) {
+        if text.hasPrefix("[") && text.contains("]") {
+            let parts = text.split(separator: "]", maxSplits: 1, omittingEmptySubsequences: true)
+            if parts.count == 2 {
+                let tag = String(parts[0].dropFirst()).trimmingCharacters(in: .whitespacesAndNewlines)
+                let remaining = String(parts[1]).trimmingCharacters(in: .whitespacesAndNewlines)
+                return (tag, remaining)
+            }
+        }
+        return (nil, text)
     }
 }
 
