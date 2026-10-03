@@ -72,7 +72,7 @@ struct Plan1DetailView: View {
         } message: {
             Text("Educational illustration only. Not investment advice. Values use fixed CAGR assumptions, reinvestment of returns, and no taxes, fees, or severe market drawdowns unless shown. Actual returns may vary.")
         }
-        .navigationTitle("Investment Illustration")
+        .navigationTitle(input.purposeOfInvestment.isEmpty ? "Investment Plan" : "\(input.purposeOfInvestment) Plan")
         .navigationBarTitleDisplayMode(.inline)
         .onAppear {
             setupInitialValues()
@@ -410,7 +410,7 @@ struct Plan1DetailView: View {
                     Image(systemName: "safari.fill")
                         .foregroundColor(.blue)
                         .font(.title3)
-                    Text("Illustrative Allocation")
+                Text(input.purposeOfInvestment.isEmpty ? "Investment Plan" : "\(input.purposeOfInvestment) Plan")
                         .font(.title3)
                         .fontWeight(.black)
                     Spacer()

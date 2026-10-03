@@ -491,7 +491,7 @@ struct PlannerView: View {
     private var actionButtonsSection: some View {
         VStack(spacing: 10) {
             ActionButton(
-                title: "New Investment Illustration",
+                title: "New Investment Plan",
                 subtitle: "Start a new investment strategy",
                 icon: "chart.line.uptrend.xyaxis.circle.fill",
                 gradientColors: [Color(hex: "#007AFF"), Color(hex: "#5E5CE6")],

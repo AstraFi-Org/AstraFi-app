@@ -267,23 +267,16 @@ struct Plan3DetailView: View {
 
     private var riskTypeSection: some View {
         VStack(alignment: .leading, spacing: 16) {
-            Text("Investment Profile")
+            Text("Investment risk level")
                 .font(.headline)
             
-            HStack(spacing: 12) {
-                RiskOptionCard(title: "Low", icon: "shield.fill", color: .green, isSelected: selectedScenario == "Conservative") {
-                    selectedScenario = "Conservative"
-                    recalculate()
-                }
-                RiskOptionCard(title: "Mid", icon: "chart.bar.fill", color: .orange, isSelected: selectedScenario == "Moderate") {
-                    selectedScenario = "Moderate"
-                    recalculate()
-                }
-                RiskOptionCard(title: "High", icon: "flame.fill", color: .red, isSelected: selectedScenario == "Aggressive") {
-                    selectedScenario = "Aggressive"
-                    recalculate()
-                }
+            Picker("Investment risk level", selection: $selectedScenario) {
+                Text("Low").tag("Conservative")
+                Text("Medium").tag("Moderate")
+                Text("High").tag("Aggressive")
             }
+            .pickerStyle(.segmented)
+            .onChange(of: selectedScenario) { _, _ in recalculate() }
         }
         .padding(20)                          // ← add this
             .background(AppTheme.cardBackground)  // ← add this
@@ -814,7 +807,12 @@ struct Plan3DetailView: View {
                     .font(.title3)
                     .fontWeight(.bold)
                 Spacer()
-                Text("\(historicalPeriodYears)Y history")
+                VStack(alignment: .trailing, spacing: 2) {
+                    Text("Historical basis")
+                    Text("\(historicalPeriodYears) years")
+                        .font(.caption2)
+                        .foregroundStyle(.secondary)
+                }
                     .font(.caption)
                     .fontWeight(.semibold)
                     .foregroundColor(.blue)
@@ -833,7 +831,7 @@ struct Plan3DetailView: View {
                         
                         VStack(spacing: 8) {
                             let corpusValue = year.monthlySteps.last?.endValue ?? 0
-                            Text(formatL(corpusValue))
+                            Text("₹\(formatL(corpusValue))")
                                 .font(.system(size: 10, weight: .bold))
                                 .foregroundColor(.green)
                             
@@ -851,7 +849,7 @@ struct Plan3DetailView: View {
                                 .font(.system(size: 11, weight: .bold))
                                 .foregroundColor(isSelected ? .primary : .secondary)
                             
-                            Text(formatL(year.monthlySteps.last?.loanOutstanding ?? 0))
+                            Text("₹\(formatL(year.monthlySteps.last?.loanOutstanding ?? 0))")
                                 .font(.system(size: 10))
                                 .foregroundColor(.secondary)
                         }
@@ -878,20 +876,15 @@ struct Plan3DetailView: View {
                     .foregroundColor(.secondary)
             }
 
-            VStack(spacing: 0) {
-                monthlyPerformanceHeader
-                    .padding(.vertical, 12)
+            let selectedYear = currentStrategy.yearlyBreakdown.indices.contains(selectedYearIndex) ? currentStrategy.yearlyBreakdown[selectedYearIndex] : nil
 
-                Divider()
-
-                let selectedYear = currentStrategy.yearlyBreakdown.indices.contains(selectedYearIndex) ? currentStrategy.yearlyBreakdown[selectedYearIndex] : nil
-
-                if let year = selectedYear {
+            if let year = selectedYear {
+                VStack(spacing: 0) {
                     ForEach(year.monthlySteps) { step in
-                        monthlyPerformanceRow(step)
-                            .padding(.vertical, 8)
-
-                        Divider()
+                        monthlyPerformanceDisclosure(step)
+                        if step.id != year.monthlySteps.last?.id {
+                            Divider()
+                        }
                     }
                 }
             }
@@ -902,76 +895,34 @@ struct Plan3DetailView: View {
         .shadow(color: AppTheme.adaptiveShadow.opacity(0.15), radius: 8)
     }
 
-    private var monthlyPerformanceHeader: some View {
-        Grid(horizontalSpacing: 10, verticalSpacing: 0) {
-            GridRow {
-                monthlyHeaderText("Month", alignment: .leading)
-                monthlyHeaderText("Start", alignment: .trailing)
-                monthlyHeaderText("Return", alignment: .trailing)
-                monthlyHeaderText("Gain", alignment: .trailing)
+    private func monthlyPerformanceDisclosure(_ step: Plan3MonthlyStep) -> some View {
+        DisclosureGroup {
+            VStack(spacing: 8) {
+                LabeledContent("Starting balance", value: "₹\(formatL(step.startValue))")
+                LabeledContent("Contribution", value: "₹\(formatL(step.investment))")
+                LabeledContent("Historical return", value: "\(String(format: "%.2f", step.historicalReturnPercent))%")
+                LabeledContent("Investment gain", value: "₹\(formatL(step.growth))")
                 if isEMIDeductionOn {
-                    monthlyHeaderText("EMI", alignment: .trailing)
+                    LabeledContent("EMI", value: "₹\(formatL(step.emiFromPocket > 0 ? step.emiFromPocket : activeResult.monthlyEMI))")
                 }
-                monthlyHeaderText("Net", alignment: .trailing)
-                monthlyHeaderText("End", alignment: .trailing)
+                LabeledContent("Net change", value: "₹\(formatL(step.netChange))")
+                LabeledContent("Ending value", value: "₹\(formatL(step.endValue))")
+                    .fontWeight(.semibold)
             }
-        }
-    }
-
-    private func monthlyPerformanceRow(_ step: Plan3MonthlyStep) -> some View {
-        Grid(horizontalSpacing: 10, verticalSpacing: 0) {
-            GridRow {
-                Text(step.month)
-                    .font(.system(size: 12, weight: .medium))
-                    .frame(maxWidth: .infinity, alignment: .leading)
-
-                HStack(spacing: 2) {
-                    Text(formatL(step.startValue))
-                    if step.investment > 0 {
-                        Text("+\(formatL(step.investment))")
-                            .foregroundColor(.blue)
-                            .font(.system(size: 9, weight: .bold))
-                    }
-                }
-                .font(.system(size: 12))
-                .frame(maxWidth: .infinity, alignment: .trailing)
-
-                Text("\(step.historicalReturnPercent >= 0 ? "+" : "")\(String(format: "%.2f", step.historicalReturnPercent))%")
-                    .font(.system(size: 12, weight: .semibold))
-                    .foregroundColor(step.historicalReturnPercent >= 0 ? .green : .red)
-                    .frame(maxWidth: .infinity, alignment: .trailing)
-
-                Text("\(step.growth >= 0 ? "+" : "")\(formatL(step.growth))")
-                    .font(.system(size: 12, weight: .bold))
-                    .foregroundColor(step.growth >= 0 ? .green : .red)
-                    .frame(maxWidth: .infinity, alignment: .trailing)
-
-                if isEMIDeductionOn {
-                    Text(formatL(step.emiFromPocket > 0 ? step.emiFromPocket : activeResult.monthlyEMI))
-                        .font(.system(size: 12))
-                        .foregroundColor(.orange)
-                        .frame(maxWidth: .infinity, alignment: .trailing)
-                }
-
-                Text("\(step.netChange >= 0 ? "+" : "")\(formatL(step.netChange))")
-                    .font(.system(size: 12, weight: .bold))
-                    .foregroundColor(step.netChange >= 0 ? .green : .red)
-                    .frame(maxWidth: .infinity, alignment: .trailing)
-
-                Text(formatL(step.endValue))
-                    .font(.system(size: 12, weight: .bold))
-                    .foregroundColor(step.endValue >= 0 ? .primary : .red)
-                    .frame(maxWidth: .infinity, alignment: .trailing)
+            .font(.subheadline)
+            .padding(.vertical, 8)
+        } label: {
+            HStack {
+                Text(step.month).font(.subheadline.weight(.semibold))
+                Spacer()
+                Text("₹\(formatL(step.endValue))")
+                    .font(.subheadline.weight(.semibold))
+                    .foregroundStyle(.primary)
             }
+            .contentShape(Rectangle())
         }
-    }
-
-    private func monthlyHeaderText(_ text: String, alignment: Alignment) -> some View {
-        Text(text)
-            .font(.caption)
-            .fontWeight(.bold)
-            .foregroundColor(.secondary)
-            .frame(maxWidth: .infinity, alignment: alignment)
+        .tint(.secondary)
+        .padding(.vertical, 10)
     }
 
     private var recommendationCard: some View {
@@ -1001,10 +952,14 @@ struct Plan3DetailView: View {
             HStack {
                 VStack(alignment: .leading, spacing: 4) {
                     Text("Strategy Builder").font(.headline)
-                    Text("Phase-wise capital injection").font(.caption).foregroundColor(.secondary)
+                    Text("\(lumpsumPhases) equal investments across 12 months")
+                        .font(.caption)
+                        .foregroundColor(.secondary)
                 }
                 Spacer()
                 Stepper("", value: $lumpsumPhases, in: 1...12)
+                    .labelsHidden()
+                    .accessibilityLabel("Number of investment phases")
                     .onChange(of: lumpsumPhases) { _, _ in recalculate() }
             }
 

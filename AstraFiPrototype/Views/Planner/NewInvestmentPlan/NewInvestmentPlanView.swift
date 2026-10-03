@@ -73,7 +73,7 @@ struct NewInvestmentPlanView: View {
 
             bottomNav
         }
-        .navigationTitle("\(initialGoal) Illustration")
+        .navigationTitle("\(initialGoal) Plan")
         .navigationBarTitleDisplayMode(.inline)
         .navigationBarBackButtonHidden(true)
         .toolbar {
@@ -591,4 +591,3 @@ struct GoalInfoChip: View {
             .environment(AppStateManager.withSampleData())
     }
 }
-

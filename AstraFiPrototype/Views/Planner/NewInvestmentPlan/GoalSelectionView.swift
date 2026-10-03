@@ -63,7 +63,7 @@ struct GoalSelectionView: View {
                         }
                     }) {
                         HStack(spacing: 8) {
-                            Text("Start Illustration")
+                            Text("Start Plan")
                         }
                         .font(.headline).fontWeight(.bold)
                         .foregroundColor(.white)

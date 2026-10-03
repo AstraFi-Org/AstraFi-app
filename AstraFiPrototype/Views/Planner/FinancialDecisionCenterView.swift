@@ -584,12 +584,12 @@ struct DecisionAdvisorView: View {
     var body: some View {
         Form {
             Section("Available this month") {
-                TextField("Surplus amount", value: $availableSurplus, format: .number).keyboardType(.decimalPad)
+                TextField("Surplus amount", value: $availableSurplus, format: .currency(code: "INR")).keyboardType(.decimalPad)
                 Text("Use an amount you can allocate after essential expenses and EMIs.").font(.caption).foregroundStyle(.secondary)
             }
             Section("Your priority") { ForEach(priorities, id: \.self) { Text($0) } }
-            Section("Why this recommendation?") { Text(explanation).foregroundStyle(.secondary) }
-            Section { NavigationLink("See impact on my goals →") { GoalSelectionView() } }
+            Section("Why this is recommended") { Text(explanation).foregroundStyle(.secondary) }
+            Section { NavigationLink("See how this affects my goals") { GoalSelectionView() } }
         }
         .navigationTitle("Decision Advisor")
         .onAppear { availableSurplus = max(0, analysis.insights?.monthlySavings ?? 0) }
@@ -628,7 +628,7 @@ struct DecisionImpactView: View {
                 Text("This comparison uses your current monthly surplus. Goal projections remain managed by Goal-Based Planning.")
                     .font(.caption).foregroundStyle(.secondary)
             }
-            Section { NavigationLink("See impact on my goals →") { GoalSelectionView() } }
+            Section { NavigationLink("See how this affects my goals") { GoalSelectionView() } }
         }
         .navigationTitle("Decision Impact")
         .onAppear { additionalInvestment = min(5_000, maximum) }

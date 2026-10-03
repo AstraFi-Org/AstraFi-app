@@ -322,7 +322,7 @@ struct LoanDetailView: View {
                                         .font(.system(size: 32))
                                         .foregroundColor(color)
                                 }
-                                Text(loan.displayName)
+                                Text(loan.displayName.trimmingCharacters(in: CharacterSet(charactersIn: ": ")))
                                     .font(.system(size: 22, weight: .bold))
                                 Text(loan.displayLender)
                                     .font(.system(size: 15))
@@ -346,7 +346,7 @@ struct LoanDetailView: View {
 
                             HStack(spacing: 10) {
                                 AmountBox(label: "Total Principal", value: loan.loanAmount.toCurrency(), color: color)
-                                AmountBox(label: "Paid Approx",    value: paid.toCurrency(),             color: color)
+                                AmountBox(label: "Paid so far",     value: paid.toCurrency(),             color: color)
                                 AmountBox(label: "Remaining",      value: remaining.toCurrency(),        color: color)
                             }
                         }
@@ -404,7 +404,7 @@ struct LoanDetailView: View {
                     .padding(.top, 8)
                 }
                 .background(AppTheme.appBackground(for: colorScheme))
-                .navigationTitle(loan.displayName)
+                .navigationTitle(loan.loanType == .personalLoan ? "Personal Loan" : loan.displayName.trimmingCharacters(in: CharacterSet(charactersIn: ": ")))
                 .navigationBarTitleDisplayMode(.inline)
                 .toolbar {
                     ToolbarItem(placement: .navigationBarTrailing) {

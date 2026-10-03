@@ -5,7 +5,7 @@ struct RetirementResultView: View {
     
     var body: some View {
         InvestmentPlanResultView(input: input)
-            .navigationTitle("Retirement Illustration")
+            .navigationTitle("Retirement Plan")
     }
 }
 

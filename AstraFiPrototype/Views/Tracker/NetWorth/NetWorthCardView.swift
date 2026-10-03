@@ -240,22 +240,22 @@ struct NetWorthCard: View {
                 if areScenarioControlsExpanded {
                     VStack(spacing: 14) {
                         ProjectionSliderRow(
-                            title: "Increase monthly investment",
-                            icon: "plus.circle.fill",
+                            title: "Monthly investment increase",
+                            icon: "",
                             value: $extraMonthlyInvestment,
                             range: 0...maxInvestmentStepUp,
                             step: 1000,
-                            tint: AppTheme.auraGreen,
+                            tint: .accentColor,
                             suffix: "/mo"
                         )
 
                         ProjectionSliderRow(
-                            title: "Add extra loan repayment",
-                            icon: "minus.circle.fill",
+                            title: "Extra loan repayment",
+                            icon: "",
                             value: $extraLoanRepayment,
                             range: 0...30000,
                             step: 1000,
-                            tint: AppTheme.vibrantRed,
+                            tint: .accentColor,
                             suffix: "/mo"
                         )
 
@@ -1218,14 +1218,16 @@ private struct ProjectionSliderRow: View {
     var body: some View {
         VStack(alignment: .leading, spacing: 8) {
             HStack(spacing: 8) {
-                Image(systemName: icon)
-                    .foregroundStyle(tint)
+                if !icon.isEmpty {
+                    Image(systemName: icon)
+                        .foregroundStyle(tint)
+                }
                 Text(title)
                     .font(.auraBody(size: 14, weight: .semibold))
                     .lineLimit(1)
                     .minimumScaleFactor(0.8)
                 Spacer(minLength: 8)
-                Text("\(value.toCurrency(compact: true))\(suffix)")
+                Text("\(value.toCurrency()) \(suffix == "/mo" ? "/ month" : suffix)")
                     .font(.auraCaption(size: 12, weight: .bold))
                     .foregroundStyle(tint)
             }

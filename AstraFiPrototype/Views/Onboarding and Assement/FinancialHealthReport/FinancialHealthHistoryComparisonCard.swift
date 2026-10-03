@@ -121,7 +121,7 @@ struct FinancialHealthHistoryComparisonCard: View {
                     ForEach(Array(activeItems.enumerated()), id: \.element.id) { index, assessment in
                         comparisonRow(
                             index: index + 1,
-                            monthName: assessment.date.formatted(.dateTime.month(.wide)),
+                            monthName: assessment.date.formatted(.dateTime.month(.abbreviated).year()),
                             score: assessment.score,
                             previousScore: index > 0 ? activeItems[index - 1].score : nil
                         )
@@ -138,7 +138,7 @@ struct FinancialHealthHistoryComparisonCard: View {
                 HStack(alignment: .bottom, spacing: 12) {
                     ForEach(activeItems) { item in
                         VStack(spacing: 6) {
-                            Text("\(item.score)")
+                            Text("\(item.score)/100")
                                 .font(.caption2.weight(.bold))
                                 .foregroundStyle(scoreColor(item.score))
 
@@ -158,7 +158,7 @@ struct FinancialHealthHistoryComparisonCard: View {
                             }
                             .frame(height: 70)
 
-                            Text(item.date.formatted(.dateTime.month(.abbreviated)))
+                            Text(item.date.formatted(.dateTime.month(.abbreviated).year()))
                                 .font(.caption2.weight(.semibold))
                                 .foregroundStyle(.secondary)
                         }

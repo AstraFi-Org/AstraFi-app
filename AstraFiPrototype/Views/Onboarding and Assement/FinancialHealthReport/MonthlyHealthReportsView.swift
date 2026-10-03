@@ -139,7 +139,7 @@ struct MonthlyHealthReportsView: View {
                 HStack {
                     VStack(alignment: .leading, spacing: 2) {
                         Text("Latest Score").font(.caption).foregroundColor(.secondary)
-                        Text("\(latest.score)").font(.system(size: 32, weight: .bold))
+                        Text("\(latest.score)/100").font(.system(size: 32, weight: .bold))
                             .foregroundColor(scoreColor(latest.score))
                     }
                     Spacer()
@@ -277,7 +277,7 @@ struct HealthReportRow: View {
         HStack(spacing: 16) {
             ZStack {
                 Circle().fill(scoreColor(report.score).opacity(0.12)).frame(width: 50, height: 50)
-                Text("\(report.score)")
+                Text("\(report.score)/100")
                     .font(.system(size: 15, weight: .bold)).foregroundColor(scoreColor(report.score))
             }
             VStack(alignment: .leading, spacing: 3) {

@@ -176,7 +176,7 @@ struct InvestmentPlanResultView: View {
             }
             .padding(.horizontal, 20)
         }
-        .navigationTitle("\(results.goalCategory.rawValue) Illustration")
+        .navigationTitle("\(results.goalCategory.rawValue) Plan")
         .navigationBarTitleDisplayMode(.inline)
         .background(AppTheme.appBackground(for: colorScheme))
     }

@@ -189,7 +189,7 @@ struct RetirementQuestionnaire: View {
                     goalAccentColor: goalAccentColor,
                     onSave: {
                         let planModel = InvestmentPlanModel(
-                            name: "Retirement Illustration",
+                            name: "Retirement Plan",
                             dateSaved: DateFormatter.localizedString(from: Date(), dateStyle: .medium, timeStyle: .none),
                             targetGoal: "Retirement",
                             input: buildTrackerInput()
