@@ -197,6 +197,22 @@ struct HomeQuestionnaire: View {
         }
         .animation(.spring(response: 0.5, dampingFraction: 0.8), value: input.locationType)
         .animation(.spring(response: 0.5, dampingFraction: 0.8), value: showInsights)
+        .onAppear {
+            if let draft = appState.currentProfile?.planningJourney?.goalDrafts.first(where: {
+                $0.category.localizedCaseInsensitiveContains("Home") || $0.name.localizedCaseInsensitiveContains("Home") || $0.name.localizedCaseInsensitiveContains("House")
+            }) {
+                if input.yearsUntilPurchase.isEmpty, let targetDate = draft.targetDate {
+                    let years = max(1, Calendar.current.dateComponents([.year], from: Date(), to: targetDate).year ?? 7)
+                    input.yearsUntilPurchase = "\(years)"
+                }
+                if input.currentHomeCost.isEmpty, let amount = draft.targetAmount {
+                    input.currentHomeCost = String(format: "%.0f", amount)
+                }
+                if input.locationType == nil {
+                    input.locationType = .metro
+                }
+            }
+        }
     }
     
     private var showInsights: Bool {

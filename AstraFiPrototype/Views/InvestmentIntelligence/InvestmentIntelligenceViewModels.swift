@@ -4,10 +4,13 @@ import Observation
 @Observable
 final class InvestmentIntelligenceHomeViewModel {
     var stocks: [InvestmentSummaryAsset] = []
+    var recommendations: [InvestmentSummaryAsset] = []
     var mutualFunds: [InvestmentSummaryAsset] = []
     var goldETFs: [InvestmentSummaryAsset] = []
     var isLoading = false
+    var isRefreshingRecommendations = false
     var errorMessage: String?
+    private var recommendationOffset = 0
 
     private let repository: InvestmentIntelligenceRepository
 
@@ -24,9 +27,21 @@ final class InvestmentIntelligenceHomeViewModel {
         stocks = assets.stocks
         mutualFunds = assets.funds
         goldETFs = assets.gold
+        recommendations = await InvestmentRecommendationEngine.shared.dailyRecommendations(from: stocks)
         errorMessage = (stocks.isEmpty && mutualFunds.isEmpty && goldETFs.isEmpty)
             ? "No verified market data loaded. Check FINNHUB_API_KEY, network access, and AMFI availability."
             : nil
+    }
+
+    func refreshRecommendations() async {
+        guard !isRefreshingRecommendations, !stocks.isEmpty else { return }
+        isRefreshingRecommendations = true
+        defer { isRefreshingRecommendations = false }
+        recommendationOffset += 1
+        let refreshed = await InvestmentRecommendationEngine.shared.dailyRecommendations(from: stocks, offset: recommendationOffset)
+        if !refreshed.isEmpty {
+            recommendations = refreshed
+        }
     }
 }
 
@@ -193,7 +208,7 @@ final class InvestmentCategoryListViewModel {
 
     func selectFilter(_ filter: String) async {
         selectedFilter = filter
-        if kind == .mutualFund && searchText.isEmpty {
+        if searchText.isEmpty {
             isLoading = true
             defer { isLoading = false }
             categoryAssets = await repository.categoryAssets(kind: kind, filter: filter == "All" ? nil : filter)
@@ -220,4 +235,3 @@ final class InvestmentCategoryListViewModel {
         isSearching = false
     }
 }
-

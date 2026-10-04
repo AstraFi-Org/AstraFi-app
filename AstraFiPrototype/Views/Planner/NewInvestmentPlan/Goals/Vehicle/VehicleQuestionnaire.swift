@@ -195,6 +195,22 @@ struct VehicleQuestionnaire: View {
         }
         .animation(.spring(response: 0.5, dampingFraction: 0.8), value: input.vehicleType)
         .animation(.spring(response: 0.5, dampingFraction: 0.8), value: showInsights)
+        .onAppear {
+            if let draft = appState.currentProfile?.planningJourney?.goalDrafts.first(where: {
+                $0.category.localizedCaseInsensitiveContains("Vehicle") || $0.name.localizedCaseInsensitiveContains("Vehicle") || $0.name.localizedCaseInsensitiveContains("Car")
+            }) {
+                if input.yearsUntilPurchase.isEmpty, let targetDate = draft.targetDate {
+                    let years = max(1, Calendar.current.dateComponents([.year], from: Date(), to: targetDate).year ?? 3)
+                    input.yearsUntilPurchase = "\(years)"
+                }
+                if input.currentVehicleCost.isEmpty, let amount = draft.targetAmount {
+                    input.currentVehicleCost = String(format: "%.0f", amount)
+                }
+                if input.vehicleType == nil {
+                    input.vehicleType = .family
+                }
+            }
+        }
     }
     
     private var showInsights: Bool {

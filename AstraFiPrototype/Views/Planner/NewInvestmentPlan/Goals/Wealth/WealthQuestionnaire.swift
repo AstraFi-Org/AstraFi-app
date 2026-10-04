@@ -184,6 +184,22 @@ struct WealthQuestionnaire: View {
         }
         .animation(.spring(response: 0.5, dampingFraction: 0.8), value: input.wealthStrategy)
         .animation(.spring(response: 0.5, dampingFraction: 0.8), value: showInsights)
+        .onAppear {
+            if let draft = appState.currentProfile?.planningJourney?.goalDrafts.first(where: {
+                $0.category.localizedCaseInsensitiveContains("Wealth") || $0.name.localizedCaseInsensitiveContains("Wealth")
+            }) {
+                if input.targetYears.isEmpty, let targetDate = draft.targetDate {
+                    let years = max(1, Calendar.current.dateComponents([.year], from: Date(), to: targetDate).year ?? 10)
+                    input.targetYears = "\(years)"
+                }
+                if input.targetAmount.isEmpty, let amount = draft.targetAmount {
+                    input.targetAmount = String(format: "%.0f", amount)
+                }
+                if input.wealthStrategy == nil {
+                    input.wealthStrategy = .moderate
+                }
+            }
+        }
     }
     
     private var showInsights: Bool {

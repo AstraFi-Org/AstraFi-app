@@ -195,6 +195,22 @@ struct TravelQuestionnaire: View {
         }
         .animation(.spring(response: 0.5, dampingFraction: 0.8), value: input.tripType)
         .animation(.spring(response: 0.5, dampingFraction: 0.8), value: showInsights)
+        .onAppear {
+            if let draft = appState.currentProfile?.planningJourney?.goalDrafts.first(where: {
+                $0.category.localizedCaseInsensitiveContains("Travel") || $0.name.localizedCaseInsensitiveContains("Travel")
+            }) {
+                if input.yearsUntilTrip.isEmpty, let targetDate = draft.targetDate {
+                    let years = max(1, Calendar.current.dateComponents([.year], from: Date(), to: targetDate).year ?? 2)
+                    input.yearsUntilTrip = "\(years)"
+                }
+                if input.currentTripCost.isEmpty, let amount = draft.targetAmount {
+                    input.currentTripCost = String(format: "%.0f", amount)
+                }
+                if input.tripType == nil {
+                    input.tripType = .intlBudget
+                }
+            }
+        }
     }
     
     private var showInsights: Bool {

@@ -21,7 +21,7 @@ struct FinancialHealthHistoryComparisonCard: View {
     }
 
     private var activeItems: [AstraHealthAssessment] {
-        sortedHistory.isEmpty ? sampleFallbackHistory : sortedHistory
+        sortedHistory
     }
 
     private var earliestScore: Int {
@@ -58,7 +58,9 @@ struct FinancialHealthHistoryComparisonCard: View {
                     .clipShape(Capsule())
             }
 
-            // MARK: - Improvement Summary Callout Box
+            if activeItems.isEmpty {
+                ContentUnavailableView("No assessment history", systemImage: "chart.bar", description: Text("Complete a financial health assessment to see your score history here."))
+            } else {
             VStack(alignment: .leading, spacing: 8) {
                 HStack(spacing: 12) {
                     ZStack {
@@ -168,6 +170,7 @@ struct FinancialHealthHistoryComparisonCard: View {
                 .background(Color.primary.opacity(0.03))
                 .clipShape(RoundedRectangle(cornerRadius: 14, style: .continuous))
             }
+            }
         }
         .padding(18)
         .background(AppTheme.cardBackground)
@@ -220,14 +223,6 @@ struct FinancialHealthHistoryComparisonCard: View {
         s >= 80 ? Color(hex: "#30D158") : s >= 70 ? Color(hex: "#FF9F0A") : Color(hex: "#5E5CE6")
     }
 
-    private var sampleFallbackHistory: [AstraHealthAssessment] {
-        [
-            AstraHealthAssessment(date: Calendar.current.date(from: DateComponents(year: 2026, month: 6, day: 1)) ?? Date(), score: 61, status: "Needs Work", keyInsights: []),
-            AstraHealthAssessment(date: Calendar.current.date(from: DateComponents(year: 2026, month: 7, day: 1)) ?? Date(), score: 65, status: "Needs Work", keyInsights: []),
-            AstraHealthAssessment(date: Calendar.current.date(from: DateComponents(year: 2026, month: 8, day: 1)) ?? Date(), score: 69, status: "Good", keyInsights: []),
-            AstraHealthAssessment(date: Calendar.current.date(from: DateComponents(year: 2026, month: 9, day: 1)) ?? Date(), score: 74, status: "Good", keyInsights: [])
-        ]
-    }
 }
 
 #Preview {

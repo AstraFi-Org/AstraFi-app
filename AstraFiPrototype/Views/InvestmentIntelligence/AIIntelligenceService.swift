@@ -22,12 +22,7 @@ final class AIIntelligenceService {
     private let openRouterModels = [
         "qwen/qwen3-next-80b-a3b-instruct:free",
         "nvidia/nemotron-3-super-120b-a12b:free",
-        "google/gemma-4-31b-it:free",
-        "google/gemma-4-26b-a4b-it:free",
-        "openai/gpt-oss-20b:free",
-        "nex-agi/nex-n2-pro:free",
-        "nousresearch/hermes-3-llama-3.1-405b:free",
-        "meta-llama/llama-3.3-70b-instruct:free"
+        "google/gemma-4-31b-it:free"
     ]
 
     init(session: URLSession = .shared) {
@@ -75,7 +70,8 @@ final class AIIntelligenceService {
                 ChatMessage(role: "system", content: "Explain only supplied facts. Never provide product recommendations or guarantees."),
                 ChatMessage(role: "user", content: prompt)
             ],
-            temperature: 0.2
+            temperature: 0.2,
+            max_tokens: 1_600
         )
         var request = URLRequest(url: url)
         request.httpMethod = "POST"
@@ -121,9 +117,10 @@ final class AIIntelligenceService {
         - Maximum 30 words per bullet.
         - Use numbers whenever possible.
         - Explain in simple language.
-        - Avoid generic statements.
-        - Mention market sizes if available.
-        - Mention employees and competitors.
+        - Use 1 to 3 concise bullets per section.
+        - Use only supplied facts. Null means unavailable; never invent, infer, or treat missing values as zero.
+        - Omit unsupported statistics, analyst counts, market sizes, employee totals, and competitor claims.
+        - Say data is unavailable when a requested section has no supplied facts.
         - Do not provide buy, sell, or hold advice.
 
         Expected JSON:
@@ -165,7 +162,8 @@ final class AIIntelligenceService {
                     ChatMessage(role: "system", content: "Return strict JSON only. Do not include markdown."),
                     ChatMessage(role: "user", content: prompt)
                 ],
-                temperature: 0.2
+            temperature: 0.2,
+            max_tokens: 2_200
             )
 
             let payloadData = try JSONEncoder().encode(payload)
@@ -176,6 +174,7 @@ final class AIIntelligenceService {
 
             var request = URLRequest(url: url)
             request.httpMethod = "POST"
+            request.timeoutInterval = 30
             request.setValue("Bearer \(Secrets.openRouterAPIKey)", forHTTPHeaderField: "Authorization")
             request.setValue("application/json", forHTTPHeaderField: "Content-Type")
             request.setValue("https://astrafi.app", forHTTPHeaderField: "HTTP-Referer")
@@ -307,12 +306,15 @@ final class AIIntelligenceService {
         let sector = facts.sector.isEmpty ? "General Equities" : facts.sector
         let industry = facts.industry.isEmpty ? sector : facts.industry
         let marketContext = SecurityMarketContext.forSymbol(facts.symbol)
-        let employees = facts.employees > 0 ? formattedInteger(facts.employees) : "Data unavailable"
-        let marketCap = facts.marketCap > 0 ? marketContext.formatMarketCap(facts.marketCap) : "Data unavailable"
-        let peRatio = facts.peRatio > 0 ? String(format: "%.1fx", facts.peRatio) : "Data unavailable"
+        let employees = facts.employees.flatMap { $0 > 0 ? formattedInteger($0) : nil } ?? "Data unavailable"
+        let marketCap = facts.marketCap.flatMap { $0 > 0 ? marketContext.formatMarketCap($0) : nil } ?? "Data unavailable"
+        let peRatio = facts.peRatio.flatMap { $0 > 0 ? String(format: "%.1fx", $0) : nil } ?? "Data unavailable"
         let revenueGrowth = formattedPercent(facts.revenueGrowth)
         let profitGrowth = formattedPercent(facts.profitGrowth)
-        let debtToEquity = facts.debtToEquity > 0 ? String(format: "%.2f", facts.debtToEquity) : "Data unavailable"
+        let debtToEquity = facts.debtToEquity.flatMap { $0 > 0 ? String(format: "%.2f", $0) : nil } ?? "Data unavailable"
+        let analystCoverage = [facts.analystBuy, facts.analystHold, facts.analystSell].allSatisfy { $0 != nil }
+            ? "\(facts.analystBuy ?? 0) Buy, \(facts.analystHold ?? 0) Hold, \(facts.analystSell ?? 0) Sell"
+            : "Data unavailable"
         let priceTrend = priceTrendText(from: facts.priceHistory)
 
         print("===== DECODE SUCCESS =====")
@@ -338,7 +340,7 @@ final class AIIntelligenceService {
             let revenuePoints: [String] = verified.revenueModel.map { "- \($0)" }
 
             let bullishPoints: [String] = [
-                "- [Analyst Stance] \(facts.analystBuy) Buy ratings, \(facts.analystHold) Hold, \(facts.analystSell) Sell from reporting brokers.",
+                "- [Analyst Stance] \(analystCoverage) from reporting brokers.",
                 "- [Core Tailwinds] \(verified.secularGrowthDrivers.first ?? "Secular demand tailwinds in \(industry).")",
                 "- [Valuation Multiple] Trading at a P/E multiple of \(peRatio)."
             ]
@@ -406,7 +408,7 @@ final class AIIntelligenceService {
                 "- Operating results depend on volume demand and operational cost containment."
             ],
             analystBullishReason: [
-                "- Analyst coverage: \(facts.analystBuy) Buy, \(facts.analystHold) Hold, \(facts.analystSell) Sell.",
+                "- Analyst coverage: \(analystCoverage).",
                 "- Current valuation multiple stands at P/E of \(peRatio).",
                 "- Return on equity (ROE) is \(formattedPercent(facts.roe))."
             ],
@@ -440,8 +442,8 @@ final class AIIntelligenceService {
         return formatter.string(from: NSNumber(value: value)) ?? "\(value)"
     }
 
-    private func formattedPercent(_ value: Double) -> String {
-        guard value != 0 else { return "Data unavailable" }
+    private func formattedPercent(_ value: Double?) -> String {
+        guard let value else { return "Data unavailable" }
         let normalized = abs(value) > 1 ? value : value * 100
         let sign = value > 0 ? "+" : ""
         return "\(sign)\(String(format: "%.1f%%", normalized))"
@@ -474,6 +476,7 @@ private struct ChatCompletionRequest: Encodable {
     let model: String
     let messages: [ChatMessage]
     let temperature: Double
+    let max_tokens: Int
 }
 
 private struct ChatMessage: Codable {

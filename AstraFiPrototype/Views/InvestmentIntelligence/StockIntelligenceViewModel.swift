@@ -21,18 +21,21 @@ final class StockIntelligenceViewModel {
         self.cache = cache
     }
 
-    func loadIntelligence(for asset: InvestmentSummaryAsset) async {
+    func loadIntelligence(for asset: InvestmentSummaryAsset, forceRefresh: Bool = false) async {
         guard asset.kind == .stock else { return }
         guard !isLoading else { return }
 
         isLoading = true
         errorMessage = nil
+        if forceRefresh {
+            companyIntelligence = nil
+        }
         defer { isLoading = false }
 
         do {
             let facts = try await factsBuilder.buildFacts(for: asset)
 
-            if let cached = await cache.cachedIntelligence(for: facts.symbol) {
+            if !forceRefresh, let cached = await cache.cachedIntelligence(for: facts.symbol) {
                 companyIntelligence = cached
                 print("AI generation completed")
                 print("CompanyIntelligence assigned:", companyIntelligence != nil)

@@ -396,6 +396,25 @@ struct EducationQuestionnaire: View {
         .animation(.spring(response: 0.5, dampingFraction: 0.8), value: input.lifestyle)
         .animation(.spring(response: 0.5, dampingFraction: 0.8), value: input.savingPlan)
         .animation(.spring(response: 0.5, dampingFraction: 0.8), value: showInsights)
+        .onAppear {
+            if let draft = appState.currentProfile?.planningJourney?.goalDrafts.first(where: {
+                $0.category.localizedCaseInsensitiveContains("Education") || $0.name.localizedCaseInsensitiveContains("Education")
+            }) {
+                if input.yearsUntilCourse.isEmpty, let targetDate = draft.targetDate {
+                    let years = max(1, Calendar.current.dateComponents([.year], from: Date(), to: targetDate).year ?? 5)
+                    input.yearsUntilCourse = "\(years)"
+                }
+                if input.courseAmount.isEmpty, let amount = draft.targetAmount {
+                    input.courseAmount = String(format: "%.0f", amount)
+                }
+                if input.location == nil {
+                    input.location = .india
+                }
+                if input.lifestyle == nil {
+                    input.lifestyle = .normal
+                }
+            }
+        }
     }
 
     private var showInsights: Bool {

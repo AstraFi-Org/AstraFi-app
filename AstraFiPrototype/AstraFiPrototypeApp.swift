@@ -2,7 +2,16 @@ import SwiftUI
 
 @main
 struct AstraFiPrototypeApp: App {
-    @State private var appState = AppStateManager()
+    @State private var appState: AppStateManager = {
+        #if DEBUG
+        if ProcessInfo.processInfo.arguments.contains("-useSampleData") {
+            return AppStateManager.withSampleData()
+        }
+        return AppStateManager()
+        #else
+        return AppStateManager()
+        #endif
+    }()
     @Environment(\.scenePhase) private var scenePhase
 
     var body: some Scene {

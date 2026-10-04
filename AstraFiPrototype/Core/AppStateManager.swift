@@ -75,7 +75,7 @@ final class AppStateManager {
                 adultDependents: 1, childDependents: 1,
                 incomeType: .fixed,
                 monthlyIncome: 120000, monthlyIncomeAfterTax: 95000,
-                monthlyExpenses: 55000, emergencyFundAmount: 300000,
+                monthlyExpenses: 52000, emergencyFundAmount: 300000,
                 activeInvestment: true,
                 riskTolerance: .high,
                 investmentHorizon: .longTerm
@@ -91,10 +91,10 @@ final class AppStateManager {
                 jewelleryAmount: 0
             ),
             liabilities: AstraLiabilities(
-                homeLoanAmount: 7500000,
-                vehicleLoanAmount: 900000,
+                homeLoanAmount: 0,
+                vehicleLoanAmount: 0,
                 creditCardBills: 0,
-                educationLoanAmount: 500000,
+                educationLoanAmount: 0,
                 otherLoanAmount: 0,
                 otherDebtAmount: 0
             ),
@@ -120,17 +120,7 @@ final class AppStateManager {
                                 investmentName: "HDFC Fixed Deposit", investmentAmount: 200000,
                                 startDate: monthsAgo(8), mode: .lumpsum),
             ],
-            loans: [
-                AstraLoan(loanType: .homeLoan, lender: .hdfcBank,
-                          loanAmount: 7500000, interestRate: 8.5,
-                          loanStartDate: monthsAgo(5), loanTenureMonths: 180),
-                AstraLoan(loanType: .carLoan, lender: .iciciBank,
-                          loanAmount: 900000, interestRate: 9.2,
-                          loanStartDate: monthsAgo(22), loanTenureMonths: 60),
-                AstraLoan(loanType: .educationLoan, lender: .stateBankOfIndia,
-                          loanAmount: 500000, interestRate: 7.0,
-                          loanStartDate: monthsAgo(12), loanTenureMonths: 84)
-            ],
+            loans: [],
             insurances: [
                 AstraInsurance(insuranceType: .health, provider: "Star Health",
                                policyNumber: "SH-2024-00123", sumAssured: 500000,
@@ -183,6 +173,48 @@ final class AppStateManager {
             ],
             isSetuConnected: false
         )
+
+        let draftMarriage = FinancialPlanningGoalDraft(
+            name: "Marriage / Wedding",
+            category: "Wedding",
+            targetDate: yearsFromNow(2),
+            targetAmount: 2_500_000,
+            priority: 1
+        )
+        let draftHome = FinancialPlanningGoalDraft(
+            name: "Home Purchase",
+            category: "Home Purchase",
+            targetDate: yearsFromNow(4),
+            targetAmount: 7_500_000,
+            priority: 2
+        )
+        let draftCar = FinancialPlanningGoalDraft(
+            name: "Car Purchase",
+            category: "Vehicle",
+            targetDate: yearsFromNow(3),
+            targetAmount: 1_800_000,
+            priority: 3
+        )
+        mgr.currentProfile?.planningJourney = FinancialPlanningJourney(
+            currentPhase: .actions,
+            goalDrafts: [draftMarriage, draftHome, draftCar],
+            events: [],
+            goalPriorityIDs: [draftMarriage.id, draftHome.id, draftCar.id],
+            assumptions: FinancialPlanningAssumptions(
+                version: 1,
+                enteredAt: Date(),
+                inflationRate: 0.06,
+                incomeGrowthRate: 0.08,
+                expenseGrowthRate: 0.05,
+                investmentReturnRate: 0.12,
+                source: "Preset"
+            )
+        )
+
+        mgr.isAuthenticated = true
+        mgr.hasCompletedOnboarding = true
+        mgr.showDashboard = true
+        mgr.selectedTab = 1
         return mgr
     }
     
@@ -243,6 +275,7 @@ final class AppStateManager {
     
     var isAuthenticated: Bool = false
     var authError: String? = nil
+    var authNotice: String? = nil
     var isAuthLoading: Bool = false
     
     var showDashboard: Bool = false
@@ -506,8 +539,9 @@ final class AppStateManager {
     func signUp(name: String, email: String, password: String) async -> Bool {
         isAuthLoading = true
         authError = nil
+        authNotice = nil
         do {
-            let session = try await supabase.auth.signUp(
+            let response = try await supabase.auth.signUp(
                 email: email,
                 password: password,
                 data: [
@@ -515,6 +549,11 @@ final class AppStateManager {
                     "full_name": .string(name)
                 ]
             )
+            guard let session = response.session else {
+                authNotice = "Your account was created. Check \(email) for the confirmation link, then sign in."
+                isAuthLoading = false
+                return false
+            }
             try? await supabase.from("users").insert([
                 "id": session.user.id.uuidString,
                 "email": email
@@ -1549,6 +1588,20 @@ final class AppStateManager {
                 }
             }
         }
+    }
+
+    func updateFinancialPlanningJourney(_ journey: FinancialPlanningJourney) {
+        guard var profile = currentProfile else { return }
+        profile.planningJourney = journey
+        currentProfile = profile
+        syncProfile()
+    }
+
+    func updateMasterFinancialPlan(_ plan: MasterFinancialPlan) {
+        guard var profile = currentProfile else { return }
+        profile.masterFinancialPlan = plan
+        currentProfile = profile
+        syncProfile()
     }
     
     func addGoal(_ goal: AstraGoal) {

@@ -141,13 +141,19 @@ struct PlannerView: View {
         .navigationTitle("Planner")
         .navigationBarTitleDisplayMode(.large)
         .background(AppTheme.appBackground(for: colorScheme))
-        .navigationDestination(isPresented: $showNewInvestmentPlan) { GoalSelectionView() }
+        .navigationDestination(isPresented: $showNewInvestmentPlan) {
+            PlanJourneyView()
+        }
         .navigationDestination(isPresented: $efState.showFundSetup) {
             EmergencyFundSetupView(plannerState: emergencyFundState)
                 .environment(appState)
         }
-        .sheet(isPresented: $showCompanyAnalyzer)  { CompanyAnalyzerView() }
-        .onAppear { includeEmergencyFundInvestmentsInGrowth() }
+        .onAppear {
+            includeEmergencyFundInvestmentsInGrowth()
+            #if DEBUG
+            showNewInvestmentPlan = true
+            #endif
+        }
         .onChange(of: profile?.emergencyFundLinkedInvestmentIDs ?? []) { _, _ in
             includeEmergencyFundInvestmentsInGrowth()
         }

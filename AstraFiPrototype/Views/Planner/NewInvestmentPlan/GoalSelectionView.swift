@@ -5,17 +5,29 @@ struct GoalSelectionView: View {
     @Environment(\.colorScheme) var colorScheme
     @State private var selectedGoal: String? = nil
     @State private var navigateToForm = false
+    private let reviewJourneyFirst: Bool
+    private let initialGoal: String?
+    private let initialGoalTitle: String?
+
+    init(reviewJourneyFirst: Bool = true, initialGoal: String? = nil, initialGoalTitle: String? = nil) {
+        self.reviewJourneyFirst = reviewJourneyFirst
+        self.initialGoal = initialGoal
+        self.initialGoalTitle = initialGoalTitle
+        self._selectedGoal = State(initialValue: initialGoal)
+    }
 
     let goals = [
         GoalOption(name: "Retirement", icon: "person.2.fill", color: .purple),
         GoalOption(name: "Education", icon: "book.fill", color: .blue),
-        GoalOption(name: "Home Purchase", icon: "house.fill", color: .green),
+        GoalOption(name: "Home", icon: "house.fill", color: .green),
         GoalOption(name: "Vehicle", icon: "car.fill", color: .orange),
-        GoalOption(name: "Travel / Trip", icon: "airplane", color: .cyan),
-        GoalOption(name: "Wedding", icon: "heart.fill", color: .pink),
-        GoalOption(name: "Wealth Creation", icon: "crown.fill", color: .indigo),
+        GoalOption(name: "Travel", icon: "airplane", color: .cyan),
+        GoalOption(name: "Marriage", icon: "heart.fill", color: .pink),
+        GoalOption(name: "Children", icon: "figure.2.and.child.holdinghands", color: .orange),
+        GoalOption(name: "Build Wealth", icon: "chart.line.uptrend.xyaxis", color: .indigo),
+        GoalOption(name: "Family", icon: "figure.2", color: .teal),
         GoalOption(name: "Business Fund", icon: "briefcase.fill", color: .teal),
-        GoalOption(name: "Other Goal", icon: "star.fill", color: .gray)
+        GoalOption(name: "Custom Goal", icon: "star.fill", color: .gray)
     ]
 
     var body: some View {
@@ -23,11 +35,11 @@ struct GoalSelectionView: View {
             AppTheme.appBackground(for: colorScheme)
                 .ignoresSafeArea()
 
-            ScrollView {
-                VStack(alignment: .leading, spacing: 24) {
+            ScrollView(showsIndicators: false) {
+                VStack(alignment: .leading, spacing: 20) {
                     headerSection
 
-                    LazyVGrid(columns: Array(repeating: GridItem(.flexible(), spacing: 16), count: 3), spacing: 16) {
+                    LazyVGrid(columns: Array(repeating: GridItem(.flexible(), spacing: 14), count: 3), spacing: 14) {
                         ForEach(goals) { goal in
                             GoalGridItem(goal: goal, isSelected: selectedGoal == goal.name) {
                                 withAnimation(.spring(response: 0.3, dampingFraction: 0.7)) {
@@ -36,26 +48,19 @@ struct GoalSelectionView: View {
                             }
                         }
                     }
-                    .padding(.horizontal, 24)
+                    .padding(.horizontal, 20)
 
                     if let selection = selectedGoal {
                         timelineHint(for: selection)
                             .transition(.move(edge: .bottom).combined(with: .opacity))
                     }
 
-                    Spacer(minLength: 120)
+                    Spacer(minLength: 40)
                 }
-                .padding(.top, 20)
+                .padding(.top, 16)
             }
-
-            VStack {
-                Spacer()
-                ZStack(alignment: .bottom) {
-                    Rectangle()
-                        .fill(.ultraThinMaterial)
-                        .frame(height: 180)
-                        .mask(LinearGradient(colors: [.clear, .black], startPoint: .top, endPoint: .bottom))
-
+            .safeAreaInset(edge: .bottom, spacing: 0) {
+                VStack(spacing: 0) {
                     Button(action: {
                         if selectedGoal != nil {
                             UIImpactFeedbackGenerator(style: .medium).impactOccurred()
@@ -64,27 +69,35 @@ struct GoalSelectionView: View {
                     }) {
                         HStack(spacing: 8) {
                             Text("Start Plan")
+                            Image(systemName: "arrow.right")
                         }
-                        .font(.headline).fontWeight(.bold)
+                        .font(.headline.weight(.semibold))
                         .foregroundColor(.white)
                         .frame(maxWidth: .infinity)
-                        .padding(.vertical, 18)
-                        .background(selectedGoal == nil ? Color.gray : Color.blue)
-                        .cornerRadius(16)
-                        .shadow(color: (selectedGoal == nil ? Color.clear : Color.blue).opacity(0.4), radius: 10, x: 0, y: 5)
+                        .frame(height: 54)
+                        .background(
+                            selectedGoal == nil ? AnyShapeStyle(Color.gray.opacity(0.4)) : AnyShapeStyle(AppTheme.accentGradient),
+                            in: RoundedRectangle(cornerRadius: 18, style: .continuous)
+                        )
+                        .shadow(color: (selectedGoal == nil ? Color.clear : Color.blue).opacity(0.3), radius: 12, x: 0, y: 6)
                     }
                     .disabled(selectedGoal == nil)
-                    .padding(.horizontal, 24)
-                    .padding(.bottom, 120)
+                    .buttonStyle(.plain)
+                    .padding(.horizontal, 20)
+                    .padding(.top, 12)
+                    .padding(.bottom, 12)
                 }
+                .background(.ultraThinMaterial)
             }
-            .ignoresSafeArea()
         }
         .navigationTitle("Choose Your Goal")
         .navigationBarTitleDisplayMode(.inline)
         .navigationDestination(isPresented: $navigateToForm) {
             if let selection = selectedGoal {
-                NewInvestmentPlanView(initialGoal: selection)
+                NewInvestmentPlanView(
+                    initialGoal: selection == initialGoal ? (initialGoalTitle ?? selection) : selection,
+                    reviewJourneyFirst: reviewJourneyFirst
+                )
             }
         }
     }
@@ -120,11 +133,11 @@ struct GoalSelectionView: View {
         switch goal {
         case "Retirement": return "Long-term (15+ years)"
         case "Education": return "Mid-term (3-10 years)"
-        case "Home Purchase": return "Long-term (5-15 years)"
+        case "Home", "Home Purchase": return "Long-term (5-15 years)"
         case "Vehicle": return "Typically 1-5 years"
-        case "Travel / Trip": return "Short-term (6-24 months)"
-        case "Wedding": return "Short-term (1-3 years)"
-        case "Wealth Creation": return "Open-ended (5+ years)"
+        case "Travel", "Travel / Trip": return "Short-term (6-24 months)"
+        case "Marriage", "Wedding": return "Short-term (1-3 years)"
+        case "Build Wealth", "Wealth Creation": return "Open-ended (5+ years)"
         default: return "Flexible Timeline"
         }
     }
@@ -145,37 +158,40 @@ struct GoalGridItem: View {
 
     var body: some View {
         Button(action: action) {
-            VStack(spacing: 12) {
+            VStack(spacing: 10) {
                 ZStack {
-                    RoundedRectangle(cornerRadius: 12)
-                        .fill(goal.color.opacity(isSelected ? 1.0 : 0.1))
-                        .frame(width: 50, height: 50)
+                    RoundedRectangle(cornerRadius: 14, style: .continuous)
+                        .fill(goal.color.opacity(isSelected ? 0.95 : 0.12))
+                        .frame(width: 48, height: 48)
 
                     Image(systemName: goal.icon)
                         .foregroundColor(isSelected ? .white : goal.color)
-                        .font(.title3)
+                        .font(.system(size: 20, weight: .semibold))
                 }
 
                 Text(goal.name)
-                    .font(.system(size: 10, weight: .medium))
+                    .font(.system(size: 11, weight: isSelected ? .bold : .medium))
                     .foregroundColor(isSelected ? .primary : .secondary)
                     .multilineTextAlignment(.center)
                     .lineLimit(2)
+                    .fixedSize(horizontal: false, vertical: true)
             }
             .frame(maxWidth: .infinity)
-            .padding(.vertical, 16)
+            .padding(.vertical, 14)
+            .padding(.horizontal, 6)
             .background(
-                RoundedRectangle(cornerRadius: 16)
-                    .stroke(isSelected ? Color.orange : Color.clear, lineWidth: 2)
-                    .background(isSelected ? selectedBackground : AppTheme.cardBackground)
+                RoundedRectangle(cornerRadius: 18, style: .continuous)
+                    .stroke(isSelected ? Color.blue : Color.primary.opacity(0.06), lineWidth: isSelected ? 2 : 1)
+                    .background(isSelected ? selectedBackground : AppTheme.cardBackground, in: RoundedRectangle(cornerRadius: 18, style: .continuous))
             )
-            .cornerRadius(16)
+            .scaleEffect(isSelected ? 1.02 : 1.0)
+            .shadow(color: isSelected ? Color.blue.opacity(0.15) : Color.black.opacity(0.03), radius: isSelected ? 8 : 4, x: 0, y: 2)
         }
         .buttonStyle(PlainButtonStyle())
     }
 
     private var selectedBackground: Color {
-        colorScheme == .dark ? AppTheme.elevatedCardBackground : Color.orange.opacity(0.10)
+        colorScheme == .dark ? AppTheme.elevatedCardBackground : Color.blue.opacity(0.08)
     }
 }
 

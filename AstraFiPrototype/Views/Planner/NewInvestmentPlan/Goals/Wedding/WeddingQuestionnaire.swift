@@ -195,6 +195,62 @@ struct WeddingQuestionnaire: View {
         }
         .animation(.spring(response: 0.5, dampingFraction: 0.8), value: input.weddingScale)
         .animation(.spring(response: 0.5, dampingFraction: 0.8), value: showInsights)
+        .onAppear {
+            if let draft = appState.currentProfile?.planningJourney?.goalDrafts.first(where: {
+                $0.category.localizedCaseInsensitiveContains("Marriage") || $0.category.localizedCaseInsensitiveContains("Wedding") || $0.name.localizedCaseInsensitiveContains("Marriage")
+            }) {
+                if input.yearsUntilWedding.isEmpty, let targetDate = draft.targetDate {
+                    let years = max(1, Calendar.current.dateComponents([.year], from: Date(), to: targetDate).year ?? 3)
+                    input.yearsUntilWedding = "\(years)"
+                }
+                if input.currentWeddingCost.isEmpty, let amount = draft.targetAmount {
+                    input.currentWeddingCost = String(format: "%.0f", amount)
+                }
+                if input.weddingScale == nil {
+                    input.weddingScale = .standard
+                }
+            }
+        }
+        .onChange(of: input.currentWeddingCost) { _, newCost in
+            syncToPlanningJourney(costText: newCost, yearsText: input.yearsUntilWedding)
+        }
+        .onChange(of: input.yearsUntilWedding) { _, newYears in
+            syncToPlanningJourney(costText: input.currentWeddingCost, yearsText: newYears)
+        }
+        .onChange(of: input.weddingScale) { _, newScale in
+            if let scale = newScale {
+                let scaleCost: Double = {
+                    switch scale {
+                    case .destination: return 4_000_000
+                    case .grand: return 3_000_000
+                    case .standard: return 2_000_000
+                    case .intimate: return 1_000_000
+                    }
+                }()
+                input.currentWeddingCost = String(format: "%.0f", scaleCost)
+                syncToPlanningJourney(costText: input.currentWeddingCost, yearsText: input.yearsUntilWedding)
+            }
+        }
+    }
+
+    private func syncToPlanningJourney(costText: String, yearsText: String) {
+        guard var journey = appState.currentProfile?.planningJourney else { return }
+        guard let idx = journey.goalDrafts.firstIndex(where: {
+            $0.category.localizedCaseInsensitiveContains("Marriage") || $0.category.localizedCaseInsensitiveContains("Wedding") || $0.name.localizedCaseInsensitiveContains("Marriage")
+        }) else { return }
+        var changed = false
+        let cleanCost = costText.replacingOccurrences(of: ",", with: "").replacingOccurrences(of: "₹", with: "").trimmingCharacters(in: .whitespacesAndNewlines)
+        if let amt = Double(cleanCost), amt > 0 {
+            journey.goalDrafts[idx].targetAmount = amt
+            changed = true
+        }
+        if let yrs = Int(yearsText.trimmingCharacters(in: .whitespacesAndNewlines)), yrs > 0 {
+            journey.goalDrafts[idx].targetDate = Calendar.current.date(byAdding: .year, value: yrs, to: Date())
+            changed = true
+        }
+        if changed {
+            appState.updateFinancialPlanningJourney(journey)
+        }
     }
     
     private var showInsights: Bool {

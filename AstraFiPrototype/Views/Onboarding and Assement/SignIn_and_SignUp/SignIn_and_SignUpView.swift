@@ -265,13 +265,21 @@ struct SignUpView: View {
         
         .navigationBarBackButtonHidden(true)
         .background(Color(uiColor: .systemGroupedBackground).ignoresSafeArea())
-        .alert("Authentication Error", isPresented: Binding(
-            get: { appState.authError != nil },
-            set: { if !$0 { appState.authError = nil } }
+        .alert(appState.authNotice == nil ? "Authentication Error" : "Check your email", isPresented: Binding(
+            get: { appState.authError != nil || appState.authNotice != nil },
+            set: {
+                if !$0 {
+                    appState.authError = nil
+                    appState.authNotice = nil
+                }
+            }
         )) {
-            Button("OK", role: .cancel) { }
+            Button("OK", role: .cancel) {
+                appState.authError = nil
+                appState.authNotice = nil
+            }
         } message: {
-            Text(appState.authError ?? "")
+            Text(appState.authError ?? appState.authNotice ?? "")
         }
         .sheet(isPresented: $showTermsSheet) {
             TermsAndConditionsView(agreedToTerms: $agreedToTerms)
@@ -312,4 +320,3 @@ struct SignUpView: View {
         return errors.isEmpty ? nil : errors.joined(separator: "\n")
     }
 }
-

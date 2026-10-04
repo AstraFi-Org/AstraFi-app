@@ -5,13 +5,12 @@ struct InvestmentIntelligenceView: View {
     @Environment(\.colorScheme) private var colorScheme
     @State private var homeViewModel = InvestmentIntelligenceHomeViewModel()
     @State private var searchViewModel = InvestmentSearchViewModel()
-    @Environment(\.isSearching) private var isSearching
     @State private var isSearchPresented = false
     @Namespace private var cardNamespace
 
     var body: some View {
         ScrollView(showsIndicators: false) {
-            if searchViewModel.query.isEmpty && !isSearching {
+            if searchViewModel.query.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty {
                 VStack(alignment: .leading, spacing: 26) {
                     assetSection(title: "Stocks", subtitle: "Popular companies with live prices when available", assets: homeViewModel.stocks)
                     assetSection(title: "Mutual Funds", subtitle: "Popular categories from AMFI data", assets: homeViewModel.mutualFunds)
@@ -22,16 +21,15 @@ struct InvestmentIntelligenceView: View {
                 .padding(.bottom, 44)
             } else {
                 VStack(alignment: .leading, spacing: 20) {
-                    if !searchViewModel.recentSearches.isEmpty && searchViewModel.query.isEmpty {
-                        searchSection(title: "Recent Searches", assets: searchViewModel.recentSearches)
-                    }
-
                     if searchViewModel.query.trimmingCharacters(in: .whitespacesAndNewlines).count >= 2 {
                         searchResults
-                    } else if searchViewModel.query.isEmpty {
-                        searchSection(title: "Provider Stocks", assets: searchViewModel.trendingStocks)
-                        searchSection(title: "AMFI Mutual Funds", assets: searchViewModel.popularFunds)
-                        searchSection(title: "Gold ETFs", assets: searchViewModel.topGoldETFs)
+                    } else {
+                        ContentUnavailableView(
+                            "Keep typing to search",
+                            systemImage: "magnifyingglass",
+                            description: Text("Enter at least 2 characters to search stocks, mutual funds, and Gold ETFs.")
+                        )
+                        .frame(maxWidth: .infinity, minHeight: 180)
                     }
                 }
                 .padding(.horizontal, AppTheme.auraPadding)
@@ -250,7 +248,9 @@ struct InvestmentIntelligenceDetailView: View {
             OverviewTab(snapshot: snapshot, asset: viewModel.asset)
             FinancialsTab(snapshot: snapshot, asset: viewModel.asset)
             if viewModel.asset.kind == .stock {
-                StockIntelligenceSection(viewModel: stockIntelligenceViewModel)
+                StockIntelligenceSection(viewModel: stockIntelligenceViewModel, asset: viewModel.asset) {
+                    Task { await stockIntelligenceViewModel.loadIntelligence(for: viewModel.asset, forceRefresh: true) }
+                }
                     .task(id: viewModel.asset.symbol) {
                         await stockIntelligenceViewModel.loadIntelligence(for: viewModel.asset)
                     }
@@ -295,7 +295,7 @@ private struct InvestmentSummaryCard: View {
 
             HStack(spacing: 8) {
                 InfoPill(title: asset.kind == .mutualFund ? "Current NAV" : "Current Price", value: valueText(for: asset), color: asset.kind.accent)
-                InfoPill(title: "Growth", value: growthText(for: asset), color: growthColor(for: asset))
+                InfoPill(title: performanceLabel(for: asset), value: growthText(for: asset), color: growthColor(for: asset))
             }
             .frame(maxWidth: .infinity)
             .frame(height: 48)
@@ -336,7 +336,7 @@ struct InvestmentHomePreviewCard: View {
 
             HStack(spacing: 8) {
                 InfoPill(title: asset.kind == .mutualFund ? "Current NAV" : "Current Price", value: valueText(for: asset), color: asset.kind.accent)
-                InfoPill(title: "Growth", value: growthText(for: asset), color: growthColor(for: asset))
+                InfoPill(title: performanceLabel(for: asset), value: growthText(for: asset), color: growthColor(for: asset))
             }
             .frame(maxWidth: .infinity)
             .frame(height: 48)
@@ -882,9 +882,12 @@ private struct RecommendationBarRow: View {
 
 private struct StockIntelligenceCard: View {
     let viewModel: StockIntelligenceViewModel
+    let asset: InvestmentSummaryAsset
 
     var body: some View {
-        StockIntelligenceSection(viewModel: viewModel)
+        StockIntelligenceSection(viewModel: viewModel, asset: asset) {
+            Task { await viewModel.loadIntelligence(for: asset, forceRefresh: true) }
+        }
     }
 }
 
@@ -1890,21 +1893,25 @@ private func shortChangeText(for asset: InvestmentSummaryAsset) -> String {
 }
 
 private func growthText(for asset: InvestmentSummaryAsset) -> String {
-    if let daily = asset.dailyChange, abs(daily) > 0.0001 {
-        return "\(daily >= 0 ? "+" : "")\(daily.percentText)"
-    }
-    if let oneYear = asset.oneYearReturn {
+    if asset.kind == .mutualFund, let oneYear = asset.oneYearReturn {
         return "\(oneYear >= 0 ? "+" : "")\(oneYear.percentText)"
+    }
+    if asset.kind != .mutualFund, let daily = asset.dailyChange {
+        return "\(daily >= 0 ? "+" : "")\(daily.percentText)"
     }
     return "N/A"
 }
 
+private func performanceLabel(for asset: InvestmentSummaryAsset) -> String {
+    asset.kind == .mutualFund ? "1Y Return" : "Day Change"
+}
+
 private func growthColor(for asset: InvestmentSummaryAsset) -> Color {
-    if let daily = asset.dailyChange, abs(daily) > 0.0001 {
-        return daily >= 0 ? AppTheme.auraGreen : AppTheme.vibrantRed
-    }
-    if let oneYear = asset.oneYearReturn {
+    if asset.kind == .mutualFund, let oneYear = asset.oneYearReturn {
         return oneYear >= 0 ? AppTheme.auraGreen : AppTheme.vibrantRed
+    }
+    if asset.kind != .mutualFund, let daily = asset.dailyChange {
+        return daily >= 0 ? AppTheme.auraGreen : AppTheme.vibrantRed
     }
     return .secondary
 }

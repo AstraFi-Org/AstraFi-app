@@ -15,16 +15,21 @@ struct NewInvestmentPlanView: View {
     @Environment(AppStateManager.self) var appState
 
     var initialGoal: String
+    private let reviewJourneyFirst: Bool
 
     // ── Navigation ────────────────────────────────────────────────────────────
     @State private var currentStep: Int = 0
     @State private var showResultView = false
+    @State private var hasStartedJourney = false
+    @State private var hasCompletedJourney = false
 
     // ── Consolidated State ───────────────────────────────────────────────────
     @State private var input: InvestmentPlanInputModel
 
-    init(initialGoal: String) {
+    init(initialGoal: String, reviewJourneyFirst: Bool = true) {
         self.initialGoal = initialGoal
+        self.reviewJourneyFirst = reviewJourneyFirst
+        self._hasCompletedJourney = State(initialValue: !reviewJourneyFirst)
         self._input = State(initialValue: InvestmentPlanInputModel(
             investmentType: "Monthly SIP",
             amount: "",
@@ -48,6 +53,7 @@ struct NewInvestmentPlanView: View {
     private var profileSavings: Double { profile?.investments.reduce(0) { $0 + $1.investmentAmount } ?? 0 }
 
     private var steps: [GoalStep] { GoalStep.steps(for: initialGoal, profile: profile) }
+    private let journeyPhases: [FinancialPlanningPhase] = [.today, .future, .timeline, .impact, .simulation, .strategy, .actions]
     private var totalSteps: Int { steps.count }
     private var progressFraction: Double {
         totalSteps > 1 ? Double(currentStep) / Double(totalSteps - 1) : 1.0
@@ -59,35 +65,91 @@ struct NewInvestmentPlanView: View {
 
             VStack(spacing: 0) {
 
-                ScrollView {
-                    VStack(alignment: .leading, spacing: 24) {
-                        stepContent
-                        Spacer(minLength: 130)
+                if hasCompletedJourney {
+                    ScrollView {
+                        VStack(alignment: .leading, spacing: 24) {
+                            selectedGoalHeader
+                            journeyReviewCard
+                            progressHeader
+                            stepContent
+                            Spacer(minLength: 24)
+                        }
+                        .padding(.horizontal, 20)
+                        .padding(.top, 18)
+                        .padding(.bottom, 20)
+                        .contentShape(Rectangle())
+                        .onTapGesture { hideKeyboard() }
                     }
-                    .padding(.horizontal, 16)
-                    .padding(.top, 24)
-                    .contentShape(Rectangle())
-                    .onTapGesture { hideKeyboard() }
+                    .safeAreaInset(edge: .bottom, spacing: 0) {
+                        HStack(spacing: 12) {
+                            if currentStep > 0 {
+                                Button("Back") {
+                                    withAnimation(.spring(response: 0.35)) { currentStep -= 1 }
+                                }
+                                .buttonStyle(.bordered)
+                                .tint(goalAccentColor)
+                                .frame(minHeight: 50)
+                            }
+                            Button {
+                                hideKeyboard()
+                                if currentStep < totalSteps - 1 {
+                                    withAnimation(.spring(response: 0.35)) { currentStep += 1 }
+                                } else {
+                                    showResultView = true
+                                }
+                            } label: {
+                                Text(currentStep == totalSteps - 1 ? "Build My Plan" : "Continue")
+                                .font(.headline)
+                                .padding(.horizontal, 18)
+                                .frame(height: 54)
+                                .frame(maxWidth: .infinity)
+                                .foregroundStyle(.white)
+                                .background(goalAccentColor, in: RoundedRectangle(cornerRadius: 17, style: .continuous))
+                            }
+                            .buttonStyle(.plain)
+                            .frame(maxWidth: .infinity)
+                        }
+                        .padding(.horizontal, 20)
+                        .padding(.top, 12)
+                        .padding(.bottom, 8)
+                        .background(.ultraThinMaterial)
+                    }
+                } else if hasStartedJourney {
+                    PlanJourneyView(
+                            onComplete: {
+                                withAnimation(.easeInOut(duration: 0.25)) {
+                                    hasCompletedJourney = true
+                                }
+                            },
+                            goalContext: initialGoal
+                        )
+                        .frame(maxWidth: .infinity, maxHeight: .infinity)
+                } else {
+                    journeyWelcome
                 }
             }
 
             bottomNav
         }
-        .navigationTitle("\(initialGoal) Plan")
+        .navigationTitle(hasCompletedJourney ? "\(initialGoal) Plan" : "Financial Journey")
         .navigationBarTitleDisplayMode(.inline)
         .navigationBarBackButtonHidden(true)
         .toolbar {
-            ToolbarItem(placement: .navigationBarLeading) {
-                Button {
-                    if currentStep > 0 {
-                        withAnimation(.spring(response: 0.35)) { currentStep -= 1 }
-                    } else {
-                        dismiss()
+            if !hasStartedJourney || hasCompletedJourney {
+                ToolbarItem(placement: .topBarLeading) {
+                    Button {
+                        if hasCompletedJourney {
+                            withAnimation(.easeInOut(duration: 0.25)) { hasCompletedJourney = false }
+                        } else if currentStep > 0 {
+                            withAnimation(.spring(response: 0.35)) { currentStep -= 1 }
+                        } else {
+                            dismiss()
+                        }
+                    } label: {
+                        Image(systemName: "chevron.left")
+                            .font(.headline.weight(.semibold))
                     }
-                } label: {
-                    Image(systemName: "chevron.left")
-                        .font(.system(size: 16, weight: .bold))
-                        .foregroundColor(.primary)
+                    .accessibilityLabel("Go back one screen")
                 }
             }
         }
@@ -96,11 +158,11 @@ struct NewInvestmentPlanView: View {
             switch initialGoal {
             case "Retirement": RetirementResultView(input: input)
             case "Education": EducationResultView(input: input)
-            case "Home Purchase": HomeResultView(input: input)
+            case "Home Purchase", "Home": HomeResultView(input: input)
             case "Vehicle": VehicleResultView(input: input)
-            case "Travel": TravelResultView(input: input)
-            case "Wedding": WeddingResultView(input: input)
-            case "Wealth Creation": WealthResultView(input: input)
+            case "Travel", "Travel / Trip": TravelResultView(input: input)
+            case "Wedding", "Marriage": WeddingResultView(input: input)
+            case "Wealth Creation", "Build Wealth": WealthResultView(input: input)
             case "Business Fund": BusinessResultView(input: input)
             default: OtherResultView(input: input)
             }
@@ -115,6 +177,134 @@ struct NewInvestmentPlanView: View {
                 }
             }
         }
+    }
+
+    private var journeyWelcome: some View {
+        ScrollView(showsIndicators: false) {
+            VStack(alignment: .leading, spacing: 24) {
+                HStack(spacing: 8) {
+                    Image(systemName: "sparkle")
+                        .foregroundStyle(.blue)
+                    Text("ASTRAFI · FINANCIAL JOURNEY")
+                        .font(.caption.weight(.bold))
+                        .tracking(1.1)
+                        .foregroundStyle(.secondary)
+                }
+
+                VStack(alignment: .leading, spacing: 12) {
+                    Text("Plan today\nfor a brighter\ntomorrow.")
+                        .font(.system(.largeTitle, design: .rounded).weight(.bold))
+                        .fixedSize(horizontal: false, vertical: true)
+                    Text("Understand where you are, plan for what matters, and explore how your decisions may shape your future.")
+                        .font(.body)
+                        .foregroundStyle(.secondary)
+                        .fixedSize(horizontal: false, vertical: true)
+                }
+
+                journeyIllustration
+
+                VStack(alignment: .leading, spacing: 14) {
+                    Label("Understand your current position", systemImage: "chart.bar.xaxis")
+                    Label("Connect your goals and life events", systemImage: "target")
+                    Label("Explore scenarios before choosing a strategy", systemImage: "arrow.triangle.branch")
+                }
+                .font(.subheadline.weight(.medium))
+                .foregroundStyle(.primary)
+
+                Label("Selected goal · \(initialGoal)", systemImage: "target")
+                    .font(.subheadline.weight(.semibold))
+                    .padding(.horizontal, 14)
+                    .padding(.vertical, 10)
+                    .background(goalAccentColor.opacity(0.12), in: Capsule())
+                    .foregroundStyle(goalAccentColor)
+            }
+            .frame(maxWidth: .infinity, alignment: .leading)
+            .padding(.horizontal, 24)
+            .padding(.top, 28)
+            .padding(.bottom, 140)
+        }
+    }
+
+    private var journeyIllustration: some View {
+        HStack(spacing: 0) {
+            journeyMarker("banknote.fill", tint: .blue)
+            journeyConnector
+            journeyMarker("house.fill", tint: .green)
+            journeyConnector
+            journeyMarker("graduationcap.fill", tint: .orange)
+            journeyConnector
+            journeyMarker("leaf.fill", tint: .purple)
+        }
+        .padding(.horizontal, 16)
+        .padding(.vertical, 20)
+        .background(AppTheme.cardBackground, in: RoundedRectangle(cornerRadius: 22, style: .continuous))
+    }
+
+    private func journeyMarker(_ symbol: String, tint: Color) -> some View {
+        Image(systemName: symbol)
+            .font(.system(size: 17, weight: .semibold))
+            .foregroundStyle(tint)
+            .frame(width: 42, height: 42)
+            .background(tint.opacity(0.12), in: Circle())
+    }
+
+    private var journeyConnector: some View {
+        Rectangle()
+            .fill(Color.secondary.opacity(0.25))
+            .frame(maxWidth: .infinity)
+            .frame(height: 2)
+    }
+
+    private var selectedGoalHeader: some View {
+        HStack(spacing: 12) {
+            Image(systemName: "target")
+                .font(.title3.weight(.semibold))
+                .foregroundStyle(goalAccentColor)
+                .frame(width: 42, height: 42)
+                .background(goalAccentColor.opacity(0.12), in: RoundedRectangle(cornerRadius: 13))
+            VStack(alignment: .leading, spacing: 3) {
+                Text("Selected goal")
+                    .font(.caption)
+                    .foregroundStyle(.secondary)
+                Text(initialGoal)
+                    .font(.headline)
+            }
+            Spacer()
+            Text("NEXT")
+                .font(.caption2.weight(.bold))
+                .foregroundStyle(goalAccentColor)
+        }
+        .padding(14)
+        .background(AppTheme.cardBackground, in: RoundedRectangle(cornerRadius: 18))
+    }
+
+    private var journeyReviewCard: some View {
+        Button {
+            withAnimation(.easeInOut(duration: 0.25)) {
+                hasCompletedJourney = false
+            }
+        } label: {
+            HStack(spacing: 12) {
+                Image(systemName: "checkmark.circle.fill")
+                    .font(.title2)
+                    .foregroundStyle(.green)
+                VStack(alignment: .leading, spacing: 3) {
+                    Text("Financial journey reviewed")
+                        .font(.subheadline.weight(.semibold))
+                        .foregroundStyle(.primary)
+                    Text("Revisit your timeline, assumptions, and priorities")
+                        .font(.caption)
+                        .foregroundStyle(.secondary)
+                }
+                Spacer(minLength: 4)
+                Image(systemName: "chevron.right")
+                    .font(.caption.weight(.bold))
+                    .foregroundStyle(.secondary)
+            }
+            .padding(14)
+            .background(AppTheme.cardBackground, in: RoundedRectangle(cornerRadius: 18))
+        }
+        .buttonStyle(.plain)
     }
 
     // MARK: - Progress Header
@@ -150,7 +340,24 @@ struct NewInvestmentPlanView: View {
     // MARK: - Bottom Nav
     @ViewBuilder
     private var bottomNav: some View {
-        // Bottom nav removed because all goals now use the GoalSavingPlanSection inline.
+        if !hasStartedJourney && !hasCompletedJourney {
+            Button {
+                withAnimation(.easeInOut(duration: 0.25)) {
+                    hasStartedJourney = true
+                }
+            } label: {
+                Text("Start My Financial Journey")
+                    .font(.headline)
+                    .frame(maxWidth: .infinity)
+                    .padding(.vertical, 16)
+            }
+            .buttonStyle(.borderedProminent)
+            .tint(.blue)
+            .padding(.horizontal, 24)
+            .padding(.top, 14)
+            .padding(.bottom, 24)
+            .background(.bar)
+        }
     }
 
     // MARK: - Step Content
@@ -301,15 +508,15 @@ struct NewInvestmentPlanView: View {
                 profileAge: profileAge,
                 goalAccentColor: goalAccentColor
             )
-        case "Home Purchase":
+        case "Home Purchase", "Home":
             HomeQuestionnaire(goalAccentColor: goalAccentColor)
         case "Vehicle":
             VehicleQuestionnaire(goalAccentColor: goalAccentColor)
-        case "Travel / Trip":
+        case "Travel / Trip", "Travel":
             TravelQuestionnaire(goalAccentColor: goalAccentColor)
-        case "Wedding":
+        case "Wedding", "Marriage":
             WeddingQuestionnaire(goalAccentColor: goalAccentColor)
-        case "Wealth Creation":
+        case "Wealth Creation", "Build Wealth":
             WealthQuestionnaire(goalAccentColor: goalAccentColor)
         case "Business Fund":
             BusinessQuestionnaire(goalAccentColor: goalAccentColor)
@@ -332,11 +539,11 @@ struct NewInvestmentPlanView: View {
         switch initialGoal {
         case "Retirement":      return .purple
         case "Education":       return .blue
-        case "Home Purchase":   return Color(red: 0.13, green: 0.55, blue: 0.26)
+        case "Home Purchase", "Home":   return Color(red: 0.13, green: 0.55, blue: 0.26)
         case "Vehicle":         return .orange
-        case "Travel / Trip":   return .cyan
-        case "Wedding":         return .pink
-        case "Wealth Creation": return .indigo
+        case "Travel / Trip", "Travel":   return .cyan
+        case "Wedding", "Marriage":         return .pink
+        case "Wealth Creation", "Build Wealth": return .indigo
         case "Business Fund":   return .teal
         default:                return .blue
         }
@@ -430,7 +637,7 @@ struct GoalStep: Identifiable {
                 GoalStep(id: "edu_details", title: "Education Plan",
                          subtitle: "Timeline, Cost & Strategy", emoji: "🎓")
             ]
-        case "Home Purchase":
+        case "Home Purchase", "Home":
             goalSteps = [
                 GoalStep(id: "home_details", title: "Home Plan",
                          subtitle: "Timeline, Budget & Strategy", emoji: "🏠")
@@ -440,17 +647,17 @@ struct GoalStep: Identifiable {
                 GoalStep(id: "vehicle_details", title: "Vehicle Plan",
                          subtitle: "Timeline, Segment & Strategy", emoji: "🚗"),
             ]
-        case "Travel / Trip":
+        case "Travel / Trip", "Travel":
             goalSteps = [
                 GoalStep(id: "travel_details", title: "Travel Plan",
                          subtitle: "Timeline, Budget & Strategy", emoji: "✈️"),
             ]
-        case "Wedding":
+        case "Wedding", "Marriage":
             goalSteps = [
                 GoalStep(id: "wedding_details", title: "Wedding Plan",
                          subtitle: "Timeline, Scale & Strategy", emoji: "💍"),
             ]
-        case "Wealth Creation":
+        case "Wealth Creation", "Build Wealth":
             goalSteps = [
                 GoalStep(id: "wealth_details", title: "Wealth Plan",
                          subtitle: "Target, Timeline & Strategy", emoji: "💰"),

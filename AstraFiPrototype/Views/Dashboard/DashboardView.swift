@@ -10,8 +10,7 @@ struct DashboardView: View {
     @State private var showAuthPrompt = false
     @State private var showingMonthlyAssessmentPrompt = false
     @State private var showingMonthlyAssessment = false
-    @State private var recommendedAssets: [InvestmentSummaryAsset] = InvestmentRecommendationEngine.shared.dailyRecommendations()
-    @State private var recommendationShuffleOffset: Int = 0
+    @State private var investmentIntelligence = InvestmentIntelligenceHomeViewModel()
     
     private var profile: AstraUserProfile? { appState.currentProfile }
     private var investments: [AstraInvestment] { profile?.investments ?? [] }
@@ -103,8 +102,7 @@ struct DashboardView: View {
             }
         }
         .task {
-            let enriched = await InvestmentRecommendationEngine.shared.enrichWithLiveQuotes(assets: recommendedAssets)
-            recommendedAssets = enriched
+            await investmentIntelligence.load()
         }
     }
 
@@ -492,32 +490,25 @@ struct DashboardView: View {
                 VStack(alignment: .leading, spacing: 3) {
                     Text("Investment Intelligence")
                         .font(.system(size: 20, weight: .bold))
-                    Text("Daily curated recommendations")
+                    Text("Market information from connected sources")
                         .font(.system(size: 12))
                         .foregroundStyle(.secondary)
                 }
                 Spacer()
-
                 Button {
-                    withAnimation(.easeInOut(duration: 0.25)) {
-                        recommendationShuffleOffset += 1
-                        recommendedAssets = InvestmentRecommendationEngine.shared.dailyRecommendations(offset: recommendationShuffleOffset)
-                    }
-                    Task {
-                        let enriched = await InvestmentRecommendationEngine.shared.enrichWithLiveQuotes(assets: recommendedAssets)
-                        recommendedAssets = enriched
-                    }
+                    Task { await investmentIntelligence.refreshRecommendations() }
                 } label: {
-                    Image(systemName: "arrow.triangle.2.circlepath")
-                        .font(.system(size: 13, weight: .semibold))
-                        .foregroundStyle(AppTheme.auraIndigo)
-                        .padding(7)
-                        .background(AppTheme.cardBackground)
-                        .clipShape(Circle())
-                        .shadow(color: AppTheme.adaptiveShadow.opacity(0.3), radius: 4, x: 0, y: 2)
+                    if investmentIntelligence.isRefreshingRecommendations {
+                        ProgressView().controlSize(.small)
+                    } else {
+                        Image(systemName: "arrow.clockwise")
+                            .font(.system(size: 14, weight: .semibold))
+                            .foregroundStyle(AppTheme.auraIndigo)
+                    }
                 }
                 .buttonStyle(.plain)
-
+                .disabled(investmentIntelligence.isRefreshingRecommendations || investmentIntelligence.stocks.isEmpty)
+                .accessibilityLabel("Refresh daily stock recommendations")
                 NavigationLink(destination: AnyView(InvestmentIntelligenceView())) {
                     Image(systemName: "chevron.right")
                         .font(.system(size: 14, weight: .semibold))
@@ -525,17 +516,49 @@ struct DashboardView: View {
                 }
             }
 
-            ScrollView(.horizontal, showsIndicators: false) {
-                HStack(spacing: 12) {
-                    ForEach(recommendedAssets) { asset in
-                        NavigationLink(destination: InvestmentIntelligenceDetailView(asset: asset)) {
-                            InvestmentHomePreviewCard(asset: asset)
-                        }
-                        .buttonStyle(.plain)
+            let assets = (investmentIntelligence.recommendations + investmentIntelligence.mutualFunds + investmentIntelligence.goldETFs)
+                .filter { ($0.currentValue ?? 0).isFinite && ($0.currentValue ?? 0) > 0 }
+                .prefix(6)
+
+            if investmentIntelligence.isLoading && assets.isEmpty {
+                HStack(spacing: 10) {
+                    ProgressView()
+                    Text("Loading verified market data…")
+                        .font(.subheadline)
+                        .foregroundStyle(.secondary)
+                }
+                .frame(maxWidth: .infinity, alignment: .leading)
+                .padding(16)
+                .background(AppTheme.cardBackground, in: RoundedRectangle(cornerRadius: 18))
+            } else if assets.isEmpty {
+                VStack(alignment: .leading, spacing: 8) {
+                    Label("Market data isn’t available right now", systemImage: "chart.xyaxis.line")
+                        .font(.subheadline.weight(.semibold))
+                    Text("No provider quotes were returned. Your saved portfolio and goals remain available above.")
+                        .font(.caption)
+                        .foregroundStyle(.secondary)
+                    NavigationLink(destination: AnyView(InvestmentIntelligenceView())) {
+                        Text("Search market information")
+                            .font(.subheadline.weight(.semibold))
+                            .padding(.top, 2)
                     }
                 }
-                .padding(.horizontal, 2)
-                .padding(.vertical, 8)
+                .frame(maxWidth: .infinity, alignment: .leading)
+                .padding(16)
+                .background(AppTheme.cardBackground, in: RoundedRectangle(cornerRadius: 18))
+            } else {
+                ScrollView(.horizontal, showsIndicators: false) {
+                    HStack(spacing: 12) {
+                        ForEach(Array(assets)) { asset in
+                            NavigationLink(destination: InvestmentIntelligenceDetailView(asset: asset)) {
+                                InvestmentHomePreviewCard(asset: asset)
+                            }
+                            .buttonStyle(.plain)
+                        }
+                    }
+                    .padding(.horizontal, 2)
+                    .padding(.vertical, 6)
+                }
             }
         }
     }

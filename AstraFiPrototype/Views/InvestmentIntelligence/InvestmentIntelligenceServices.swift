@@ -824,28 +824,12 @@ final class InvestmentIntelligenceRepository {
         await InvestmentIntelligenceHomeAssetCache.shared.warm(repository: self)
     }
 
-    /// Returns home assets.  First call builds static placeholder data instantly from
-    /// the seed lists (< 5 ms), caches it, then fires a background task to refresh
-    /// live prices so the UI can update without blocking the initial render.
+    /// Loads a limited set of verified data from connected providers. Empty results remain empty when sources are unavailable.
     fileprivate func fetchHomeAssetsFresh() async -> InvestmentHomeAssets {
-        // 1. Build static assets immediately from seeds (no network)
-        let staticStocks = buildStaticStocks()
-        let staticFunds  = buildStaticFunds()
-        let staticGold   = buildStaticGoldETFs()
-
-        let rotated = (
-            InvestmentRecommendationEngine.shared.rotateDaily(items: staticStocks),
-            InvestmentRecommendationEngine.shared.rotateDaily(items: staticFunds),
-            InvestmentRecommendationEngine.shared.rotateDaily(items: staticGold)
-        )
-
-        // 2. Fire background refresh for live prices — callers update via
-        //    refreshLivePrices(stocks:gold:) once network calls resolve.
-        Task.detached(priority: .background) {
-            await self.refreshLivePrices()
-        }
-
-        return (rotated.0, rotated.1, rotated.2)
+        async let stocks = loadStocks()
+        async let funds = loadFunds()
+        async let gold = loadGoldETFs()
+        return await (stocks, funds, gold)
     }
 
     /// Builds stock assets from seed list without any network calls.
@@ -1057,9 +1041,7 @@ final class InvestmentIntelligenceRepository {
     func categoryAssets(kind: IntelligenceAssetKind, filter: String? = nil) async -> [InvestmentSummaryAsset] {
         switch kind {
         case .stock:
-            let all = await loadStocks()
-            guard let filter, filter != "All", !filter.isEmpty else { return all }
-            return all.filter { $0.sector.localizedCaseInsensitiveContains(filter) }
+            return await loadStocks(filter: filter)
         case .mutualFund:
             let schemes = await amfiService.schemesByCategory(filter, limit: 100)
             return schemes.map { SearchService.fundAsset(from: $0) }
@@ -1080,7 +1062,7 @@ final class InvestmentIntelligenceRepository {
         }
     }
 
-    private func loadStocks() async -> [InvestmentSummaryAsset] {
+    private func loadStocks(filter: String? = nil) async -> [InvestmentSummaryAsset] {
         let seeds: [(symbol: String, name: String, sector: String)] = [
             ("RADICO.NS", "Radico Khaitan", "Beverages"),
             ("RELIANCE.NS", "Reliance Industries", "Energy"),
@@ -1151,24 +1133,44 @@ final class InvestmentIntelligenceRepository {
             ("TSLA", "Tesla Inc", "US Tech")
         ]
 
-        return await withTaskGroup(of: InvestmentSummaryAsset.self) { group in
-            for seed in seeds {
+        let selectedSeeds = seeds.filter { seed in
+            guard let filter, filter != "All", !filter.isEmpty else { return true }
+            return seed.sector.localizedCaseInsensitiveContains(filter)
+                || (filter == "US Tech" && seed.symbol.range(of: "^[A-Z]{1,5}$", options: .regularExpression) != nil)
+        }
+
+        return await withTaskGroup(of: InvestmentSummaryAsset?.self) { group in
+            for seed in selectedSeeds.prefix(12) {
                 group.addTask {
                     let quote = await self.stockService.fetchPrice(symbol: seed.symbol)
+                    guard let quote, quote.currentPrice > 0 else {
+                        guard filter == "US Tech" else { return nil }
+                        let listing = AstraStock(
+                            symbol: seed.symbol,
+                            name: seed.name,
+                            exchange: "NASDAQ",
+                            currentPrice: 0,
+                            priceChange: 0,
+                            priceChangePercentage: 0
+                        )
+                        return SearchService.stockAsset(from: listing, sector: seed.sector)
+                    }
                     let stock = AstraStock(
                         symbol: seed.symbol,
-                        name: quote?.name == seed.symbol ? seed.name : quote?.name ?? seed.name,
-                        exchange: quote?.exchange ?? (seed.symbol.hasSuffix(".NS") ? "NSE" : "NASDAQ"),
-                        currentPrice: quote?.currentPrice ?? 0,
-                        priceChange: quote?.priceChange ?? 0,
-                        priceChangePercentage: quote?.priceChangePercentage ?? 0
+                        name: quote.name == seed.symbol ? seed.name : quote.name,
+                        exchange: quote.exchange,
+                        currentPrice: quote.currentPrice,
+                        priceChange: quote.priceChange,
+                        priceChangePercentage: quote.priceChangePercentage
                     )
                     return SearchService.stockAsset(from: stock, sector: seed.sector)
                 }
             }
 
             var assets: [InvestmentSummaryAsset] = []
-            for await asset in group { assets.append(asset) }
+            for await asset in group {
+                if let asset { assets.append(asset) }
+            }
             return assets.sorted { ($0.dailyChange ?? 0) > ($1.dailyChange ?? 0) }
         }
     }
@@ -1177,7 +1179,7 @@ final class InvestmentIntelligenceRepository {
         let schemes = await amfiService.schemes()
         let topSchemes = schemes
             .filter { $0.name.localizedCaseInsensitiveContains("Direct") || $0.name.localizedCaseInsensitiveContains("Growth") }
-            .prefix(50)
+            .prefix(8)
         
         return await withTaskGroup(of: InvestmentSummaryAsset.self) { group in
             for scheme in topSchemes {
@@ -1225,24 +1227,27 @@ final class InvestmentIntelligenceRepository {
             ("AXISSILVER.NS", "Axis Silver ETF")
         ]
 
-        return await withTaskGroup(of: InvestmentSummaryAsset.self) { group in
-            for seed in seeds {
+        return await withTaskGroup(of: InvestmentSummaryAsset?.self) { group in
+            for seed in seeds.prefix(8) {
                 group.addTask {
                     let quote = await self.stockService.fetchPrice(symbol: seed.symbol)
+                    guard let quote, quote.currentPrice > 0 else { return nil }
                     let stock = AstraStock(
                         symbol: seed.symbol,
-                        name: quote?.name == seed.symbol ? seed.name : quote?.name ?? seed.name,
-                        exchange: quote?.exchange ?? "NSE",
-                        currentPrice: quote?.currentPrice ?? 0,
-                        priceChange: quote?.priceChange ?? 0,
-                        priceChangePercentage: quote?.priceChangePercentage ?? 0
+                        name: quote.name == seed.symbol ? seed.name : quote.name,
+                        exchange: quote.exchange,
+                        currentPrice: quote.currentPrice,
+                        priceChange: quote.priceChange,
+                        priceChangePercentage: quote.priceChangePercentage
                     )
                     return SearchService.goldAsset(from: stock)
                 }
             }
 
             var assets: [InvestmentSummaryAsset] = []
-            for await asset in group { assets.append(asset) }
+            for await asset in group {
+                if let asset { assets.append(asset) }
+            }
             return assets.sorted { ($0.dailyChange ?? 0) > ($1.dailyChange ?? 0) }
         }
     }

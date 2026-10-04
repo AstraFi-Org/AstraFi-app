@@ -48,6 +48,7 @@ final class SupabaseRepository {
         let riskTolerance: String
         let investmentHorizon: String
         let isSetuConnected: Bool
+        let planningJourney: FinancialPlanningJourney?
 
         enum CodingKeys: String, CodingKey {
             case user_id
@@ -66,6 +67,7 @@ final class SupabaseRepository {
             case riskTolerance = "riskTolerance"
             case investmentHorizon = "investmentHorizon"
             case isSetuConnected = "isSetuConnected"
+            case planningJourney = "planningJourney"
         }
     }
 
@@ -436,7 +438,8 @@ final class SupabaseRepository {
             activeInvestment: profile.basicDetails.activeInvestment,
             riskTolerance: profile.basicDetails.riskTolerance.rawValue,
             investmentHorizon: profile.basicDetails.investmentHorizon.rawValue,
-            isSetuConnected: profile.isSetuConnected
+            isSetuConnected: profile.isSetuConnected,
+            planningJourney: profile.planningJourney
         ), onConflict: "user_id").execute()
 
         try await supabase.from("assets").upsert(AssetsRow(
@@ -1153,6 +1156,7 @@ ins.maturityDate = row.maturityDate.flatMap { parseDate($0) }
             let emergencyFundAmount: Double?; let activeInvestment: Bool?
             let riskTolerance: String?; let investmentHorizon: String?
             let isSetuConnected: Bool?
+            let planningJourney: FinancialPlanningJourney?
         }
         struct AssetsFetchRow: Decodable {
             let savingsAccountAmount: Double?; let currentAccountAmount: Double?
@@ -1253,7 +1257,8 @@ ins.maturityDate = row.maturityDate.flatMap { parseDate($0) }
             financialHealthReport: nil,
             cashflowData: snapshots.keys.sorted().last.flatMap { snapshots[$0] },
             monthlyHealthAssessments: assessments,
-            isSetuConnected: profileRow.isSetuConnected ?? false
+            isSetuConnected: profileRow.isSetuConnected ?? false,
+            planningJourney: profileRow.planningJourney
         )
         profile.monthlyCashflowSnapshots = snapshots
         return profile

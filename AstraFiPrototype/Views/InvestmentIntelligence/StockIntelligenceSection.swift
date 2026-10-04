@@ -2,6 +2,8 @@ import SwiftUI
 
 struct StockIntelligenceSection: View {
     let viewModel: StockIntelligenceViewModel
+    let asset: InvestmentSummaryAsset
+    let onRefresh: () -> Void
     @State private var isExpanded: Bool = false
 
     private var infoData: SectionInfoData {
@@ -20,12 +22,24 @@ struct StockIntelligenceSection: View {
 
     var body: some View {
         VStack(alignment: .leading, spacing: 16) {
-            SectionHeaderWithInfo(
-                title: "AI Stock Intelligence",
-                subtitle: "Plain-language fundamental synthesis",
-                systemImage: "sparkles",
-                infoData: infoData
-            )
+            HStack(alignment: .top, spacing: 10) {
+                SectionHeaderWithInfo(
+                    title: "AI Stock Intelligence",
+                    subtitle: "Plain-language fundamental synthesis",
+                    systemImage: "sparkles",
+                    infoData: infoData
+                )
+                Spacer(minLength: 4)
+                Button(action: onRefresh) {
+                    Image(systemName: viewModel.isLoading ? "hourglass" : "arrow.clockwise")
+                        .font(.system(size: 14, weight: .semibold))
+                        .foregroundStyle(AppTheme.auraIndigo)
+                        .padding(9)
+                        .background(AppTheme.auraIndigo.opacity(0.09), in: Circle())
+                }
+                .disabled(viewModel.isLoading)
+                .accessibilityLabel("Refresh AI stock analysis for \(asset.symbol)")
+            }
 
             if viewModel.isLoading {
                 loadingView

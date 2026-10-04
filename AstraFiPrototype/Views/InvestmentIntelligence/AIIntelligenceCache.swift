@@ -3,7 +3,7 @@ import Foundation
 actor AIIntelligenceCache {
     static let shared = AIIntelligenceCache()
 
-    private let version = 2
+    private let version = 3
     private let defaults: UserDefaults
     private let ttl: TimeInterval = 7 * 24 * 60 * 60
 

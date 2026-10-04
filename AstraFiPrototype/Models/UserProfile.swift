@@ -23,6 +23,8 @@ struct AstraUserProfile: Codable, Identifiable, Equatable {
     var emergencyFundLinkedInvestmentIDs: [UUID]? = nil
     var performanceRecords: [InvestmentPerformanceRecord]? = []
     var transferHistory: [FinancialTransferRecord]? = []
+    var planningJourney: FinancialPlanningJourney? = nil
+    var masterFinancialPlan: MasterFinancialPlan? = nil
 
     var safePerformanceRecords: [InvestmentPerformanceRecord] {
         get { performanceRecords ?? [] }
