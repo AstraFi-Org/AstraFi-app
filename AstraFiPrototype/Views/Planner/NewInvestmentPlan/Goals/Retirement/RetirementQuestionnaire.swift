@@ -210,7 +210,6 @@ struct RetirementQuestionnaire: View {
             }
         }
         .scrollDismissesKeyboard(.interactively)
-        .onTapGesture { hideKeyboard() }
     }
     
     private var projectedMFCorpus: Double {

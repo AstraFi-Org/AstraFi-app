@@ -391,7 +391,6 @@ struct EducationQuestionnaire: View {
             .padding(.vertical, 16)
         }
         .scrollDismissesKeyboard(.interactively)
-        .onTapGesture { hideKeyboard() }
         .animation(.spring(response: 0.5, dampingFraction: 0.8), value: input.location)
         .animation(.spring(response: 0.5, dampingFraction: 0.8), value: input.lifestyle)
         .animation(.spring(response: 0.5, dampingFraction: 0.8), value: input.savingPlan)

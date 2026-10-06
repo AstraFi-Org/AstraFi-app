@@ -43,7 +43,6 @@ enum FundingStrategyEngine {
         availableMonthlyCapacity: Double,
         currentSavings: Double = 0
     ) -> [GoalFundingStrategy] {
-        let years = Double(horizonMonths) / 12.0
         var strategies: [GoalFundingStrategy] = []
         
         // 1. Capital Preservation Strategy (7% conservative return)

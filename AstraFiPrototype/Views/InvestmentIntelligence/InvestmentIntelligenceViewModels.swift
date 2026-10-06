@@ -81,12 +81,16 @@ final class InvestmentSearchViewModel {
             return
         }
 
+        // Wait for the user to pause typing before making a network request.
+        // The generation check also prevents older keystrokes from starting work.
+        try? await Task.sleep(for: .milliseconds(300))
+        guard generation == searchGeneration,
+              query.trimmingCharacters(in: .whitespacesAndNewlines) == trimmed else { return }
+
         isSearching = true
         let matchingResults = await searchService.search(query: trimmed)
 
-        // A network-backed search is launched for each keystroke. Ignore an older
-        // request that completes after a newer query, rather than replacing the
-        // current results with stale matches.
+        // Ignore an older request that completes after a newer query.
         guard generation == searchGeneration,
               query.trimmingCharacters(in: .whitespacesAndNewlines) == trimmed else { return }
         results = matchingResults
@@ -225,6 +229,10 @@ final class InvestmentCategoryListViewModel {
             isSearching = false
             return
         }
+
+        try? await Task.sleep(for: .milliseconds(300))
+        guard generation == searchGeneration,
+              searchText.trimmingCharacters(in: .whitespacesAndNewlines) == trimmed else { return }
 
         isSearching = true
         let results = await repository.searchCategory(kind: kind, query: trimmed)

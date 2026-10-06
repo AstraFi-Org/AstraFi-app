@@ -88,6 +88,9 @@ struct FinancialPlanningGoalDraft: Codable, Identifiable, Equatable {
     var category: String
     var targetDate: Date?
     var targetAmount: Double?
+    var targetYearsFromNow: Int? = nil
+    var savedAmount: Double? = nil
+    var planVariant: String? = nil
     var priority: Int = 2
 }
 

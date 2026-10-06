@@ -87,7 +87,6 @@ enum MultiGoalOptimizer {
                     priorGoalName = item.draft.name
                 } else {
                     // Queued Goal: starts after prior goal completes
-                    let queuedStart = cumulativeMonths
                     let monthsToComplete = FinancialCalculationEngine.monthsToAchieve(targetCorpus: item.corpus, monthlyContribution: capacity, annualReturnRate: 0.10) ?? item.months
                     cumulativeMonths += monthsToComplete
                     let completionDate = Calendar.current.date(byAdding: .month, value: cumulativeMonths, to: Date()) ?? item.targetDate

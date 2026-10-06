@@ -81,10 +81,8 @@ struct PlanJourneyView: View {
     @State private var editedEvent: FinancialPlanningEvent?
     @State private var editingGoalDraft: FinancialPlanningGoalDraft?
     @State private var throughYear: Int?
-    @State private var contributionText = ""
     @State private var hasStartedPlanning = false
     @State private var customGoalName = ""
-    @State private var targetAmountText: [UUID: String] = [:]
     @State private var showPlanGoalSelection = false
     @State private var editingAssumption: PlanningAssumption?
     @State private var selectedDetailedGoal: String? = nil
@@ -98,7 +96,7 @@ struct PlanJourneyView: View {
     @State private var selectedSimulationPlan: Int = 1
     // Goal strategy mode & simulation/customization
     @State private var executionMode: GoalExecutionMode = .sequential
-    @State private var simulatingGoal: CalculatedGoalPlan? = nil
+    @State private var simulatingGoalID: UUID? = nil
     @State private var selectedGoalPlanOption: Int = 0
     @State private var customizingGoalCategory: CalculatedGoalPlan? = nil
     // Tracks which plan (0=SIP, 1=Loan/Debt, 2=StressTest) user activated per goal
@@ -450,7 +448,6 @@ struct PlanJourneyView: View {
         for plan in calculatedGoalPlans {
             let r = 0.14 / 12.0
             let months = plan.months
-            guard r > 0 else { result[plan.id] = months; continue }
             // Solve: SIP * ((1+r)^n - 1)/r = target
             // n = log(1 + target*r/SIP) / log(1+r)
             let numerator = 1 + (plan.inflationAdjustedAmount * r / plan.monthlySIP)
@@ -552,10 +549,10 @@ struct PlanJourneyView: View {
                 .presentationDetents([.medium])
                 .presentationDragIndicator(.visible)
         }
-        .sheet(item: $simulatingGoal) { plan in
-            goalSpecificSimulationSheet(plan: plan)
-                .presentationDetents([.large])
-                .presentationDragIndicator(.visible)
+        .navigationDestination(item: $simulatingGoalID) { goalID in
+            if let plan = calculatedGoalPlans.first(where: { $0.id == goalID }) {
+                goalSpecificSimulationScreen(plan: plan)
+            }
         }
         .sheet(item: $customizingGoalCategory) { plan in
             goalQuestionnaireSheet(plan: plan)
@@ -575,14 +572,10 @@ struct PlanJourneyView: View {
                 .presentationDetents([.large])
                 .presentationDragIndicator(.visible)
         }
-        .onChange(of: profile?.planningJourney?.monthlyInvestmentWhatIf) { _, amount in
-            contributionText = amount.map { String($0) } ?? ""
-        }
         .onAppear {
             if hasExistingJourney {
                 hasStartedPlanning = true
             }
-            contributionText = journey.monthlyInvestmentWhatIf.map { String($0) } ?? ""
             ensurePresetsForAllDrafts()
         }
     }
@@ -611,21 +604,6 @@ struct PlanJourneyView: View {
         VStack(spacing: 0) {
             Divider().opacity(0.3)
             HStack(spacing: 12) {
-                if phaseIndex > 0 {
-                    Button {
-                        UIImpactFeedbackGenerator(style: .light).impactOccurred()
-                        withAnimation(.spring(response: 0.35, dampingFraction: 0.8)) {
-                            advance(to: journeyPhases[phaseIndex - 1])
-                        }
-                    } label: {
-                        Image(systemName: "chevron.left")
-                            .font(.system(size: 16, weight: .bold))
-                            .foregroundStyle(.primary)
-                            .frame(width: 44, height: 52)
-                    }
-                    .buttonStyle(.plain)
-                }
-
                 Button {
                     UIImpactFeedbackGenerator(style: .medium).impactOccurred()
                     if phase == .actions {
@@ -1253,17 +1231,9 @@ struct PlanJourneyView: View {
                     amountPresetChip("₹1Cr", 10_000_000, draft.id)
                 }
 
-                TextField("Or enter custom amount · e.g. 15L or 2Cr", text: Binding(
-                    get: { targetAmountText[draft.id] ?? draft.targetAmount.map { String(format: "%.0f", $0) } ?? "" },
-                    set: { val in
-                        targetAmountText[draft.id] = val
-                        updateGoalDraft(draft.id) { $0.targetAmount = parseFinancialAmount(val) }
-                    }
-                ))
-                .keyboardType(.decimalPad)
-                .font(.subheadline)
-                .padding(10)
-                .background(Color(UIColor.tertiarySystemGroupedBackground), in: RoundedRectangle(cornerRadius: 10))
+                GoalDraftAmountField(amount: draft.targetAmount) { amount in
+                    updateGoalDraft(draft.id) { $0.targetAmount = amount }
+                }
             }
 
             // Target Date Picker
@@ -1301,7 +1271,6 @@ struct PlanJourneyView: View {
         Button {
             UIImpactFeedbackGenerator(style: .light).impactOccurred()
             updateGoalDraft(goalID) { $0.targetAmount = value }
-            targetAmountText[goalID] = String(format: "%.0f", value)
         } label: {
             Text(label)
                 .font(.caption2.weight(.bold))
@@ -1745,16 +1714,14 @@ struct PlanJourneyView: View {
                 }
 
                 HStack(spacing: 8) {
-                    TextField("Enter monthly scenario amount · e.g. 50000", text: $contributionText)
-                        .keyboardType(.decimalPad)
-                        .font(.subheadline)
-                        .padding(12)
-                        .background(Color(UIColor.secondarySystemGroupedBackground), in: RoundedRectangle(cornerRadius: 12))
-                        .onChange(of: contributionText) { _, val in
-                            var updated = journey
-                            updated.monthlyInvestmentWhatIf = parseFinancialAmount(val)
-                            appState.updateFinancialPlanningJourney(updated)
-                        }
+                    GoalDraftAmountField(
+                        amount: journey.monthlyInvestmentWhatIf,
+                        placeholder: "Enter monthly scenario amount · e.g. 50000"
+                    ) { amount in
+                        var updated = journey
+                        updated.monthlyInvestmentWhatIf = amount
+                        appState.updateFinancialPlanningJourney(updated)
+                    }
                 }
             }
 
@@ -1797,7 +1764,6 @@ struct PlanJourneyView: View {
             UIImpactFeedbackGenerator(style: .light).impactOccurred()
             let base = position.monthlyInvestmentContribution ?? 41_653
             let newAmount = base + addAmount
-            contributionText = String(format: "%.0f", newAmount)
             var updated = journey
             updated.monthlyInvestmentWhatIf = newAmount
             appState.updateFinancialPlanningJourney(updated)
@@ -2059,7 +2025,7 @@ struct PlanJourneyView: View {
                                         Text("Balance required for target:")
                                             .font(.caption2)
                                             .foregroundStyle(.secondary)
-                                        return                                 Spacer()
+                                        Spacer()
                                         Text("+\(gap.toCurrency()) / mo via bonuses & 11% salary raise")
                                             .font(.system(size: 10, weight: .semibold))
                                             .foregroundStyle(.orange)
@@ -2206,7 +2172,7 @@ struct PlanJourneyView: View {
         Button {
             UIImpactFeedbackGenerator(style: .medium).impactOccurred()
             selectedGoalPlanOption = 0
-            simulatingGoal = plan
+            simulatingGoalID = plan.id
         } label: {
         VStack(alignment: .leading, spacing: 12) {
             // Header
@@ -2638,10 +2604,11 @@ struct PlanJourneyView: View {
         }
     }
 
-    // MARK: - Goal-Specific 3-Plan Simulation Sheet
-    private func goalSpecificSimulationSheet(plan: CalculatedGoalPlan) -> some View {
-        // Build InvestmentPlanInputModel from the CalculatedGoalPlan so we can
-        // drive the real Plan1/2/3 detail views with accurate numbers.
+    // MARK: - Goal-Specific 3-Plan Simulation Screen (full push)
+    @ViewBuilder
+    private func goalSpecificSimulationScreen(plan: CalculatedGoalPlan) -> some View {
+        // Always built from the live calculatedGoalPlans value so customized
+        // amounts are always reflected here.
         let input = makeInputModel(for: plan)
         let fullPlan = InvestmentPlannerEngine.generateFullPlan(input: input, profile: profile)
         let isLoanEligible = fullPlan.goalCategory != .retirement && fullPlan.goalCategory != .wealthCreation
@@ -2651,156 +2618,148 @@ struct PlanJourneyView: View {
         let nextGoal = calculatedGoalPlans.first(where: { $0.id != plan.id && $0.priority > plan.priority })
             ?? calculatedGoalPlans.first(where: { $0.id != plan.id })
 
-        return NavigationStack {
-            ScrollView(showsIndicators: false) {
-                VStack(alignment: .leading, spacing: 20) {
+        ScrollView(showsIndicators: false) {
+            VStack(alignment: .leading, spacing: 20) {
 
-                    // ── Header ──────────────────────────────────────────────
-                    HStack(spacing: 12) {
-                        ZStack {
-                            RoundedRectangle(cornerRadius: 14, style: .continuous)
-                                .fill(goalTint(for: plan.category).opacity(0.14))
-                                .frame(width: 52, height: 52)
-                            Image(systemName: goalIcon(for: plan.category))
-                                .font(.system(size: 24, weight: .bold))
-                                .foregroundStyle(goalTint(for: plan.category))
-                        }
-                        VStack(alignment: .leading, spacing: 3) {
-                            Text("\(plan.name) — 3 Plans")
-                                .font(.title3.weight(.bold))
-                            Text("Inflation-adjusted target: \(plan.inflationAdjustedAmount.toCurrency()) in \(plan.yearsFromNow) yrs")
-                                .font(.caption)
-                                .foregroundStyle(.secondary)
-                        }
-                        Spacer()
-                        if let idx = chosenIdx {
-                            VStack(spacing: 2) {
-                                Image(systemName: "checkmark.seal.fill")
-                                    .font(.title3)
-                                    .foregroundStyle(.green)
-                                Text(["Plan 1", "Plan 2", "Plan 3"][idx])
-                                    .font(.caption2.weight(.bold))
-                                    .foregroundStyle(.green)
-                            }
+                // ── Header ──────────────────────────────────────────────
+                HStack(spacing: 12) {
+                    ZStack {
+                        RoundedRectangle(cornerRadius: 14, style: .continuous)
+                            .fill(goalTint(for: plan.category).opacity(0.14))
+                            .frame(width: 52, height: 52)
+                        Image(systemName: goalIcon(for: plan.category))
+                            .font(.system(size: 24, weight: .bold))
+                            .foregroundStyle(goalTint(for: plan.category))
+                    }
+                    VStack(alignment: .leading, spacing: 3) {
+                        Text("\(plan.name) — 3 Plans")
+                            .font(.title3.weight(.bold))
+                        Text("Inflation-adjusted target: \(plan.inflationAdjustedAmount.toCurrency()) in \(plan.yearsFromNow) yrs")
+                            .font(.caption)
+                            .foregroundStyle(.secondary)
+                    }
+                    Spacer()
+                    if let idx = chosenIdx {
+                        VStack(spacing: 2) {
+                            Image(systemName: "checkmark.seal.fill")
+                                .font(.title3)
+                                .foregroundStyle(.green)
+                            Text(["Plan 1", "Plan 2", "Plan 3"][idx])
+                                .font(.caption2.weight(.bold))
+                                .foregroundStyle(.green)
                         }
                     }
-                    .padding(14)
-                    .background(Color(UIColor.secondarySystemGroupedBackground), in: RoundedRectangle(cornerRadius: 16))
+                }
+                .padding(14)
+                .background(Color(UIColor.secondarySystemGroupedBackground), in: RoundedRectangle(cornerRadius: 16))
 
-                    // ── Intro explanation ────────────────────────────────────
-                    Text("Review each strategy below. Tap a card to explore the full detail simulation. When ready, choose the plan you want to follow.")
-                        .font(.caption)
-                        .foregroundStyle(.secondary)
-                        .padding(.horizontal, 2)
+                // ── Intro explanation ────────────────────────────────────
+                Text("Review each strategy below. Tap a card to explore the full detail simulation. When ready, choose the plan you want to follow.")
+                    .font(.caption)
+                    .foregroundStyle(.secondary)
+                    .padding(.horizontal, 2)
 
-                    // ══════════════════════════════════════════════════════════
-                    // PLAN 1: SIP / Pure Savings
-                    // ══════════════════════════════════════════════════════════
+                // ══════════════════════════════════════════════════════════
+                // PLAN 1: SIP / Pure Savings
+                // ══════════════════════════════════════════════════════════
+                planSelectionCard(
+                    planNumber: 1,
+                    title: "SIP + Diversification",
+                    subtitle: "Systematic monthly savings across equity, debt & gold. Zero debt, full corpus built by discipline.",
+                    icon: "chart.line.uptrend.xyaxis.circle.fill",
+                    color: .blue,
+                    tag: "Steady Wealth Builder",
+                    metric: "₹\(Int(plan.monthlySIP).formatted()) / mo",
+                    isChosen: chosenIdx == 0,
+                    loanEMI: nil,
+                    nextGoalName: nextGoal?.name,
+                    residualSurplus: nil
+                ) {
+                    // Choose Plan 1
+                    withAnimation(.spring(response: 0.35)) {
+                        chosenPlanIndex[plan.id] = 0
+                    }
+                    UINotificationFeedbackGenerator().notificationOccurred(.success)
+                    simulatingGoalID = nil
+                } detailDestination: {
+                    AnyView(
+                        Plan1DetailView(input: input, result: fullPlan.plan1)
+                            .environment(appState)
+                    )
+                }
+
+                // ══════════════════════════════════════════════════════════
+                // PLAN 2: Loan / Debt Scenario (only for loan-eligible goals)
+                // ══════════════════════════════════════════════════════════
+                if isLoanEligible, let plan2Result = fullPlan.plan2 {
+                    let loanEMI = plan2Result.monthlyEMI
+                    let residual = max(0, availableMonthlyCapacity - loanEMI)
+
                     planSelectionCard(
-                        planNumber: 1,
-                        title: "SIP + Diversification",
-                        subtitle: "Systematic monthly savings across equity, debt & gold. Zero debt, full corpus built by discipline.",
-                        icon: "chart.line.uptrend.xyaxis.circle.fill",
-                        color: .blue,
-                        tag: "Steady Wealth Builder",
-                        metric: "₹\(Int(plan.monthlySIP).formatted()) / mo",
-                        isChosen: chosenIdx == 0,
-                        loanEMI: nil,
+                        planNumber: 2,
+                        title: "Traditional Loan / Debt",
+                        subtitle: "Bank loan for immediate acquisition. EMI is fixed; surplus flows to the next priority goal.",
+                        icon: "banknote.fill",
+                        color: .purple,
+                        tag: "Immediate Access",
+                        metric: "EMI ₹\(Int(loanEMI).formatted()) / mo",
+                        isChosen: chosenIdx == 1,
+                        loanEMI: loanEMI,
                         nextGoalName: nextGoal?.name,
-                        residualSurplus: nil
+                        residualSurplus: residual > 0 ? residual : nil
                     ) {
-                        // Choose Plan 1
                         withAnimation(.spring(response: 0.35)) {
-                            chosenPlanIndex[plan.id] = 0
+                            chosenPlanIndex[plan.id] = 1
                         }
                         UINotificationFeedbackGenerator().notificationOccurred(.success)
-                        simulatingGoal = nil
+                        simulatingGoalID = nil
                     } detailDestination: {
                         AnyView(
-                            Plan1DetailView(input: input, result: fullPlan.plan1)
+                            Plan2DetailView(input: input, result: plan2Result)
                                 .environment(appState)
                         )
                     }
-
-                    // ══════════════════════════════════════════════════════════
-                    // PLAN 2: Loan / Debt Scenario (only for loan-eligible goals)
-                    // ══════════════════════════════════════════════════════════
-                    if isLoanEligible, let plan2Result = fullPlan.plan2 {
-                        let loanEMI = plan2Result.monthlyEMI
-                        let residual = max(0, availableMonthlyCapacity - loanEMI)
-
-                        planSelectionCard(
-                            planNumber: 2,
-                            title: "Traditional Loan / Debt",
-                            subtitle: "Bank loan for immediate acquisition. EMI is fixed; surplus flows to the next priority goal.",
-                            icon: "banknote.fill",
-                            color: .purple,
-                            tag: "Immediate Access",
-                            metric: "EMI ₹\(Int(loanEMI).formatted()) / mo",
-                            isChosen: chosenIdx == 1,
-                            loanEMI: loanEMI,
-                            nextGoalName: nextGoal?.name,
-                            residualSurplus: residual > 0 ? residual : nil
-                        ) {
-                            withAnimation(.spring(response: 0.35)) {
-                                chosenPlanIndex[plan.id] = 1
-                            }
-                            UINotificationFeedbackGenerator().notificationOccurred(.success)
-                            simulatingGoal = nil
-                        } detailDestination: {
-                            AnyView(
-                                Plan2DetailView(input: input, result: plan2Result)
-                                    .environment(appState)
-                            )
-                        }
-                    }
-
-                    // ══════════════════════════════════════════════════════════
-                    // PLAN 3: Loan Stress-Test
-                    // ══════════════════════════════════════════════════════════
-                    if let plan3Result = fullPlan.plan3 {
-                        let stressEMI = plan3Result.monthlyEMI
-                        let residual = max(0, availableMonthlyCapacity - stressEMI)
-
-                        planSelectionCard(
-                            planNumber: 3,
-                            title: "Loan Stress-Test Scenario",
-                            subtitle: "Debt-funded investing simulation. High-risk: shows how leverage amplifies gains & losses.",
-                            icon: "arrow.up.right.circle.fill",
-                            color: .orange,
-                            tag: "High-Risk Simulation",
-                            metric: "Loan: \(plan3Result.loanAmount.toCurrency())",
-                            isChosen: chosenIdx == 2,
-                            loanEMI: stressEMI,
-                            nextGoalName: nextGoal?.name,
-                            residualSurplus: residual > 0 ? residual : nil
-                        ) {
-                            withAnimation(.spring(response: 0.35)) {
-                                chosenPlanIndex[plan.id] = 2
-                            }
-                            UINotificationFeedbackGenerator().notificationOccurred(.success)
-                            simulatingGoal = nil
-                        } detailDestination: {
-                            AnyView(
-                                Plan3DetailView(input: input, result: plan3Result)
-                                    .environment(appState)
-                            )
-                        }
-                    }
-
-                    Spacer().frame(height: 20)
                 }
-                .padding(20)
-            }
-            .navigationTitle("Simulate: \(plan.name)")
-            .navigationBarTitleDisplayMode(.inline)
-            .toolbar {
-                ToolbarItem(placement: .confirmationAction) {
-                    Button("Done") { simulatingGoal = nil }
-                        .font(.headline.weight(.semibold))
+
+                // ══════════════════════════════════════════════════════════
+                // PLAN 3: Loan Stress-Test
+                // ══════════════════════════════════════════════════════════
+                if let plan3Result = fullPlan.plan3 {
+                    let stressEMI = plan3Result.monthlyEMI
+                    let residual = max(0, availableMonthlyCapacity - stressEMI)
+
+                    planSelectionCard(
+                        planNumber: 3,
+                        title: "Loan Stress-Test Scenario",
+                        subtitle: "Debt-funded investing simulation. High-risk: shows how leverage amplifies gains & losses.",
+                        icon: "arrow.up.right.circle.fill",
+                        color: .orange,
+                        tag: "High-Risk Simulation",
+                        metric: "Loan: \(plan3Result.loanAmount.toCurrency())",
+                        isChosen: chosenIdx == 2,
+                        loanEMI: stressEMI,
+                        nextGoalName: nextGoal?.name,
+                        residualSurplus: residual > 0 ? residual : nil
+                    ) {
+                        withAnimation(.spring(response: 0.35)) {
+                            chosenPlanIndex[plan.id] = 2
+                        }
+                        UINotificationFeedbackGenerator().notificationOccurred(.success)
+                        simulatingGoalID = nil
+                    } detailDestination: {
+                        AnyView(
+                            Plan3DetailView(input: input, result: plan3Result)
+                                .environment(appState)
+                        )
+                    }
                 }
+
+                Spacer().frame(height: 20)
             }
+            .padding(20)
         }
+        .navigationTitle("Simulate: \(plan.name)")
+        .navigationBarTitleDisplayMode(.inline)
     }
 
     // MARK: - Reusable Plan Selection Card
@@ -3845,6 +3804,53 @@ struct PlanJourneyView: View {
     private func estimatedMonthlyNeed(for goal: AstraGoal) -> Double {
         let months = max(1, Calendar.current.dateComponents([.month], from: Date(), to: goal.targetDate).month ?? 1)
         return max(0, goal.targetAmount - goal.currentAmount) / Double(months)
+    }
+}
+
+private struct GoalDraftAmountField: View {
+    let amount: Double?
+    let placeholder: String
+    let onCommit: (Double?) -> Void
+
+    @State private var text: String
+    @FocusState private var isFocused: Bool
+
+    init(
+        amount: Double?,
+        placeholder: String = "Or enter custom amount · e.g. 15L or 2Cr",
+        onCommit: @escaping (Double?) -> Void
+    ) {
+        self.amount = amount
+        self.placeholder = placeholder
+        self.onCommit = onCommit
+        _text = State(initialValue: amount.map { String(format: "%.0f", $0) } ?? "")
+    }
+
+    var body: some View {
+        TextField(placeholder, text: $text)
+            .keyboardType(.default)
+            .textInputAutocapitalization(.never)
+            .autocorrectionDisabled()
+            .submitLabel(.done)
+            .focused($isFocused)
+            .onSubmit {
+                commit()
+                isFocused = false
+            }
+            .onChange(of: isFocused) { wasFocused, isFocused in
+                if wasFocused && !isFocused { commit() }
+            }
+            .onChange(of: amount) { _, newAmount in
+                guard !isFocused else { return }
+                text = newAmount.map { String(format: "%.0f", $0) } ?? ""
+            }
+            .font(.subheadline)
+            .padding(10)
+            .background(Color(UIColor.tertiarySystemGroupedBackground), in: RoundedRectangle(cornerRadius: 10))
+    }
+
+    private func commit() {
+        onCommit(parseFinancialAmount(text))
     }
 }
 

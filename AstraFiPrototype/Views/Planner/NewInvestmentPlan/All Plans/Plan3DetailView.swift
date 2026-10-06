@@ -897,32 +897,97 @@ struct Plan3DetailView: View {
 
     private func monthlyPerformanceDisclosure(_ step: Plan3MonthlyStep) -> some View {
         DisclosureGroup {
-            VStack(spacing: 8) {
-                LabeledContent("Starting balance", value: "₹\(formatL(step.startValue))")
-                LabeledContent("Contribution", value: "₹\(formatL(step.investment))")
-                LabeledContent("Historical return", value: "\(String(format: "%.2f", step.historicalReturnPercent))%")
-                LabeledContent("Investment gain", value: "₹\(formatL(step.growth))")
-                if isEMIDeductionOn {
-                    LabeledContent("EMI", value: "₹\(formatL(step.emiFromPocket > 0 ? step.emiFromPocket : activeResult.monthlyEMI))")
+            VStack(alignment: .leading, spacing: 14) {
+                HStack(alignment: .firstTextBaseline) {
+                    VStack(alignment: .leading, spacing: 3) {
+                        Text("Month-end portfolio")
+                            .font(.caption)
+                            .foregroundStyle(.secondary)
+                        Text("₹\(formatL(step.endValue))")
+                            .font(.title3.weight(.bold))
+                            .contentTransition(.numericText())
+                    }
+                    Spacer()
+                    Text("\(step.netChange >= 0 ? "+" : "−")₹\(formatL(abs(step.netChange)))")
+                        .font(.subheadline.weight(.semibold))
+                        .foregroundStyle(step.netChange >= 0 ? .green : .red)
+                        .padding(.horizontal, 10)
+                        .padding(.vertical, 6)
+                        .background((step.netChange >= 0 ? Color.green : Color.red).opacity(0.10), in: Capsule())
                 }
-                LabeledContent("Net change", value: "₹\(formatL(step.netChange))")
-                LabeledContent("Ending value", value: "₹\(formatL(step.endValue))")
-                    .fontWeight(.semibold)
+
+                Chart {
+                    BarMark(x: .value("Amount", step.investment), y: .value("Cash flow", "Contribution"))
+                        .foregroundStyle(Color.blue.gradient)
+                    BarMark(x: .value("Amount", step.growth), y: .value("Cash flow", "Investment gain"))
+                        .foregroundStyle(Color.green.gradient)
+                    if isEMIDeductionOn {
+                        BarMark(
+                            x: .value("Amount", -(step.emiFromPocket > 0 ? step.emiFromPocket : activeResult.monthlyEMI)),
+                            y: .value("Cash flow", "EMI from portfolio")
+                        )
+                        .foregroundStyle(Color.orange.gradient)
+                    }
+                }
+                .chartXAxis {
+                    AxisMarks(position: .bottom, values: .automatic(desiredCount: 4)) { value in
+                        AxisGridLine().foregroundStyle(.secondary.opacity(0.16))
+                        AxisValueLabel {
+                            if let amount = value.as(Double.self) {
+                                Text("\(amount < 0 ? "−" : "")₹\(formatL(abs(amount)))")
+                            }
+                        }
+                    }
+                }
+                .chartYAxis { AxisMarks(position: .leading) }
+                .frame(height: isEMIDeductionOn ? 104 : 76)
+                .accessibilityLabel("Monthly cash flows: contribution ₹\(formatL(step.investment)), investment gain ₹\(formatL(step.growth))\(isEMIDeductionOn ? ", EMI ₹\(formatL(step.emiFromPocket > 0 ? step.emiFromPocket : activeResult.monthlyEMI))" : "")")
+
+                HStack(spacing: 8) {
+                    monthlyMetric(title: "Starting", value: "₹\(formatL(step.startValue))", tint: .secondary)
+                    monthlyMetric(title: "Return", value: "\(String(format: "%.2f", step.historicalReturnPercent))%", tint: .purple)
+                    monthlyMetric(title: "Gain", value: "+₹\(formatL(step.growth))", tint: .green)
+                }
             }
-            .font(.subheadline)
-            .padding(.vertical, 8)
+            .padding(.top, 12)
+            .padding(.bottom, 4)
         } label: {
             HStack {
-                Text(step.month).font(.subheadline.weight(.semibold))
+                VStack(alignment: .leading, spacing: 2) {
+                    Text(step.month).font(.subheadline.weight(.semibold))
+                    Text("\(step.historicalReturnPercent >= 0 ? "+" : "")\(String(format: "%.2f", step.historicalReturnPercent))% return")
+                        .font(.caption2)
+                        .foregroundStyle(step.historicalReturnPercent >= 0 ? .green : .red)
+                }
                 Spacer()
                 Text("₹\(formatL(step.endValue))")
                     .font(.subheadline.weight(.semibold))
                     .foregroundStyle(.primary)
+                Image(systemName: "chevron.down")
+                    .font(.caption.weight(.bold))
+                    .foregroundStyle(.secondary)
             }
             .contentShape(Rectangle())
         }
         .tint(.secondary)
         .padding(.vertical, 10)
+    }
+
+    private func monthlyMetric(title: String, value: String, tint: Color) -> some View {
+        VStack(alignment: .leading, spacing: 4) {
+            Text(title.uppercased())
+                .font(.system(size: 9, weight: .bold, design: .rounded))
+                .tracking(0.5)
+                .foregroundStyle(.secondary)
+            Text(value)
+                .font(.system(size: 12, weight: .semibold, design: .rounded))
+                .foregroundStyle(tint)
+                .lineLimit(1)
+                .minimumScaleFactor(0.8)
+        }
+        .frame(maxWidth: .infinity, alignment: .leading)
+        .padding(10)
+        .background(tint.opacity(0.07), in: RoundedRectangle(cornerRadius: 12, style: .continuous))
     }
 
     private var recommendationCard: some View {

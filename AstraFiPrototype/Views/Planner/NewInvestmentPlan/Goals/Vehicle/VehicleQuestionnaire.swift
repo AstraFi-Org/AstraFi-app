@@ -178,13 +178,28 @@ struct VehicleQuestionnaire: View {
                     goalAccentColor: goalAccentColor,
                     onSave: {
                         let trackerInput = buildTrackerInput()
-                        let planModel = InvestmentPlanModel(
+                        saveVehicleGoalToJourney()
+                        var planModel = InvestmentPlanModel(
                             name: "Vehicle Plan",
                             dateSaved: DateFormatter.localizedString(from: Date(), dateStyle: .medium, timeStyle: .none),
                             targetGoal: "Vehicle",
                             input: trackerInput
                         )
-                        appState.savePlan(planModel)
+                        if let existingPlan = appState.savedPlans.first(where: {
+                            $0.targetGoal.localizedCaseInsensitiveContains("Vehicle")
+                                || $0.name.localizedCaseInsensitiveContains("Vehicle")
+                                || $0.name.localizedCaseInsensitiveContains("Car")
+                        }) {
+                            planModel.id = existingPlan.id
+                            planModel.isFollowed = existingPlan.isFollowed
+                            planModel.dateFollowed = existingPlan.dateFollowed
+                            planModel.selectedScenario = existingPlan.selectedScenario
+                            planModel.linkedInvestmentNames = existingPlan.linkedInvestmentNames
+                            planModel.linkedLoanNames = existingPlan.linkedLoanNames
+                            appState.updatePlan(planModel)
+                        } else {
+                            appState.savePlan(planModel)
+                        }
                         dismiss()
                     },
                     destination: VehicleResultView(input: buildTrackerInput())
@@ -244,6 +259,33 @@ struct VehicleQuestionnaire: View {
         let inflation = input.vehicleType?.annualInflation ?? 0.07
         let futureCost = currentCost * pow(1 + inflation, years)
         return max(0, futureCost - savedAmt)
+    }
+
+    /// Keep the Master Plan's source goal in sync with the price and date entered here.
+    private func saveVehicleGoalToJourney() {
+        guard let currentCost = Double(input.currentVehicleCost), currentCost.isFinite, currentCost >= 0 else { return }
+        var journey = appState.currentProfile?.planningJourney ?? FinancialPlanningJourney()
+        let targetDate = Calendar.current.date(
+            byAdding: .year,
+            value: max(1, Int(input.yearsUntilPurchase) ?? 1),
+            to: Date()
+        )
+        if let index = journey.goalDrafts.firstIndex(where: {
+            $0.category.localizedCaseInsensitiveContains("Vehicle")
+                || $0.name.localizedCaseInsensitiveContains("Vehicle")
+                || $0.name.localizedCaseInsensitiveContains("Car")
+        }) {
+            journey.goalDrafts[index].targetAmount = currentCost
+            journey.goalDrafts[index].targetDate = targetDate
+        } else {
+            journey.goalDrafts.append(FinancialPlanningGoalDraft(
+                name: "Vehicle",
+                category: "Vehicle",
+                targetDate: targetDate,
+                targetAmount: currentCost
+            ))
+        }
+        appState.updateFinancialPlanningJourney(journey)
     }
     
     private func buildTrackerInput() -> InvestmentPlanInputModel {

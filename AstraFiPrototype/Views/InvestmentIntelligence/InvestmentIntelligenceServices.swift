@@ -899,7 +899,7 @@ final class InvestmentIntelligenceRepository {
         ]
         return seeds.map { seed in
             let profile = MutualFundIntelligenceStore.shared.profile(for: seed.code)
-            var asset = InvestmentSummaryAsset(
+            let asset = InvestmentSummaryAsset(
                 id: seed.code,
                 kind: .mutualFund,
                 symbol: seed.code,
@@ -1001,7 +1001,7 @@ final class InvestmentIntelligenceRepository {
         let refreshedGold = await withTaskGroup(of: InvestmentSummaryAsset.self) { group in
             for sym in goldSeeds {
                 group.addTask {
-                    let name = GoldETFIntelligenceStore.shared.profile(for: sym)?.fundName ?? sym
+                    let name = await GoldETFIntelligenceStore.shared.profile(for: sym)?.fundName ?? sym
                     let quote = await self.stockService.fetchPrice(symbol: sym)
                     let stock = AstraStock(
                         symbol: sym, name: quote?.name == sym ? name : quote?.name ?? name,

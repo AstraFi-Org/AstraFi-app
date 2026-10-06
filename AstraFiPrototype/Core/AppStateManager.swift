@@ -10,6 +10,7 @@ final class AppStateManager {
     static let defaultTaxRate: Double = 0.0
 
     private var isSyncing = false
+    private var profileSyncTask: Task<Void, Never>?
 
     // The current Supabase profile schema stores the emergency-fund total but not
     // its composition. Keep the composition per signed-in user so a profile reload
@@ -402,14 +403,20 @@ final class AppStateManager {
     }
 
     func syncProfile() {
-        guard let profile = currentProfile else { return }
-        Task {
-            if let session = try? await supabase.auth.session {
-                do {
-                    try await SupabaseRepository.shared.syncFullProfile(profile, userId: session.user.id)
-                } catch {
-                    print("Supabase profile sync failed: \(error)")
-                }
+        profileSyncTask?.cancel()
+        profileSyncTask = Task { [weak self] in
+            do {
+                try await Task.sleep(for: .milliseconds(350))
+            } catch {
+                return
+            }
+
+            guard !Task.isCancelled, let self, let profile = self.currentProfile,
+                  let session = try? await supabase.auth.session else { return }
+            do {
+                try await SupabaseRepository.shared.syncFullProfile(profile, userId: session.user.id)
+            } catch {
+                print("Supabase profile sync failed: \(error)")
             }
         }
     }
@@ -554,7 +561,7 @@ final class AppStateManager {
                 isAuthLoading = false
                 return false
             }
-            try? await supabase.from("users").insert([
+            _ = try? await supabase.from("users").insert([
                 "id": session.user.id.uuidString,
                 "email": email
             ]).execute()
@@ -689,7 +696,7 @@ final class AppStateManager {
                 print("AppStateManager: Supabase sign in succeeded for user: \(session.user.id)")
                 
                 // Try to insert user record (will silently fail if already exists)
-                try? await supabase.from("users").insert([
+                _ = try? await supabase.from("users").insert([
                     "id": session.user.id.uuidString,
                     "email": session.user.email ?? ""
                 ]).execute()
@@ -1246,17 +1253,6 @@ final class AppStateManager {
             debtToIncomeRatio: dti,
             investmentScore: investmentScore,
             emergencyFundMonths: efMonths
-        )
-        
-        let initialScore = report.investmentScore
-        let status = initialScore >= 80 ? "Excellent" : initialScore >= 70 ? "Good" : "Needs Work"
-        let firstAssessment = AstraHealthAssessment(
-            date: Date(),
-            score: initialScore,
-            status: status,
-            keyInsights: ["First assessment generated from initial data",
-                          "Emergency fund covers \(String(format: "%.1f", efMonths)) months",
-                          "Savings rate stands at \(savingsRate.safeInt)%"]
         )
         
         let newInvestments = profileInvestments

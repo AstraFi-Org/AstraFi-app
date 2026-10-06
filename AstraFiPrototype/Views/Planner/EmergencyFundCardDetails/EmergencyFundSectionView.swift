@@ -20,7 +20,7 @@ struct GraphPoint: Identifiable {
 
 // MARK: - Emergency Fund Section Parts
 
-enum EmergencyFundSectionPart: Hashable {
+enum EmergencyFundSectionPart: Hashable, CaseIterable {
     case summary
     case contribution
     case allocation
@@ -161,10 +161,10 @@ struct EmergencyFundSectionView: View {
 
     init(
         state: EmergencyFundSectionState,
-        parts: Set<EmergencyFundSectionPart> = [.summary, .projection, .contribution, .allocation]
+        parts: Set<EmergencyFundSectionPart>? = nil
     ) {
         self.state = state
-        self.parts = parts
+        self.parts = parts ?? Set(EmergencyFundSectionPart.allCases)
     }
 
     private var monthlyContribution: Double {

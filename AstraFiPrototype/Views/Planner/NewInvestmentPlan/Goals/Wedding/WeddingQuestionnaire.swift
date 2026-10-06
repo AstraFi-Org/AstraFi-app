@@ -150,7 +150,7 @@ struct WeddingQuestionnaire: View {
                         WeddingScaleRow(
                             scale: scale,
                             isSelected: input.weddingScale == scale,
-                            action: { input.weddingScale = scale }
+                            action: { selectWeddingScale(scale) }
                         )
                         if scale != .intimate { Divider().padding(.leading, 54) }
                     }
@@ -178,6 +178,7 @@ struct WeddingQuestionnaire: View {
                     goalAccentColor: goalAccentColor,
                     onSave: {
                         let trackerInput = buildTrackerInput()
+                        syncToPlanningJourney(costText: input.currentWeddingCost, yearsText: input.yearsUntilWedding)
                         let planModel = InvestmentPlanModel(
                             name: "Wedding Plan",
                             dateSaved: DateFormatter.localizedString(from: Date(), dateStyle: .medium, timeStyle: .none),
@@ -199,37 +200,23 @@ struct WeddingQuestionnaire: View {
             if let draft = appState.currentProfile?.planningJourney?.goalDrafts.first(where: {
                 $0.category.localizedCaseInsensitiveContains("Marriage") || $0.category.localizedCaseInsensitiveContains("Wedding") || $0.name.localizedCaseInsensitiveContains("Marriage")
             }) {
-                if input.yearsUntilWedding.isEmpty, let targetDate = draft.targetDate {
-                    let years = max(1, Calendar.current.dateComponents([.year], from: Date(), to: targetDate).year ?? 3)
+                if input.yearsUntilWedding.isEmpty {
+                    let years = draft.targetYearsFromNow
+                        ?? draft.targetDate.map { max(1, Calendar.current.dateComponents([.year], from: Date(), to: $0).year ?? 3) }
+                        ?? 3
                     input.yearsUntilWedding = "\(years)"
                 }
                 if input.currentWeddingCost.isEmpty, let amount = draft.targetAmount {
                     input.currentWeddingCost = String(format: "%.0f", amount)
                 }
-                if input.weddingScale == nil {
-                    input.weddingScale = .standard
+                if input.savedAmount.isEmpty, let savedAmount = draft.savedAmount {
+                    input.savedAmount = String(format: "%.0f", savedAmount)
                 }
+                input.weddingScale = draft.planVariant.flatMap(WeddingScale.init(rawValue:)) ?? .standard
             }
         }
-        .onChange(of: input.currentWeddingCost) { _, newCost in
-            syncToPlanningJourney(costText: newCost, yearsText: input.yearsUntilWedding)
-        }
-        .onChange(of: input.yearsUntilWedding) { _, newYears in
-            syncToPlanningJourney(costText: input.currentWeddingCost, yearsText: newYears)
-        }
-        .onChange(of: input.weddingScale) { _, newScale in
-            if let scale = newScale {
-                let scaleCost: Double = {
-                    switch scale {
-                    case .destination: return 4_000_000
-                    case .grand: return 3_000_000
-                    case .standard: return 2_000_000
-                    case .intimate: return 1_000_000
-                    }
-                }()
-                input.currentWeddingCost = String(format: "%.0f", scaleCost)
-                syncToPlanningJourney(costText: input.currentWeddingCost, yearsText: input.yearsUntilWedding)
-            }
+        .onDisappear {
+            syncToPlanningJourney(costText: input.currentWeddingCost, yearsText: input.yearsUntilWedding)
         }
     }
 
@@ -246,11 +233,33 @@ struct WeddingQuestionnaire: View {
         }
         if let yrs = Int(yearsText.trimmingCharacters(in: .whitespacesAndNewlines)), yrs > 0 {
             journey.goalDrafts[idx].targetDate = Calendar.current.date(byAdding: .year, value: yrs, to: Date())
+            journey.goalDrafts[idx].targetYearsFromNow = yrs
+            changed = true
+        }
+        let cleanSaved = input.savedAmount.replacingOccurrences(of: ",", with: "").replacingOccurrences(of: "₹", with: "").trimmingCharacters(in: .whitespacesAndNewlines)
+        if let saved = Double(cleanSaved), saved >= 0 {
+            journey.goalDrafts[idx].savedAmount = saved
+            changed = true
+        }
+        if let scale = input.weddingScale, journey.goalDrafts[idx].planVariant != scale.rawValue {
+            journey.goalDrafts[idx].planVariant = scale.rawValue
             changed = true
         }
         if changed {
             appState.updateFinancialPlanningJourney(journey)
         }
+    }
+
+    private func selectWeddingScale(_ scale: WeddingScale) {
+        input.weddingScale = scale
+        let scaleCost: Double = switch scale {
+        case .destination: 4_000_000
+        case .grand: 3_000_000
+        case .standard: 2_000_000
+        case .intimate: 1_000_000
+        }
+        input.currentWeddingCost = String(format: "%.0f", scaleCost)
+        syncToPlanningJourney(costText: input.currentWeddingCost, yearsText: input.yearsUntilWedding)
     }
     
     private var showInsights: Bool {

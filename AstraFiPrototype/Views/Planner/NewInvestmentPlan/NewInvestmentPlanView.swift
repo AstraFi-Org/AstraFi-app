@@ -76,10 +76,8 @@ struct NewInvestmentPlanView: View {
                         }
                         .padding(.horizontal, 20)
                         .padding(.top, 18)
-                        .padding(.bottom, 20)
-                        .contentShape(Rectangle())
-                        .onTapGesture { hideKeyboard() }
                     }
+                    .scrollDismissesKeyboard(.interactively)
                     .safeAreaInset(edge: .bottom, spacing: 0) {
                         HStack(spacing: 12) {
                             if currentStep > 0 {

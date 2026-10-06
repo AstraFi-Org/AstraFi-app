@@ -150,9 +150,6 @@ struct PlannerView: View {
         }
         .onAppear {
             includeEmergencyFundInvestmentsInGrowth()
-            #if DEBUG
-            showNewInvestmentPlan = true
-            #endif
         }
         .onChange(of: profile?.emergencyFundLinkedInvestmentIDs ?? []) { _, _ in
             includeEmergencyFundInvestmentsInGrowth()
