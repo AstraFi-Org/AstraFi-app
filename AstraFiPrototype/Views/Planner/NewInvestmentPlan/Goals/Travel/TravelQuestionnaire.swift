@@ -177,6 +177,7 @@ struct TravelQuestionnaire: View {
                     totalCorpus: netTargetValue,
                     goalAccentColor: goalAccentColor,
                     onSave: {
+                        syncToPlanningJourney()
                         let trackerInput = buildTrackerInput()
                         let planModel = InvestmentPlanModel(
                             name: "Travel Plan",
@@ -199,17 +200,25 @@ struct TravelQuestionnaire: View {
             if let draft = appState.currentProfile?.planningJourney?.goalDrafts.first(where: {
                 $0.category.localizedCaseInsensitiveContains("Travel") || $0.name.localizedCaseInsensitiveContains("Travel")
             }) {
-                if input.yearsUntilTrip.isEmpty, let targetDate = draft.targetDate {
-                    let years = max(1, Calendar.current.dateComponents([.year], from: Date(), to: targetDate).year ?? 2)
+                if input.yearsUntilTrip.isEmpty {
+                    let years = draft.targetYearsFromNow
+                        ?? draft.targetDate.map { max(1, Calendar.current.dateComponents([.year], from: Date(), to: $0).year ?? 2) }
+                        ?? 2
                     input.yearsUntilTrip = "\(years)"
                 }
                 if input.currentTripCost.isEmpty, let amount = draft.targetAmount {
                     input.currentTripCost = String(format: "%.0f", amount)
                 }
+                if input.savedAmount.isEmpty, let saved = draft.savedAmount {
+                    input.savedAmount = String(format: "%.0f", saved)
+                }
                 if input.tripType == nil {
                     input.tripType = .intlBudget
                 }
             }
+        }
+        .onDisappear {
+            syncToPlanningJourney()
         }
     }
     
@@ -244,6 +253,35 @@ struct TravelQuestionnaire: View {
         let inflation = input.tripType?.annualInflation ?? 0.08
         let futureCost = currentCost * pow(1 + inflation, years)
         return max(0, futureCost - savedAmt)
+    }
+
+    private func syncToPlanningJourney() {
+        let cleanCost = input.currentTripCost.replacingOccurrences(of: ",", with: "").replacingOccurrences(of: "₹", with: "").trimmingCharacters(in: .whitespacesAndNewlines)
+        guard let currentCost = Double(cleanCost), currentCost > 0 else { return }
+        var journey = appState.currentProfile?.planningJourney ?? FinancialPlanningJourney()
+        let years = max(1, Int(input.yearsUntilTrip.trimmingCharacters(in: .whitespacesAndNewlines)) ?? 2)
+        let targetDate = Calendar.current.date(byAdding: .year, value: years, to: Date())
+        let cleanSaved = input.savedAmount.replacingOccurrences(of: ",", with: "").replacingOccurrences(of: "₹", with: "").trimmingCharacters(in: .whitespacesAndNewlines)
+        let savedAmt = Double(cleanSaved) ?? 0
+
+        if let index = journey.goalDrafts.firstIndex(where: {
+            $0.category.localizedCaseInsensitiveContains("Travel") || $0.name.localizedCaseInsensitiveContains("Travel")
+        }) {
+            journey.goalDrafts[index].targetAmount = currentCost
+            journey.goalDrafts[index].targetDate = targetDate
+            journey.goalDrafts[index].targetYearsFromNow = years
+            journey.goalDrafts[index].savedAmount = savedAmt
+        } else {
+            journey.goalDrafts.append(FinancialPlanningGoalDraft(
+                name: "Travel",
+                category: "Travel",
+                targetDate: targetDate,
+                targetAmount: currentCost,
+                targetYearsFromNow: years,
+                savedAmount: savedAmt
+            ))
+        }
+        appState.updateFinancialPlanningJourney(journey)
     }
     
     private func buildTrackerInput() -> InvestmentPlanInputModel {

@@ -166,6 +166,7 @@ struct WealthQuestionnaire: View {
                     totalCorpus: additionalNeedValue,
                     goalAccentColor: goalAccentColor,
                     onSave: {
+                        syncToPlanningJourney()
                         let trackerInput = buildTrackerInput()
                         let planModel = InvestmentPlanModel(
                             name: "Wealth Plan",
@@ -188,17 +189,25 @@ struct WealthQuestionnaire: View {
             if let draft = appState.currentProfile?.planningJourney?.goalDrafts.first(where: {
                 $0.category.localizedCaseInsensitiveContains("Wealth") || $0.name.localizedCaseInsensitiveContains("Wealth")
             }) {
-                if input.targetYears.isEmpty, let targetDate = draft.targetDate {
-                    let years = max(1, Calendar.current.dateComponents([.year], from: Date(), to: targetDate).year ?? 10)
+                if input.targetYears.isEmpty {
+                    let years = draft.targetYearsFromNow
+                        ?? draft.targetDate.map { max(1, Calendar.current.dateComponents([.year], from: Date(), to: $0).year ?? 10) }
+                        ?? 10
                     input.targetYears = "\(years)"
                 }
                 if input.targetAmount.isEmpty, let amount = draft.targetAmount {
                     input.targetAmount = String(format: "%.0f", amount)
                 }
+                if input.savedAmount.isEmpty, let saved = draft.savedAmount {
+                    input.savedAmount = String(format: "%.0f", saved)
+                }
                 if input.wealthStrategy == nil {
                     input.wealthStrategy = .moderate
                 }
             }
+        }
+        .onDisappear {
+            syncToPlanningJourney()
         }
     }
     
@@ -233,6 +242,35 @@ struct WealthQuestionnaire: View {
         let expectedReturn = input.wealthStrategy?.expectedReturn ?? 0.12
         let futureValueOfSavings = savedAmt * pow(1 + expectedReturn, years)
         return max(0, targetAmt - futureValueOfSavings)
+    }
+
+    private func syncToPlanningJourney() {
+        let cleanCost = input.targetAmount.replacingOccurrences(of: ",", with: "").replacingOccurrences(of: "₹", with: "").trimmingCharacters(in: .whitespacesAndNewlines)
+        guard let currentCost = Double(cleanCost), currentCost > 0 else { return }
+        var journey = appState.currentProfile?.planningJourney ?? FinancialPlanningJourney()
+        let years = max(1, Int(input.targetYears.trimmingCharacters(in: .whitespacesAndNewlines)) ?? 10)
+        let targetDate = Calendar.current.date(byAdding: .year, value: years, to: Date())
+        let cleanSaved = input.savedAmount.replacingOccurrences(of: ",", with: "").replacingOccurrences(of: "₹", with: "").trimmingCharacters(in: .whitespacesAndNewlines)
+        let savedAmt = Double(cleanSaved) ?? 0
+
+        if let index = journey.goalDrafts.firstIndex(where: {
+            $0.category.localizedCaseInsensitiveContains("Wealth") || $0.name.localizedCaseInsensitiveContains("Wealth")
+        }) {
+            journey.goalDrafts[index].targetAmount = currentCost
+            journey.goalDrafts[index].targetDate = targetDate
+            journey.goalDrafts[index].targetYearsFromNow = years
+            journey.goalDrafts[index].savedAmount = savedAmt
+        } else {
+            journey.goalDrafts.append(FinancialPlanningGoalDraft(
+                name: "Wealth Creation",
+                category: "Wealth",
+                targetDate: targetDate,
+                targetAmount: currentCost,
+                targetYearsFromNow: years,
+                savedAmount: savedAmt
+            ))
+        }
+        appState.updateFinancialPlanningJourney(journey)
     }
     
     private func buildTrackerInput() -> InvestmentPlanInputModel {

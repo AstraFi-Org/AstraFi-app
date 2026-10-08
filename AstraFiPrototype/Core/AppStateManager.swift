@@ -314,7 +314,11 @@ final class AppStateManager {
     }
     
     func savePlan(_ plan: InvestmentPlanModel) {
-        savedPlans.append(plan)
+        if let index = savedPlans.firstIndex(where: { $0.id == plan.id || $0.name == plan.name }) {
+            savedPlans[index] = plan
+        } else {
+            savedPlans.append(plan)
+        }
         Task {
             if let session = try? await supabase.auth.session {
                 try? await SupabaseRepository.shared.savePlan(plan, userId: session.user.id)
@@ -323,15 +327,19 @@ final class AppStateManager {
     }
     
     func followPlan(_ plan: InvestmentPlanModel) {
-        if let index = savedPlans.firstIndex(where: { $0.id == plan.id }) {
+        if let index = savedPlans.firstIndex(where: { $0.id == plan.id || $0.name == plan.name }) {
             savedPlans[index].isFollowed = true
             Task {
                 if (try? await supabase.auth.session) != nil {
                     try? await SupabaseRepository.shared.updatePlanFollowStatus(
-                        planId: plan.id, isFollowed: true
+                        planId: savedPlans[index].id, isFollowed: true
                     )
                 }
             }
+        } else {
+            var newPlan = plan
+            newPlan.isFollowed = true
+            savePlan(newPlan)
         }
     }
 
@@ -709,6 +717,11 @@ final class AppStateManager {
                     if sanitizedProfile.signUp.email.isEmpty, let email = session.user.email, !email.isEmpty {
                         sanitizedProfile.signUp.email = email
                     }
+                    sanitizedProfile.goals = sanitizedProfile.goals.deduplicated()
+                    sanitizedProfile.investments = sanitizedProfile.investments.deduplicated()
+                    sanitizedProfile.loans = sanitizedProfile.loans.deduplicated()
+                    sanitizedProfile.insurances = sanitizedProfile.insurances.deduplicated()
+                    self.applySavedEmergencyFundComposition(to: &sanitizedProfile, userID: session.user.id)
                     self.currentProfile = sanitizedProfile
                     recalculateFinancials()
                     isAuthenticated = true
@@ -806,6 +819,11 @@ final class AppStateManager {
                 if sanitizedProfile.signUp.email.isEmpty, let email = session.user.email, !email.isEmpty {
                     sanitizedProfile.signUp.email = email
                 }
+                sanitizedProfile.goals = sanitizedProfile.goals.deduplicated()
+                sanitizedProfile.investments = sanitizedProfile.investments.deduplicated()
+                sanitizedProfile.loans = sanitizedProfile.loans.deduplicated()
+                sanitizedProfile.insurances = sanitizedProfile.insurances.deduplicated()
+                self.applySavedEmergencyFundComposition(to: &sanitizedProfile, userID: session.user.id)
                 self.currentProfile = sanitizedProfile
                 recalculateFinancials()
                 
@@ -873,6 +891,11 @@ final class AppStateManager {
                 if sanitizedProfile.signUp.email.isEmpty, let email = session.user.email, !email.isEmpty {
                     sanitizedProfile.signUp.email = email
                 }
+                sanitizedProfile.goals = sanitizedProfile.goals.deduplicated()
+                sanitizedProfile.investments = sanitizedProfile.investments.deduplicated()
+                sanitizedProfile.loans = sanitizedProfile.loans.deduplicated()
+                sanitizedProfile.insurances = sanitizedProfile.insurances.deduplicated()
+                self.applySavedEmergencyFundComposition(to: &sanitizedProfile, userID: session.user.id)
                 self.currentProfile = sanitizedProfile
                 recalculateFinancials()
                 
@@ -1220,7 +1243,7 @@ final class AppStateManager {
         let assets = AstraAssets(
             stocksHoldingAmount: profileInvestments.filter { $0.investmentType == .stocks }.map { $0.investmentAmount }.reduce(0, +),
             mutualFundHoldingAmount: profileInvestments.filter { $0.investmentType == .mutualFund }.map { $0.investmentAmount }.reduce(0, +),
-            otherInvestmentAmount: profileInvestments.filter { [.cryptocurrency, .other, .nps, .ppf, .bonds, .cashSavings, .emergencyFund].contains($0.investmentType) }.map { $0.investmentAmount }.reduce(0, +),
+            otherInvestmentAmount: profileInvestments.filter { [.cryptocurrency, .other, .nps, .ppf, .bonds, .cashSavings, .emergencyFund, .goldETF].contains($0.investmentType) }.map { $0.investmentAmount }.reduce(0, +),
             propertyAmount: profileInvestments.filter { $0.investmentType == .realEstate }.map { $0.investmentAmount }.reduce(0, +),
             vehiclesAmount: 0,
             depositsAmount: profileInvestments.filter { $0.investmentType == .deposits }.map { $0.investmentAmount }.reduce(0, +),
@@ -1230,9 +1253,9 @@ final class AppStateManager {
         let liabilities = AstraLiabilities(
             homeLoanAmount: profileLoans.filter { $0.loanType == .homeLoan }.map { $0.loanAmount }.reduce(0, +),
             vehicleLoanAmount: profileLoans.filter { $0.loanType == .carLoan }.map { $0.loanAmount }.reduce(0, +),
-            creditCardBills: profileLoans.filter { $0.loanType == .other && $0.lender == .other }.map { $0.loanAmount }.reduce(0, +),
+            creditCardBills: profileLoans.filter { $0.loanType == .creditCard }.map { $0.loanAmount }.reduce(0, +),
             educationLoanAmount: profileLoans.filter { $0.loanType == .educationLoan }.map { $0.loanAmount }.reduce(0, +),
-            otherLoanAmount: profileLoans.filter { ![.homeLoan, .carLoan, .educationLoan].contains($0.loanType) }.map { $0.loanAmount }.reduce(0, +)
+            otherLoanAmount: profileLoans.filter { ![.homeLoan, .carLoan, .educationLoan, .creditCard].contains($0.loanType) }.map { $0.loanAmount }.reduce(0, +)
         )
         
         let totalAs = assets.totalAssets
@@ -1419,7 +1442,7 @@ final class AppStateManager {
         case .educationLoan: return .educationLoan
         case .businessLoan: return .businessLoan
         case .personalLoan: return .personalLoan
-        case .creditCard: return .other
+        case .creditCard: return .creditCard
         }
     }
     
@@ -1481,6 +1504,7 @@ final class AppStateManager {
                 .reduce(0.0) { $0 + $1.currentValue.safeFinite }
             let manualAmount = profile.emergencyFundManualAmount
                 ?? profile.basicDetails.emergencyFundAmount
+            profile.emergencyFundManualAmount = manualAmount
             profile.basicDetails.emergencyFundAmount = (manualAmount + linkedValue).safeFinite
         }
         
@@ -1490,14 +1514,15 @@ final class AppStateManager {
         newAssets.depositsAmount = profile.investments.filter { $0.investmentType == .deposits }.map { $0.currentValue.safeFinite }.reduce(0, +)
         newAssets.propertyAmount = profile.investments.filter { $0.investmentType == .realEstate }.map { $0.currentValue.safeFinite }.reduce(0, +)
         newAssets.jewelleryAmount = profile.investments.filter { $0.investmentType == .physicalGold }.map { $0.currentValue.safeFinite }.reduce(0, +)
-        newAssets.otherInvestmentAmount = profile.investments.filter { [.cryptocurrency, .other, .nps, .ppf, .bonds, .cashSavings, .emergencyFund].contains($0.investmentType) }.map { $0.currentValue.safeFinite }.reduce(0, +)
+        newAssets.otherInvestmentAmount = profile.investments.filter { [.cryptocurrency, .other, .nps, .ppf, .bonds, .cashSavings, .emergencyFund, .goldETF].contains($0.investmentType) }.map { $0.currentValue.safeFinite }.reduce(0, +)
         profile.assets = newAssets
         
         var newLiabilities = profile.liabilities
         newLiabilities.homeLoanAmount = profile.loans.filter { $0.loanType == .homeLoan }.map { $0.loanAmount }.reduce(0, +)
         newLiabilities.vehicleLoanAmount = profile.loans.filter { $0.loanType == .carLoan }.map { $0.loanAmount }.reduce(0, +)
         newLiabilities.educationLoanAmount = profile.loans.filter { $0.loanType == .educationLoan }.map { $0.loanAmount }.reduce(0, +)
-        newLiabilities.otherLoanAmount = profile.loans.filter { ![.homeLoan, .carLoan, .educationLoan].contains($0.loanType) }.map { $0.loanAmount }.reduce(0, +)
+        newLiabilities.creditCardBills = profile.loans.filter { $0.loanType == .creditCard }.map { $0.loanAmount }.reduce(0, +)
+        newLiabilities.otherLoanAmount = profile.loans.filter { ![.homeLoan, .carLoan, .educationLoan, .creditCard].contains($0.loanType) }.map { $0.loanAmount }.reduce(0, +)
         profile.liabilities = newLiabilities
         
         let totalAs = profile.assets.totalAssets
@@ -1528,6 +1553,9 @@ final class AppStateManager {
             let gid = profile.goals[i].id
             let linked = profile.investments.filter { $0.associatedGoalID == gid }
             let linkedTotal = linked.reduce(0.0) { $0 + $1.currentValue }
+            if profile.goals[i].manualSavingsContribution == 0 && profile.goals[i].currentAmount > linkedTotal {
+                profile.goals[i].manualSavingsContribution = profile.goals[i].currentAmount - linkedTotal
+            }
             let newAmount = linkedTotal + profile.goals[i].manualSavingsContribution
             profile.goals[i].currentAmount = newAmount
 
@@ -1875,6 +1903,7 @@ final class AppStateManager {
                     investmentName: holding.displayName,
                     investmentAmount: holding.investedAmount.safeFinite,
                     startDate: existingUpstoxInvestments[holding.id]?.startDate ?? Date(),
+                    associatedGoalID: existingUpstoxInvestments[holding.id]?.associatedGoalID,
                     mode: .lumpsum,
                     isin: holding.isin,
                     symbol: holding.tradingSymbol,
@@ -1928,6 +1957,7 @@ final class AppStateManager {
                     investmentName: holding.displayName,
                     investmentAmount: (isSIP ? (recurringAmount ?? holding.investedAmount) : holding.investedAmount).safeFinite,
                     startDate: startDate,
+                    associatedGoalID: existingUpstoxInvestments[holding.id]?.associatedGoalID,
                     mode: isSIP ? .sip : .lumpsum,
                     isin: holding.instrumentKey,
                     lastNAV: holding.lastPrice.safeFinite,
@@ -1945,6 +1975,7 @@ final class AppStateManager {
         profile.investments = manualInvestments + connectedStockInvestments + connectedMutualFundInvestments
         currentProfile = profile
         recalculateFinancials()
+        syncProfile()
     }
 
     private func normalizedUpstoxKey(_ value: String?) -> String {
@@ -1972,6 +2003,7 @@ final class AppStateManager {
         profile.investments.removeAll { $0.brokerSource == "Upstox" }
         currentProfile = profile
         recalculateFinancials()
+        syncProfile()
     }
     
     func deleteInvestment(at indexSet: IndexSet) {

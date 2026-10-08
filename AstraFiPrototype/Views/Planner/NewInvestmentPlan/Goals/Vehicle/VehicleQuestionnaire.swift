@@ -215,16 +215,23 @@ struct VehicleQuestionnaire: View {
                 $0.category.localizedCaseInsensitiveContains("Vehicle") || $0.name.localizedCaseInsensitiveContains("Vehicle") || $0.name.localizedCaseInsensitiveContains("Car")
             }) {
                 if input.yearsUntilPurchase.isEmpty, let targetDate = draft.targetDate {
-                    let years = max(1, Calendar.current.dateComponents([.year], from: Date(), to: targetDate).year ?? 3)
+                    let years = draft.targetYearsFromNow
+                        ?? max(1, Calendar.current.dateComponents([.year], from: Date(), to: targetDate).year ?? 3)
                     input.yearsUntilPurchase = "\(years)"
                 }
                 if input.currentVehicleCost.isEmpty, let amount = draft.targetAmount {
                     input.currentVehicleCost = String(format: "%.0f", amount)
                 }
+                if input.savedAmount.isEmpty, let saved = draft.savedAmount {
+                    input.savedAmount = String(format: "%.0f", saved)
+                }
                 if input.vehicleType == nil {
                     input.vehicleType = .family
                 }
             }
+        }
+        .onDisappear {
+            saveVehicleGoalToJourney()
         }
     }
     
@@ -265,11 +272,13 @@ struct VehicleQuestionnaire: View {
     private func saveVehicleGoalToJourney() {
         guard let currentCost = Double(input.currentVehicleCost), currentCost.isFinite, currentCost >= 0 else { return }
         var journey = appState.currentProfile?.planningJourney ?? FinancialPlanningJourney()
+        let years = max(1, Int(input.yearsUntilPurchase) ?? 1)
         let targetDate = Calendar.current.date(
             byAdding: .year,
-            value: max(1, Int(input.yearsUntilPurchase) ?? 1),
+            value: years,
             to: Date()
         )
+        let savedAmt = Double(input.savedAmount) ?? 0
         if let index = journey.goalDrafts.firstIndex(where: {
             $0.category.localizedCaseInsensitiveContains("Vehicle")
                 || $0.name.localizedCaseInsensitiveContains("Vehicle")
@@ -277,12 +286,16 @@ struct VehicleQuestionnaire: View {
         }) {
             journey.goalDrafts[index].targetAmount = currentCost
             journey.goalDrafts[index].targetDate = targetDate
+            journey.goalDrafts[index].targetYearsFromNow = years
+            journey.goalDrafts[index].savedAmount = savedAmt
         } else {
             journey.goalDrafts.append(FinancialPlanningGoalDraft(
                 name: "Vehicle",
                 category: "Vehicle",
                 targetDate: targetDate,
-                targetAmount: currentCost
+                targetAmount: currentCost,
+                targetYearsFromNow: years,
+                savedAmount: savedAmt
             ))
         }
         appState.updateFinancialPlanningJourney(journey)

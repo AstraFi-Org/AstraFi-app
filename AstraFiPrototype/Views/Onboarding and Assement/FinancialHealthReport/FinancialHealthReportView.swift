@@ -48,8 +48,8 @@ struct FinancialHealthReportView: View {
                     },
                     onImproveHealth: {
                         if let data = data {
-                            appState.saveAssessmentToHistory(score: score.safeInt, status: status, insights: reportModel.insights.activeConcerns.map { $0.title }, assessmentInsights: reportModel.insights)
                             appState.updateProfile(from: data)
+                            appState.saveAssessmentToHistory(score: score.safeInt, status: status, insights: reportModel.insights.activeConcerns.map { $0.title }, assessmentInsights: reportModel.insights)
                             appState.isAssessmentSkipped = false
                         }
                         appState.activatePersonalizedPlanFromAssessment()

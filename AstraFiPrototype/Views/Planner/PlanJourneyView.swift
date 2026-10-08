@@ -2420,13 +2420,27 @@ struct PlanJourneyView: View {
     private func saveAndActivateCompletePlan() {
         UIImpactFeedbackGenerator(style: .heavy).impactOccurred()
         for draft in journey.goalDrafts {
-            let exists = goals.contains { $0.id == draft.id || $0.goalName.localizedCaseInsensitiveCompare(draft.name) == .orderedSame }
-            if !exists {
+            if let existing = goals.first(where: { $0.id == draft.id || $0.goalName.localizedCaseInsensitiveCompare(draft.name) == .orderedSame }) {
+                var updatedGoal = existing
+                if let targetAmount = draft.targetAmount {
+                    updatedGoal.targetAmount = targetAmount
+                }
+                if let targetDate = draft.targetDate {
+                    updatedGoal.targetDate = targetDate
+                }
+                if let saved = draft.savedAmount, saved > 0, updatedGoal.currentAmount == 0 {
+                    updatedGoal.currentAmount = saved
+                    updatedGoal.manualSavingsContribution = saved
+                }
+                appState.updateGoal(updatedGoal)
+            } else {
+                let saved = draft.savedAmount ?? 0
                 let newGoal = AstraGoal(
                     id: draft.id,
                     goalName: draft.name,
                     targetAmount: draft.targetAmount ?? 1_000_000,
-                    currentAmount: 0,
+                    currentAmount: saved,
+                    manualSavingsContribution: saved,
                     targetDate: draft.targetDate ?? Calendar.current.date(byAdding: .year, value: 3, to: Date())!
                 )
                 appState.addGoal(newGoal)
@@ -2452,13 +2466,16 @@ struct PlanJourneyView: View {
                 return plan.assetAllocation
             }()
             let note = eff?.statusTitle ?? (alloc?.queueStartsAfterGoalName != nil ? "Queued after \(alloc!.queueStartsAfterGoalName!)" : "Active")
+            let saved = journey.goalDrafts.first(where: { $0.id == plan.id })?.savedAmount
+                ?? goals.first(where: { $0.id == plan.id })?.currentAmount
+                ?? 0
             return ActiveGoalPlan(
                 id: plan.id,
                 name: plan.name,
                 category: plan.category,
                 targetBaseAmount: plan.baseAmount,
                 inflationCorpus: plan.inflationAdjustedAmount,
-                currentSaved: 0,
+                currentSaved: saved,
                 monthlySIPRequired: eff?.monthlyCommitment ?? plan.monthlySIP,
                 allocatedMonthlySurplus: allocated,
                 targetDate: plan.targetDate,
@@ -2493,6 +2510,7 @@ struct PlanJourneyView: View {
             summaryNotes: "Configured via New Investment Plan Journey with \(modeString) strategy."
         )
         appState.updateMasterFinancialPlan(masterPlan)
+        appState.syncProfile()
 
         showPlanSavedConfirmation = true
     }
