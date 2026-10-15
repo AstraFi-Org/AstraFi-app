@@ -114,6 +114,10 @@ struct InvestmentPlanInputModel: Codable, Hashable {
     var currentAge: Int?
     var retirementAge: Int?
     var yearsPostRetirement: Int?
+    /// Today's monthly retirement lifestyle cost, collected from the user or their profile.
+    var retirementMonthlyExpensesToday: Double?
+    /// Optional healthcare portion of monthly expenses; modeled with healthcare inflation.
+    var retirementMonthlyHealthcareToday: Double?
     var lifestylePreference: String?
     var yearlyStepUpPct: Double?
     var withdrawalPreference: String?

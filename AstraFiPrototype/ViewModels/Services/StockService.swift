@@ -11,6 +11,18 @@ struct AstraStock: Identifiable, Codable, Hashable {
     var priceChangePercentage: Double
 }
 
+extension AstraStock {
+    var marketContext: SecurityMarketContext {
+        SecurityMarketContext.forStock(self)
+    }
+
+    var formattedPrice: String {
+        guard currentPrice > 0 else { return "—" }
+        return marketContext.formatPrice(currentPrice)
+    }
+}
+
+
 class StockService {
     static let shared = StockService()
     

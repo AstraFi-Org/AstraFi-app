@@ -287,7 +287,7 @@ struct FinancialDecisionCenterSection: View {
                 }
 
                 NavigationLink {
-                    FinancialDecisionCenterView()
+                    FinancialDecisionCenterView(openHealthPlanOnAppear: false)
                 } label: {
                     Label("Check My Financial Readiness", systemImage: "arrow.right.circle.fill")
                         .font(.subheadline.weight(.bold))
@@ -346,65 +346,268 @@ private struct FinancialReadinessMiniCard: View {
 struct FinancialDecisionCenterView: View {
     @Environment(\.colorScheme) private var colorScheme
     @Environment(AppStateManager.self) private var appState
+    var openHealthPlanOnAppear: Bool = false
     @State private var aiInsight: String?
     @State private var isLoadingAIInsight = false
+    @State private var showHealthPlan = false
 
     private var analysis: FinancialDecisionAnalysis { FinancialDecisionAnalysis.build(profile: appState.currentProfile) }
+    private var statusTint: Color {
+        guard let score = analysis.healthScore else { return AppTheme.auraIndigo }
+        return FinancialHealthUIStyle.scoreColor(score)
+    }
+
+    private var diagnosedActionCount: Int {
+        FinancialHealthEngine.evaluate(profile: appState.currentProfile, data: nil).priorities.count
+    }
 
     var body: some View {
-        ScrollView {
+        ScrollView(.vertical, showsIndicators: false) {
             VStack(alignment: .leading, spacing: 18) {
-                Text("Financial Decision Center")
-                    .font(.title2.bold())
-                Text("Readiness insights are calculated from your existing assessment and portfolio data. They are educational, not personalised investment advice.")
-                    .font(.subheadline)
-                    .foregroundStyle(.secondary)
+                healthHeroCard
+                personalizedHealthPlanCard
 
-                if let score = analysis.healthScore {
-                    HStack {
-                        VStack(alignment: .leading) {
-                            Text("Financial Health")
-                                .font(.caption).foregroundStyle(.secondary)
-                            Text("\(score) / 100 · \(analysis.healthStatus)")
-                                .font(.title3.bold())
-                        }
-                        Spacer()
-                        Image(systemName: "heart.text.square.fill")
-                            .font(.title).foregroundStyle(AppTheme.auraIndigo)
-                    }
-                    .padding(16)
-                    .background(AppTheme.cardBackground, in: RoundedRectangle(cornerRadius: 18, style: .continuous))
-                }
+                readinessGrid
 
                 AIInsightCard(insight: aiInsight, isLoading: isLoadingAIInsight) {
                     Task { await loadAIInsight() }
                 }
 
-                ForEach(analysis.readinessCards) { card in
-                    NavigationLink {
-                        destination(for: card.id)
-                    } label: {
-                        FinancialReadinessRow(card: card)
-                    }
-                    .buttonStyle(.plain)
-                }
-
-                NavigationLink { DecisionAdvisorView() } label: {
-                    decisionAction(title: "Decision Advisor", subtitle: "Compare debt, cash, and investment priorities", icon: "arrow.triangle.branch")
-                }
-                .buttonStyle(.plain)
-
-                NavigationLink { DecisionImpactView() } label: {
-                    decisionAction(title: "Decision Impact", subtitle: "Simulate an increase in monthly investing", icon: "slider.horizontal.3")
-                }
-                .buttonStyle(.plain)
+                nextStepsSection
             }
-            .padding(16)
+            .padding(.horizontal, 16)
+            .padding(.top, 8)
+            .padding(.bottom, 110)
         }
         .navigationTitle("Decision Center")
         .navigationBarTitleDisplayMode(.inline)
         .background(AppTheme.appBackground(for: colorScheme).ignoresSafeArea())
+        .navigationDestination(isPresented: $showHealthPlan) {
+            PersonalizedHealthPlanView()
+        }
         .task { await loadAIInsight() }
+        .onAppear {
+            if openHealthPlanOnAppear {
+                showHealthPlan = true
+                appState.showPersonalizedHealthPlan = false
+            }
+        }
+    }
+
+    private var healthHeroCard: some View {
+        VStack(alignment: .leading, spacing: 14) {
+            HStack(alignment: .center, spacing: 16) {
+                DecisionScoreRing(
+                    score: analysis.healthScore ?? 0,
+                    color: analysis.healthScore == nil ? .secondary : statusTint,
+                    size: 96
+                )
+
+                VStack(alignment: .leading, spacing: 8) {
+                    Text("Financial Health")
+                        .font(.caption.weight(.semibold))
+                        .foregroundStyle(.secondary)
+                    if let score = analysis.healthScore {
+                        HStack(alignment: .firstTextBaseline, spacing: 6) {
+                            Text("\(score)")
+                                .font(.system(size: 32, weight: .bold, design: .rounded))
+                            Text("/ 100")
+                                .font(.subheadline.weight(.semibold))
+                                .foregroundStyle(.secondary)
+                        }
+                        Text(analysis.healthStatus)
+                            .font(.caption.weight(.bold))
+                            .foregroundStyle(statusTint)
+                            .padding(.horizontal, 10)
+                            .padding(.vertical, 5)
+                            .background(statusTint.opacity(0.14), in: Capsule())
+                    } else {
+                        Text("Complete assessment")
+                            .font(.headline)
+                        NavigationLink { StartAssesmentView(mode: .update) } label: {
+                            Text("Start now")
+                                .font(.caption.weight(.bold))
+                                .foregroundStyle(.white)
+                                .padding(.horizontal, 12)
+                                .padding(.vertical, 6)
+                                .background(AppTheme.auraIndigo, in: Capsule())
+                        }
+                    }
+                }
+                Spacer(minLength: 0)
+            }
+
+            Text("Readiness insights use your assessment and portfolio. They are educational, not personalised investment advice.")
+                .font(.caption2)
+                .foregroundStyle(.secondary)
+                .fixedSize(horizontal: false, vertical: true)
+        }
+        .padding(18)
+        .frame(maxWidth: .infinity, alignment: .leading)
+        .background(
+            LinearGradient(
+                colors: [statusTint.opacity(0.16), AppTheme.cardBackground],
+                startPoint: .topLeading,
+                endPoint: .bottomTrailing
+            ),
+            in: RoundedRectangle(cornerRadius: 24, style: .continuous)
+        )
+        .overlay(
+            RoundedRectangle(cornerRadius: 24, style: .continuous)
+                .stroke(statusTint.opacity(0.18), lineWidth: 1)
+        )
+    }
+
+    private var personalizedHealthPlanCard: some View {
+        Button {
+            showHealthPlan = true
+        } label: {
+            VStack(alignment: .leading, spacing: 14) {
+                HStack(alignment: .top, spacing: 12) {
+                    Image(systemName: "sparkles")
+                        .font(.system(size: 17, weight: .bold))
+                        .foregroundStyle(.white)
+                        .frame(width: 42, height: 42)
+                        .background(
+                            LinearGradient(
+                                colors: [AppTheme.auraIndigo, Color(hex: "#5E5CE6")],
+                                startPoint: .topLeading,
+                                endPoint: .bottomTrailing
+                            ),
+                            in: RoundedRectangle(cornerRadius: 12, style: .continuous)
+                        )
+
+                    VStack(alignment: .leading, spacing: 4) {
+                        Text("Personalized Financial Health Plan")
+                            .font(.system(size: 16, weight: .bold))
+                            .foregroundStyle(.primary)
+                            .multilineTextAlignment(.leading)
+                        Text("View action plan from your assessment diagnosis")
+                            .font(.caption)
+                            .foregroundStyle(.secondary)
+                            .multilineTextAlignment(.leading)
+                    }
+
+                    Spacer(minLength: 4)
+
+                    Image(systemName: "chevron.right")
+                        .font(.caption.weight(.bold))
+                        .foregroundStyle(AppTheme.auraIndigo)
+                        .padding(.top, 12)
+                }
+
+                HStack(spacing: 8) {
+                    Label(
+                        diagnosedActionCount == 0 ? "Built from your assessment" : "\(diagnosedActionCount) diagnosed actions",
+                        systemImage: "checklist"
+                    )
+                        .font(.caption.weight(.semibold))
+                        .foregroundStyle(AppTheme.auraIndigo)
+                    Spacer()
+                    Text("Open plan")
+                        .font(.caption.weight(.bold))
+                        .foregroundStyle(.white)
+                        .padding(.horizontal, 12)
+                        .padding(.vertical, 6)
+                        .background(AppTheme.auraIndigo, in: Capsule())
+                }
+            }
+            .padding(16)
+            .background(
+                LinearGradient(
+                    colors: [AppTheme.auraIndigo.opacity(0.14), AppTheme.auraIndigo.opacity(0.05)],
+                    startPoint: .topLeading,
+                    endPoint: .bottomTrailing
+                ),
+                in: RoundedRectangle(cornerRadius: 20, style: .continuous)
+            )
+            .overlay(
+                RoundedRectangle(cornerRadius: 20, style: .continuous)
+                    .stroke(AppTheme.auraIndigo.opacity(0.28), lineWidth: 1)
+            )
+        }
+        .buttonStyle(.plain)
+        .accessibilityHint("Opens your personalized financial health action plan")
+    }
+
+    private var readinessGrid: some View {
+        VStack(alignment: .leading, spacing: 10) {
+            HStack {
+                Text("Readiness")
+                    .font(.headline)
+                Spacer()
+                NavigationLink {
+                    WhyThisResultView(focus: "risk")
+                } label: {
+                    Label("Ask why", systemImage: "questionmark.circle")
+                        .font(.caption.weight(.semibold))
+                        .foregroundStyle(AppTheme.auraIndigo)
+                }
+            }
+
+            LazyVGrid(columns: [GridItem(.flexible(), spacing: 10), GridItem(.flexible(), spacing: 10)], spacing: 10) {
+                ForEach(analysis.readinessCards) { card in
+                    NavigationLink {
+                        destination(for: card.id)
+                    } label: {
+                        VStack(alignment: .leading, spacing: 8) {
+                            HStack {
+                                Image(systemName: card.icon)
+                                    .foregroundStyle(card.color)
+                                Spacer()
+                                if let score = card.score {
+                                    Text("\(score)")
+                                        .font(.caption2.weight(.bold))
+                                        .foregroundStyle(.secondary)
+                                }
+                            }
+                            Text(card.title)
+                                .font(.caption.weight(.semibold))
+                                .foregroundStyle(.secondary)
+                            Text(card.status)
+                                .font(.subheadline.weight(.bold))
+                                .foregroundStyle(.primary)
+                                .lineLimit(1)
+                                .minimumScaleFactor(0.85)
+                            ProgressView(value: Double(card.score ?? 0), total: 100)
+                                .tint(card.color)
+                        }
+                        .padding(12)
+                        .frame(maxWidth: .infinity, alignment: .leading)
+                        .background(card.color.opacity(0.10), in: RoundedRectangle(cornerRadius: 16, style: .continuous))
+                    }
+                    .buttonStyle(.plain)
+                }
+            }
+        }
+    }
+
+    private var nextStepsSection: some View {
+        VStack(alignment: .leading, spacing: 10) {
+            Text("Next steps")
+                .font(.headline)
+            HStack(spacing: 10) {
+                NavigationLink { DecisionAdvisorView() } label: {
+                    decisionAction(
+                        title: "Advisor",
+                        subtitle: "Debt, cash & investing order",
+                        icon: "arrow.triangle.branch",
+                        tint: AppTheme.auraIndigo
+                    )
+                }
+                .buttonStyle(.plain)
+
+                NavigationLink { DecisionImpactView() } label: {
+                    decisionAction(
+                        title: "Impact",
+                        subtitle: "Test a higher monthly SIP",
+                        icon: "slider.horizontal.3",
+                        tint: AppTheme.vibrantCyan
+                    )
+                }
+                .buttonStyle(.plain)
+            }
+        }
     }
 
     @ViewBuilder private func destination(for id: String) -> some View {
@@ -415,18 +618,25 @@ struct FinancialDecisionCenterView: View {
         }
     }
 
-    private func decisionAction(title: String, subtitle: String, icon: String) -> some View {
-        HStack(spacing: 14) {
-            Image(systemName: icon).font(.title3).foregroundStyle(AppTheme.auraIndigo).frame(width: 36)
-            VStack(alignment: .leading, spacing: 3) {
-                Text(title).font(.headline).foregroundStyle(.primary)
-                Text(subtitle).font(.caption).foregroundStyle(.secondary)
-            }
-            Spacer()
-            Image(systemName: "chevron.right").font(.caption.weight(.bold)).foregroundStyle(.tertiary)
+    private func decisionAction(title: String, subtitle: String, icon: String, tint: Color) -> some View {
+        VStack(alignment: .leading, spacing: 10) {
+            Image(systemName: icon)
+                .font(.title3.weight(.semibold))
+                .foregroundStyle(tint)
+                .frame(width: 36, height: 36)
+                .background(tint.opacity(0.14), in: RoundedRectangle(cornerRadius: 10, style: .continuous))
+            Text(title)
+                .font(.subheadline.weight(.bold))
+                .foregroundStyle(.primary)
+            Text(subtitle)
+                .font(.caption)
+                .foregroundStyle(.secondary)
+                .fixedSize(horizontal: false, vertical: true)
         }
-        .padding(16)
+        .padding(14)
+        .frame(maxWidth: .infinity, alignment: .leading)
         .background(AppTheme.cardBackground, in: RoundedRectangle(cornerRadius: 18, style: .continuous))
+        .shadow(color: AppTheme.adaptiveShadow.opacity(0.35), radius: 8, y: 3)
     }
 
     private func loadAIInsight() async {
@@ -439,46 +649,79 @@ struct FinancialDecisionCenterView: View {
     }
 }
 
+private struct DecisionScoreRing: View {
+    let score: Int
+    let color: Color
+    var size: CGFloat = 88
+
+    var body: some View {
+        ZStack {
+            Circle()
+                .stroke(color.opacity(0.14), lineWidth: 10)
+            Circle()
+                .trim(from: 0, to: CGFloat(min(max(score, 0), 100)) / 100)
+                .stroke(
+                    AngularGradient(colors: [color, color.opacity(0.55), color], center: .center),
+                    style: StrokeStyle(lineWidth: 10, lineCap: .round)
+                )
+                .rotationEffect(.degrees(-90))
+            VStack(spacing: 1) {
+                Text("\(score)")
+                    .font(.system(size: size * 0.28, weight: .bold, design: .rounded))
+                Text("of 100")
+                    .font(.system(size: 9, weight: .semibold))
+                    .foregroundStyle(.secondary)
+            }
+        }
+        .frame(width: size, height: size)
+        .accessibilityLabel("Financial health score \(score) out of 100")
+    }
+}
+
 private struct AIInsightCard: View {
     let insight: String?
     let isLoading: Bool
     let refresh: () -> Void
     var body: some View {
-        VStack(alignment: .leading, spacing: 8) {
+        VStack(alignment: .leading, spacing: 10) {
             HStack {
                 Label("AI Financial Insight", systemImage: "sparkles")
-                    .font(.headline)
+                    .font(.subheadline.weight(.bold))
                     .foregroundStyle(AppTheme.auraIndigo)
                 Spacer()
-                Button("Refresh", action: refresh).font(.caption)
+                Button(action: refresh) {
+                    Text("Refresh")
+                        .font(.caption.weight(.semibold))
+                }
             }
-            if isLoading { ProgressView().controlSize(.small) }
-            else { Text(insight ?? "A fact-based explanation will appear here.").font(.subheadline).foregroundStyle(.secondary) }
+            if isLoading {
+                ProgressView().controlSize(.small)
+            } else {
+                Text(insight ?? "A fact-based explanation will appear here.")
+                    .font(.subheadline)
+                    .foregroundStyle(.primary)
+                    .fixedSize(horizontal: false, vertical: true)
+            }
             Text("Educational explanation only — not a recommendation to buy, sell, or choose a specific financial product.")
-                .font(.caption2).foregroundStyle(.tertiary)
+                .font(.caption2)
+                .foregroundStyle(.secondary)
         }
         .padding(16)
-        .background(AppTheme.cardBackground, in: RoundedRectangle(cornerRadius: 18, style: .continuous))
+        .background(
+            LinearGradient(
+                colors: [AppTheme.auraIndigo.opacity(0.10), AppTheme.cardBackground],
+                startPoint: .topLeading,
+                endPoint: .bottomTrailing
+            ),
+            in: RoundedRectangle(cornerRadius: 18, style: .continuous)
+        )
+        .overlay(
+            RoundedRectangle(cornerRadius: 18, style: .continuous)
+                .stroke(AppTheme.auraIndigo.opacity(0.16), lineWidth: 1)
+        )
     }
 }
 
-private struct FinancialReadinessRow: View {
-    let card: FinancialDecisionAnalysis.Readiness
-    var body: some View {
-        HStack(alignment: .top, spacing: 13) {
-            Image(systemName: card.icon).font(.title3).foregroundStyle(card.color).frame(width: 30)
-            VStack(alignment: .leading, spacing: 6) {
-                HStack { Text(card.title).font(.headline); Spacer(); Text(card.status).font(.subheadline.weight(.semibold)).foregroundStyle(card.color) }
-                Text(card.explanation).font(.caption).foregroundStyle(.secondary).multilineTextAlignment(.leading)
-                ProgressView(value: Double(card.score ?? 0), total: 100).tint(card.color)
-                if let score = card.score { Text("\(score) / 100").font(.caption2).foregroundStyle(.secondary) }
-            }
-            Image(systemName: "chevron.right").font(.caption.weight(.bold)).foregroundStyle(.tertiary).padding(.top, 4)
-        }
-        .padding(16)
-        .background(AppTheme.cardBackground, in: RoundedRectangle(cornerRadius: 18, style: .continuous))
-    }
-}
 
 // MARK: - Risk readiness and transparency
 

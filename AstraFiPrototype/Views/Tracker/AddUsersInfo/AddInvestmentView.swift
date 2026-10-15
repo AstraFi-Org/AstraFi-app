@@ -578,7 +578,7 @@ struct AddInvestmentView: View {
                             Spacer()
                             let price = displayedMarketPrice(for: asset)
                             if price > 0 {
-                                Text("₹\(String(format: "%.2f", price))")
+                                Text(asset.marketContext.formatPrice(price))
                                     .font(.caption)
                                     .fontWeight(.semibold)
                                     .foregroundColor(.green)

@@ -34,12 +34,20 @@ struct PersonalizedHealthPlanView: View {
     }
 
     var body: some View {
-        VStack(alignment: .leading, spacing: 20) {
-            heroHeaderBanner
-            scoreProgressCard
-            diagnosedActionItems
-            reassessmentCTA
+        ScrollView(.vertical, showsIndicators: false) {
+            VStack(alignment: .leading, spacing: 20) {
+                heroHeaderBanner
+                scoreProgressCard
+                diagnosedActionItems
+                reassessmentCTA
+            }
+            .padding(.horizontal, 16)
+            .padding(.top, 8)
+            .padding(.bottom, 32)
         }
+        .navigationTitle("Health Plan")
+        .navigationBarTitleDisplayMode(.inline)
+        .background(AppTheme.appBackground(for: colorScheme).ignoresSafeArea())
         .sheet(isPresented: $showingAssessmentSheet) {
             StartAssesmentView(
                 mode: .update,
@@ -74,17 +82,6 @@ struct PersonalizedHealthPlanView: View {
                 }
 
                 Spacer()
-
-                Button {
-                    withAnimation {
-                        appState.showPersonalizedHealthPlan = false
-                    }
-                } label: {
-                    Image(systemName: "xmark.circle.fill")
-                        .font(.system(size: 22))
-                        .foregroundStyle(.tertiary)
-                }
-                .buttonStyle(.plain)
             }
 
             // 6-Stage Lifecycle Flow Header

@@ -30,9 +30,10 @@ struct RetirementQuestionnaire: View {
     @Environment(AppStateManager.self) private var appState
     @Environment(\.dismiss) private var dismiss
     
-    @State private var showExpenseSheet = false
     @State private var savingPlan: SavingPlanOption? = nil
     @State private var expectedSIPAmount: String = ""
+    @State private var monthlyExpensesText = ""
+    @State private var healthcareExpensesText = ""
 
     var body: some View {
         ScrollView(showsIndicators: false){
@@ -82,9 +83,23 @@ struct RetirementQuestionnaire: View {
                             .padding(.horizontal, 12)
                             .padding(.vertical, 8)
                             .background(.blue.opacity(0.06), in: RoundedRectangle(cornerRadius: 10, style: .continuous))
+                        } else {
+                            HStack {
+                                Text("Current age")
+                                    .font(.system(size: 15, design: .rounded))
+                                    .foregroundStyle(.secondary)
+                                Spacer()
+                                TextField("e.g. 35", text: Binding(
+                                    get: { input.currentAge.map { String($0) } ?? "" },
+                                    set: { input.currentAge = Int($0) }
+                                ))
+                                .keyboardType(.numberPad)
+                                .multilineTextAlignment(.trailing)
+                                .frame(width: 80)
+                            }
                         }
                         
-                        if let age = profileAge, let rAge = input.retirementAge, rAge > age {
+                        if let age = profileAge ?? input.currentAge, let rAge = input.retirementAge, rAge > age {
                             HStack {
                                 Image(systemName: "arrow.right.circle.fill")
                                     .foregroundStyle(goalAccentColor)
@@ -117,66 +132,21 @@ struct RetirementQuestionnaire: View {
                         }
                     }
                 }
-                // ── 2. Lifestyle Selection Card
+                // ── 2. Current lifestyle cost
                 SectionCard {
-                    VStack(alignment: .leading, spacing: 0) {
+                    VStack(alignment: .leading, spacing: 14) {
                         SectionHeader2(
-                            icon: "hand.tap.fill",
-                            iconColor: .purple,
-                            title: "Retirement Lifestyle",
-                            subtitle: "What type of life do you want after retirement?"
+                            icon: "house.and.flag.fill",
+                            iconColor: goalAccentColor,
+                            title: "Your lifestyle today",
+                            subtitle: "Use your household spending as the starting point."
                         )
-                        .padding(.bottom, 14)
-
-                        Divider()
-
-                        LifestyleChoiceCard(
-                            title: "Lavish",
-                            description: "Dining in best hotels, trips, pubs & luxury lifestyle",
-                            isSelected: input.lifestylePreference == "Lavish",
-                            color: .purple
-                        ) { input.lifestylePreference = "Lavish" }
-
-                        Divider().padding(.leading, 54)
-
-                        LifestyleChoiceCard(
-                            title: "Normal",
-                            description: "Comfortable trips, good food & occasional luxury",
-                            isSelected: input.lifestylePreference == "Normal",
-                            color: .blue
-                        ) { input.lifestylePreference = "Normal" }
-
-                        Divider().padding(.leading, 54)
-
-                        LifestyleChoiceCard(
-                            title: "Average",
-                            description: "Essential comforts with budget-friendly trips",
-                            isSelected: input.lifestylePreference == "Average",
-                            color: .green
-                        ) { input.lifestylePreference = "Average" }
+                        currencyInput("Monthly household expenses", text: $monthlyExpensesText)
+                        currencyInput("Of that, monthly healthcare", text: $healthcareExpensesText)
+                        Text("Healthcare is projected separately using its own inflation assumption. Enter only amounts you want your retirement plan to replace.")
+                            .font(.footnote)
+                            .foregroundStyle(.secondary)
                     }
-                }
-                
-                // ── 3. Dynamic Insights Card
-                if let preference = input.lifestylePreference {
-                    SectionCard {
-                        VStack(spacing: 16) {
-                            SectionHeader2(
-                                icon: "sparkles",
-                                iconColor: .orange,
-                                title: "Corpus Estimate",
-                                subtitle: "Based on your lifestyle choice"
-                            )
-                            Divider()
-                            RetirementInsightCard(
-                                preference: preference,
-                                targetAge: input.retirementAge ?? 60,
-                                tenure: input.yearsPostRetirement ?? 25,
-                                onInfoTap: { showExpenseSheet = true }
-                            )
-                        }
-                    }
-                    .transition(.move(edge: .bottom).combined(with: .opacity))
                 }
                 
                 // ── 4. Plan Section (Universal)
@@ -202,11 +172,21 @@ struct RetirementQuestionnaire: View {
                 
                 Spacer(minLength: 40)
             }
-            .animation(.spring(response: 0.5, dampingFraction: 0.8), value: input.lifestylePreference)
-            .sheet(isPresented: $showExpenseSheet) {
-                LifestyleExpenseSheet(preference: input.lifestylePreference ?? "Normal")
-                    .presentationDetents([.medium, .large])
-                    .presentationDragIndicator(.visible)
+            .onAppear {
+                if monthlyExpensesText.isEmpty {
+                    let expenses = input.retirementMonthlyExpensesToday ?? appState.currentProfile?.basicDetails.monthlyExpenses ?? 0
+                    monthlyExpensesText = expenses > 0 ? String(Int(expenses)) : ""
+                }
+                if healthcareExpensesText.isEmpty {
+                    let expenses = input.retirementMonthlyHealthcareToday ?? 0
+                    healthcareExpensesText = expenses > 0 ? String(Int(expenses)) : "0"
+                }
+            }
+            .onChange(of: monthlyExpensesText) { _, value in
+                input.retirementMonthlyExpensesToday = Double(value.filter(\.isNumber))
+            }
+            .onChange(of: healthcareExpensesText) { _, value in
+                input.retirementMonthlyHealthcareToday = Double(value.filter(\.isNumber))
             }
         }
         .scrollDismissesKeyboard(.interactively)
@@ -214,20 +194,14 @@ struct RetirementQuestionnaire: View {
     
     private var projectedMFCorpus: Double {
         let sip = Double(expectedSIPAmount) ?? 0
-        let years = Double(max(1, (input.retirementAge ?? 60) - (profileAge ?? 35)))
-        let months = years * 12
-        let rate = 0.12 / 12
-        guard rate > 0 && months > 0 else { return 0 }
-        return sip * ((pow(1 + rate, months) - 1) / rate) * (1 + rate)
+        let years = Double(max(0, (input.retirementAge ?? 60) - (profileAge ?? input.currentAge ?? (input.retirementAge ?? 60))))
+        return FinancialCalculationEngine.stepUpFutureValue(initialMonthlySIP: sip, annualStepUpRate: input.yearlyStepUpPct ?? 0.10, annualReturnRate: 0.105, years: Int(years))
     }
 
     private var projectedStocksCorpus: Double {
         let sip = Double(expectedSIPAmount) ?? 0
-        let years = Double(max(1, (input.retirementAge ?? 60) - (profileAge ?? 35)))
-        let months = years * 12
-        let rate = 0.15 / 12
-        guard rate > 0 && months > 0 else { return 0 }
-        return sip * ((pow(1 + rate, months) - 1) / rate) * (1 + rate)
+        let years = Double(max(0, (input.retirementAge ?? 60) - (profileAge ?? input.currentAge ?? (input.retirementAge ?? 60))))
+        return FinancialCalculationEngine.stepUpFutureValue(initialMonthlySIP: sip, annualStepUpRate: input.yearlyStepUpPct ?? 0.10, annualReturnRate: 0.105, years: Int(years))
     }
     
     private func buildTrackerInput() -> InvestmentPlanInputModel {
@@ -235,22 +209,48 @@ struct RetirementQuestionnaire: View {
         trackerInput.investmentType = "Monthly SIP"
         trackerInput.amount = savingPlan == .sip ? expectedSIPAmount : "0"
         trackerInput.targetAmount = String(format: "%.0f", getTargetCorpusValue())
-        let age = (profileAge == 0 || profileAge == nil) ? 35 : profileAge!
-        trackerInput.timePeriod = String(max(1, (input.retirementAge ?? 60) - age))
+        trackerInput.currentAge = profileAge ?? input.currentAge
+        trackerInput.retirementMonthlyExpensesToday = Double(monthlyExpensesText.filter(\.isNumber))
+        trackerInput.retirementMonthlyHealthcareToday = Double(healthcareExpensesText.filter(\.isNumber)) ?? 0
+        let age = profileAge ?? input.currentAge
+        if let age {
+            trackerInput.timePeriod = String(max(1, (input.retirementAge ?? 60) - age))
+        }
         trackerInput.goalPlanType = savingPlan?.rawValue
         trackerInput.goalSIPAmount = expectedSIPAmount
         return trackerInput
     }
 
     private func getTargetCorpusValue() -> Double {
-        let base: Double
-        switch input.lifestylePreference {
-        case "Lavish": base = 120_000_000.0
-        case "Normal": base = 45_000_000.0
-        default:       base = 22_000_000.0
+        let age = profileAge ?? input.currentAge ?? 0
+        let monthlyLifestyle = Double(monthlyExpensesText.filter(\.isNumber)) ?? 0
+        guard age > 0, monthlyLifestyle > 0, (input.retirementAge ?? 60) > age else { return 0 }
+        let years = max(1, (input.retirementAge ?? 60) - age)
+        let config = FinancialGoalConfiguration(
+            goalType: .retirement,
+            goalName: "Retirement",
+            currentAge: age > 0 ? age : nil,
+            yearsToGoal: age > 0 ? years : nil,
+            currentMonthlyExpenses: appState.currentProfile?.basicDetails.monthlyExpenses ?? monthlyLifestyle,
+            retirementLifestyleExpensesToday: monthlyLifestyle,
+            currentMonthlyHealthcareExpenses: Double(healthcareExpensesText.filter(\.isNumber)) ?? 0,
+            retirementAge: input.retirementAge,
+            lifeExpectancy: (input.retirementAge ?? 60) + (input.yearsPostRetirement ?? 25)
+        )
+        return GoalProjectionEngine.project(configuration: config, assumptions: PlanningScenarioKind.assumptionSet(for: .base)).requiredCorpus
+    }
+
+    @ViewBuilder
+    private func currencyInput(_ title: String, text: Binding<String>) -> some View {
+        HStack {
+            Text(title).font(.subheadline).foregroundStyle(.secondary)
+            Spacer(minLength: 12)
+            Text("₹").foregroundStyle(.secondary)
+            TextField("0", text: text)
+                .keyboardType(.numberPad)
+                .multilineTextAlignment(.trailing)
+                .frame(width: 120)
         }
-        let tenure = Double(input.yearsPostRetirement ?? 25)
-        return base * (tenure / 25.0)
     }
 }
 

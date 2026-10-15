@@ -102,6 +102,15 @@ struct FinancialPlanningAssumptions: Codable, Equatable {
     var expenseGrowthRate: Double?
     var investmentReturnRate: Double?
     var source: String = "User-provided"
+    var annualSIPStepUpRate: Double?
+    var postRetirementReturnRate: Double?
+    var retirementWithdrawalRate: Double?
+    var healthcareInflationRate: Double?
+    var housingInflationRate: Double?
+    var educationInflationRate: Double?
+    var lifestyleInflationRate: Double?
+    var travelInflationRate: Double?
+    var scenarioKind: PlanningScenarioKind?
 
     var isCompleteForSimulation: Bool {
         [inflationRate, incomeGrowthRate, expenseGrowthRate, investmentReturnRate]
@@ -111,6 +120,45 @@ struct FinancialPlanningAssumptions: Codable, Equatable {
                 .compactMap { $0 }
                 .allSatisfy { $0.isFinite && $0 > -1 }
     }
+
+    /// Resolved rates used by calculators. Missing values fall back to the Base planning scenario.
+    func resolved(using fallback: PlanningScenarioKind = .base) -> ResolvedPlanningAssumptions {
+        let preset = PlanningScenarioKind.assumptionSet(for: fallback)
+        return ResolvedPlanningAssumptions(
+            inflationRate: inflationRate ?? preset.inflationRate ?? 0.05,
+            incomeGrowthRate: incomeGrowthRate ?? preset.incomeGrowthRate ?? 0.08,
+            expenseGrowthRate: expenseGrowthRate ?? preset.expenseGrowthRate ?? preset.inflationRate ?? 0.05,
+            investmentReturnRate: investmentReturnRate ?? preset.investmentReturnRate ?? 0.105,
+            annualSIPStepUpRate: annualSIPStepUpRate ?? preset.annualSIPStepUpRate ?? 0.10,
+            postRetirementReturnRate: postRetirementReturnRate ?? preset.postRetirementReturnRate ?? 0.06,
+            retirementWithdrawalRate: retirementWithdrawalRate ?? preset.retirementWithdrawalRate ?? 0.04,
+            healthcareInflationRate: healthcareInflationRate ?? preset.healthcareInflationRate ?? 0.08,
+            housingInflationRate: housingInflationRate ?? preset.housingInflationRate ?? inflationRate ?? 0.05,
+            educationInflationRate: educationInflationRate ?? preset.educationInflationRate ?? 0.08,
+            lifestyleInflationRate: lifestyleInflationRate ?? preset.lifestyleInflationRate ?? inflationRate ?? 0.05,
+            travelInflationRate: travelInflationRate ?? preset.travelInflationRate ?? inflationRate ?? 0.05,
+            source: source,
+            scenarioKind: scenarioKind ?? fallback
+        )
+    }
+}
+
+/// Concrete, non-optional rates after applying a planning scenario fallback.
+struct ResolvedPlanningAssumptions: Codable, Equatable {
+    var inflationRate: Double
+    var incomeGrowthRate: Double
+    var expenseGrowthRate: Double
+    var investmentReturnRate: Double
+    var annualSIPStepUpRate: Double
+    var postRetirementReturnRate: Double
+    var retirementWithdrawalRate: Double
+    var healthcareInflationRate: Double
+    var housingInflationRate: Double
+    var educationInflationRate: Double
+    var lifestyleInflationRate: Double
+    var travelInflationRate: Double
+    var source: String
+    var scenarioKind: PlanningScenarioKind
 }
 
 struct FinancialPlanningJourney: Codable, Equatable {

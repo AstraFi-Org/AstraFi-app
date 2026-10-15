@@ -76,7 +76,7 @@ struct StockSearchView: View {
                             Spacer()
                             
                             VStack(alignment: .trailing, spacing: 4) {
-                                Text(stock.currentPrice.toCurrency())
+                                Text(stock.formattedPrice)
                                     .font(.subheadline)
                                     .fontWeight(.bold)
                                 

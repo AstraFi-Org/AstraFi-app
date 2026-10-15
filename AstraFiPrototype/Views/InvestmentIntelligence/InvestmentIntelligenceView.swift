@@ -403,7 +403,8 @@ private struct OverviewTab: View {
             PriceChartCard(
                 title: asset.kind == .mutualFund ? "NAV History" : "Price History",
                 points: snapshot?.chart ?? asset.sparkline,
-                color: asset.kind.accent
+                color: asset.kind.accent,
+                context: asset.marketContext
             )
 
             if let profile = snapshot?.profile {

@@ -9,20 +9,53 @@ public struct SecurityMarketContext: Equatable {
     public let currencySymbol: String
     public let currencyCode: String
 
-    public init(symbol: String, exchange: String? = nil, country: String? = nil) {
+    private static let knownIndianSymbols: Set<String> = [
+        "RADICO", "RELIANCE", "TCS", "HDFCBANK", "INFY", "ICICIBANK", "BAJFINANCE", "BHARTIARTL",
+        "HINDUNILVR", "ITC", "SBIN", "LT", "KOTAKBANK", "AXISBANK", "ASIANPAINT", "MARUTI",
+        "TATAMOTORS", "M&M", "HCLTECH", "WIPRO", "TATASTEEL", "JSWSTEEL", "SUNPHARMA", "TITAN",
+        "ULTRACEMCO", "NTPC", "POWERGRID", "TATAPOWER", "ZOMATO", "TRENT", "BEL", "HAL",
+        "JIOFIN", "ADANIENT", "ADANIPORTS", "BAJAJ-AUTO", "COALINDIA", "DLF", "POLYCAB", "VBL",
+        "MCDOWELL-N", "NESTLEIND", "BRITANNIA", "CIPLA", "DRREDDY", "DIVISLAB", "APOLLOHOSP",
+        "EICHERMOT", "GRASIM", "TECHM", "INDUSINDBK", "FEDERALBNK", "PNB", "BANKBARODA",
+        "INDIGO", "IOC", "BPCL", "ONGC", "GAIL", "HINDALCO", "VEDL", "HAVELLS", "SIEMENS",
+        "ABB", "RECLTD", "PFC", "MUTHOOTFIN", "CHOLAFIN", "NAUKRI", "NYKAA", "PAYTM",
+        "POLICYBZR", "BSE", "CDSL",
+        // Gold / Silver ETFs on NSE
+        "GOLDBEES", "HDFCGOLD", "SETFGOLD", "ICICIGOLD", "KOTAKGOLD", "AXISGOLD", "TATAGOLD",
+        "ADITYAGOLD", "QUANTUMGOLD", "UTIGOLDETF", "DSPGOLDETF", "INVESCGOLD", "LICNETFGOLD",
+        "CANROBGOLD", "SILVERBEES", "HDFCSILVER", "ICICISILVE", "TATASILV", "SETFSILV", "IPGETF"
+    ]
+
+    public init(symbol: String, exchange: String? = nil, country: String? = nil, isMutualFund: Bool = false) {
         let cleanSymbol = symbol.uppercased().trimmingCharacters(in: .whitespacesAndNewlines)
         let resolvedExchange = exchange?.uppercased().trimmingCharacters(in: .whitespacesAndNewlines) ?? ""
         let resolvedCountry = country?.uppercased().trimmingCharacters(in: .whitespacesAndNewlines) ?? ""
 
         self.symbol = cleanSymbol
 
-        // Indian security detection: .NS, .BO, NSE, BSE, India
-        let isIndiaDetected = cleanSymbol.hasSuffix(".NS")
+        let isNumericCode = !cleanSymbol.isEmpty && cleanSymbol.allSatisfy({ $0.isNumber })
+        let isIndianISIN = cleanSymbol.hasPrefix("INF") || cleanSymbol.hasPrefix("INE")
+        let isMFPrefix = cleanSymbol.hasPrefix("MF-")
+        let isKnownIndian = Self.knownIndianSymbols.contains(cleanSymbol)
+            || Self.knownIndianSymbols.contains(cleanSymbol.replacingOccurrences(of: ".NS", with: "").replacingOccurrences(of: ".BO", with: ""))
+
+        // Indian security detection: mutual funds, numeric scheme codes, .NS, .BO, NSE, BSE, India
+        let isIndiaDetected = isMutualFund
+            || isNumericCode
+            || isIndianISIN
+            || isMFPrefix
+            || cleanSymbol.hasSuffix(".NS")
             || cleanSymbol.hasSuffix(".BO")
             || resolvedExchange == "NSE"
             || resolvedExchange == "BSE"
+            || resolvedExchange.contains("NSE")
+            || resolvedExchange.contains("BSE")
+            || resolvedExchange.contains("AMFI")
+            || resolvedExchange.contains("MUTUAL FUND")
             || resolvedCountry == "INDIA"
             || resolvedCountry == "IN"
+            || resolvedCountry.contains("INDIA")
+            || isKnownIndian
 
         self.isIndian = isIndiaDetected
 
@@ -57,14 +90,50 @@ public struct SecurityMarketContext: Equatable {
         }
     }
 
+    public var currencySystemImage: String {
+        isIndian ? "indianrupeesign.circle.fill" : "dollarsign.circle.fill"
+    }
+
     public func formatPrice(_ value: Double?) -> String {
-        guard let value, value > 0 else { return "Unavailable" }
+        guard let value, value.isFinite, value > 0 else { return "Unavailable" }
         let formatter = NumberFormatter()
         formatter.numberStyle = .currency
         formatter.currencySymbol = currencySymbol
         formatter.currencyCode = currencyCode
         formatter.maximumFractionDigits = 2
+        formatter.minimumFractionDigits = 2
+        formatter.locale = Locale(identifier: isIndian ? "en_IN" : "en_US")
         return formatter.string(from: NSNumber(value: value)) ?? "\(currencySymbol)\(String(format: "%.2f", value))"
+    }
+
+    public func formatCompactPrice(_ value: Double?) -> String {
+        guard let value, value.isFinite, value > 0 else { return "-" }
+        let absValue = abs(value)
+        let sign = value < 0 ? "-" : ""
+
+        if isIndian {
+            if absValue >= 10_000_000 {
+                return "\(sign)₹\(String(format: "%.1f", absValue / 10_000_000))Cr"
+            }
+            if absValue >= 100_000 {
+                return "\(sign)₹\(String(format: "%.1f", absValue / 100_000))L"
+            }
+            if absValue >= 10_000 {
+                return "\(sign)₹\(String(format: "%.1f", absValue / 1000))K"
+            }
+            return formatPrice(value)
+        } else {
+            if absValue >= 1_000_000_000 {
+                return "\(sign)$\(String(format: "%.1f", absValue / 1_000_000_000))B"
+            }
+            if absValue >= 1_000_000 {
+                return "\(sign)$\(String(format: "%.1f", absValue / 1_000_000))M"
+            }
+            if absValue >= 10_000 {
+                return "\(sign)$\(String(format: "%.1f", absValue / 1000))K"
+            }
+            return formatPrice(value)
+        }
     }
 
     public func formatMarketCap(_ value: Double?) -> String {
@@ -115,7 +184,20 @@ public struct SecurityMarketContext: Equatable {
         return "\(sign)\(String(format: "%.2f", percent))%"
     }
 
-    public static func forSymbol(_ symbol: String, exchange: String? = nil, country: String? = nil) -> SecurityMarketContext {
-        SecurityMarketContext(symbol: symbol, exchange: exchange, country: country)
+    public static func forSymbol(_ symbol: String, exchange: String? = nil, country: String? = nil, isMutualFund: Bool = false) -> SecurityMarketContext {
+        SecurityMarketContext(symbol: symbol, exchange: exchange, country: country, isMutualFund: isMutualFund)
+    }
+
+    public static func forAsset(_ asset: InvestmentSummaryAsset) -> SecurityMarketContext {
+        SecurityMarketContext(
+            symbol: asset.symbol,
+            exchange: asset.metadata,
+            country: nil,
+            isMutualFund: asset.kind == .mutualFund
+        )
+    }
+
+    public static func forStock(_ stock: AstraStock) -> SecurityMarketContext {
+        SecurityMarketContext(symbol: stock.symbol, exchange: stock.exchange)
     }
 }
