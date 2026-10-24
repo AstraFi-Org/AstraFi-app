@@ -20,7 +20,6 @@ struct AstraFiPrototypeApp: App {
                 .environment(appState)
                 .task {
                     Secrets.printConfigurationStatus()
-                    await InvestmentIntelligenceRepository().warmHomeAssets()
                     #if DEBUG
                     let insuranceCases = InsuranceAnalysisVerification.run()
                     let failed = insuranceCases.filter { !$0.passed }

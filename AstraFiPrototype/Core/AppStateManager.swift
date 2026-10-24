@@ -1513,7 +1513,8 @@ final class AppStateManager {
         
         let efTarget = profile.basicDetails.monthlyIncome * 6.0
         let efMonths = efTarget > 0 ? ((profile.basicDetails.emergencyFundAmount / efTarget) * 6.0).safeFinite : 0
-        let healthScore = FinancialAssessmentInsights.build(profile: profile, data: nil).overallScore.safeInt
+        let currentInsights = FinancialAssessmentInsights.build(profile: profile, data: nil)
+        let healthScore = currentInsights.overallScore.safeInt
         
         profile.financialHealthReport = AstraFinancialHealthReport(
             netWorth: netWorth,
@@ -1522,6 +1523,17 @@ final class AppStateManager {
             investmentScore: healthScore,
             emergencyFundMonths: efMonths
         )
+
+        let cal = Calendar.current
+        if let idx = profile.monthlyHealthAssessments.firstIndex(where: { cal.isDate($0.date, equalTo: Date(), toGranularity: .month) }) {
+            profile.monthlyHealthAssessments[idx].score = healthScore
+            profile.monthlyHealthAssessments[idx].status = FinancialAssessmentInsights.statusTitle(for: healthScore)
+            profile.monthlyHealthAssessments[idx].insights = currentInsights
+            let concerns = currentInsights.activeConcerns.map(\.title)
+            if !concerns.isEmpty {
+                profile.monthlyHealthAssessments[idx].keyInsights = concerns
+            }
+        }
         
         // Sync goal currentAmount with dynamic total and detect goal achievement
         for i in 0..<profile.goals.count {

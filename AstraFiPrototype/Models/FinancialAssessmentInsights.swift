@@ -727,7 +727,7 @@ struct FinancialAssessmentInsights: Hashable, Codable {
         }
 
         private static let highRiskKeywords = [
-            "small cap", "mid cap", "midcap", "smallcap", "sector", "thematic", "crypto", "momentum"
+            "thematic", "sector", "crypto", "momentum", "leveraged", "futures", "options", "f&o"
         ]
         private static let lowRiskLiquidKeywords = [
             "liquid", "treasury", "t-bill", "t bill", "commercial paper", "money market", "overnight", "sweep", "ultra short", "gilt"

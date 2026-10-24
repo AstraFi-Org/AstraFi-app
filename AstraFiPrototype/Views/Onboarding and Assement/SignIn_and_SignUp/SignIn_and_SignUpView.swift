@@ -95,7 +95,7 @@ struct SignInView: View {
                 ToolbarItem(placement: .topBarTrailing) {
                     Button("Skip") {
                         appState.isGuest = true
-                        appState.isAuthenticated = true
+                        appState.isAuthenticated = false
                         appState.showPostAuthOnboarding = true
                     }
                 }
@@ -255,7 +255,7 @@ struct SignUpView: View {
                     ToolbarItem(placement: .topBarTrailing) {
                         Button("Skip") {
                             appState.isGuest = true
-                            appState.isAuthenticated = true
+                            appState.isAuthenticated = false
                             appState.showPostAuthOnboarding = true
                         }
                     }

@@ -10,6 +10,7 @@ struct StockSearchView: View {
     @State private var searchText = ""
     @State private var results: [AstraStock] = []
     @State private var isLoading = false
+    @State private var searchTask: Task<Void, Never>?
     @FocusState private var isFocused: Bool
     
     var body: some View {
@@ -102,20 +103,31 @@ struct StockSearchView: View {
         .onAppear {
             isFocused = true
         }
+        .onDisappear {
+            searchTask?.cancel()
+        }
     }
     
     private func performSearch(query: String) {
-        if query.count < 2 {
+        searchTask?.cancel()
+        let trimmedQuery = query.trimmingCharacters(in: .whitespacesAndNewlines)
+        if trimmedQuery.count < 2 {
             results = []
+            isLoading = false
             return
         }
         
         isLoading = true
-        Task {
-            let searchResults = await stockService.searchStocks(query: query)
-            
-            // Safety check: only proceed if the query matches the current search text
-            guard query == searchText else { return }
+        searchTask = Task {
+            do {
+                try await Task.sleep(for: .milliseconds(300))
+            } catch {
+                return
+            }
+            guard !Task.isCancelled else { return }
+
+            let searchResults = await stockService.searchStocks(query: trimmedQuery)
+            guard !Task.isCancelled, trimmedQuery == searchText.trimmingCharacters(in: .whitespacesAndNewlines) else { return }
             
             await MainActor.run {
                 self.results = searchResults
@@ -125,8 +137,7 @@ struct StockSearchView: View {
             // Fetch live prices for these symbols
             let symbols = searchResults.map { $0.symbol }
             let quotes = await stockService.fetchBatchQuotes(symbols: symbols)
-            
-            guard query == searchText else { return }
+            guard !Task.isCancelled, trimmedQuery == searchText.trimmingCharacters(in: .whitespacesAndNewlines) else { return }
             
             await MainActor.run {
                 for i in 0..<self.results.count {

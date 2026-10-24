@@ -188,7 +188,7 @@ public struct SecurityMarketContext: Equatable {
         SecurityMarketContext(symbol: symbol, exchange: exchange, country: country, isMutualFund: isMutualFund)
     }
 
-    public static func forAsset(_ asset: InvestmentSummaryAsset) -> SecurityMarketContext {
+    static func forAsset(_ asset: InvestmentSummaryAsset) -> SecurityMarketContext {
         SecurityMarketContext(
             symbol: asset.symbol,
             exchange: asset.metadata,
@@ -197,7 +197,7 @@ public struct SecurityMarketContext: Equatable {
         )
     }
 
-    public static func forStock(_ stock: AstraStock) -> SecurityMarketContext {
+    static func forStock(_ stock: AstraStock) -> SecurityMarketContext {
         SecurityMarketContext(symbol: stock.symbol, exchange: stock.exchange)
     }
 }

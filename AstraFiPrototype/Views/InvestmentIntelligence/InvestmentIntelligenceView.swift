@@ -47,9 +47,7 @@ struct InvestmentIntelligenceView: View {
         .onChange(of: searchViewModel.query) { _, _ in
             Task { await searchViewModel.search() }
         }
-        .onAppear {
-            UITextField.appearance(whenContainedInInstancesOf: [UISearchBar.self]).clearButtonMode = .never
-        }
+
     }
 
     // header removed
@@ -512,12 +510,13 @@ private struct OverviewTab: View {
     }
 
     private var stockSnapshotMetrics: [InvestmentMetric] {
-        [
+        let context = asset.marketContext
+        return [
             InvestmentMetric(title: "Company", value: asset.name, systemImage: "building.2.fill", color: asset.kind.accent),
             InvestmentMetric(title: "Symbol", value: asset.symbol, systemImage: "tag.fill", color: AppTheme.auraMint),
             InvestmentMetric(title: "Exchange", value: asset.metadata.isEmpty ? "Market" : asset.metadata, systemImage: "building.columns.fill", color: AppTheme.auraPurple),
             InvestmentMetric(title: "Sector", value: asset.sector, systemImage: "square.grid.2x2.fill", color: AppTheme.vibrantCyan),
-            InvestmentMetric(title: "Current Price", value: asset.currentValue?.intelligenceCurrency ?? "Loading", systemImage: "indianrupeesign.circle.fill", color: AppTheme.auraGreen),
+            InvestmentMetric(title: "Current Price", value: asset.currentValue.map { context.formatPrice($0) } ?? "Loading", systemImage: context.currencySystemImage, color: AppTheme.auraGreen),
             InvestmentMetric(title: "Daily Change", value: asset.dailyChange?.percentText ?? "Unavailable", systemImage: "chart.line.uptrend.xyaxis", color: AppTheme.vibrantOrange)
         ]
     }
@@ -595,13 +594,13 @@ private struct FinancialsTab: View {
     }
 
     private var metrics: [InvestmentMetric] {
-        let sym = asset.symbol
+        let context = asset.marketContext
         if let financials = snapshot?.financials {
             return [
-                InvestmentMetric(title: "Market Cap", value: financials.marketCap?.formattedMarketCap(for: sym) ?? "Unavailable", systemImage: "building.columns.fill", color: AppTheme.auraIndigo),
+                InvestmentMetric(title: "Market Cap", value: financials.marketCap.map { context.formatMarketCap($0) } ?? "Unavailable", systemImage: "building.columns.fill", color: AppTheme.auraIndigo),
                 InvestmentMetric(title: "P/E Ratio", value: financials.peRatio.map { String(format: "%.1fx", $0) } ?? "Unavailable", systemImage: "scale.3d", color: AppTheme.auraPurple),
-                InvestmentMetric(title: "52W High", value: financials.weekHigh52?.formattedCurrency(for: sym) ?? "Unavailable", systemImage: "arrow.up.right.circle.fill", color: AppTheme.auraGreen),
-                InvestmentMetric(title: "52W Low", value: financials.weekLow52?.formattedCurrency(for: sym) ?? "Unavailable", systemImage: "arrow.down.right.circle.fill", color: AppTheme.vibrantOrange),
+                InvestmentMetric(title: "52W High", value: financials.weekHigh52.map { context.formatPrice($0) } ?? "Unavailable", systemImage: "arrow.up.right.circle.fill", color: AppTheme.auraGreen),
+                InvestmentMetric(title: "52W Low", value: financials.weekLow52.map { context.formatPrice($0) } ?? "Unavailable", systemImage: "arrow.down.right.circle.fill", color: AppTheme.vibrantOrange),
                 InvestmentMetric(title: "Revenue Growth", value: financials.revenue?.percentText ?? "Unavailable", systemImage: "chart.line.uptrend.xyaxis", color: AppTheme.auraGreen),
                 InvestmentMetric(title: "Net Profit Margin", value: financials.netProfit?.percentText ?? "Unavailable", systemImage: "banknote.fill", color: AppTheme.auraMint),
                 InvestmentMetric(title: "EPS", value: financials.eps.map { String(format: "%.2f", $0) } ?? "Unavailable", systemImage: "plus.forwardslash.minus", color: AppTheme.auraIndigo),
@@ -614,9 +613,8 @@ private struct FinancialsTab: View {
                 InvestmentMetric(title: "Historical Growth", value: financials.historicalGrowth?.percentText ?? "Unavailable", systemImage: "clock.arrow.circlepath", color: AppTheme.vibrantCyan)
             ]
         }
-        let sym2 = asset.symbol
         return [
-            InvestmentMetric(title: asset.kind == .mutualFund ? "Current NAV" : "Current Price", value: asset.currentValue?.formattedCurrency(for: sym2) ?? "Loading", systemImage: "indianrupeesign.circle.fill", color: AppTheme.auraGreen),
+            InvestmentMetric(title: asset.kind == .mutualFund ? "Current NAV" : "Current Price", value: asset.currentValue.map { context.formatPrice($0) } ?? "Loading", systemImage: context.currencySystemImage, color: AppTheme.auraGreen),
             InvestmentMetric(title: "1Y Return", value: asset.oneYearReturn?.percentText ?? (asset.kind == .mutualFund ? "Based on NAV history" : "Based on price history"), systemImage: "chart.line.uptrend.xyaxis", color: AppTheme.auraIndigo),
             InvestmentMetric(title: "Risk Level", value: asset.riskLevel.rawValue, systemImage: "exclamationmark.triangle.fill", color: asset.riskLevel.color),
             InvestmentMetric(title: "Category", value: asset.sector, systemImage: "square.grid.2x2.fill", color: AppTheme.auraPurple)
@@ -1524,12 +1522,13 @@ private struct RiskBadge: View {
 private struct ChartSummaryRow: View {
     let points: [InvestmentChartPoint]
     let color: Color
+    var context: SecurityMarketContext = .forSymbol("")
 
     var body: some View {
         HStack(spacing: 8) {
-            SummaryTile(title: "Latest", value: latest?.compactCurrency ?? "-", color: color)
-            SummaryTile(title: "High", value: high?.compactCurrency ?? "-", color: AppTheme.auraGreen)
-            SummaryTile(title: "Low", value: low?.compactCurrency ?? "-", color: AppTheme.vibrantOrange)
+            SummaryTile(title: "Latest", value: latest.map { context.formatCompactPrice($0) } ?? "-", color: color)
+            SummaryTile(title: "High", value: high.map { context.formatCompactPrice($0) } ?? "-", color: AppTheme.auraGreen)
+            SummaryTile(title: "Low", value: low.map { context.formatCompactPrice($0) } ?? "-", color: AppTheme.vibrantOrange)
             SummaryTile(title: "Trend", value: trendText, color: trendColor)
         }
     }
@@ -1678,11 +1677,12 @@ private struct PriceChartCard: View {
     let title: String
     let points: [InvestmentChartPoint]
     let color: Color
+    var context: SecurityMarketContext = .forSymbol("")
 
     var body: some View {
         DetailCard(title: title, systemImage: "chart.xyaxis.line") {
             VStack(alignment: .leading, spacing: 14) {
-                ChartSummaryRow(points: points, color: color)
+                ChartSummaryRow(points: points, color: color, context: context)
                 ChartPanel(points: points, color: color, compact: false)
                     .frame(height: 230)
             }
@@ -1850,7 +1850,8 @@ private struct EmptyDetailMessage: View {
 
 private extension InvestmentCompetitor {
     var asset: InvestmentSummaryAsset {
-        InvestmentSummaryAsset(
+        let sym = symbol
+        return InvestmentSummaryAsset(
             id: "stock-\(symbol)",
             kind: .stock,
             symbol: symbol,
@@ -1861,7 +1862,7 @@ private extension InvestmentCompetitor {
             oneYearReturn: nil,
             riskLevel: .moderate,
             sparkline: [],
-            metadata: marketCap.map { "Market cap \($0.compactCurrency)" } ?? "Peer"
+            metadata: marketCap.map { "Market cap \($0.formattedMarketCap(for: sym))" } ?? "Peer"
         )
     }
 }
@@ -1870,7 +1871,7 @@ private func valueText(for asset: InvestmentSummaryAsset) -> String {
     guard let value = asset.currentValue, value > 0 else {
         return asset.kind == .mutualFund ? "NAV loading" : "Price loading"
     }
-    return value.formattedCurrency(for: asset.symbol)
+    return value.formattedCurrency(for: asset)
 }
 
 private func changeText(for asset: InvestmentSummaryAsset) -> String {

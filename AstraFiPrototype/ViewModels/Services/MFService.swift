@@ -4,6 +4,12 @@ import Observation
 
 @Observable
 class MFService {
+    private struct SchemeSearchEntry {
+        let scheme: MFScheme
+        let words: [String]
+        let compactName: String
+    }
+
     static let shared = MFService()
 
     var allSchemes: [MFScheme] = []
@@ -11,6 +17,7 @@ class MFService {
     var lastFetchDate: Date?
 
     @ObservationIgnored private var historyCache: [String: [MFHistoryPoint]] = [:]
+    @ObservationIgnored private var searchIndex: [SchemeSearchEntry] = []
 
     private let amfiURLs = [
         URL(string: "https://portal.amfiindia.com/spages/NAVAll.txt")!,
@@ -49,8 +56,18 @@ class MFService {
                     continue
                 }
 
+                let parsedIndex = parsed.map { scheme in
+                    let normalized = Self.normalizedSearchTerms(scheme.name, removeGenericTerms: false)
+                    return SchemeSearchEntry(
+                        scheme: scheme,
+                        words: normalized.words,
+                        compactName: normalized.compact
+                    )
+                }
+
                 await MainActor.run {
                     self.allSchemes = parsed
+                    self.searchIndex = parsedIndex
                     self.lastFetchDate = Date()
                 }
                 return
@@ -121,37 +138,36 @@ class MFService {
 
     func searchSchemes(query: String, maxLimit: Int) -> [MFScheme] {
         let search = Self.normalizedSearchTerms(query)
-        guard !search.terms.isEmpty else { return [] }
+        let limit = max(0, maxLimit)
+        guard search.compact.count >= 2, !search.terms.isEmpty, limit > 0 else { return [] }
 
         let searchCompact = search.compact
         let searchTerms = search.terms
 
-        var candidates: [(scheme: MFScheme, name: (terms: [String], words: [String], compact: String))] = []
-        for scheme in allSchemes {
-            let name = Self.normalizedSearchTerms(scheme.name, removeGenericTerms: false)
+        // Keep only the best matches while scanning. Re-normalizing and sorting
+        // every AMFI scheme on the main thread for each keystroke made fund-name
+        // fields appear to freeze, especially on the first character.
+        var bestMatches: [(scheme: MFScheme, score: Int)] = []
+        bestMatches.reserveCapacity(limit)
+        for entry in searchIndex {
             var containsAll = true
             for term in searchTerms {
-                if !name.compact.contains(term) {
+                if !entry.compactName.contains(term) {
                     containsAll = false
                     break
                 }
             }
-            if containsAll {
-                candidates.append((scheme, name))
-            }
-        }
+            guard containsAll else { continue }
 
-        var scored: [(scheme: MFScheme, score: Int)] = []
-        for (scheme, name) in candidates {
             var score = 0
-            if name.compact.hasPrefix(searchCompact) {
+            if entry.compactName.hasPrefix(searchCompact) {
                 score += 100
-            } else if name.compact.contains(searchCompact) {
+            } else if entry.compactName.contains(searchCompact) {
                 score += 80
             }
             for term in searchTerms {
                 var matchedPrefix = false
-                for w in name.words {
+                for w in entry.words {
                     if w.hasPrefix(term) {
                         matchedPrefix = true
                         break
@@ -159,24 +175,22 @@ class MFService {
                 }
                 if matchedPrefix { score += 10 }
             }
-            scored.append((scheme, score))
-        }
 
-        scored.sort { lhs, rhs in
-            if lhs.score == rhs.score {
-                return lhs.scheme.name.localizedCaseInsensitiveCompare(rhs.scheme.name) == .orderedAscending
-            }
-            return lhs.score > rhs.score
-        }
-
-        var result: [MFScheme] = []
-        let limit = min(maxLimit, scored.count)
-        if limit > 0 {
-            for i in 0..<limit {
-                result.append(scored[i].scheme)
+            let match = (scheme: entry.scheme, score: score)
+            let insertionIndex = bestMatches.firstIndex { existing in
+                if match.score == existing.score {
+                    return match.scheme.name.localizedCaseInsensitiveCompare(existing.scheme.name) == .orderedAscending
+                }
+                return match.score > existing.score
+            } ?? bestMatches.endIndex
+            if insertionIndex < limit {
+                bestMatches.insert(match, at: insertionIndex)
+                if bestMatches.count > limit {
+                    bestMatches.removeLast()
+                }
             }
         }
-        return result
+        return bestMatches.map(\.scheme)
     }
 
     func schemesByCategory(_ category: String? = nil, limit: Int = 100) -> [MFScheme] {

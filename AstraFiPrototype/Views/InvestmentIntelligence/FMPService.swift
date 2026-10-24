@@ -3,6 +3,14 @@ import Foundation
 final class FMPService {
     static let shared = FMPService()
 
+    private let session: URLSession = {
+        let configuration = URLSessionConfiguration.ephemeral
+        configuration.timeoutIntervalForRequest = 15
+        configuration.timeoutIntervalForResource = 30
+        configuration.waitsForConnectivity = false
+        return URLSession(configuration: configuration)
+    }()
+
     private let stableBaseURL = "https://financialmodelingprep.com/stable"
     private var apiKey: String { Secrets.fmpApiKey }
 
@@ -53,7 +61,7 @@ final class FMPService {
         guard let url = components?.url else { throw URLError(.badURL) }
 
         print("FMP URL:", sanitizedURL(url))
-        let (data, response) = try await URLSession.shared.data(from: url)
+        let (data, response) = try await session.data(from: url)
         let statusCode = (response as? HTTPURLResponse)?.statusCode ?? 200
         print("HTTP Status:", statusCode)
         guard statusCode < 400 else {

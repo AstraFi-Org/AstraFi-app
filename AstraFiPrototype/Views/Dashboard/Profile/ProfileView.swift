@@ -7,6 +7,7 @@ struct ProfileView: View {
     @AppStorage("profileImageData") private var profileImageData: Data?
     @State private var selectedPhotoItem: PhotosPickerItem?
     @State private var showingSignOutAlert = false
+    @State private var showingSignIn = false
 
     private var profile: AstraUserProfile? { appState.currentProfile }
     private var basic: AstraBasicDetails? { profile?.basicDetails }
@@ -34,6 +35,41 @@ struct ProfileView: View {
     }
 
     var body: some View {
+        Group {
+            if appState.isAuthenticated {
+                authenticatedProfileBody
+            } else {
+                signInPrompt
+            }
+        }
+        .fullScreenCover(isPresented: $showingSignIn) {
+            NavigationStack {
+                AuthenticationFlowView()
+            }
+        }
+        .onChange(of: appState.isAuthenticated) { _, isAuthenticated in
+            if isAuthenticated {
+                showingSignIn = false
+            }
+        }
+    }
+
+    private var signInPrompt: some View {
+        ContentUnavailableView {
+            Label("Sign in to your profile", systemImage: "person.crop.circle")
+        } description: {
+            Text("Sign in to view your financial profile, account details, and security settings.")
+        } actions: {
+            Button("Sign In") {
+                showingSignIn = true
+            }
+            .buttonStyle(.borderedProminent)
+        }
+        .navigationTitle("Profile")
+        .navigationBarTitleDisplayMode(.inline)
+    }
+
+    private var authenticatedProfileBody: some View {
         Form {
             Section {
                 ProfileHeader(

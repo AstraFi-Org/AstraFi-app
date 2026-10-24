@@ -1239,34 +1239,7 @@ struct AllocationRecommendationScreen: View {
     }
 
     private var monthlyPerformanceSection: some View {
-        let monthlyEstimate = annualReturn / 12.0
         let savedRecords = appState.currentProfile?.safePerformanceRecords ?? []
-        let displayRecords: [InvestmentPerformanceRecord] = savedRecords.isEmpty ? [
-            InvestmentPerformanceRecord(
-                period: "September 2026",
-                openingValue: currentHolding,
-                closingValue: currentHolding + monthlyEstimate,
-                returnAmount: monthlyEstimate,
-                returnPercentage: (blendedReturn * 100) / 12.0,
-                recordType: "Investment growth"
-            ),
-            InvestmentPerformanceRecord(
-                period: "August 2026",
-                openingValue: max(0, currentHolding - monthlyEstimate),
-                closingValue: currentHolding,
-                returnAmount: monthlyEstimate * 0.96,
-                returnPercentage: (blendedReturn * 100 * 0.96) / 12.0,
-                recordType: "Investment growth"
-            ),
-            InvestmentPerformanceRecord(
-                period: "July 2026",
-                openingValue: max(0, currentHolding - (monthlyEstimate * 2)),
-                closingValue: max(0, currentHolding - monthlyEstimate),
-                returnAmount: monthlyEstimate * 0.92,
-                returnPercentage: (blendedReturn * 100 * 0.92) / 12.0,
-                recordType: "Investment growth"
-            )
-        ] : savedRecords
 
         return VStack(alignment: .leading, spacing: 14) {
             Divider().padding(.vertical, 6)
@@ -1274,37 +1247,58 @@ struct AllocationRecommendationScreen: View {
             Text("Monthly Earnings & Activity")
                 .font(.system(size: 16, weight: .bold, design: .rounded))
 
-            VStack(spacing: 10) {
-                ForEach(displayRecords) { record in
-                    Button {
-                        selectedPerformanceRecord = record
-                    } label: {
-                        HStack(alignment: .center, spacing: 12) {
-                            VStack(alignment: .leading, spacing: 3) {
-                                Text(record.period)
-                                    .font(.system(size: 14, weight: .semibold, design: .rounded))
-                                    .foregroundStyle(.primary)
-                                Text(record.recordType)
-                                    .font(.system(size: 12, design: .rounded))
-                                    .foregroundStyle(.secondary)
+            if savedRecords.isEmpty {
+                VStack(spacing: 8) {
+                    Image(systemName: "calendar.badge.clock")
+                        .font(.system(size: 26))
+                        .foregroundStyle(.secondary.opacity(0.8))
+                    Text("No Activity Records Yet")
+                        .font(.system(size: 14, weight: .semibold, design: .rounded))
+                        .foregroundStyle(.primary)
+                    Text(currentHolding > 0
+                         ? "Statements and interest earned on your emergency reserves will be tracked here once recorded."
+                         : "Allocate funds into your Emergency Reserve to begin tracking monthly growth and activity.")
+                        .font(.system(size: 12, design: .rounded))
+                        .foregroundStyle(.secondary)
+                        .multilineTextAlignment(.center)
+                        .padding(.horizontal, 16)
+                }
+                .frame(maxWidth: .infinity)
+                .padding(.vertical, 22)
+                .adaptivePlanCard(tint: riskColor, colorScheme: colorScheme, cornerRadius: 14, tintOpacity: 0.03)
+            } else {
+                VStack(spacing: 10) {
+                    ForEach(savedRecords) { record in
+                        Button {
+                            selectedPerformanceRecord = record
+                        } label: {
+                            HStack(alignment: .center, spacing: 12) {
+                                VStack(alignment: .leading, spacing: 3) {
+                                    Text(record.period)
+                                        .font(.system(size: 14, weight: .semibold, design: .rounded))
+                                        .foregroundStyle(.primary)
+                                    Text(record.recordType)
+                                        .font(.system(size: 12, design: .rounded))
+                                        .foregroundStyle(.secondary)
+                                }
+                                Spacer()
+                                VStack(alignment: .trailing, spacing: 3) {
+                                    Text(record.returnAmount >= 0 ? "+ \(record.returnAmount.toCurrency())" : "- \(abs(record.returnAmount).toCurrency())")
+                                        .font(.system(size: 15, weight: .bold, design: .rounded))
+                                        .foregroundStyle(record.returnAmount >= 0 ? Color(hex: "#30D158") : Color(hex: "#FF453A"))
+                                    Text(String(format: "%@%.1f%%", record.returnPercentage >= 0 ? "+" : "", record.returnPercentage))
+                                        .font(.system(size: 11, weight: .medium, design: .rounded))
+                                        .foregroundStyle(.secondary)
+                                }
+                                Image(systemName: "chevron.right")
+                                    .font(.system(size: 11, weight: .semibold))
+                                    .foregroundStyle(.secondary.opacity(0.6))
                             }
-                            Spacer()
-                            VStack(alignment: .trailing, spacing: 3) {
-                                Text(record.returnAmount >= 0 ? "+ \(record.returnAmount.toCurrency())" : "- \(abs(record.returnAmount).toCurrency())")
-                                    .font(.system(size: 15, weight: .bold, design: .rounded))
-                                    .foregroundStyle(record.returnAmount >= 0 ? Color(hex: "#30D158") : Color(hex: "#FF453A"))
-                                Text(String(format: "%@%.1f%%", record.returnPercentage >= 0 ? "+" : "", record.returnPercentage))
-                                    .font(.system(size: 11, weight: .medium, design: .rounded))
-                                    .foregroundStyle(.secondary)
-                            }
-                            Image(systemName: "chevron.right")
-                                .font(.system(size: 11, weight: .semibold))
-                                .foregroundStyle(.secondary.opacity(0.6))
+                            .padding(14)
+                            .adaptivePlanCard(tint: riskColor, colorScheme: colorScheme, cornerRadius: 14, tintOpacity: 0.03)
                         }
-                        .padding(14)
-                        .adaptivePlanCard(tint: riskColor, colorScheme: colorScheme, cornerRadius: 14, tintOpacity: 0.03)
+                        .buttonStyle(PlainButtonStyle())
                     }
-                    .buttonStyle(PlainButtonStyle())
                 }
             }
 
@@ -1323,9 +1317,11 @@ struct AllocationRecommendationScreen: View {
                         .font(.system(size: 13, design: .rounded))
                         .foregroundStyle(.secondary)
                     Spacer()
-                    Text("+\(annualReturn.toCurrency())")
+                    let isPositive = annualReturn >= 0
+                    let signStr = isPositive ? "+" : "-"
+                    Text("\(signStr)\(abs(annualReturn).toCurrency())")
                         .font(.system(size: 14, weight: .bold, design: .rounded))
-                        .foregroundStyle(Color(hex: "#30D158"))
+                        .foregroundStyle(isPositive ? Color(hex: "#30D158") : Color(hex: "#FF453A"))
                 }
             }
             .padding(14)

@@ -16,6 +16,9 @@ struct DashboardView: View {
     private var investments: [AstraInvestment] { profile?.investments ?? [] }
     private var goals: [AstraGoal] { profile?.goals ?? [] }
     private var loans: [AstraLoan] { profile?.loans ?? [] }
+    private var shouldLoadInvestmentIntelligence: Bool {
+        !showAuthPrompt && !navigateToProfile
+    }
     
     var body: some View {
         GeometryReader { proxy in
@@ -101,7 +104,8 @@ struct DashboardView: View {
                 AuthenticationFlowView()
             }
         }
-        .task {
+        .task(id: shouldLoadInvestmentIntelligence) {
+            guard shouldLoadInvestmentIntelligence else { return }
             await investmentIntelligence.load()
         }
     }

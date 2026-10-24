@@ -66,7 +66,47 @@ struct GoalDetailView: View {
 
     private var firstDate: Date {
         let linked = goal.map { appState.investments(for: $0.id) } ?? []
-        return linked.map { $0.startDate }.min() ?? Date()
+        let starts = linked.map { $0.startDate }
+        if let earliest = starts.min() {
+            return earliest
+        }
+        return goal?.startDate ?? Date()
+    }
+
+    private var lastInvestedText: String {
+        let linked = goal.map { appState.investments(for: $0.id) } ?? []
+        let allTxDates = linked.flatMap { $0.installments.map(\.date) }
+        if let maxTx = allTxDates.max() {
+            return df.string(from: maxTx)
+        }
+        let pastStarts = linked.compactMap { $0.startDate <= Date() ? $0.startDate : nil }
+        if let lastStart = pastStarts.max() {
+            return df.string(from: lastStart)
+        }
+        if let start = goal?.startDate, start <= Date() {
+            return df.string(from: start)
+        }
+        return "No investments yet"
+    }
+
+    private var nextDueDateText: String {
+        let linked = goal.map { appState.investments(for: $0.id) } ?? []
+        let sips = linked.filter { $0.mode == .sip }
+        guard let firstSip = sips.first else {
+            return "N/A (Lump sum)"
+        }
+        let now = Date()
+        let dayOfMonth = calendar.component(.day, from: firstSip.startDate)
+        var components = calendar.dateComponents([.year, .month], from: now)
+        components.day = dayOfMonth
+        if let thisMonthDueDate = calendar.date(from: components) {
+            if thisMonthDueDate >= now {
+                return df.string(from: thisMonthDueDate)
+            } else if let nextMonth = calendar.date(byAdding: .month, value: 1, to: thisMonthDueDate) {
+                return df.string(from: nextMonth)
+            }
+        }
+        return df.string(from: calendar.date(byAdding: .month, value: 1, to: now) ?? now)
     }
 
     private func investedAmountUpTo(date: Date, linked: [AstraInvestment]) -> Double {
@@ -104,15 +144,22 @@ struct GoalDetailView: View {
         let currentTotal = currentAmount
         let goalStart = goal?.startDate ?? Date()
         
-        let components = calendar.dateComponents([.month], from: goalStart, to: Date())
-        let monthsPassed = max(5, components.month ?? 0)
+        let startMonth = calendar.date(from: calendar.dateComponents([.year, .month], from: goalStart)) ?? Date()
+        let thisMonth = calendar.date(from: calendar.dateComponents([.year, .month], from: Date())) ?? Date()
+        let monthsDiff = max(0, calendar.dateComponents([.month], from: startMonth, to: thisMonth).month ?? 0)
+        let monthsPassed = min(11, monthsDiff)
+
+        if monthsPassed == 0 {
+            points.append(ProgressDataPoint(month: "Start", amount: 0))
+            points.append(ProgressDataPoint(month: shortDF.string(from: Date()), amount: max(0, currentTotal)))
+            return points
+        }
 
         for i in (0...monthsPassed).reversed() {
             if let date = calendar.date(byAdding: .month, value: -i, to: Date()) {
                 let monthName = shortDF.string(from: date)
                 var amount: Double = 0
                 
-                let startMonth = calendar.date(from: calendar.dateComponents([.year, .month], from: goalStart)) ?? Date()
                 let currentMonth = calendar.date(from: calendar.dateComponents([.year, .month], from: date)) ?? Date()
                 
                 if currentMonth >= startMonth {
@@ -133,36 +180,37 @@ struct GoalDetailView: View {
 
     private var dynamicSIPData: [SIPBarPoint] {
         let linked = goal.map { appState.investments(for: $0.id) } ?? []
-        guard !linked.isEmpty else {
-            return (1...6).map { i in SIPBarPoint(month: "M\(i)", amount: 0) }
+        let sipInvestments = linked.filter { $0.mode == .sip }
+        guard !sipInvestments.isEmpty || linked.contains(where: { !$0.installments.isEmpty }) else {
+            return []
         }
 
         var data: [SIPBarPoint] = []
-        let goalStart = goal?.startDate ?? Date()
-        let components = calendar.dateComponents([.month], from: goalStart, to: Date())
-        let monthsPassed = max(5, components.month ?? 0)
+        let allTxDates = linked.flatMap { $0.installments.map(\.date) }
+        let earliestDate = (sipInvestments.map(\.startDate) + allTxDates).min() ?? (goal?.startDate ?? Date())
+        
+        let startMonth = calendar.date(from: calendar.dateComponents([.year, .month], from: earliestDate)) ?? Date()
+        let thisMonth = calendar.date(from: calendar.dateComponents([.year, .month], from: Date())) ?? Date()
+        
+        let monthsPassed = max(0, calendar.dateComponents([.month], from: startMonth, to: thisMonth).month ?? 0)
+        let displayMonths = min(11, monthsPassed)
 
-        for i in (0...monthsPassed).reversed() {
+        for i in (0...displayMonths).reversed() {
             if let date = calendar.date(byAdding: .month, value: -i, to: Date()) {
                 let monthName = shortDF.string(from: date)
                 var monthAmount = 0.0
                 
-                let startMonth = calendar.date(from: calendar.dateComponents([.year, .month], from: goalStart)) ?? Date()
-                let currentMonth = calendar.date(from: calendar.dateComponents([.year, .month], from: date)) ?? Date()
-                
-                if currentMonth >= startMonth {
-                    for inv in linked {
-                        if !inv.installments.isEmpty {
-                            let monthTx = inv.installments.filter { 
-                                calendar.isDate($0.date, equalTo: date, toGranularity: .month) && 
-                                calendar.isDate($0.date, equalTo: date, toGranularity: .year)
-                            }
-                            monthAmount += monthTx.reduce(0.0) { res, tx in
-                                tx.type == .buy ? res + tx.amount : res - tx.amount
-                            }
-                        } else if inv.mode == .sip && inv.startDate <= date {
-                            monthAmount += inv.investmentAmount
+                for inv in linked {
+                    if !inv.installments.isEmpty {
+                        let monthTx = inv.installments.filter { 
+                            calendar.isDate($0.date, equalTo: date, toGranularity: .month) && 
+                            calendar.isDate($0.date, equalTo: date, toGranularity: .year)
                         }
+                        monthAmount += monthTx.reduce(0.0) { res, tx in
+                            tx.type == .buy ? res + tx.amount : res - tx.amount
+                        }
+                    } else if inv.mode == .sip && inv.startDate <= date {
+                        monthAmount += inv.investmentAmount
                     }
                 }
 
@@ -170,7 +218,7 @@ struct GoalDetailView: View {
             }
         }
 
-        return Array(data.suffix(12))
+        return data
     }
 
     private var shortDF: DateFormatter {
@@ -356,7 +404,7 @@ struct GoalDetailView: View {
             HStack {
                 Text("Collection Progress").font(.headline).fontWeight(.semibold)
                 Spacer()
-                Text("2024")
+                Text(String(calendar.component(.year, from: Date())))
                     .font(.caption).foregroundColor(.secondary)
                     .padding(.horizontal, 10).padding(.vertical, 4)
                     .background(Color(uiColor: .secondarySystemGroupedBackground))
@@ -400,9 +448,16 @@ struct GoalDetailView: View {
                 RoundedRectangle(cornerRadius: 2).fill(gradient[0]).frame(width: 20, height: 3)
                 Text("Collected Amount").font(.caption2).foregroundColor(.secondary)
                 Spacer()
-                HStack(spacing: 4) {
-                    Image(systemName: "arrow.up.right").font(.caption2).foregroundColor(.green)
-                    Text("Almost there! \(remainingAmount.toCurrency()) to go").font(.caption2).foregroundColor(.green).fontWeight(.medium)
+                if remainingAmount > 0 {
+                    HStack(spacing: 4) {
+                        Image(systemName: "arrow.up.right").font(.caption2).foregroundColor(.green)
+                        Text("Almost there! \(remainingAmount.toCurrency()) to go").font(.caption2).foregroundColor(.green).fontWeight(.medium)
+                    }
+                } else {
+                    HStack(spacing: 4) {
+                        Image(systemName: "checkmark.circle.fill").font(.caption2).foregroundColor(.green)
+                        Text("Target Reached!").font(.caption2).foregroundColor(.green).fontWeight(.medium)
+                    }
                 }
             }
         }
@@ -452,43 +507,65 @@ struct GoalDetailView: View {
             HStack {
                 Text("Monthly SIP Contributions").font(.headline).fontWeight(.semibold)
                 Spacer()
-                HStack(spacing: 4) {
-                    Circle().fill(gradient[0]).frame(width: 8, height: 8)
-                    Text("\(sipBaseAmount.toCurrency()) base").font(.caption2).foregroundColor(.secondary)
+                if sipBaseAmount > 0 {
+                    HStack(spacing: 4) {
+                        Circle().fill(gradient[0]).frame(width: 8, height: 8)
+                        Text("\(sipBaseAmount.toCurrency()) base").font(.caption2).foregroundColor(.secondary)
+                    }
                 }
             }
 
-            Chart(dynamicSIPData) { item in
-                BarMark(x: .value("Month", item.month), y: .value("Amount", item.amount))
-                    .foregroundStyle(
-                        item.amount > sipBaseAmount
-                            ? LinearGradient(colors: gradient, startPoint: .bottom, endPoint: .top)
-                            : LinearGradient(colors: [gradient[0].opacity(0.4), gradient[0].opacity(0.4)], startPoint: .bottom, endPoint: .top)
-                    )
-                    .cornerRadius(4)
-            }
-            .frame(height: 120)
-            .chartYScale(domain: 0...sipChartUpperBound)
-            .chartYAxis(.hidden)
-            .chartXAxis {
-                AxisMarks(values: .automatic) { _ in
-                    AxisValueLabel().font(.caption2).foregroundStyle(.secondary)
+            if dynamicSIPData.isEmpty {
+                VStack(spacing: 8) {
+                    Image(systemName: "arrow.triangle.2.circlepath.circle")
+                        .font(.system(size: 28))
+                        .foregroundStyle(gradient[0].opacity(0.7))
+                    Text(sipBaseAmount > 0 ? "First Installment Scheduled" : "No Recurring SIP Linked")
+                        .font(.system(size: 14, weight: .semibold))
+                        .foregroundStyle(.primary)
+                    Text(sipBaseAmount > 0
+                         ? "Next SIP installment of \(sipBaseAmount.toCurrency()) is due on \(nextDueDateText)."
+                         : "This goal is funded via lump sum or manual savings. Attach a Systematic Investment Plan to track monthly contributions.")
+                        .font(.system(size: 12))
+                        .foregroundStyle(.secondary)
+                        .multilineTextAlignment(.center)
+                        .padding(.horizontal, 16)
                 }
-            }
-            .chartPlotStyle { plotArea in
-                plotArea
-                    .padding(.top, 12)
-                    .padding(.horizontal, 4)
-            }
+                .frame(maxWidth: .infinity)
+                .padding(.vertical, 20)
+            } else {
+                Chart(dynamicSIPData) { item in
+                    BarMark(x: .value("Month", item.month), y: .value("Amount", item.amount))
+                        .foregroundStyle(
+                            item.amount > sipBaseAmount
+                                ? LinearGradient(colors: gradient, startPoint: .bottom, endPoint: .top)
+                                : LinearGradient(colors: [gradient[0].opacity(0.4), gradient[0].opacity(0.4)], startPoint: .bottom, endPoint: .top)
+                        )
+                        .cornerRadius(4)
+                }
+                .frame(height: 120)
+                .chartYScale(domain: 0...sipChartUpperBound)
+                .chartYAxis(.hidden)
+                .chartXAxis {
+                    AxisMarks(values: .automatic) { _ in
+                        AxisValueLabel().font(.caption2).foregroundStyle(.secondary)
+                    }
+                }
+                .chartPlotStyle { plotArea in
+                    plotArea
+                        .padding(.top, 12)
+                        .padding(.horizontal, 4)
+                }
 
-            HStack(spacing: 16) {
-                HStack(spacing: 6) {
-                    RoundedRectangle(cornerRadius: 2).fill(gradient[0]).frame(width: 14, height: 10)
-                    Text("Extra top-up").font(.caption2).foregroundColor(.secondary)
-                }
-                HStack(spacing: 6) {
-                    RoundedRectangle(cornerRadius: 2).fill(gradient[0].opacity(0.4)).frame(width: 14, height: 10)
-                    Text("Regular SIP").font(.caption2).foregroundColor(.secondary)
+                HStack(spacing: 16) {
+                    HStack(spacing: 6) {
+                        RoundedRectangle(cornerRadius: 2).fill(gradient[0]).frame(width: 14, height: 10)
+                        Text("Extra top-up").font(.caption2).foregroundColor(.secondary)
+                    }
+                    HStack(spacing: 6) {
+                        RoundedRectangle(cornerRadius: 2).fill(gradient[0].opacity(0.4)).frame(width: 14, height: 10)
+                        Text("Regular SIP").font(.caption2).foregroundColor(.secondary)
+                    }
                 }
             }
         }
@@ -512,9 +589,9 @@ struct GoalDetailView: View {
             Divider()
             DetailInfoRow(label: "Started On",    value: df.string(from: firstDate))
             Divider()
-            DetailInfoRow(label: "Last Invested", value: df.string(from: calendar.date(byAdding: .month, value: -1, to: Date()) ?? Date()))
+            DetailInfoRow(label: "Last Invested", value: lastInvestedText)
             Divider()
-            DetailInfoRow(label: "Next Due Date", value: df.string(from: Date()))
+            DetailInfoRow(label: "Next Due Date", value: nextDueDateText)
             Divider()
             HStack {
                 Text("Status").font(.subheadline).foregroundColor(.secondary)
@@ -632,54 +709,70 @@ struct GoalDetailView: View {
     private var monthlyEarningsSection: some View {
         let savedRecords = appState.currentProfile?.safePerformanceRecords.filter { $0.goalId == goalID } ?? []
         let linked = goal.map { appState.investments(for: $0.id) } ?? []
-        let totalInvested = max(1, linked.reduce(0.0) { $0 + $1.totalInvestedAmount })
-        let growth = max(0, currentAmount - totalInvested)
-        let monthlyGrowthEst = max(500, growth / 6.0)
-
-        let displayRecords: [InvestmentPerformanceRecord] = !savedRecords.isEmpty ? savedRecords : [
-            InvestmentPerformanceRecord(goalId: goalID, period: "September 2026", openingValue: currentAmount - monthlyGrowthEst, closingValue: currentAmount, returnAmount: monthlyGrowthEst, returnPercentage: 2.1, recordType: "Investment growth"),
-            InvestmentPerformanceRecord(goalId: goalID, period: "August 2026", openingValue: currentAmount - (monthlyGrowthEst * 2), closingValue: currentAmount - monthlyGrowthEst, returnAmount: monthlyGrowthEst * 0.9, returnPercentage: 1.9, recordType: "Investment growth"),
-            InvestmentPerformanceRecord(goalId: goalID, period: "July 2026", openingValue: currentAmount - (monthlyGrowthEst * 3), closingValue: currentAmount - (monthlyGrowthEst * 2), returnAmount: monthlyGrowthEst * 0.8, returnPercentage: 1.7, recordType: "Investment growth"),
-            InvestmentPerformanceRecord(goalId: goalID, period: "June 2026", openingValue: currentAmount - (monthlyGrowthEst * 4), closingValue: currentAmount - (monthlyGrowthEst * 3), returnAmount: -monthlyGrowthEst * 0.3, returnPercentage: -0.6, recordType: "Investment growth")
-        ]
+        let manualSavings = goal?.manualSavingsContribution ?? 0
+        let totalInvested = linked.reduce(0.0) { $0 + $1.totalInvestedAmount } + manualSavings
+        let growth = currentAmount - totalInvested
+        let growthPercent = totalInvested > 0 ? (growth / totalInvested) * 100 : 0.0
 
         return VStack(alignment: .leading, spacing: 14) {
             Text("Monthly Earnings & Activity")
                 .font(.headline)
                 .foregroundStyle(.primary)
 
-            VStack(spacing: 8) {
-                ForEach(displayRecords) { record in
-                    Button {
-                        selectedPerformanceRecord = record
-                    } label: {
-                        HStack(spacing: 12) {
-                            VStack(alignment: .leading, spacing: 2) {
-                                Text(record.period)
-                                    .font(.system(size: 14, weight: .semibold, design: .rounded))
-                                    .foregroundStyle(.primary)
-                                Text(record.recordType)
-                                    .font(.system(size: 12, design: .rounded))
-                                    .foregroundStyle(.secondary)
-                            }
-                            Spacer()
-                            VStack(alignment: .trailing, spacing: 2) {
-                                Text(record.returnAmount >= 0 ? "+ \(record.returnAmount.toCurrency())" : "- \(abs(record.returnAmount).toCurrency())")
-                                    .font(.system(size: 14, weight: .bold, design: .rounded))
-                                    .foregroundStyle(record.returnAmount >= 0 ? Color(hex: "#30D158") : Color(hex: "#FF453A"))
-                                Text(String(format: "%@%.1f%%", record.returnPercentage >= 0 ? "+" : "", record.returnPercentage))
+            if savedRecords.isEmpty {
+                VStack(spacing: 8) {
+                    Image(systemName: linked.isEmpty ? "chart.line.uptrend.xyaxis" : "calendar.badge.clock")
+                        .font(.system(size: 26))
+                        .foregroundStyle(.secondary.opacity(0.8))
+                    Text(linked.isEmpty ? "No Investments Linked" : "No Closed Statements Yet")
+                        .font(.system(size: 14, weight: .semibold, design: .rounded))
+                        .foregroundStyle(.primary)
+                    Text(linked.isEmpty
+                         ? "Attach an investment to this goal to track actual monthly performance."
+                         : "Monthly statements will appear here once the first statement cycle closes.")
+                        .font(.system(size: 12, design: .rounded))
+                        .foregroundStyle(.secondary)
+                        .multilineTextAlignment(.center)
+                        .padding(.horizontal, 16)
+                }
+                .frame(maxWidth: .infinity)
+                .padding(.vertical, 20)
+                .background(Color(uiColor: .tertiarySystemFill))
+                .clipShape(RoundedRectangle(cornerRadius: 12, style: .continuous))
+            } else {
+                VStack(spacing: 8) {
+                    ForEach(savedRecords) { record in
+                        Button {
+                            selectedPerformanceRecord = record
+                        } label: {
+                            HStack(spacing: 12) {
+                                VStack(alignment: .leading, spacing: 2) {
+                                    Text(record.period)
+                                        .font(.system(size: 14, weight: .semibold, design: .rounded))
+                                        .foregroundStyle(.primary)
+                                    Text(record.recordType)
+                                        .font(.system(size: 12, design: .rounded))
+                                        .foregroundStyle(.secondary)
+                                }
+                                Spacer()
+                                VStack(alignment: .trailing, spacing: 2) {
+                                    Text(record.returnAmount >= 0 ? "+ \(record.returnAmount.toCurrency())" : "- \(abs(record.returnAmount).toCurrency())")
+                                        .font(.system(size: 14, weight: .bold, design: .rounded))
+                                        .foregroundStyle(record.returnAmount >= 0 ? Color(hex: "#30D158") : Color(hex: "#FF453A"))
+                                    Text(String(format: "%@%.1f%%", record.returnPercentage >= 0 ? "+" : "", record.returnPercentage))
+                                        .font(.caption2)
+                                        .foregroundStyle(.secondary)
+                                }
+                                Image(systemName: "chevron.right")
                                     .font(.caption2)
-                                    .foregroundStyle(.secondary)
+                                    .foregroundStyle(.secondary.opacity(0.5))
                             }
-                            Image(systemName: "chevron.right")
-                                .font(.caption2)
-                                .foregroundStyle(.secondary.opacity(0.5))
+                            .padding(12)
+                            .background(Color(uiColor: .tertiarySystemFill))
+                            .clipShape(RoundedRectangle(cornerRadius: 12, style: .continuous))
                         }
-                        .padding(12)
-                        .background(Color(uiColor: .tertiarySystemFill))
-                        .clipShape(RoundedRectangle(cornerRadius: 12, style: .continuous))
+                        .buttonStyle(PlainButtonStyle())
                     }
-                    .buttonStyle(PlainButtonStyle())
                 }
             }
 
@@ -697,9 +790,11 @@ struct GoalDetailView: View {
                 HStack {
                     Text("Total Growth").font(.caption).foregroundStyle(.secondary)
                     Spacer()
-                    Text("+\(growth.toCurrency())")
+                    let isPositive = growth >= 0
+                    let signStr = isPositive ? "+" : "-"
+                    Text("\(signStr)\(abs(growth).toCurrency()) (\(signStr)\(String(format: "%.1f", abs(growthPercent)))%)")
                         .font(.caption.weight(.bold))
-                        .foregroundStyle(Color(hex: "#30D158"))
+                        .foregroundStyle(isPositive ? Color(hex: "#30D158") : Color(hex: "#FF453A"))
                 }
             }
             .padding(12)

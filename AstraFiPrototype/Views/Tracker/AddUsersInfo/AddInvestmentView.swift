@@ -235,6 +235,8 @@ struct AddInvestmentView: View {
     @State private var showingStockSearch = false
     @State private var isSearchingMarket = false
     @State private var marketSearchTask: Task<Void, Never>?
+    @State private var calculationTask: Task<Void, Never>?
+    @State private var fundSearchTask: Task<Void, Never>?
     @State private var quantity = ""
     @State private var historicalPriceOnDate: Double?
     @State private var isFetchingHistoricalQty = false
@@ -297,6 +299,11 @@ struct AddInvestmentView: View {
                     }
                     .disabled(!canSave)
                 }
+            }
+            .onDisappear {
+                calculationTask?.cancel()
+                marketSearchTask?.cancel()
+                fundSearchTask?.cancel()
             }
         }
     }
@@ -492,12 +499,26 @@ struct AddInvestmentView: View {
         VStack(alignment: .leading, spacing: 6) {
             TextField("Fund / Investment Name", text: $name)
                 .onChange(of: name) { _, newValue in
+                    fundSearchTask?.cancel()
                     guard selectedSchemeCode == nil, !newValue.isEmpty else {
+                        searchResults = []
                         showSearch = false
                         return
                     }
-                    searchResults = MFService.shared.searchSchemes(query: newValue)
-                    showSearch = !searchResults.isEmpty
+                    let query = newValue
+                    showSearch = false
+                    fundSearchTask = Task {
+                        do {
+                            try await Task.sleep(for: .milliseconds(250))
+                        } catch {
+                            return
+                        }
+                        guard !Task.isCancelled,
+                              query == name,
+                              selectedSchemeCode == nil else { return }
+                        searchResults = MFService.shared.searchSchemes(query: query)
+                        showSearch = !searchResults.isEmpty
+                    }
                 }
 
             if let code = selectedSchemeCode {
@@ -918,6 +939,9 @@ struct AddInvestmentView: View {
     }
 
     private func resetTypeSpecificFields() {
+        calculationTask?.cancel()
+        marketSearchTask?.cancel()
+        fundSearchTask?.cancel()
         name = ""
         amount = ""
         currentValue = ""
@@ -931,6 +955,8 @@ struct AddInvestmentView: View {
         showSearch = false
         marketSearchQuery = ""
         historicalPriceOnDate = nil
+        isCalculatingUnits = false
+        isFetchingHistoricalQty = false
         mode = selectedType.supportsMode ? .sip : .lumpsum
         if selectedType == .fixedDeposit { name = bankName }
         if selectedType == .cashSavings { bankName = "" }
@@ -1081,34 +1107,51 @@ struct AddInvestmentView: View {
     }
 
     private func recalculateMarketQuantity() {
+        calculationTask?.cancel()
         guard let asset = selectedMarketAsset, let invested = Double(amount), invested > 0 else {
             quantity = ""
+            isFetchingHistoricalQty = false
             return
         }
 
         isFetchingHistoricalQty = true
-        Task {
+        let calculationType = selectedType
+        let calculationDate = startDate
+        calculationTask = Task {
+            do {
+                try await Task.sleep(for: .milliseconds(300))
+            } catch {
+                return
+            }
+            guard !Task.isCancelled else { return }
+
             var price: Double?
 
-            if selectedType == .crypto {
-                price = await StockService.shared.fetchCryptoINRPrice(symbol: asset.symbol, date: startDate)
-            } else if selectedType == .goldETF || selectedType == .stock {
-                price = await StockService.shared.fetchHistoricalPrice(symbol: asset.symbol, date: startDate)
+            if calculationType == .crypto {
+                price = await StockService.shared.fetchCryptoINRPrice(symbol: asset.symbol, date: calculationDate)
+            } else if calculationType == .goldETF || calculationType == .stock {
+                price = await StockService.shared.fetchHistoricalPrice(symbol: asset.symbol, date: calculationDate)
             }
+            guard !Task.isCancelled else { return }
 
             if price == nil || price == 0 {
                 price = await StockService.shared.fetchPrice(symbol: asset.symbol)?.currentPrice
             }
+            guard !Task.isCancelled else { return }
 
             if price == nil || price == 0 {
                 price = asset.currentPrice
             }
 
             await MainActor.run {
+                guard selectedMarketAsset?.symbol == asset.symbol,
+                      selectedType == calculationType,
+                      startDate == calculationDate,
+                      Double(amount) == invested else { return }
                 if let price, price > 0 {
                     historicalPriceOnDate = price
-                    quantity = selectedType == .crypto ? String(format: "%.6f", invested / price) : String(format: "%.3f", invested / price)
-                    if selectedType == .crypto, var current = selectedMarketAsset {
+                    quantity = calculationType == .crypto ? String(format: "%.6f", invested / price) : String(format: "%.3f", invested / price)
+                    if calculationType == .crypto, var current = selectedMarketAsset {
                         current.currentPrice = price
                         selectedMarketAsset = current
                     }
@@ -1122,33 +1165,55 @@ struct AddInvestmentView: View {
     }
 
     private func performMutualFundAutoCalculation() {
+        calculationTask?.cancel()
         guard selectedType == .mutualFund,
               let code = selectedSchemeCode,
               let invested = Double(amount),
-              invested > 0 else { return }
+              invested > 0 else {
+            isCalculatingUnits = false
+            return
+        }
 
         isCalculatingUnits = true
-        Task {
-            if mode == .sip {
+        let calculationMode = mode
+        let calculationDate = startDate
+        calculationTask = Task {
+            do {
+                try await Task.sleep(for: .milliseconds(300))
+            } catch {
+                return
+            }
+            guard !Task.isCancelled else { return }
+
+            let calculatedUnits: Double?
+            let calculatedNAV: Double?
+            if calculationMode == .sip {
                 let result = await MFService.shared.calculateHistoricalSIPUnits(
                     schemeCode: code,
                     monthlyAmount: invested,
-                    startDate: startDate
+                    startDate: calculationDate
                 )
-                await MainActor.run {
-                    units = String(format: "%.4f", result.totalUnits)
-                    isCalculatingUnits = false
-                }
-            } else if let nav = await MFService.shared.fetchHistoricalNAV(schemeCode: code, date: startDate) {
-                await MainActor.run {
-                    units = String(format: "%.4f", invested / nav)
-                    historicalPriceOnDate = nav
-                    isCalculatingUnits = false
-                }
+                calculatedUnits = result.totalUnits
+                calculatedNAV = nil
             } else {
-                await MainActor.run {
-                    isCalculatingUnits = false
+                calculatedNAV = await MFService.shared.fetchHistoricalNAV(schemeCode: code, date: calculationDate)
+                calculatedUnits = calculatedNAV.map { invested / $0 }
+            }
+
+            guard !Task.isCancelled else { return }
+            await MainActor.run {
+                guard selectedSchemeCode == code,
+                      selectedType == .mutualFund,
+                      mode == calculationMode,
+                      startDate == calculationDate,
+                      Double(amount) == invested else { return }
+                if let calculatedUnits {
+                    units = String(format: "%.4f", calculatedUnits)
                 }
+                if let calculatedNAV {
+                    historicalPriceOnDate = calculatedNAV
+                }
+                isCalculatingUnits = false
             }
         }
     }
