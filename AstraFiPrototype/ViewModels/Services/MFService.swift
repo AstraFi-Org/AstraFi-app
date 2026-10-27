@@ -15,9 +15,20 @@ class MFService {
     var allSchemes: [MFScheme] = []
     var isFetching: Bool = false
     var lastFetchDate: Date?
+    /// True after at least one fetch attempt has been made and all mirrors failed.
+    var lastFetchFailed: Bool = false
 
     @ObservationIgnored private var historyCache: [String: [MFHistoryPoint]] = [:]
     @ObservationIgnored private var searchIndex: [SchemeSearchEntry] = []
+
+    /// Dedicated URLSession for AMFI so slow requests don't impact other network activity.
+    @ObservationIgnored private let amfiSession: URLSession = {
+        let config = URLSessionConfiguration.ephemeral
+        config.timeoutIntervalForRequest  = 15   // per-request connect/read timeout
+        config.timeoutIntervalForResource = 30   // total resource download timeout
+        config.waitsForConnectivity = true
+        return URLSession(configuration: config)
+    }()
 
     private let amfiURLs = [
         URL(string: "https://portal.amfiindia.com/spages/NAVAll.txt")!,
@@ -34,47 +45,67 @@ class MFService {
         isFetching = true
         defer { isFetching = false }
 
+        // Try each mirror; use bounded exponential backoff within each attempt
         for url in amfiURLs {
-            do {
-                var request = URLRequest(url: url)
-                request.timeoutInterval = 20
-                request.setValue("text/plain,*/*", forHTTPHeaderField: "Accept")
-                request.setValue("AstraFi/1.0 iOS", forHTTPHeaderField: "User-Agent")
+            var backoff: UInt64 = 500_000_000  // 0.5 s initial
+            for attempt in 1...3 {
+                do {
+                    var request = URLRequest(url: url)
+                    request.setValue("text/plain,*/*", forHTTPHeaderField: "Accept")
+                    request.setValue("AstraFi/1.0 iOS", forHTTPHeaderField: "User-Agent")
+                    request.cachePolicy = .reloadIgnoringLocalCacheData
 
-                let (data, response) = try await URLSession.shared.data(for: request)
-                guard let httpResponse = response as? HTTPURLResponse,
-                      200..<300 ~= httpResponse.statusCode else {
-                    print("Error fetching AMFI data from \(url): invalid HTTP response")
-                    continue
+                    let (data, response) = try await amfiSession.data(for: request)
+                    guard let httpResponse = response as? HTTPURLResponse,
+                          200..<300 ~= httpResponse.statusCode else {
+                        print("⚠️ [AMFI] attempt \(attempt) \(url.host ?? ""): bad HTTP status")
+                        break  // non-retriable HTTP error — try next mirror
+                    }
+
+                    guard let content = String(data: data, encoding: .utf8) else {
+                        print("⚠️ [AMFI] attempt \(attempt) \(url.host ?? ""): encoding failure")
+                        break
+                    }
+
+                    let parsed = parseAMFIData(content)
+                    guard !parsed.isEmpty else {
+                        print("⚠️ [AMFI] attempt \(attempt) \(url.host ?? ""): zero schemes parsed")
+                        break
+                    }
+
+                    let parsedIndex = parsed.map { scheme in
+                        let normalized = Self.normalizedSearchTerms(scheme.name, removeGenericTerms: false)
+                        return SchemeSearchEntry(
+                            scheme: scheme,
+                            words: normalized.words,
+                            compactName: normalized.compact
+                        )
+                    }
+
+                    await MainActor.run {
+                        self.allSchemes = parsed
+                        self.searchIndex = parsedIndex
+                        self.lastFetchDate = Date()
+                        self.lastFetchFailed = false
+                    }
+                    print("✅ [AMFI] fetched \(parsed.count) schemes from \(url.host ?? "") (attempt \(attempt))")
+                    return  // success — exit entirely
+
+                } catch {
+                    print("⚠️ [AMFI] attempt \(attempt) \(url.host ?? "") error: \(error.localizedDescription)")
+                    if attempt < 3 {
+                        // Exponential backoff with jitter before retry
+                        let jitter = UInt64.random(in: 0...200_000_000)
+                        try? await Task.sleep(nanoseconds: backoff + jitter)
+                        backoff *= 2
+                    }
                 }
-
-                guard let content = String(data: data, encoding: .utf8) else { continue }
-
-                let parsed = parseAMFIData(content)
-                guard !parsed.isEmpty else {
-                    print("Error fetching AMFI data: no schemes parsed from \(url)")
-                    continue
-                }
-
-                let parsedIndex = parsed.map { scheme in
-                    let normalized = Self.normalizedSearchTerms(scheme.name, removeGenericTerms: false)
-                    return SchemeSearchEntry(
-                        scheme: scheme,
-                        words: normalized.words,
-                        compactName: normalized.compact
-                    )
-                }
-
-                await MainActor.run {
-                    self.allSchemes = parsed
-                    self.searchIndex = parsedIndex
-                    self.lastFetchDate = Date()
-                }
-                return
-            } catch {
-                print("Error fetching AMFI data from \(url): \(error)")
             }
         }
+
+        // All mirrors exhausted — mark failure; retain any schemes already in memory
+        await MainActor.run { self.lastFetchFailed = true }
+        print("❌ [AMFI] all mirrors failed — retaining \(self.allSchemes.count) cached schemes")
     }
 
     private func parseAMFIData(_ content: String) -> [MFScheme] {
