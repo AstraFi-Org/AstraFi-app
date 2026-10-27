@@ -1178,15 +1178,24 @@ ins.maturityDate = row.maturityDate.flatMap { parseDate($0) }
             .single().execute().value
         else { return nil }
 
-        let assetsRow: AssetsFetchRow?      = try? await supabase.from("assets").select().eq("user_id", value: userId.uuidString).single().execute().value
-        let liabilitiesRow: LiabilitiesFetchRow? = try? await supabase.from("liabilities").select().eq("user_id", value: userId.uuidString).single().execute().value
+        // Fetch related profile entities concurrently over the dedicated HTTP/2 session
+        async let assetsTask: AssetsFetchRow? = try? await supabase.from("assets").select().eq("user_id", value: userId.uuidString).single().execute().value
+        async let liabilitiesTask: LiabilitiesFetchRow? = try? await supabase.from("liabilities").select().eq("user_id", value: userId.uuidString).single().execute().value
+        async let goalsTask = try? await fetchGoals(userId: userId)
+        async let investmentsTask = try? await fetchInvestments(userId: userId)
+        async let loansTask = try? await fetchLoans(userId: userId)
+        async let insurancesTask = try? await fetchInsurances(userId: userId)
+        async let snapshotsTask = try? await fetchCashflowSnapshots(userId: userId)
+        async let assessmentsTask = try? await fetchHealthAssessments(userId: userId)
 
-        let rawGoals       = (try? await fetchGoals(userId: userId)) ?? []
-        let rawInvestments = (try? await fetchInvestments(userId: userId)) ?? []
-        let rawLoans       = (try? await fetchLoans(userId: userId)) ?? []
-        let rawInsurances  = (try? await fetchInsurances(userId: userId)) ?? []
-        let snapshots      = (try? await fetchCashflowSnapshots(userId: userId)) ?? [:]
-        let assessments    = (try? await fetchHealthAssessments(userId: userId)) ?? []
+        let assetsRow      = await assetsTask
+        let liabilitiesRow = await liabilitiesTask
+        let rawGoals       = (await goalsTask) ?? []
+        let rawInvestments = (await investmentsTask) ?? []
+        let rawLoans       = (await loansTask) ?? []
+        let rawInsurances  = (await insurancesTask) ?? []
+        let snapshots      = (await snapshotsTask) ?? [:]
+        let assessments    = (await assessmentsTask) ?? []
 
         // Apply entity deduplication
         let goals       = rawGoals.deduplicated()
