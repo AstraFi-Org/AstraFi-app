@@ -1628,6 +1628,29 @@ final class AppStateManager {
         currentProfile = profile
         syncProfile()
     }
+
+    /// Completely deletes the current financial planning journey, all active/planned goals,
+    /// and resets the financial roadmap so the user can start completely fresh.
+    func deleteFinancialPlanAndJourney() {
+        guard var profile = currentProfile else { return }
+        let goalsToDelete = profile.goals
+        let plansToDelete = savedPlans
+        profile.goals.removeAll()
+        profile.planningJourney = FinancialPlanningJourney()
+        profile.masterFinancialPlan = nil
+        currentProfile = profile
+        savedPlans.removeAll()
+        recalculateFinancials()
+        syncProfile()
+        Task {
+            for goal in goalsToDelete {
+                _ = try? await SupabaseRepository.shared.deleteGoal(goal.id)
+            }
+            for plan in plansToDelete {
+                _ = try? await SupabaseRepository.shared.deleteSavedPlan(plan.id)
+            }
+        }
+    }
     
     func addGoal(_ goal: AstraGoal) {
         if var profile = currentProfile {

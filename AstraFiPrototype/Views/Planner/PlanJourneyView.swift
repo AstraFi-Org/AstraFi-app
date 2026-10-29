@@ -108,6 +108,7 @@ struct PlanJourneyView: View {
     @State private var goalToDelete: DisplayableJourneyGoal? = nil
     @State private var showDeleteGoalConfirmation = false
     @State private var showResetJourneyConfirmation = false
+    @State private var showDeleteCompletePlanConfirmation = false
 
     private var profile: AstraUserProfile? { appState.currentProfile }
     private var journey: FinancialPlanningJourney { profile?.planningJourney ?? FinancialPlanningJourney() }
@@ -473,6 +474,7 @@ struct PlanJourneyView: View {
                 journeyIntroduction
             }
         }
+        .background(AppTheme.appBackground(for: colorScheme).ignoresSafeArea())
         .navigationTitle(hasStartedPlanning ? phaseHeaderTitle : "Financial Journey")
         .navigationBarTitleDisplayMode(.inline)
         .navigationBarBackButtonHidden(true)
@@ -510,16 +512,31 @@ struct PlanJourneyView: View {
                 }
             } else {
                 ToolbarItem(placement: .topBarTrailing) {
-                    Button {
-                        showPlanGoalSelection = true
-                    } label: {
-                        Image(systemName: "plus")
-                            .font(.system(size: 16, weight: .semibold))
-                            .foregroundStyle(.primary)
-                            .frame(width: 40, height: 40)
+                    HStack(spacing: 2) {
+                        if hasExistingJourney {
+                            Button(role: .destructive) {
+                                showDeleteCompletePlanConfirmation = true
+                            } label: {
+                                Image(systemName: "trash")
+                                    .font(.system(size: 15, weight: .semibold))
+                                    .foregroundStyle(.red)
+                                    .frame(width: 36, height: 40)
+                            }
+                            .accessibilityLabel("Delete Financial Plan")
+                            .buttonStyle(.plain)
+                        }
+
+                        Button {
+                            showPlanGoalSelection = true
+                        } label: {
+                            Image(systemName: "plus")
+                                .font(.system(size: 16, weight: .semibold))
+                                .foregroundStyle(.primary)
+                                .frame(width: 36, height: 40)
+                        }
+                        .accessibilityLabel("Add a new goal")
+                        .buttonStyle(.plain)
                     }
-                    .accessibilityLabel("Add a new goal")
-                    .buttonStyle(.plain)
                 }
             }
         }
@@ -618,6 +635,18 @@ struct PlanJourneyView: View {
             Button("Cancel", role: .cancel) {}
         } message: {
             Text("This will reset your financial journey planning drafts, milestones, and scenario configurations. Your personal profile, tracked investments, bank accounts, and loans will not be affected.")
+        }
+        .confirmationDialog(
+            "Delete Financial Plan?",
+            isPresented: $showDeleteCompletePlanConfirmation,
+            titleVisibility: .visible
+        ) {
+            Button("Delete Plan Completely & Start Fresh", role: .destructive) {
+                deleteCompleteFinancialPlan()
+            }
+            Button("Cancel", role: .cancel) {}
+        } message: {
+            Text("This will permanently remove your active financial plan, all planned goals, timeline milestones, and strategy simulations so you can start with a clean slate. Your profile, tracked bank accounts, and loans will not be modified.")
         }
     }
 
@@ -1053,6 +1082,15 @@ struct PlanJourneyView: View {
         }
     }
 
+    private func deleteCompleteFinancialPlan() {
+        UIImpactFeedbackGenerator(style: .heavy).impactOccurred()
+        appState.deleteFinancialPlanAndJourney()
+        chosenPlanIndex.removeAll()
+        withAnimation(.spring(response: 0.35)) {
+            hasStartedPlanning = false
+        }
+    }
+
     // MARK: - Redesigned Financial Journey Overview
     private var savedJourneyOverview: some View {
         VStack(alignment: .leading, spacing: 22) {
@@ -1188,16 +1226,22 @@ struct PlanJourneyView: View {
             // Visual Cash Flow Proportion Bar
             VStack(spacing: 5) {
                 GeometryReader { geo in
-                    HStack(spacing: 3) {
+                    let w = geo.size.width
+                    let expW = min(w, max(4, w * CGFloat(expenseRatio)))
+                    let surpW = min(max(0, w - expW), max(0, w * CGFloat(surplusRatio)))
+                    HStack(spacing: 2) {
                         RoundedRectangle(cornerRadius: 3)
                             .fill(Color.orange)
-                            .frame(width: max(4, geo.size.width * CGFloat(expenseRatio) - 2))
-                        RoundedRectangle(cornerRadius: 3)
-                            .fill(Color.blue)
-                            .frame(width: max(4, geo.size.width * CGFloat(surplusRatio) - 2))
+                            .frame(width: max(4, expW - (surpW > 4 ? 2 : 0)))
+                        if surpW > 4 {
+                            RoundedRectangle(cornerRadius: 3)
+                                .fill(Color.blue)
+                                .frame(width: surpW)
+                        }
                     }
                 }
                 .frame(height: 6)
+                .clipShape(Capsule())
 
                 HStack {
                     HStack(spacing: 4) {
@@ -1453,14 +1497,17 @@ struct PlanJourneyView: View {
                 // Styled Progress Bar
                 VStack(spacing: 3) {
                     GeometryReader { geo in
+                        let w = geo.size.width
+                        let progressW = min(w, max(4, w * CGFloat(min(1.0, goal.progress))))
                         ZStack(alignment: .leading) {
                             Capsule().fill(Color.primary.opacity(0.08))
                             Capsule()
                                 .fill(color)
-                                .frame(width: max(4, geo.size.width * CGFloat(goal.progress)))
+                                .frame(width: progressW)
                         }
                     }
                     .frame(height: 6)
+                    .clipShape(Capsule())
 
                     HStack {
                         Text(String(format: "%.0f%% saved", goal.progress * 100))
@@ -1666,14 +1713,17 @@ struct PlanJourneyView: View {
                             }
 
                             GeometryReader { geo in
+                                let w = geo.size.width
+                                let progressW = min(w, max(4, w * CGFloat(min(1.0, goal.progress))))
                                 ZStack(alignment: .leading) {
                                     Capsule().fill(Color.primary.opacity(0.06))
                                     Capsule()
                                         .fill(colorForCategory(goal.category))
-                                        .frame(width: max(4, geo.size.width * CGFloat(goal.progress)))
+                                        .frame(width: progressW)
                                 }
                             }
                             .frame(height: 4)
+                            .clipShape(Capsule())
                         }
                     }
                 }
@@ -1731,28 +1781,35 @@ struct PlanJourneyView: View {
 
             // Cash-flow visualization bar
             GeometryReader { geo in
+                let labelW: CGFloat = 52
+                let spacing: CGFloat = 8
+                let trackW = max(20, geo.size.width - labelW - spacing)
                 let maxVal = max(surplus, needed, 1000)
-                let surplusW = min(geo.size.width, max(8, geo.size.width * CGFloat(surplus / maxVal)))
-                let neededW = min(geo.size.width, max(8, geo.size.width * CGFloat(needed / maxVal)))
+                let surplusW = min(trackW, max(8, trackW * CGFloat(surplus / maxVal)))
+                let neededW = min(trackW, max(8, trackW * CGFloat(needed / maxVal)))
 
                 VStack(spacing: 8) {
-                    HStack(spacing: 8) {
+                    HStack(spacing: spacing) {
                         Text("Surplus")
                             .font(.caption2.weight(.medium))
-                            .frame(width: 48, alignment: .leading)
+                            .frame(width: labelW, alignment: .leading)
                         ZStack(alignment: .leading) {
                             Capsule().fill(Color.blue.opacity(0.12))
                             Capsule().fill(Color.blue).frame(width: surplusW)
                         }
+                        .frame(maxWidth: .infinity, maxHeight: .infinity)
+                        .clipShape(Capsule())
                     }
-                    HStack(spacing: 8) {
+                    HStack(spacing: spacing) {
                         Text("Needed")
                             .font(.caption2.weight(.medium))
-                            .frame(width: 48, alignment: .leading)
+                            .frame(width: labelW, alignment: .leading)
                         ZStack(alignment: .leading) {
                             Capsule().fill(Color.primary.opacity(0.08))
                             Capsule().fill(isSurplusEnough ? Color.green : Color.red).frame(width: neededW)
                         }
+                        .frame(maxWidth: .infinity, maxHeight: .infinity)
+                        .clipShape(Capsule())
                     }
                 }
             }
@@ -1765,7 +1822,7 @@ struct PlanJourneyView: View {
                     .foregroundStyle(isSurplusEnough ? .green : .red)
                 Text(isSurplusEnough
                     ? "Safe funding buffer: \(diff.toCurrency())/mo remaining after covering all goals."
-                    : "Funding shortfall: ₹\(diff.toCurrency())/mo needed. Prioritize key goals or extend deadlines.")
+                    : "Funding shortfall: \(diff.toCurrency())/mo needed. Prioritize key goals or extend deadlines.")
                     .font(.caption)
                     .foregroundStyle(.secondary)
             }
@@ -1985,20 +2042,41 @@ struct PlanJourneyView: View {
             }
             .buttonStyle(.plain)
 
-            // Reset Journey Secondary Action
+            // Delete Plan Completely & Start Fresh
+            Button(role: .destructive) {
+                showDeleteCompletePlanConfirmation = true
+            } label: {
+                HStack(spacing: 8) {
+                    Image(systemName: "trash.fill")
+                        .font(.system(size: 14, weight: .semibold))
+                    Text("Delete Plan Completely & Start Fresh")
+                        .font(.system(size: 15, weight: .semibold))
+                }
+                .frame(maxWidth: .infinity)
+                .frame(height: 50)
+                .foregroundStyle(.red)
+                .background(Color.red.opacity(0.08), in: RoundedRectangle(cornerRadius: 16, style: .continuous))
+                .overlay(
+                    RoundedRectangle(cornerRadius: 16, style: .continuous)
+                        .stroke(Color.red.opacity(0.2), lineWidth: 1)
+                )
+            }
+            .buttonStyle(.plain)
+            .padding(.top, 4)
+
+            // Reset Journey Drafts Secondary Action
             Button {
                 showResetJourneyConfirmation = true
             } label: {
                 HStack(spacing: 6) {
                     Image(systemName: "arrow.counterclockwise")
-                    Text("Reset Financial Journey")
+                    Text("Reset Journey Assumptions & Drafts")
                 }
                 .font(.footnote.weight(.medium))
                 .foregroundStyle(.secondary)
-                .padding(.vertical, 8)
+                .padding(.vertical, 4)
             }
             .buttonStyle(.plain)
-            .padding(.top, 4)
         }
         .padding(.top, 8)
     }
