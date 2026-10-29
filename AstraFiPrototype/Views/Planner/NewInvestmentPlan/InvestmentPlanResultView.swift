@@ -13,70 +13,31 @@ struct InvestmentPlanResultView: View {
         )
     }
     
+    private var isRetirement: Bool { results.goalCategory == .retirement }
+    
     var body: some View {
         ScrollView(showsIndicators: false) {
             VStack(spacing: 32) {
                 // Header Message
                 VStack(alignment:.leading,spacing: 16) {
-                    //                    let profile = appState.currentProfile
-                    //                    let isPortfolioHighRisk = profile.riskProfile == .high
-                    //                    let goalCategory = input.goalCategory
-                    //
-                    //                    VStack(spacing: 8) {
-                    //                        Text("Your Investment Profile")
-                    //                            .font(.system(size: 28, weight: .bold, design: .rounded))
-                    //                        Text("Risk profile: \(profile.riskProfile.rawValue)")
-                    //                            .font(.title2)
-                    //                            .foregroundColor(isPortfolioHighRisk ? .red : .green)
-                    //                            .bold()
-                    //                    }
-                    //                    .padding()
-                    //
-                    //                    VStack(spacing: 12) {
-                    //                        Text("Investment Goal: \(goalCategory.rawValue)")
-                    //                            .font(.title3)
-                    //                            .bold()
-                    //                        Text("Target Amount: ₹\(input.targetAmount)")
-                    //                            .font(.title3)
-                    //                    }
-                    //
-                    //                    Spacer()
-                    //
-                    //                    Text("Plan Recommendations")
-                    //                        .font(.system(size: 20, weight: .bold, design: .rounded))
-                    //                        .padding(.bottom, 8)
-                    //
-                    //                    ForEach(results.planSummaries) { plan in
-                    //                        HStack {
-                    //                            Text(plan.title)
-                    //                                .bold()
-                    //                            Spacer()
-                    //                            Text(plan.estimatedYield)
-                    //                                .foregroundColor(.secondary)
-                    //                        }
-                    //                        .padding(.horizontal)
-                    //                        .padding(.vertical, 8)
-                    //                        .background(AppTheme.secondaryBackground)
-                    //                        .cornerRadius(12)
-                    //                    }
-                    //                    .padding(.horizontal)
-                    //
-                    //                    Spacer()
-                    //                        .frame(height: 40)
-                    //                }
-                    //                .frame(maxWidth: .infinity)
-                    //                .background(
-                    //                    RoundedRectangle(cornerRadius: 20)
-                    //                        .fill(AppTheme.cardBackground)
-                    //                        .shadow(color: AppTheme.adaptiveShadow.opacity(0.2), radius: 8)
-                    //                )
-                    
                     let targetVal = Double(input.targetAmount.replacingOccurrences(of: ",", with: "")) ?? 0
-                    Text("Based on your target of ₹\(targetVal >= 100000 ? String(format: "%.1fL", targetVal / 100000) : input.targetAmount), here are educational scenarios to compare possible illustration paths.")
-                        .font(.system(size: 15, design: .rounded))
-                        .multilineTextAlignment(.center)
-                        .foregroundStyle(.secondary)
-                        .padding(.horizontal, 20)
+                    let targetLabel = targetVal >= 10_000_000
+                        ? String(format: "%.2fCr", targetVal / 10_000_000)
+                        : (targetVal >= 100_000 ? String(format: "%.1fL", targetVal / 100_000) : input.targetAmount)
+                    
+                    if isRetirement {
+                        Text("Based on your inflation-adjusted retirement corpus of ₹\(targetLabel), here are three strategies to build your retirement wealth.")
+                            .font(.system(size: 15, design: .rounded))
+                            .multilineTextAlignment(.center)
+                            .foregroundStyle(.secondary)
+                            .padding(.horizontal, 20)
+                    } else {
+                        Text("Based on your target of ₹\(targetLabel), here are educational scenarios to compare possible illustration paths.")
+                            .font(.system(size: 15, design: .rounded))
+                            .multilineTextAlignment(.center)
+                            .foregroundStyle(.secondary)
+                            .padding(.horizontal, 20)
+                    }
                 }
                 .padding(.top, 24)
                 
@@ -86,46 +47,62 @@ struct InvestmentPlanResultView: View {
                     NavigationLink(destination: Plan1DetailView(input: input, result: results.plan1)) {
                         StrategySelectionCard(
                             id: 1,
-                            title: "SIP with Diversification",
-                            subtitle: "Systematic investing across equity, debt & gold.",
+                            title: isRetirement ? "Systematic Retirement Corpus (SIP)" : "SIP with Diversification",
+                            subtitle: isRetirement
+                                ? "Build your retirement corpus through disciplined monthly SIP across equity, debt & gold."
+                                : "Systematic investing across equity, debt & gold.",
                             icon: "chart.line.uptrend.xyaxis.circle.fill",
                             color: .blue,
-                            bestFor: "Long-term Wealth",
+                            bestFor: isRetirement ? "Long-term Compounding" : "Long-term Wealth",
                             metric: "8–12% CAGR assumption",
                             isRecommended: false
                         )
                     }
                     .buttonStyle(PlainButtonStyle())
                     
-                    // Plan 3: Loan + Invest stress test
-                    NavigationLink(destination: Plan3DetailView(input: input, result: results.plan3!)) {
-                        StrategySelectionCard(
-                            id: 3,
-                            title: "Loan Stress-Test Scenario",
-                            subtitle: "Compare debt-funded investing risks.",
-                            icon: "arrow.up.right.circle.fill",
-                            color: .purple,
-                            bestFor: "Efficiency",
-                            metric: "High risk simulation",
-                            isRecommended: false
-                        )
+                    // Plan 3: Loan stress test — for Retirement, this means
+                    // "Pre-Retirement Debt Leverage Stress-Test"
+                    if let plan3 = results.plan3 {
+                        NavigationLink(destination: Plan3DetailView(input: input, result: plan3)) {
+                            StrategySelectionCard(
+                                id: 3,
+                                title: isRetirement
+                                    ? "Pre-Retirement Loan Stress-Test"
+                                    : "Loan Stress-Test Scenario",
+                                subtitle: isRetirement
+                                    ? "Stress-test debt leverage during your earning years to accelerate corpus growth before retirement."
+                                    : "Compare debt-funded investing risks.",
+                                icon: "arrow.up.right.circle.fill",
+                                color: .purple,
+                                bestFor: isRetirement ? "Accelerated Growth" : "Efficiency",
+                                metric: "High risk simulation",
+                                isRecommended: false
+                            )
+                        }
+                        .buttonStyle(PlainButtonStyle())
                     }
-                    .buttonStyle(PlainButtonStyle())
                     
-                    // Plan 2: Traditional Loan
-                    NavigationLink(destination: Plan2DetailView(input: input, result: results.plan2!)) {
-                        StrategySelectionCard(
-                            id: 2,
-                            title: "Traditional \(results.goalCategory.rawValue) Loan",
-                            subtitle: "Simple bank loan with flexible EMI options.",
-                            icon: "banknote.fill",
-                            color: .orange,
-                            bestFor: "Immediate Need",
-                            metric: "Bank Fixed",
-                            isRecommended: false
-                        )
+                    // Plan 2: Traditional Loan — for Retirement, this is
+                    // "Pre-Retirement Asset Leverage Strategy"
+                    if let plan2 = results.plan2 {
+                        NavigationLink(destination: Plan2DetailView(input: input, result: plan2)) {
+                            StrategySelectionCard(
+                                id: 2,
+                                title: isRetirement
+                                    ? "Pre-Retirement Asset Leverage"
+                                    : "Traditional \(results.goalCategory.rawValue) Loan",
+                                subtitle: isRetirement
+                                    ? "Use a loan during your earning years to invest and build wealth before retirement begins."
+                                    : "Simple bank loan with flexible EMI options.",
+                                icon: "banknote.fill",
+                                color: .orange,
+                                bestFor: isRetirement ? "Wealth Acceleration" : "Immediate Need",
+                                metric: isRetirement ? "Pre-Retirement Only" : "Bank Fixed",
+                                isRecommended: false
+                            )
+                        }
+                        .buttonStyle(PlainButtonStyle())
                     }
-                    .buttonStyle(PlainButtonStyle())
                 }
                 
                 // Compare All Plans Button

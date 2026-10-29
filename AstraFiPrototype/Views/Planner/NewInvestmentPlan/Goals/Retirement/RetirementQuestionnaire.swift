@@ -167,7 +167,7 @@ struct RetirementQuestionnaire: View {
                         appState.savePlan(planModel)
                         dismiss()
                     },
-                    destination: RetirementResultView(input: buildTrackerInput())
+                    destination: InvestmentPlanResultView(input: buildTrackerInput())
                 )
                 
                 Spacer(minLength: 40)
@@ -181,12 +181,21 @@ struct RetirementQuestionnaire: View {
                     let expenses = input.retirementMonthlyHealthcareToday ?? 0
                     healthcareExpensesText = expenses > 0 ? String(Int(expenses)) : "0"
                 }
+                syncInputFromQuestionnaire()
             }
             .onChange(of: monthlyExpensesText) { _, value in
                 input.retirementMonthlyExpensesToday = Double(value.filter(\.isNumber))
+                syncInputFromQuestionnaire()
             }
             .onChange(of: healthcareExpensesText) { _, value in
                 input.retirementMonthlyHealthcareToday = Double(value.filter(\.isNumber))
+                syncInputFromQuestionnaire()
+            }
+            .onChange(of: input.retirementAge) { _, _ in
+                syncInputFromQuestionnaire()
+            }
+            .onChange(of: input.yearsPostRetirement) { _, _ in
+                syncInputFromQuestionnaire()
             }
         }
         .scrollDismissesKeyboard(.interactively)
@@ -238,6 +247,21 @@ struct RetirementQuestionnaire: View {
             lifeExpectancy: (input.retirementAge ?? 60) + (input.yearsPostRetirement ?? 25)
         )
         return GoalProjectionEngine.project(configuration: config, assumptions: PlanningScenarioKind.assumptionSet(for: .base)).requiredCorpus
+    }
+
+    /// Keeps `input.targetAmount` and `input.timePeriod` in sync with the
+    /// questionnaire so `InvestmentPlanResultView` receives the inflation-adjusted
+    /// retirement corpus and correct tenure when the user taps "Build My Plan".
+    private func syncInputFromQuestionnaire() {
+        let corpus = getTargetCorpusValue()
+        if corpus > 0 {
+            input.targetAmount = String(format: "%.0f", corpus)
+        }
+        let age = profileAge ?? input.currentAge
+        if let age {
+            let years = max(1, (input.retirementAge ?? 60) - age)
+            input.timePeriod = String(years)
+        }
     }
 
     @ViewBuilder
