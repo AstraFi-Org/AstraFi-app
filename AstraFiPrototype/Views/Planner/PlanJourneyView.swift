@@ -1,4 +1,5 @@
 import SwiftUI
+import Charts
 
 private struct JourneyGoalNeed: Identifiable {
     let id: UUID
@@ -101,6 +102,12 @@ struct PlanJourneyView: View {
     @State private var customizingGoalCategory: CalculatedGoalPlan? = nil
     // Tracks which plan (0=SIP, 1=Loan/Debt, 2=StressTest) user activated per goal
     @State private var chosenPlanIndex: [UUID: Int] = [:]
+    // Overview Interactive State
+    @State private var selectedAnalyticsTab = 0
+    @State private var selectedGrowthScenario = 1
+    @State private var goalToDelete: DisplayableJourneyGoal? = nil
+    @State private var showDeleteGoalConfirmation = false
+    @State private var showResetJourneyConfirmation = false
 
     private var profile: AstraUserProfile? { appState.currentProfile }
     private var journey: FinancialPlanningJourney { profile?.planningJourney ?? FinancialPlanningJourney() }
@@ -501,14 +508,26 @@ struct PlanJourneyView: View {
                         .font(.subheadline.weight(.medium).monospacedDigit())
                         .foregroundStyle(.secondary)
                 }
+            } else {
+                ToolbarItem(placement: .topBarTrailing) {
+                    Button {
+                        showPlanGoalSelection = true
+                    } label: {
+                        Image(systemName: "plus")
+                            .font(.system(size: 16, weight: .semibold))
+                            .foregroundStyle(.primary)
+                            .frame(width: 40, height: 40)
+                    }
+                    .accessibilityLabel("Add a new goal")
+                    .buttonStyle(.plain)
+                }
             }
         }
         .navigationDestination(isPresented: $showPlanGoalSelection) {
-            let firstGoal = orderedGoalDrafts.first
             GoalSelectionView(
                 reviewJourneyFirst: false,
-                initialGoal: firstGoal.map { $0.category == "Custom" ? "Custom Goal" : $0.category },
-                initialGoalTitle: firstGoal?.name
+                initialGoal: nil,
+                initialGoalTitle: nil
             )
         }
         .sheet(item: $editedEvent) { event in
@@ -573,10 +592,32 @@ struct PlanJourneyView: View {
                 .presentationDragIndicator(.visible)
         }
         .onAppear {
-            if hasExistingJourney {
-                hasStartedPlanning = true
-            }
             ensurePresetsForAllDrafts()
+        }
+        .confirmationDialog(
+            "Remove this goal?",
+            isPresented: $showDeleteGoalConfirmation,
+            titleVisibility: .visible,
+            presenting: goalToDelete
+        ) { goal in
+            Button("Remove Goal", role: .destructive) {
+                deleteJourneyGoal(goal)
+            }
+            Button("Cancel", role: .cancel) {}
+        } message: { _ in
+            Text("This will remove the goal from your financial journey and goal tracker. Your other goals will remain unchanged. Any existing savings or investments will not be withdrawn or deleted.")
+        }
+        .confirmationDialog(
+            "Reset Financial Journey?",
+            isPresented: $showResetJourneyConfirmation,
+            titleVisibility: .visible
+        ) {
+            Button("Reset Journey", role: .destructive) {
+                resetCompleteJourney()
+            }
+            Button("Cancel", role: .cancel) {}
+        } message: {
+            Text("This will reset your financial journey planning drafts, milestones, and scenario configurations. Your personal profile, tracked investments, bank accounts, and loans will not be affected.")
         }
     }
 
@@ -748,94 +789,481 @@ struct PlanJourneyView: View {
         .padding(.vertical, 2)
     }
 
-    // MARK: - Saved Journey Overview (Resume Card)
-    private var savedJourneyOverview: some View {
-        VStack(alignment: .leading, spacing: 20) {
-            VStack(alignment: .leading, spacing: 6) {
-                Text("Your Financial Roadmap")
-                    .font(.system(size: 28, weight: .bold, design: .rounded))
-                Text("Review your active milestones, monthly surplus, and planning timeline.")
-                    .font(.subheadline)
-                    .foregroundStyle(.secondary)
+    // MARK: - Displayable Journey Goal Model
+    private struct DisplayableJourneyGoal: Identifiable {
+        let id: UUID
+        let name: String
+        let category: String
+        let targetDate: Date
+        let targetAmount: Double
+        let currentSaved: Double
+        let monthlySIP: Double
+        let priority: Int
+        let astraGoal: AstraGoal?
+        let draftGoal: FinancialPlanningGoalDraft?
+
+        var progress: Double {
+            guard targetAmount > 0 else { return 0 }
+            return min(1.0, max(0.0, currentSaved / targetAmount))
+        }
+
+        var remainingAmount: Double {
+            max(0, targetAmount - currentSaved)
+        }
+
+        var yearsRemaining: Int {
+            max(1, Calendar.current.dateComponents([.year], from: Date(), to: targetDate).year ?? 1)
+        }
+    }
+
+    private var displayableGoals: [DisplayableJourneyGoal] {
+        var result: [DisplayableJourneyGoal] = []
+        var seenNames = Set<String>()
+        var seenIDs = Set<UUID>()
+
+        for (index, draft) in orderedGoalDrafts.enumerated() {
+            let key = draft.name.trimmingCharacters(in: .whitespacesAndNewlines).lowercased()
+            guard !seenNames.contains(key) else { continue }
+            seenNames.insert(key)
+            seenIDs.insert(draft.id)
+
+            let matchedAstraGoal = goals.first {
+                $0.id == draft.id || $0.goalName.trimmingCharacters(in: .whitespacesAndNewlines).lowercased() == key
+            }
+            if let matched = matchedAstraGoal {
+                seenIDs.insert(matched.id)
             }
 
-            // Financial Snapshot Banner
-            HStack(spacing: 10) {
-                metricSummaryBox(title: "Income", amount: position.monthlyIncome, tint: .green)
-                metricSummaryBox(title: "Expenses", amount: position.monthlyExpenses, tint: .orange)
-                metricSummaryBox(title: "Surplus", amount: position.monthlySurplus, tint: .blue)
+            let targetDate = draft.targetDate ?? matchedAstraGoal?.targetDate ?? Calendar.current.date(byAdding: .year, value: 3, to: Date())!
+            let targetAmount = max(100_000, draft.targetAmount ?? matchedAstraGoal?.targetAmount ?? 1_000_000)
+            let savedAmount: Double = {
+                if let matched = matchedAstraGoal, (matched.currentAmount + matched.manualSavingsContribution) > 0 {
+                    return matched.currentAmount + matched.manualSavingsContribution
+                }
+                return draft.savedAmount ?? 0
+            }()
+
+            let calcPlan = calculatedGoalPlans.first { $0.id == draft.id }
+            let sip = calcPlan?.monthlySIP ?? calculateRequiredSIP(targetAmount: targetAmount, targetDate: targetDate)
+
+            result.append(DisplayableJourneyGoal(
+                id: draft.id,
+                name: draft.name,
+                category: draft.category.isEmpty ? "General" : draft.category,
+                targetDate: targetDate,
+                targetAmount: targetAmount,
+                currentSaved: savedAmount,
+                monthlySIP: sip,
+                priority: index + 1,
+                astraGoal: matchedAstraGoal,
+                draftGoal: draft
+            ))
+        }
+
+        for goal in goals {
+            let key = goal.goalName.trimmingCharacters(in: .whitespacesAndNewlines).lowercased()
+            guard !seenNames.contains(key), !seenIDs.contains(goal.id) else { continue }
+            seenNames.insert(key)
+            seenIDs.insert(goal.id)
+
+            let savedAmount = goal.currentAmount + goal.manualSavingsContribution
+            let sip = calculateRequiredSIP(targetAmount: goal.targetAmount, targetDate: goal.targetDate)
+
+            result.append(DisplayableJourneyGoal(
+                id: goal.id,
+                name: goal.goalName,
+                category: inferCategory(from: goal.goalName),
+                targetDate: goal.targetDate,
+                targetAmount: goal.targetAmount,
+                currentSaved: savedAmount,
+                monthlySIP: sip,
+                priority: result.count + 1,
+                astraGoal: goal,
+                draftGoal: nil
+            ))
+        }
+
+        return result.sorted { $0.targetDate < $1.targetDate }
+    }
+
+    private func calculateRequiredSIP(targetAmount: Double, targetDate: Date) -> Double {
+        let months = max(1, Calendar.current.dateComponents([.month], from: Date(), to: targetDate).month ?? 36)
+        let years = Double(months) / 12.0
+        let inflationRate = journey.assumptions.inflationRate ?? 0.06
+        let futureCost = targetAmount * pow(1 + inflationRate, years)
+        let annualRate: Double = months < 36 ? 0.07 : (months < 84 ? 0.10 : (journey.assumptions.investmentReturnRate ?? 0.11))
+        let monthlyRate = annualRate / 12.0
+        guard monthlyRate > 0 else { return futureCost / Double(months) }
+        return (futureCost * monthlyRate) / (pow(1 + monthlyRate, Double(months)) - 1)
+    }
+
+    private func inferCategory(from name: String) -> String {
+        let lower = name.lowercased()
+        if lower.contains("retire") { return "Retirement" }
+        if lower.contains("home") || lower.contains("house") { return "Home" }
+        if lower.contains("car") || lower.contains("vehicle") { return "Vehicle" }
+        if lower.contains("edu") { return "Education" }
+        if lower.contains("travel") || lower.contains("vacation") { return "Travel" }
+        if lower.contains("marri") || lower.contains("wedding") { return "Marriage" }
+        if lower.contains("child") { return "Children" }
+        if lower.contains("wealth") { return "Build Wealth" }
+        if lower.contains("emerg") { return "Emergency" }
+        if lower.contains("business") { return "Business" }
+        return "General"
+    }
+
+    private func iconForCategory(_ category: String) -> String {
+        let lower = category.lowercased()
+        if lower.contains("retire") { return "person.2.fill" }
+        if lower.contains("home") || lower.contains("house") { return "house.fill" }
+        if lower.contains("car") || lower.contains("vehicle") { return "car.fill" }
+        if lower.contains("edu") { return "book.fill" }
+        if lower.contains("travel") || lower.contains("vacation") { return "airplane" }
+        if lower.contains("marri") || lower.contains("wedding") { return "heart.fill" }
+        if lower.contains("child") { return "figure.2.and.child.holdinghands" }
+        if lower.contains("wealth") { return "chart.line.uptrend.xyaxis" }
+        if lower.contains("emerg") { return "shield.fill" }
+        if lower.contains("business") { return "briefcase.fill" }
+        return "target"
+    }
+
+    private func colorForCategory(_ category: String) -> Color {
+        let lower = category.lowercased()
+        if lower.contains("retire") { return .purple }
+        if lower.contains("home") || lower.contains("house") { return .green }
+        if lower.contains("car") || lower.contains("vehicle") { return .orange }
+        if lower.contains("edu") { return .blue }
+        if lower.contains("travel") || lower.contains("vacation") { return .cyan }
+        if lower.contains("marri") || lower.contains("wedding") { return .pink }
+        if lower.contains("child") { return .orange }
+        if lower.contains("wealth") { return .indigo }
+        if lower.contains("emerg") { return .yellow }
+        if lower.contains("business") { return .teal }
+        return .blue
+    }
+
+    private var journeyTotalTargetAmount: Double {
+        displayableGoals.reduce(0) { $0 + $1.targetAmount }
+    }
+
+    private var journeyTotalSavedAmount: Double {
+        displayableGoals.reduce(0) { $0 + $1.currentSaved }
+    }
+
+    private var journeyTotalMonthlySIP: Double {
+        displayableGoals.reduce(0) { $0 + $1.monthlySIP }
+    }
+
+    private var journeyProgressRatio: Double {
+        guard journeyTotalTargetAmount > 0 else { return 0 }
+        return min(1.0, max(0.0, journeyTotalSavedAmount / journeyTotalTargetAmount))
+    }
+
+    private enum OverallJourneyStatus {
+        case onTrack
+        case needsAttention
+        case planNeedsAdjustment
+
+        var title: String {
+            switch self {
+            case .onTrack: return "On track"
+            case .needsAttention: return "Needs attention"
+            case .planNeedsAdjustment: return "Plan needs adjustment"
             }
+        }
 
-            journeySection("Active Goals & Milestones", icon: "target", tint: .blue) {
-                if orderedGoalDrafts.isEmpty && goals.isEmpty {
-                    Text("No goals mapped yet. Tap below to begin planning.")
-                        .font(.subheadline)
-                        .foregroundStyle(.secondary)
-                } else {
-                    VStack(spacing: 8) {
-                        ForEach(Array(orderedGoalDrafts.enumerated()), id: \.element.id) { index, goal in
-                            HStack(spacing: 10) {
-                                Text("\(index + 1)")
-                                    .font(.caption.weight(.bold))
-                                    .foregroundStyle(.white)
-                                    .frame(width: 24, height: 24)
-                                    .background(Color.blue, in: Circle())
-                                Text(goal.name)
-                                    .font(.subheadline.weight(.semibold))
-                                Spacer()
-                                Text(goal.targetAmount?.toCurrency() ?? "Amount not set")
-                                    .font(.caption.weight(.medium))
-                                    .foregroundStyle(.secondary)
-                            }
-                            .padding(10)
-                            .background(Color(UIColor.secondarySystemGroupedBackground), in: RoundedRectangle(cornerRadius: 12))
-                        }
-                    }
-                }
+        var color: Color {
+            switch self {
+            case .onTrack: return .green
+            case .needsAttention: return .orange
+            case .planNeedsAdjustment: return .red
             }
+        }
 
-            VStack(spacing: 12) {
-                Button {
-                    withAnimation(.spring(response: 0.35)) {
-                        hasStartedPlanning = true
-                    }
-                } label: {
-                    HStack {
-                        Image(systemName: "pencil")
-                        Text("Resume / Edit Journey")
-                    }
-                    .font(.headline.weight(.semibold))
-                    .frame(maxWidth: .infinity)
-                    .frame(height: 52)
-                    .foregroundStyle(.white)
-                    .background(AppTheme.accentGradient, in: RoundedRectangle(cornerRadius: 16))
-                    .shadow(color: Color.blue.opacity(0.3), radius: 8, x: 0, y: 4)
-                }
-                .buttonStyle(.plain)
-
-                Button {
-                    showPlanGoalSelection = true
-                } label: {
-                    HStack {
-                        Image(systemName: "plus.circle.fill")
-                        Text("Plan a Specific Goal Now")
-                    }
-                    .font(.headline.weight(.semibold))
-                    .frame(maxWidth: .infinity)
-                    .frame(height: 52)
-                    .foregroundStyle(Color.accentColor)
-                    .background(Color.accentColor.opacity(0.1), in: RoundedRectangle(cornerRadius: 16))
-                }
-                .buttonStyle(.plain)
+        var icon: String {
+            switch self {
+            case .onTrack: return "checkmark.seal.fill"
+            case .needsAttention: return "exclamationmark.triangle.fill"
+            case .planNeedsAdjustment: return "exclamationmark.octagon.fill"
             }
         }
     }
 
-    private func metricSummaryBox(title: String, amount: Double?, tint: Color) -> some View {
+    private var overallJourneyStatus: (status: OverallJourneyStatus, explanation: String) {
+        let totalNeeded = journeyTotalMonthlySIP
+        let surplus = availableMonthlyCapacity
+
+        if displayableGoals.isEmpty {
+            return (.onTrack, "No goals mapped yet. Tap + to connect your life goals.")
+        }
+        if surplus <= 0 {
+            return (.planNeedsAdjustment, "Zero monthly surplus available. Review expenses or obligations.")
+        }
+        if totalNeeded <= surplus {
+            let buffer = surplus - totalNeeded
+            return (.onTrack, "Monthly surplus covers 100% of required contributions with \(buffer.toCurrency())/mo buffer.")
+        }
+        let deficit = totalNeeded - surplus
+        if deficit <= surplus * 0.4 {
+            return (.needsAttention, "Monthly shortfall of \(deficit.toCurrency())/mo across active goals. Consider prioritizing key milestones.")
+        }
+        return (.planNeedsAdjustment, "Required SIP of \(totalNeeded.toCurrency())/mo exceeds surplus by \(deficit.toCurrency())/mo. Plan adjustment recommended.")
+    }
+
+    private func goalStatus(for goal: DisplayableJourneyGoal) -> (title: String, color: Color, icon: String) {
+        if goal.currentSaved >= goal.targetAmount && goal.targetAmount > 0 {
+            return ("Fully funded", .green, "checkmark.circle.fill")
+        }
+        let now = Date()
+        if goal.targetDate <= now {
+            return ("Deadline reached", .red, "clock.badge.exclamationmark.fill")
+        }
+        let monthsRemaining = max(1, Calendar.current.dateComponents([.month], from: now, to: goal.targetDate).month ?? 1)
+        if monthsRemaining <= 6 && goal.currentSaved < goal.targetAmount * 0.5 {
+            return ("Deadline at risk", .red, "exclamationmark.triangle.fill")
+        }
+        if availableMonthlyCapacity < goal.monthlySIP {
+            return ("Contribution needed", .orange, "arrow.up.circle.fill")
+        }
+        return ("On track", .green, "checkmark.seal.fill")
+    }
+
+    private func deleteJourneyGoal(_ goal: DisplayableJourneyGoal) {
+        UIImpactFeedbackGenerator(style: .medium).impactOccurred()
+        if let astraGoal = goal.astraGoal {
+            appState.deleteGoal(astraGoal)
+        } else if let matching = goals.first(where: { $0.id == goal.id || $0.goalName.localizedCaseInsensitiveCompare(goal.name) == .orderedSame }) {
+            appState.deleteGoal(matching)
+        }
+
+        var updatedJourney = journey
+        updatedJourney.goalDrafts.removeAll { $0.id == goal.id || $0.name.localizedCaseInsensitiveCompare(goal.name) == .orderedSame }
+        updatedJourney.goalPriorityIDs.removeAll { $0 == goal.id }
+        appState.updateFinancialPlanningJourney(updatedJourney)
+        chosenPlanIndex.removeValue(forKey: goal.id)
+    }
+
+    private func resetCompleteJourney() {
+        UIImpactFeedbackGenerator(style: .heavy).impactOccurred()
+        var empty = FinancialPlanningJourney()
+        empty.currentPhase = .today
+        appState.updateFinancialPlanningJourney(empty)
+        withAnimation(.spring(response: 0.35)) {
+            hasStartedPlanning = false
+        }
+    }
+
+    // MARK: - Redesigned Financial Journey Overview
+    private var savedJourneyOverview: some View {
+        VStack(alignment: .leading, spacing: 22) {
+            journeyHeroSection
+            journeyFinancialSummary
+            journeyTimelineSection
+            journeyAnalyticsSection
+            journeyBottomActions
+        }
+    }
+
+    // MARK: - 1. Hero Section
+    private var journeyHeroSection: some View {
+        let status = overallJourneyStatus
+        return VStack(alignment: .leading, spacing: 14) {
+            // Eyebrow and Status Badge Row
+            HStack(alignment: .center) {
+                HStack(spacing: 6) {
+                    Image(systemName: "map.fill")
+                        .font(.system(size: 11, weight: .bold))
+                        .foregroundStyle(Color.accentColor)
+                    Text("FINANCIAL ROADMAP")
+                        .font(.system(size: 11, weight: .bold))
+                        .foregroundStyle(Color.accentColor)
+                }
+                .padding(.horizontal, 9)
+                .padding(.vertical, 4)
+                .background(Color.accentColor.opacity(0.08), in: Capsule())
+
+                Spacer()
+
+                HStack(spacing: 5) {
+                    Image(systemName: status.status.icon)
+                        .font(.system(size: 10, weight: .bold))
+                    Text(status.status.title)
+                        .font(.caption2.weight(.bold))
+                }
+                .padding(.horizontal, 10)
+                .padding(.vertical, 5)
+                .foregroundStyle(status.status.color)
+                .background(status.status.color.opacity(0.12), in: Capsule())
+            }
+
+            // Headline & Subtitle
+            VStack(alignment: .leading, spacing: 5) {
+                Text("Your Financial Future, Connected.")
+                    .font(.system(size: 23, weight: .bold, design: .rounded))
+                    .foregroundStyle(.primary)
+                    .fixedSize(horizontal: false, vertical: true)
+                Text("See how today's financial decisions bring your life goals closer.")
+                    .font(.subheadline)
+                    .foregroundStyle(.secondary)
+                    .fixedSize(horizontal: false, vertical: true)
+            }
+
+            // Status Callout Banner
+            HStack(alignment: .top, spacing: 10) {
+                Image(systemName: status.status == .onTrack ? "checkmark.circle.fill" : "exclamationmark.triangle.fill")
+                    .font(.system(size: 14, weight: .bold))
+                    .foregroundStyle(status.status.color)
+                    .padding(.top, 1)
+
+                VStack(alignment: .leading, spacing: 2) {
+                    Text(status.status == .onTrack ? "Plan Feasibility Confirmed" : "Contribution Gap Detected")
+                        .font(.caption.weight(.bold))
+                        .foregroundStyle(status.status.color)
+                    Text(status.explanation)
+                        .font(.caption2)
+                        .foregroundStyle(.secondary)
+                        .fixedSize(horizontal: false, vertical: true)
+                }
+            }
+            .padding(12)
+            .frame(maxWidth: .infinity, alignment: .leading)
+            .background(status.status.color.opacity(0.08), in: RoundedRectangle(cornerRadius: 12, style: .continuous))
+            .overlay(
+                RoundedRectangle(cornerRadius: 12, style: .continuous)
+                    .stroke(status.status.color.opacity(0.15), lineWidth: 1)
+            )
+        }
+        .padding(18)
+        .background(AppTheme.cardBackground, in: RoundedRectangle(cornerRadius: 20, style: .continuous))
+        .overlay(
+            RoundedRectangle(cornerRadius: 20, style: .continuous)
+                .stroke(Color.primary.opacity(0.06), lineWidth: 1)
+        )
+        .shadow(color: Color.black.opacity(0.03), radius: 8, x: 0, y: 3)
+    }
+
+    // MARK: - 2. Combined Financial Summary Card
+    private var journeyFinancialSummary: some View {
+        let income = max(1.0, position.monthlyIncome ?? 0)
+        let expenses = position.monthlyExpenses ?? 0
+        let surplus = max(0.0, availableMonthlyCapacity)
+        let expenseRatio = min(1.0, expenses / income)
+        let surplusRatio = min(1.0, surplus / income)
+
+        return VStack(alignment: .leading, spacing: 14) {
+            // Card Title Header
+            HStack {
+                HStack(spacing: 6) {
+                    Image(systemName: "wallet.pass.fill")
+                        .font(.caption.weight(.semibold))
+                        .foregroundStyle(Color.accentColor)
+                    Text("Monthly Cash Flow & Surplus")
+                        .font(.subheadline.weight(.bold))
+                }
+                Spacer()
+            }
+
+            // Top Row: 3 Primary Cash Flow Metric Columns
+            HStack(spacing: 8) {
+                summaryPrimaryMetricBox(
+                    title: "Monthly Income",
+                    amount: position.monthlyIncome,
+                    icon: "arrow.down.left",
+                    tint: .green
+                )
+                summaryPrimaryMetricBox(
+                    title: "Monthly Expenses",
+                    amount: position.monthlyExpenses,
+                    icon: "arrow.up.right",
+                    tint: .orange
+                )
+                summaryPrimaryMetricBox(
+                    title: "Available Surplus",
+                    amount: availableMonthlyCapacity,
+                    icon: "sparkles",
+                    tint: .blue
+                )
+            }
+
+            // Visual Cash Flow Proportion Bar
+            VStack(spacing: 5) {
+                GeometryReader { geo in
+                    HStack(spacing: 3) {
+                        RoundedRectangle(cornerRadius: 3)
+                            .fill(Color.orange)
+                            .frame(width: max(4, geo.size.width * CGFloat(expenseRatio) - 2))
+                        RoundedRectangle(cornerRadius: 3)
+                            .fill(Color.blue)
+                            .frame(width: max(4, geo.size.width * CGFloat(surplusRatio) - 2))
+                    }
+                }
+                .frame(height: 6)
+
+                HStack {
+                    HStack(spacing: 4) {
+                        Circle().fill(Color.orange).frame(width: 5, height: 5)
+                        Text(String(format: "%.0f%% Expenses", expenseRatio * 100))
+                            .font(.system(size: 10, weight: .medium))
+                            .foregroundStyle(.secondary)
+                    }
+                    Spacer()
+                    HStack(spacing: 4) {
+                        Circle().fill(Color.blue).frame(width: 5, height: 5)
+                        Text(String(format: "%.0f%% Available Surplus", surplusRatio * 100))
+                            .font(.system(size: 10, weight: .medium))
+                            .foregroundStyle(.secondary)
+                    }
+                }
+            }
+            .padding(.vertical, 2)
+
+            Divider().opacity(0.5)
+
+            // Bottom Row: 3 Secondary Goal Targets
+            HStack(spacing: 8) {
+                summarySecondaryMetric(
+                    icon: "target",
+                    tint: .blue,
+                    title: "Active Goals",
+                    primary: "\(displayableGoals.count)",
+                    secondary: "\(displayableGoals.filter { goalStatus(for: $0).title == "On track" }.count) on track"
+                )
+                summarySecondaryMetric(
+                    icon: "flag.checkered",
+                    tint: .purple,
+                    title: "Total Target",
+                    primary: journeyTotalTargetAmount.toCurrency(compact: true),
+                    secondary: "Combined goals"
+                )
+                summarySecondaryMetric(
+                    icon: "chart.line.uptrend.xyaxis",
+                    tint: .green,
+                    title: "Journey Progress",
+                    primary: String(format: "%.0f%%", journeyProgressRatio * 100),
+                    secondary: "\(journeyTotalSavedAmount.toCurrency(compact: true)) saved"
+                )
+            }
+        }
+        .padding(18)
+        .background(AppTheme.cardBackground, in: RoundedRectangle(cornerRadius: 20, style: .continuous))
+        .overlay(
+            RoundedRectangle(cornerRadius: 20, style: .continuous)
+                .stroke(Color.primary.opacity(0.06), lineWidth: 1)
+        )
+        .shadow(color: Color.black.opacity(0.03), radius: 8, x: 0, y: 3)
+    }
+
+    private func summaryPrimaryMetricBox(title: String, amount: Double?, icon: String, tint: Color) -> some View {
         VStack(alignment: .leading, spacing: 4) {
-            Text(title)
-                .font(.caption2.weight(.medium))
-                .foregroundStyle(.secondary)
+            HStack(spacing: 4) {
+                Image(systemName: icon)
+                    .font(.system(size: 10, weight: .semibold))
+                    .foregroundStyle(tint)
+                Text(title)
+                    .font(.system(size: 10, weight: .medium))
+                    .foregroundStyle(.secondary)
+                    .lineLimit(1)
+            }
             Text(amount?.toCurrency(compact: true) ?? "—")
                 .font(.subheadline.weight(.bold))
                 .foregroundStyle(tint)
@@ -843,8 +1271,736 @@ struct PlanJourneyView: View {
                 .minimumScaleFactor(0.8)
         }
         .frame(maxWidth: .infinity, alignment: .leading)
-        .padding(12)
-        .background(tint.opacity(0.08), in: RoundedRectangle(cornerRadius: 14))
+        .padding(10)
+        .background(tint.opacity(0.08), in: RoundedRectangle(cornerRadius: 12, style: .continuous))
+    }
+
+    private func summarySecondaryMetric(icon: String, tint: Color, title: String, primary: String, secondary: String) -> some View {
+        VStack(alignment: .leading, spacing: 3) {
+            HStack(spacing: 4) {
+                Image(systemName: icon)
+                    .font(.system(size: 11, weight: .bold))
+                    .foregroundStyle(tint)
+                Text(title)
+                    .font(.system(size: 10, weight: .medium))
+                    .foregroundStyle(.secondary)
+                    .lineLimit(1)
+            }
+            Text(primary)
+                .font(.headline.weight(.bold))
+                .foregroundStyle(.primary)
+                .lineLimit(1)
+                .minimumScaleFactor(0.8)
+            Text(secondary)
+                .font(.system(size: 10))
+                .foregroundStyle(.secondary)
+                .lineLimit(1)
+        }
+        .frame(maxWidth: .infinity, alignment: .leading)
+        .padding(10)
+        .background(Color(UIColor.secondarySystemGroupedBackground), in: RoundedRectangle(cornerRadius: 12, style: .continuous))
+    }
+
+    // MARK: - 3. Complete Journey Timeline
+    private var journeyTimelineSection: some View {
+        VStack(alignment: .leading, spacing: 14) {
+            // Section Header
+            VStack(alignment: .leading, spacing: 3) {
+                HStack {
+                    Text("Your Journey at a Glance")
+                        .font(.title3.weight(.bold))
+                    Spacer()
+                    Text("\(displayableGoals.count) Goal\(displayableGoals.count == 1 ? "" : "s")")
+                        .font(.caption2.weight(.bold))
+                        .foregroundStyle(.secondary)
+                        .padding(.horizontal, 8)
+                        .padding(.vertical, 3)
+                        .background(Color.primary.opacity(0.06), in: Capsule())
+                }
+                Text("Every goal has a place in your financial timeline. Here's how your plans work together.")
+                    .font(.caption)
+                    .foregroundStyle(.secondary)
+            }
+
+            if displayableGoals.isEmpty {
+                emptyTimelinePlaceholder
+            } else {
+                VStack(spacing: 0) {
+                    ForEach(Array(displayableGoals.enumerated()), id: \.element.id) { index, goal in
+                        let isLast = index == displayableGoals.count - 1
+                        timelineGoalRow(goal: goal, isLast: isLast)
+                    }
+                }
+            }
+        }
+    }
+
+    private func timelineGoalRow(goal: DisplayableJourneyGoal, isLast: Bool) -> some View {
+        let status = goalStatus(for: goal)
+        let color = colorForCategory(goal.category)
+        let icon = iconForCategory(goal.category)
+        let sameYearGoals = displayableGoals.filter {
+            $0.id != goal.id && Calendar.current.isDate($0.targetDate, equalTo: goal.targetDate, toGranularity: .year)
+        }
+
+        return HStack(alignment: .top, spacing: 12) {
+            // Left Spine (Track & Node)
+            VStack(spacing: 0) {
+                ZStack {
+                    Circle()
+                        .fill(color.opacity(0.15))
+                        .frame(width: 38, height: 38)
+                    Image(systemName: icon)
+                        .font(.system(size: 15, weight: .bold))
+                        .foregroundStyle(color)
+                }
+                if !isLast {
+                    Rectangle()
+                        .fill(LinearGradient(
+                            colors: [color.opacity(0.4), Color.primary.opacity(0.1)],
+                            startPoint: .top,
+                            endPoint: .bottom
+                        ))
+                        .frame(width: 2)
+                        .frame(maxHeight: .infinity)
+                        .padding(.vertical, 4)
+                }
+            }
+
+            // Right Milestone Card
+            VStack(alignment: .leading, spacing: 10) {
+                // Top Row: Date Pill, Status Pill & Menu
+                HStack(spacing: 6) {
+                    HStack(spacing: 4) {
+                        Image(systemName: "calendar")
+                            .font(.system(size: 9))
+                        Text(goal.targetDate.formatted(.dateTime.year().month()))
+                            .font(.caption2.weight(.bold))
+                    }
+                    .padding(.horizontal, 7)
+                    .padding(.vertical, 3)
+                    .background(Color.primary.opacity(0.06), in: Capsule())
+
+                    Spacer()
+
+                    HStack(spacing: 3) {
+                        Image(systemName: status.icon)
+                            .font(.system(size: 9, weight: .bold))
+                        Text(status.title)
+                            .font(.caption2.weight(.bold))
+                    }
+                    .foregroundStyle(status.color)
+                    .padding(.horizontal, 7)
+                    .padding(.vertical, 3)
+                    .background(status.color.opacity(0.1), in: Capsule())
+
+                    Menu {
+                        if let draft = goal.draftGoal {
+                            Button {
+                                editingGoalDraft = draft
+                            } label: {
+                                Label("Edit Goal", systemImage: "pencil")
+                            }
+                        }
+                        Button(role: .destructive) {
+                            goalToDelete = goal
+                            showDeleteGoalConfirmation = true
+                        } label: {
+                            Label("Remove Goal", systemImage: "trash")
+                        }
+                    } label: {
+                        Image(systemName: "ellipsis")
+                            .font(.system(size: 13, weight: .bold))
+                            .foregroundStyle(.secondary)
+                            .frame(width: 24, height: 24)
+                            .contentShape(Rectangle())
+                    }
+                }
+
+                // Goal Title & Years Remaining
+                VStack(alignment: .leading, spacing: 1) {
+                    Text(goal.name)
+                        .font(.headline.weight(.bold))
+                        .foregroundStyle(.primary)
+                    Text("Target deadline in \(goal.yearsRemaining) year\(goal.yearsRemaining == 1 ? "" : "s")")
+                        .font(.caption2)
+                        .foregroundStyle(.secondary)
+                }
+
+                // Target vs Saved Row
+                HStack(alignment: .bottom) {
+                    VStack(alignment: .leading, spacing: 2) {
+                        Text("Target Amount")
+                            .font(.system(size: 10, weight: .medium))
+                            .foregroundStyle(.secondary)
+                        Text(goal.targetAmount.toCurrency())
+                            .font(.subheadline.weight(.bold))
+                            .foregroundStyle(.primary)
+                    }
+
+                    Spacer()
+
+                    VStack(alignment: .trailing, spacing: 2) {
+                        Text("Current Saved")
+                            .font(.system(size: 10, weight: .medium))
+                            .foregroundStyle(.secondary)
+                        Text(goal.currentSaved.toCurrency())
+                            .font(.subheadline.weight(.bold))
+                            .foregroundStyle(goal.currentSaved > 0 ? .green : .secondary)
+                    }
+                }
+
+                // Styled Progress Bar
+                VStack(spacing: 3) {
+                    GeometryReader { geo in
+                        ZStack(alignment: .leading) {
+                            Capsule().fill(Color.primary.opacity(0.08))
+                            Capsule()
+                                .fill(color)
+                                .frame(width: max(4, geo.size.width * CGFloat(goal.progress)))
+                        }
+                    }
+                    .frame(height: 6)
+
+                    HStack {
+                        Text(String(format: "%.0f%% saved", goal.progress * 100))
+                            .font(.system(size: 9, weight: .semibold))
+                            .foregroundStyle(.secondary)
+                        Spacer()
+                        Text(goal.remainingAmount > 0 ? "\(goal.remainingAmount.toCurrency(compact: true)) to go" : "Completed")
+                            .font(.system(size: 9))
+                            .foregroundStyle(.secondary)
+                    }
+                }
+
+                // Bottom Row: Monthly SIP & Priority
+                HStack {
+                    HStack(spacing: 4) {
+                        Text("Required SIP:")
+                            .font(.caption2)
+                            .foregroundStyle(.secondary)
+                        Text(goal.monthlySIP.toCurrency() + "/mo")
+                            .font(.caption.weight(.bold))
+                            .foregroundStyle(.primary)
+                    }
+                    .padding(.horizontal, 8)
+                    .padding(.vertical, 4)
+                    .background(Color.primary.opacity(0.04), in: RoundedRectangle(cornerRadius: 8, style: .continuous))
+
+                    Spacer()
+
+                    Text("Priority \(goal.priority)")
+                        .font(.caption2.weight(.bold))
+                        .foregroundStyle(.secondary)
+                        .padding(.horizontal, 7)
+                        .padding(.vertical, 3)
+                        .background(Color.primary.opacity(0.05), in: RoundedRectangle(cornerRadius: 6, style: .continuous))
+                }
+
+                // Shared Funding Window Warning
+                if !sameYearGoals.isEmpty {
+                    HStack(spacing: 5) {
+                        Image(systemName: "exclamationmark.circle.fill")
+                            .font(.system(size: 10))
+                        Text("Shares funding window with \(sameYearGoals.first?.name ?? "concurrent goal")")
+                            .font(.system(size: 10, weight: .medium))
+                    }
+                    .foregroundStyle(.orange)
+                    .padding(.horizontal, 8)
+                    .padding(.vertical, 4)
+                    .frame(maxWidth: .infinity, alignment: .leading)
+                    .background(Color.orange.opacity(0.08), in: RoundedRectangle(cornerRadius: 8, style: .continuous))
+                }
+            }
+            .padding(14)
+            .background(AppTheme.cardBackground, in: RoundedRectangle(cornerRadius: 18, style: .continuous))
+            .overlay(
+                RoundedRectangle(cornerRadius: 18, style: .continuous)
+                    .stroke(Color.primary.opacity(0.06), lineWidth: 1)
+            )
+            .shadow(color: Color.black.opacity(0.02), radius: 6, x: 0, y: 2)
+            .padding(.bottom, isLast ? 0 : 16)
+        }
+    }
+
+    private var emptyTimelinePlaceholder: some View {
+        VStack(spacing: 10) {
+            Image(systemName: "map")
+                .font(.system(size: 32))
+                .foregroundStyle(Color.accentColor.opacity(0.8))
+            Text("No goals mapped yet")
+                .font(.subheadline.weight(.bold))
+            Text("Tap the plus button above to add goals to your financial journey.")
+                .font(.caption)
+                .foregroundStyle(.secondary)
+                .multilineTextAlignment(.center)
+        }
+        .frame(maxWidth: .infinity)
+        .padding(28)
+        .background(AppTheme.cardBackground, in: RoundedRectangle(cornerRadius: 20, style: .continuous))
+        .overlay(
+            RoundedRectangle(cornerRadius: 20, style: .continuous)
+                .stroke(Color.primary.opacity(0.06), lineWidth: 1)
+        )
+    }
+
+    // MARK: - 4. Journey Analytics & Charts Section
+    private var journeyAnalyticsSection: some View {
+        VStack(alignment: .leading, spacing: 14) {
+            // Header
+            HStack {
+                HStack(spacing: 6) {
+                    Image(systemName: "chart.xyaxis.line")
+                        .font(.caption.weight(.semibold))
+                        .foregroundStyle(Color.accentColor)
+                    Text("Financial Journey Analytics")
+                        .font(.title3.weight(.bold))
+                }
+                Spacer()
+            }
+
+            // Clean Segmented Picker (Never Truncates!)
+            Picker("Analytics", selection: $selectedAnalyticsTab) {
+                Text("Allocation").tag(0)
+                Text("Cash Flow").tag(1)
+                Text("Growth").tag(2)
+            }
+            .pickerStyle(.segmented)
+
+            // Dynamic Chart Surface
+            switch selectedAnalyticsTab {
+            case 0:
+                goalFundingChartView
+            case 1:
+                monthlySurplusChartView
+            default:
+                longTermGrowthChartView
+            }
+        }
+        .padding(18)
+        .background(AppTheme.cardBackground, in: RoundedRectangle(cornerRadius: 20, style: .continuous))
+        .overlay(
+            RoundedRectangle(cornerRadius: 20, style: .continuous)
+                .stroke(Color.primary.opacity(0.06), lineWidth: 1)
+        )
+        .shadow(color: Color.black.opacity(0.03), radius: 8, x: 0, y: 3)
+    }
+
+    // Chart 1: Goal Funding Allocation
+    private var goalFundingChartView: some View {
+        VStack(alignment: .leading, spacing: 14) {
+            HStack(alignment: .top) {
+                VStack(alignment: .leading, spacing: 2) {
+                    Text("Goal Funding Allocation")
+                        .font(.subheadline.weight(.bold))
+                    Text("Total combined target: \(journeyTotalTargetAmount.toCurrency())")
+                        .font(.caption2)
+                        .foregroundStyle(.secondary)
+                }
+                Spacer()
+                Text(String(format: "%.0f%% Funded", journeyProgressRatio * 100))
+                    .font(.caption.weight(.bold))
+                    .foregroundStyle(.green)
+                    .padding(.horizontal, 9)
+                    .padding(.vertical, 4)
+                    .background(Color.green.opacity(0.12), in: Capsule())
+            }
+
+            if displayableGoals.isEmpty {
+                emptyChartPlaceholder("No goals available to visualize allocation.")
+            } else {
+                HStack(spacing: 16) {
+                    ZStack {
+                        Chart(displayableGoals) { goal in
+                            SectorMark(
+                                angle: .value("Target", goal.targetAmount),
+                                innerRadius: .ratio(0.64),
+                                angularInset: 2
+                            )
+                            .cornerRadius(4)
+                            .foregroundStyle(colorForCategory(goal.category))
+                        }
+                        .frame(width: 135, height: 135)
+
+                        VStack(spacing: 1) {
+                            Text(journeyTotalTargetAmount.toCurrency(compact: true))
+                                .font(.subheadline.weight(.bold))
+                            Text("Total Target")
+                                .font(.system(size: 8, weight: .medium))
+                                .foregroundStyle(.secondary)
+                        }
+                    }
+
+                    // Legend Column
+                    VStack(alignment: .leading, spacing: 8) {
+                        ForEach(displayableGoals.prefix(4)) { goal in
+                            HStack(spacing: 6) {
+                                Circle()
+                                    .fill(colorForCategory(goal.category))
+                                    .frame(width: 8, height: 8)
+                                Text(goal.name)
+                                    .font(.caption.weight(.semibold))
+                                    .lineLimit(1)
+                                Spacer()
+                                Text(String(format: "%.0f%%", goal.progress * 100))
+                                    .font(.caption2.weight(.bold).monospacedDigit())
+                                    .foregroundStyle(colorForCategory(goal.category))
+                            }
+                        }
+                    }
+                }
+
+                Divider().opacity(0.5)
+
+                // Breakdown list per goal
+                VStack(spacing: 10) {
+                    ForEach(displayableGoals) { goal in
+                        VStack(alignment: .leading, spacing: 3) {
+                            HStack {
+                                Text(goal.name)
+                                    .font(.caption.weight(.semibold))
+                                Spacer()
+                                Text("\(goal.currentSaved.toCurrency()) / \(goal.targetAmount.toCurrency())")
+                                    .font(.caption2.weight(.medium))
+                                    .foregroundStyle(.secondary)
+                            }
+
+                            GeometryReader { geo in
+                                ZStack(alignment: .leading) {
+                                    Capsule().fill(Color.primary.opacity(0.06))
+                                    Capsule()
+                                        .fill(colorForCategory(goal.category))
+                                        .frame(width: max(4, geo.size.width * CGFloat(goal.progress)))
+                                }
+                            }
+                            .frame(height: 4)
+                        }
+                    }
+                }
+            }
+        }
+    }
+
+    // Chart 2: Monthly Surplus & Contributions
+    private var monthlySurplusChartView: some View {
+        VStack(alignment: .leading, spacing: 14) {
+            VStack(alignment: .leading, spacing: 2) {
+                Text("Monthly Surplus vs Required SIPs")
+                    .font(.subheadline.weight(.bold))
+                Text("Compares your surplus against required monthly goal contributions.")
+                    .font(.caption2)
+                    .foregroundStyle(.secondary)
+            }
+
+            let surplus = availableMonthlyCapacity
+            let needed = journeyTotalMonthlySIP
+            let isSurplusEnough = surplus >= needed
+            let diff = abs(surplus - needed)
+
+            HStack(spacing: 10) {
+                VStack(alignment: .leading, spacing: 4) {
+                    HStack(spacing: 4) {
+                        Circle().fill(Color.blue).frame(width: 6, height: 6)
+                        Text("Available Surplus")
+                            .font(.system(size: 10, weight: .medium))
+                            .foregroundStyle(.secondary)
+                    }
+                    Text(surplus.toCurrency())
+                        .font(.headline.weight(.bold))
+                        .foregroundStyle(.blue)
+                }
+                .frame(maxWidth: .infinity, alignment: .leading)
+                .padding(12)
+                .background(Color.blue.opacity(0.08), in: RoundedRectangle(cornerRadius: 12, style: .continuous))
+
+                VStack(alignment: .leading, spacing: 4) {
+                    HStack(spacing: 4) {
+                        Circle().fill(isSurplusEnough ? Color.green : Color.red).frame(width: 6, height: 6)
+                        Text("Required SIP")
+                            .font(.system(size: 10, weight: .medium))
+                            .foregroundStyle(.secondary)
+                    }
+                    Text(needed.toCurrency())
+                        .font(.headline.weight(.bold))
+                        .foregroundStyle(isSurplusEnough ? Color.green : Color.red)
+                }
+                .frame(maxWidth: .infinity, alignment: .leading)
+                .padding(12)
+                .background((isSurplusEnough ? Color.green : Color.red).opacity(0.08), in: RoundedRectangle(cornerRadius: 12, style: .continuous))
+            }
+
+            // Cash-flow visualization bar
+            GeometryReader { geo in
+                let maxVal = max(surplus, needed, 1000)
+                let surplusW = min(geo.size.width, max(8, geo.size.width * CGFloat(surplus / maxVal)))
+                let neededW = min(geo.size.width, max(8, geo.size.width * CGFloat(needed / maxVal)))
+
+                VStack(spacing: 8) {
+                    HStack(spacing: 8) {
+                        Text("Surplus")
+                            .font(.caption2.weight(.medium))
+                            .frame(width: 48, alignment: .leading)
+                        ZStack(alignment: .leading) {
+                            Capsule().fill(Color.blue.opacity(0.12))
+                            Capsule().fill(Color.blue).frame(width: surplusW)
+                        }
+                    }
+                    HStack(spacing: 8) {
+                        Text("Needed")
+                            .font(.caption2.weight(.medium))
+                            .frame(width: 48, alignment: .leading)
+                        ZStack(alignment: .leading) {
+                            Capsule().fill(Color.primary.opacity(0.08))
+                            Capsule().fill(isSurplusEnough ? Color.green : Color.red).frame(width: neededW)
+                        }
+                    }
+                }
+            }
+            .frame(height: 52)
+
+            // Feasibility note
+            HStack(spacing: 8) {
+                Image(systemName: isSurplusEnough ? "checkmark.circle.fill" : "exclamationmark.triangle.fill")
+                    .font(.caption.weight(.bold))
+                    .foregroundStyle(isSurplusEnough ? .green : .red)
+                Text(isSurplusEnough
+                    ? "Safe funding buffer: \(diff.toCurrency())/mo remaining after covering all goals."
+                    : "Funding shortfall: ₹\(diff.toCurrency())/mo needed. Prioritize key goals or extend deadlines.")
+                    .font(.caption)
+                    .foregroundStyle(.secondary)
+            }
+            .padding(12)
+            .frame(maxWidth: .infinity, alignment: .leading)
+            .background((isSurplusEnough ? Color.green : Color.red).opacity(0.08), in: RoundedRectangle(cornerRadius: 12, style: .continuous))
+        }
+    }
+
+    // Chart 3: Long-Term Financial Projection
+    private var longTermGrowthChartView: some View {
+        VStack(alignment: .leading, spacing: 14) {
+            VStack(alignment: .leading, spacing: 2) {
+                Text("Projected Wealth Accumulation")
+                    .font(.subheadline.weight(.bold))
+                Text("Hypothetical accumulation toward upcoming milestones.")
+                    .font(.caption2)
+                    .foregroundStyle(.secondary)
+            }
+
+            Picker("Scenario", selection: $selectedGrowthScenario) {
+                Text("Conservative").tag(0)
+                Text("Moderate").tag(1)
+                Text("Optimistic").tag(2)
+            }
+            .pickerStyle(.segmented)
+
+            let points = projectionPoints
+            if points.isEmpty {
+                emptyChartPlaceholder("Add goals to simulate long-term portfolio growth.")
+            } else {
+                Chart {
+                    ForEach(points) { pt in
+                        AreaMark(
+                            x: .value("Year", pt.calendarYear),
+                            y: .value("Wealth", pt.projectedWealth)
+                        )
+                        .foregroundStyle(LinearGradient(
+                            colors: [Color.blue.opacity(0.24), Color.blue.opacity(0.02)],
+                            startPoint: .top,
+                            endPoint: .bottom
+                        ))
+
+                        LineMark(
+                            x: .value("Year", pt.calendarYear),
+                            y: .value("Wealth", pt.projectedWealth)
+                        )
+                        .foregroundStyle(Color.blue)
+                        .lineStyle(StrokeStyle(lineWidth: 2.5))
+                    }
+
+                    ForEach(milestonePoints) { ms in
+                        let currentYear = Calendar.current.component(.year, from: Date())
+                        PointMark(
+                            x: .value("Year", currentYear + ms.year),
+                            y: .value("Target", ms.targetAmount)
+                        )
+                        .foregroundStyle(Color.orange)
+                        .symbolSize(45)
+                    }
+                }
+                .frame(height: 160)
+                .chartXAxis {
+                    AxisMarks(values: .automatic(desiredCount: 5)) { val in
+                        AxisGridLine()
+                        AxisValueLabel {
+                            if let intVal = val.as(Int.self) {
+                                Text("\(intVal)")
+                                    .font(.system(size: 10))
+                            }
+                        }
+                    }
+                }
+                .chartYAxis {
+                    AxisMarks(position: .leading, values: .automatic(desiredCount: 4)) { val in
+                        AxisGridLine()
+                        AxisValueLabel {
+                            if let doubleVal = val.as(Double.self) {
+                                Text(doubleVal.toCurrency(compact: true))
+                                    .font(.system(size: 9))
+                            }
+                        }
+                    }
+                }
+
+                HStack(spacing: 14) {
+                    HStack(spacing: 5) {
+                        Rectangle().fill(Color.blue).frame(width: 12, height: 2)
+                        Text("Projected Wealth")
+                            .font(.system(size: 10, weight: .medium))
+                            .foregroundStyle(.secondary)
+                    }
+                    HStack(spacing: 5) {
+                        Circle().fill(Color.orange).frame(width: 6, height: 6)
+                        Text("Goal Milestone")
+                            .font(.system(size: 10, weight: .medium))
+                            .foregroundStyle(.secondary)
+                    }
+                }
+
+                Text("Illustrative projections based on selected return scenario and regular monthly investment. Returns are market-dependent and not guaranteed.")
+                    .font(.system(size: 10))
+                    .foregroundStyle(.tertiary)
+                    .lineSpacing(1.5)
+            }
+        }
+    }
+
+    private func emptyChartPlaceholder(_ message: String) -> some View {
+        VStack(spacing: 6) {
+            Image(systemName: "chart.bar.xaxis")
+                .font(.title2)
+                .foregroundStyle(.secondary)
+            Text(message)
+                .font(.caption)
+                .foregroundStyle(.secondary)
+        }
+        .frame(maxWidth: .infinity)
+        .padding(20)
+    }
+
+    private var growthScenarioRate: Double {
+        switch selectedGrowthScenario {
+        case 0: return 0.075
+        case 2: return 0.135
+        default: return journey.assumptions.investmentReturnRate ?? 0.105
+        }
+    }
+
+    private var projectionHorizonYears: Int {
+        let maxGoalYears = displayableGoals.map(\.yearsRemaining).max() ?? 5
+        return max(5, min(25, maxGoalYears + 2))
+    }
+
+    private struct JourneyProjectionPoint: Identifiable {
+        let id = UUID()
+        let year: Int
+        let calendarYear: Int
+        let projectedWealth: Double
+    }
+
+    private struct JourneyMilestonePoint: Identifiable {
+        let id = UUID()
+        let year: Int
+        let targetAmount: Double
+        let goalName: String
+    }
+
+    private var projectionPoints: [JourneyProjectionPoint] {
+        let r = growthScenarioRate
+        let monthlyRate = r / 12.0
+        let monthlySIP = min(availableMonthlyCapacity, journeyTotalMonthlySIP)
+        let initialSavings = journeyTotalSavedAmount
+        let currentYear = Calendar.current.component(.year, from: Date())
+
+        var points: [JourneyProjectionPoint] = []
+        for y in 0...projectionHorizonYears {
+            let months = Double(y * 12)
+            let futureFromInitial = initialSavings * pow(1 + r, Double(y))
+            let futureFromSIP: Double = {
+                guard monthlyRate > 0, months > 0 else { return monthlySIP * months }
+                return (monthlySIP * (pow(1 + monthlyRate, months) - 1)) / monthlyRate
+            }()
+            let total = futureFromInitial + futureFromSIP
+            points.append(JourneyProjectionPoint(
+                year: y,
+                calendarYear: currentYear + y,
+                projectedWealth: total
+            ))
+        }
+        return points
+    }
+
+    private var milestonePoints: [JourneyMilestonePoint] {
+        displayableGoals.map { goal in
+            JourneyMilestonePoint(
+                year: goal.yearsRemaining,
+                targetAmount: goal.targetAmount,
+                goalName: goal.name
+            )
+        }
+    }
+
+    // MARK: - 5. Bottom Actions & Journey Management
+    private var journeyBottomActions: some View {
+        VStack(spacing: 12) {
+            Button {
+                withAnimation(.spring(response: 0.35)) {
+                    hasStartedPlanning = true
+                }
+            } label: {
+                HStack(spacing: 8) {
+                    Image(systemName: "slider.horizontal.3")
+                    Text("Review & Adjust Journey")
+                }
+                .font(.headline.weight(.semibold))
+                .frame(maxWidth: .infinity)
+                .frame(height: 52)
+                .foregroundStyle(.white)
+                .background(AppTheme.accentGradient, in: RoundedRectangle(cornerRadius: 16, style: .continuous))
+                .shadow(color: Color.blue.opacity(0.25), radius: 8, x: 0, y: 4)
+            }
+            .buttonStyle(.plain)
+
+            Button {
+                showPlanGoalSelection = true
+            } label: {
+                HStack(spacing: 8) {
+                    Image(systemName: "plus.circle.fill")
+                    Text("Plan a Specific Goal Now")
+                }
+                .font(.headline.weight(.semibold))
+                .frame(maxWidth: .infinity)
+                .frame(height: 52)
+                .foregroundStyle(Color.accentColor)
+                .background(Color.accentColor.opacity(0.1), in: RoundedRectangle(cornerRadius: 16, style: .continuous))
+            }
+            .buttonStyle(.plain)
+
+            // Reset Journey Secondary Action
+            Button {
+                showResetJourneyConfirmation = true
+            } label: {
+                HStack(spacing: 6) {
+                    Image(systemName: "arrow.counterclockwise")
+                    Text("Reset Financial Journey")
+                }
+                .font(.footnote.weight(.medium))
+                .foregroundStyle(.secondary)
+                .padding(.vertical, 8)
+            }
+            .buttonStyle(.plain)
+            .padding(.top, 4)
+        }
+        .padding(.top, 8)
     }
 
     // MARK: - Phase Content Switcher
