@@ -158,6 +158,7 @@ struct RetirementQuestionnaire: View {
                     totalCorpus: getTargetCorpusValue(),
                     goalAccentColor: goalAccentColor,
                     onSave: {
+                        saveRetirementGoalToJourney()
                         let planModel = InvestmentPlanModel(
                             name: "Retirement Plan",
                             dateSaved: DateFormatter.localizedString(from: Date(), dateStyle: .medium, timeStyle: .none),
@@ -182,6 +183,9 @@ struct RetirementQuestionnaire: View {
                     healthcareExpensesText = expenses > 0 ? String(Int(expenses)) : "0"
                 }
                 syncInputFromQuestionnaire()
+            }
+            .onDisappear {
+                saveRetirementGoalToJourney()
             }
             .onChange(of: monthlyExpensesText) { _, value in
                 input.retirementMonthlyExpensesToday = Double(value.filter(\.isNumber))
@@ -225,9 +229,43 @@ struct RetirementQuestionnaire: View {
         if let age {
             trackerInput.timePeriod = String(max(1, (input.retirementAge ?? 60) - age))
         }
+        trackerInput.customTargetCorpus = getTargetCorpusValue()
         trackerInput.goalPlanType = savingPlan?.rawValue
         trackerInput.goalSIPAmount = expectedSIPAmount
         return trackerInput
+    }
+
+    private func saveRetirementGoalToJourney() {
+        let corpus = getTargetCorpusValue()
+        guard corpus > 0 else { return }
+        var journey = appState.currentProfile?.planningJourney ?? FinancialPlanningJourney()
+        let age = profileAge ?? input.currentAge ?? 30
+        let years = max(1, (input.retirementAge ?? 60) - age)
+        let targetDate = Calendar.current.date(
+            byAdding: .year,
+            value: years,
+            to: Date()
+        )
+        if let index = journey.goalDrafts.firstIndex(where: {
+            $0.category.localizedCaseInsensitiveContains("Retirement")
+                || $0.name.localizedCaseInsensitiveContains("Retirement")
+        }) {
+            journey.goalDrafts[index].targetDate = targetDate
+            journey.goalDrafts[index].customTargetCorpus = corpus
+        }
+        appState.updateFinancialPlanningJourney(journey)
+
+        if var profile = appState.currentProfile,
+           let goalIdx = profile.goals.firstIndex(where: {
+               $0.goalName.localizedCaseInsensitiveContains("Retirement")
+           }) {
+            profile.goals[goalIdx].targetAmount = corpus
+            if let targetDate = targetDate {
+                profile.goals[goalIdx].targetDate = targetDate
+            }
+            appState.currentProfile = profile
+            appState.syncProfile()
+        }
     }
 
     private func getTargetCorpusValue() -> Double {

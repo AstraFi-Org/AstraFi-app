@@ -5,6 +5,7 @@ struct InvestmentPlanResultView: View {
     @Environment(AppStateManager.self) var appState
     
     var input: InvestmentPlanInputModel
+    var isFromFinancialJourney: Bool = false
     
     private var results: FullPlanResult {
         InvestmentPlannerEngine.generateFullPlan(
@@ -44,7 +45,7 @@ struct InvestmentPlanResultView: View {
                 // Plan Options
                 VStack(spacing: 20) {
                     // Plan 1: SIP
-                    NavigationLink(destination: Plan1DetailView(input: input, result: results.plan1)) {
+                    NavigationLink(destination: Plan1DetailView(input: input, result: results.plan1, isFromFinancialJourney: isFromFinancialJourney)) {
                         StrategySelectionCard(
                             id: 1,
                             title: isRetirement ? "Systematic Retirement Corpus (SIP)" : "SIP with Diversification",
@@ -63,7 +64,7 @@ struct InvestmentPlanResultView: View {
                     // Plan 3: Loan stress test — for Retirement, this means
                     // "Pre-Retirement Debt Leverage Stress-Test"
                     if let plan3 = results.plan3 {
-                        NavigationLink(destination: Plan3DetailView(input: input, result: plan3)) {
+                        NavigationLink(destination: Plan3DetailView(input: input, result: plan3, isFromFinancialJourney: isFromFinancialJourney)) {
                             StrategySelectionCard(
                                 id: 3,
                                 title: isRetirement
@@ -85,7 +86,7 @@ struct InvestmentPlanResultView: View {
                     // Plan 2: Traditional Loan — for Retirement, this is
                     // "Pre-Retirement Asset Leverage Strategy"
                     if let plan2 = results.plan2 {
-                        NavigationLink(destination: Plan2DetailView(input: input, result: plan2)) {
+                        NavigationLink(destination: Plan2DetailView(input: input, result: plan2, isFromFinancialJourney: isFromFinancialJourney)) {
                             StrategySelectionCard(
                                 id: 2,
                                 title: isRetirement

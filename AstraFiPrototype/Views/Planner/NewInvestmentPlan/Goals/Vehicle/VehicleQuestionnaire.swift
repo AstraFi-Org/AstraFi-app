@@ -221,10 +221,16 @@ struct VehicleQuestionnaire: View {
                 if input.currentVehicleCost.isEmpty, let amount = draft.targetAmount {
                     input.currentVehicleCost = String(format: "%.0f", amount)
                 }
+                if input.savedAmount.isEmpty, let saved = draft.savedAmount {
+                    input.savedAmount = String(format: "%.0f", saved)
+                }
                 if input.vehicleType == nil {
-                    input.vehicleType = .family
+                    input.vehicleType = draft.planVariant.flatMap(VehicleType.init(rawValue:)) ?? .family
                 }
             }
+        }
+        .onDisappear {
+            saveVehicleGoalToJourney()
         }
     }
     
@@ -265,11 +271,16 @@ struct VehicleQuestionnaire: View {
     private func saveVehicleGoalToJourney() {
         guard let currentCost = Double(input.currentVehicleCost), currentCost.isFinite, currentCost >= 0 else { return }
         var journey = appState.currentProfile?.planningJourney ?? FinancialPlanningJourney()
+        let years = max(1, Int(input.yearsUntilPurchase) ?? 1)
         let targetDate = Calendar.current.date(
             byAdding: .year,
-            value: max(1, Int(input.yearsUntilPurchase) ?? 1),
+            value: years,
             to: Date()
         )
+        let inflation = input.vehicleType?.annualInflation ?? 0.07
+        let variant = input.vehicleType?.rawValue
+        let netTarget = netTargetValue
+
         if let index = journey.goalDrafts.firstIndex(where: {
             $0.category.localizedCaseInsensitiveContains("Vehicle")
                 || $0.name.localizedCaseInsensitiveContains("Vehicle")
@@ -277,15 +288,42 @@ struct VehicleQuestionnaire: View {
         }) {
             journey.goalDrafts[index].targetAmount = currentCost
             journey.goalDrafts[index].targetDate = targetDate
+            journey.goalDrafts[index].planVariant = variant
+            journey.goalDrafts[index].customInflationRate = inflation
+            journey.goalDrafts[index].customTargetCorpus = netTarget
+            if let saved = Double(input.savedAmount) {
+                journey.goalDrafts[index].savedAmount = saved
+            }
         } else {
-            journey.goalDrafts.append(FinancialPlanningGoalDraft(
+            var draft = FinancialPlanningGoalDraft(
                 name: "Vehicle",
                 category: "Vehicle",
                 targetDate: targetDate,
                 targetAmount: currentCost
-            ))
+            )
+            draft.planVariant = variant
+            draft.customInflationRate = inflation
+            draft.customTargetCorpus = netTarget
+            if let saved = Double(input.savedAmount) {
+                draft.savedAmount = saved
+            }
+            journey.goalDrafts.append(draft)
         }
         appState.updateFinancialPlanningJourney(journey)
+
+        if var profile = appState.currentProfile,
+           let goalIdx = profile.goals.firstIndex(where: {
+               $0.goalName.localizedCaseInsensitiveContains("Vehicle") || $0.goalName.localizedCaseInsensitiveContains("Car")
+           }) {
+            if netTarget > 0 {
+                profile.goals[goalIdx].targetAmount = netTarget
+            }
+            if let targetDate = targetDate {
+                profile.goals[goalIdx].targetDate = targetDate
+            }
+            appState.currentProfile = profile
+            appState.syncProfile()
+        }
     }
     
     private func buildTrackerInput() -> InvestmentPlanInputModel {
@@ -302,6 +340,10 @@ struct VehicleQuestionnaire: View {
             savedAmount: input.savedAmount.isEmpty ? "0" : input.savedAmount,
             hasEmergencyFund: true
         )
+        trackerInput.baseGoalCost = Double(input.currentVehicleCost)
+        trackerInput.inflationRate = input.vehicleType?.annualInflation ?? 0.07
+        trackerInput.customInflationRate = input.vehicleType?.annualInflation ?? 0.07
+        trackerInput.customTargetCorpus = netTargetValue
         // Vehicle-specific data
         trackerInput.goalPlanType = savingPlan?.rawValue
         trackerInput.goalSIPAmount = expectedSIPAmount

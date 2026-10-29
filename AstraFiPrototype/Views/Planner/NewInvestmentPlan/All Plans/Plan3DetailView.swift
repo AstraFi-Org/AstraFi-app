@@ -10,6 +10,7 @@ struct Plan3DetailView: View {
     var input: InvestmentPlanInputModel
     var result: Plan3Result
     var isFromTracker: Bool = false
+    var isFromFinancialJourney: Bool = false
 
     @State private var selectedScenario: String = "Moderate"
     @State private var investmentMode: String = "Lumpsum"
@@ -113,14 +114,14 @@ struct Plan3DetailView: View {
                 }
                 .padding(.horizontal, 16)
                 .padding(.top, 16)
-                .padding(.bottom, 120)
+                .padding(.bottom, (!isFromTracker && !isFromFinancialJourney) ? 120 : 36)
                 .frame(maxWidth: .infinity)
             }
             .scrollBounceBehavior(.basedOnSize, axes: .horizontal)
             .scrollDismissesKeyboard(.interactively)
             .background(AppTheme.appBackground(for: colorScheme))
 
-            if !isFromTracker {
+            if !isFromTracker && !isFromFinancialJourney {
                 savePlanFooter
             }
         }

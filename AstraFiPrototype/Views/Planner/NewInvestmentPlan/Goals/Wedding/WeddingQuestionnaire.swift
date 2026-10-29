@@ -241,12 +241,27 @@ struct WeddingQuestionnaire: View {
             journey.goalDrafts[idx].savedAmount = saved
             changed = true
         }
-        if let scale = input.weddingScale, journey.goalDrafts[idx].planVariant != scale.rawValue {
+        if let scale = input.weddingScale {
             journey.goalDrafts[idx].planVariant = scale.rawValue
+            journey.goalDrafts[idx].customInflationRate = scale.annualInflation
+            journey.goalDrafts[idx].customTargetCorpus = netTargetValue
             changed = true
         }
         if changed {
             appState.updateFinancialPlanningJourney(journey)
+            if var profile = appState.currentProfile,
+               let goalIdx = profile.goals.firstIndex(where: {
+                   $0.goalName.localizedCaseInsensitiveContains("Marriage") || $0.goalName.localizedCaseInsensitiveContains("Wedding")
+               }) {
+                if netTargetValue > 0 {
+                    profile.goals[goalIdx].targetAmount = netTargetValue
+                }
+                if let yrs = Int(yearsText.trimmingCharacters(in: .whitespacesAndNewlines)), yrs > 0 {
+                    profile.goals[goalIdx].targetDate = Calendar.current.date(byAdding: .year, value: yrs, to: Date()) ?? profile.goals[goalIdx].targetDate
+                }
+                appState.currentProfile = profile
+                appState.syncProfile()
+            }
         }
     }
 

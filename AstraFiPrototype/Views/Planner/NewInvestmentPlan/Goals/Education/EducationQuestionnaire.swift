@@ -119,6 +119,8 @@ class EducationPlanInputModel {
             educationLocation: location == .india ? "India" : "Abroad",
             yearsUntilEducation: Int(yearsUntilCourse)
         )
+        model.baseGoalCost = Double(courseAmount)
+        model.customTargetCorpus = totalCorpus
         model.goalPlanType = savingPlan?.rawValue
         model.goalSIPAmount = expectedSIPAmount
         return model
@@ -373,6 +375,7 @@ struct EducationQuestionnaire: View {
                         goalAccentColor: goalAccentColor,
                         onSave: {
                             let trackerInput = input.toTrackerModel()
+                            saveEducationGoalToJourney()
                             let planModel = InvestmentPlanModel(
                                 name: "Education Plan",
                                 dateSaved: DateFormatter.localizedString(from: Date(), dateStyle: .medium, timeStyle: .none),
@@ -413,6 +416,54 @@ struct EducationQuestionnaire: View {
                     input.lifestyle = .normal
                 }
             }
+        }
+        .onDisappear {
+            saveEducationGoalToJourney()
+        }
+    }
+
+    private func saveEducationGoalToJourney() {
+        guard let currentCost = Double(input.courseAmount), currentCost.isFinite, currentCost >= 0 else { return }
+        var journey = appState.currentProfile?.planningJourney ?? FinancialPlanningJourney()
+        let years = max(1, Int(input.yearsUntilCourse) ?? 5)
+        let targetDate = Calendar.current.date(
+            byAdding: .year,
+            value: years,
+            to: Date()
+        )
+        let netTarget = input.totalCorpus
+
+        if let index = journey.goalDrafts.firstIndex(where: {
+            $0.category.localizedCaseInsensitiveContains("Education")
+                || $0.name.localizedCaseInsensitiveContains("Education")
+        }) {
+            journey.goalDrafts[index].targetAmount = currentCost
+            journey.goalDrafts[index].targetDate = targetDate
+            journey.goalDrafts[index].customTargetCorpus = netTarget
+        } else {
+            var draft = FinancialPlanningGoalDraft(
+                name: "Education",
+                category: "Education",
+                targetDate: targetDate,
+                targetAmount: currentCost
+            )
+            draft.customTargetCorpus = netTarget
+            journey.goalDrafts.append(draft)
+        }
+        appState.updateFinancialPlanningJourney(journey)
+
+        if var profile = appState.currentProfile,
+           let goalIdx = profile.goals.firstIndex(where: {
+               $0.goalName.localizedCaseInsensitiveContains("Education")
+           }) {
+            if netTarget > 0 {
+                profile.goals[goalIdx].targetAmount = netTarget
+            }
+            if let targetDate = targetDate {
+                profile.goals[goalIdx].targetDate = targetDate
+            }
+            appState.currentProfile = profile
+            appState.syncProfile()
         }
     }
 

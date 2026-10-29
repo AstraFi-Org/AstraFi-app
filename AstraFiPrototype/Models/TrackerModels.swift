@@ -111,6 +111,12 @@ struct InvestmentPlanInputModel: Codable, Hashable {
     var interestRate: Double?
     var loanAmount: Double?
 
+    // Customization & Inflation Tracking
+    var baseGoalCost: Double?
+    var inflationRate: Double?
+    var customInflationRate: Double?
+    var customTargetCorpus: Double?
+
     var currentAge: Int?
     var retirementAge: Int?
     var yearsPostRetirement: Int?

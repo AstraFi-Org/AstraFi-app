@@ -92,6 +92,10 @@ struct FinancialPlanningGoalDraft: Codable, Identifiable, Equatable {
     var savedAmount: Double? = nil
     var planVariant: String? = nil
     var priority: Int = 2
+    var customInflationRate: Double? = nil
+    var customTargetCorpus: Double? = nil
+    var customSIP: Double? = nil
+    var customTenure: Int? = nil
 }
 
 struct FinancialPlanningAssumptions: Codable, Equatable {

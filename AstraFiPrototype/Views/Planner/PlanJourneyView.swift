@@ -215,13 +215,39 @@ struct PlanJourneyView: View {
 
     // MARK: - Multi-Goal Mathematical Plan Calculations
     private var calculatedGoalPlans: [CalculatedGoalPlan] {
-        let inflation = journey.assumptions.inflationRate ?? 0.06
+        let defaultInflation = journey.assumptions.inflationRate ?? 0.06
         let generalReturn = journey.assumptions.investmentReturnRate ?? 0.11
 
         return orderedGoalDrafts.compactMap { draft in
             guard let targetDate = draft.targetDate, let baseCost = draft.targetAmount else { return nil }
-            let years = max(1, Calendar.current.dateComponents([.year], from: Date(), to: targetDate).year ?? 1)
-            let futureTarget = baseCost * pow(1 + inflation, Double(years))
+            let years = max(1, draft.customTenure ?? Calendar.current.dateComponents([.year], from: Date(), to: targetDate).year ?? 1)
+            let actualTargetDate = draft.customTenure != nil
+                ? (Calendar.current.date(byAdding: .year, value: years, to: Date()) ?? targetDate)
+                : targetDate
+
+            // Goal-specific inflation rate
+            let goalInflation: Double = {
+                if let custom = draft.customInflationRate { return custom }
+                if let variant = draft.planVariant {
+                    if let weddingRate = weddingScaleInflation(for: variant) { return weddingRate }
+                    if let vehicleRate = vehicleTypeInflation(for: variant) { return vehicleRate }
+                    if let homeRate = homePropertyInflation(for: variant) { return homeRate }
+                }
+                if draft.category.localizedCaseInsensitiveContains("Education") || draft.name.localizedCaseInsensitiveContains("Education") {
+                    return journey.assumptions.educationInflationRate ?? 0.09
+                }
+                if draft.category.localizedCaseInsensitiveContains("Home") {
+                    return journey.assumptions.housingInflationRate ?? 0.07
+                }
+                return defaultInflation
+            }()
+
+            let futureTarget: Double = {
+                if let customCorpus = draft.customTargetCorpus, customCorpus > 0 {
+                    return customCorpus
+                }
+                return baseCost * pow(1 + goalInflation, Double(years))
+            }()
 
             let returnRate: Double = {
                 if years < 3 { return 0.07 }
@@ -232,6 +258,9 @@ struct PlanJourneyView: View {
             let monthlyRate = returnRate / 12.0
             let months = Double(years * 12)
             let sip: Double = {
+                if let customSIP = draft.customSIP, customSIP > 0 {
+                    return customSIP
+                }
                 guard monthlyRate > 0 else { return futureTarget / months }
                 return (futureTarget * monthlyRate) / (pow(1 + monthlyRate, months) - 1)
             }()
@@ -252,7 +281,7 @@ struct PlanJourneyView: View {
                 id: draft.id,
                 name: draft.name,
                 category: draft.category,
-                targetDate: targetDate,
+                targetDate: actualTargetDate,
                 yearsFromNow: years,
                 baseAmount: baseCost,
                 inflationAdjustedAmount: futureTarget,
@@ -262,6 +291,34 @@ struct PlanJourneyView: View {
                 priority: draft.priority
             )
         }
+    }
+
+    private func weddingScaleInflation(for variant: String) -> Double? {
+        switch variant {
+        case "Destination Wedding": return 0.15
+        case "Grand City Wedding": return 0.10
+        case "Standard Wedding": return 0.07
+        case "Intimate Ceremony": return 0.05
+        default: return nil
+        }
+    }
+
+    private func vehicleTypeInflation(for variant: String) -> Double? {
+        let v = variant.lowercased()
+        if v.contains("luxury") { return 0.09 }
+        if v.contains("suv") || v.contains("family") || v.contains("sedan") { return 0.07 }
+        if v.contains("bike") || v.contains("two-wheeler") || v.contains("wheeler") { return 0.05 }
+        if v.contains("electric") || v.contains("ev") { return 0.04 }
+        return nil
+    }
+
+    private func homePropertyInflation(for variant: String) -> Double? {
+        let v = variant.lowercased()
+        if v.contains("tech") || v.contains("penthouse") { return 0.10 }
+        if v.contains("metro") { return 0.08 }
+        if v.contains("growing") || v.contains("town") || v.contains("plot") || v.contains("villa") || v.contains("apartment") { return 0.06 }
+        if v.contains("rural") || v.contains("countryside") { return 0.04 }
+        return nil
     }
 
     private var totalMonthlySIPNeeded: Double {
@@ -311,7 +368,7 @@ struct PlanJourneyView: View {
     }
 
     private func makeInputModel(for plan: CalculatedGoalPlan) -> InvestmentPlanInputModel {
-        InvestmentPlanInputModel(
+        var input = InvestmentPlanInputModel(
             investmentType: "Monthly SIP",
             amount: String(format: "%.0f", plan.monthlySIP),
             liquidity: plan.yearsFromNow < 3 ? "High" : (plan.yearsFromNow < 7 ? "Medium" : "Low"),
@@ -326,6 +383,16 @@ struct PlanJourneyView: View {
             monthlyIncome: availableMonthlyCapacity,
             existingEMIs: 0
         )
+        input.baseGoalCost = plan.baseAmount
+        if let draft = journey.goalDrafts.first(where: { $0.id == plan.id }) {
+            input.inflationRate = draft.customInflationRate ?? (
+                draft.planVariant.flatMap { weddingScaleInflation(for: $0) ?? vehicleTypeInflation(for: $0) ?? homePropertyInflation(for: $0) }
+                ?? (journey.assumptions.inflationRate ?? 0.06)
+            )
+            input.customInflationRate = draft.customInflationRate
+            input.customTargetCorpus = draft.customTargetCorpus
+        }
+        return input
     }
 
     private struct EffectiveGoalAllocation {
@@ -3917,8 +3984,15 @@ struct PlanJourneyView: View {
                     simulatingGoalID = nil
                 } detailDestination: {
                     AnyView(
-                        Plan1DetailView(input: input, result: fullPlan.plan1)
-                            .environment(appState)
+                        Plan1DetailView(
+                            input: input,
+                            result: fullPlan.plan1,
+                            isFromFinancialJourney: true,
+                            onSaveJourneyPlan: { _, _ in
+                                chosenPlanIndex[plan.id] = 0
+                            }
+                        )
+                        .environment(appState)
                     )
                 }
 
@@ -3949,8 +4023,12 @@ struct PlanJourneyView: View {
                         simulatingGoalID = nil
                     } detailDestination: {
                         AnyView(
-                            Plan2DetailView(input: input, result: plan2Result)
-                                .environment(appState)
+                            Plan2DetailView(
+                                input: input,
+                                result: plan2Result,
+                                isFromFinancialJourney: true
+                            )
+                            .environment(appState)
                         )
                     }
                 }
@@ -3982,8 +4060,12 @@ struct PlanJourneyView: View {
                         simulatingGoalID = nil
                     } detailDestination: {
                         AnyView(
-                            Plan3DetailView(input: input, result: plan3Result)
-                                .environment(appState)
+                            Plan3DetailView(
+                                input: input,
+                                result: plan3Result,
+                                isFromFinancialJourney: true
+                            )
+                            .environment(appState)
                         )
                     }
                 }
@@ -4424,9 +4506,30 @@ struct PlanJourneyView: View {
                     Button {
                         UIImpactFeedbackGenerator(style: .medium).impactOccurred()
                         if let newAmount = parseFinancialAmount(customizeAmountText) {
+                            let matchedDraft = journey.goalDrafts.first(where: { $0.id == plan.id })
+                            let goalInflation: Double = {
+                                if let custom = matchedDraft?.customInflationRate { return custom }
+                                if let variant = matchedDraft?.planVariant {
+                                    if let weddingRate = weddingScaleInflation(for: variant) { return weddingRate }
+                                    if let vehicleRate = vehicleTypeInflation(for: variant) { return vehicleRate }
+                                    if let homeRate = homePropertyInflation(for: variant) { return homeRate }
+                                }
+                                return journey.assumptions.inflationRate ?? 0.06
+                            }()
+                            let futureTarget = newAmount * pow(1 + goalInflation, Double(customizeYears))
                             updateGoalDraft(plan.id) { draft in
                                 draft.targetAmount = newAmount
+                                draft.customTargetCorpus = futureTarget
+                                draft.customTenure = customizeYears
+                                draft.targetYearsFromNow = customizeYears
                                 draft.targetDate = Calendar.current.date(byAdding: .year, value: customizeYears, to: Date())
+                            }
+                            if var profile = appState.currentProfile,
+                               let goalIdx = profile.goals.firstIndex(where: { $0.id == plan.id || $0.goalName.localizedCaseInsensitiveCompare(plan.name) == .orderedSame }) {
+                                profile.goals[goalIdx].targetAmount = futureTarget
+                                profile.goals[goalIdx].targetDate = Calendar.current.date(byAdding: .year, value: customizeYears, to: Date()) ?? profile.goals[goalIdx].targetDate
+                                appState.currentProfile = profile
+                                appState.syncProfile()
                             }
                         }
                         customizingGoalID = nil
