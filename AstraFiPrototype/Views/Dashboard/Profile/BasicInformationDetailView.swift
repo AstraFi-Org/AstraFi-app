@@ -4,6 +4,17 @@ import Supabase
 struct BasicInformationDetailView: View {
     @Environment(AppStateManager.self) private var appState
 
+    enum Field: Hashable {
+        case email
+        case phoneNumber
+        case name
+        case age
+        case monthlyIncome
+        case monthlyExpenses
+        case emergencyFundAmount
+    }
+
+    @FocusState private var focusedField: Field?
     @State private var isEditing = false
     @State private var showSavedAlert = false
     @State private var form = ProfileInfoForm()
@@ -19,16 +30,16 @@ struct BasicInformationDetailView: View {
             }
 
             Section("Contact") {
-                textRow("Email ID", text: $form.email, placeholder: "Email not added", keyboard: .emailAddress)
+                textRow("Email ID", field: .email, text: $form.email, placeholder: "Email not added", keyboard: .emailAddress)
                     .textInputAutocapitalization(.never)
                     .autocorrectionDisabled()
 
-                textRow("Phone Number", text: $form.phoneNumber, placeholder: "Phone not added", keyboard: .phonePad)
+                textRow("Phone Number", field: .phoneNumber, text: $form.phoneNumber, placeholder: "Phone not added", keyboard: .phonePad)
             }
 
             Section("Personal Details") {
-                textRow("Full Name", text: $form.name, placeholder: "Name not added")
-                textRow("Age", text: $form.age, placeholder: "Age not added", keyboard: .numberPad)
+                textRow("Full Name", field: .name, text: $form.name, placeholder: "Name not added")
+                textRow("Age", field: .age, text: $form.age, placeholder: "Age not added", keyboard: .numberPad)
                 pickerRow("Gender", selection: $form.gender)
                 pickerRow("Marital Status", selection: $form.maritalStatus)
             }
@@ -44,11 +55,12 @@ struct BasicInformationDetailView: View {
             }
 
             Section("Income & Expenses") {
-                textRow("Monthly Income", text: $form.monthlyIncome, placeholder: "Income not added", keyboard: .decimalPad, prefix: "₹")
-                textRow("Monthly Expenses", text: $form.monthlyExpenses, placeholder: "Expenses not added", keyboard: .decimalPad, prefix: "₹")
-                textRow("Emergency Fund", text: $form.emergencyFundAmount, placeholder: "Emergency fund not added", keyboard: .decimalPad, prefix: "₹")
+                textRow("Monthly Income", field: .monthlyIncome, text: $form.monthlyIncome, placeholder: "Income not added", keyboard: .decimalPad, prefix: "₹")
+                textRow("Monthly Expenses", field: .monthlyExpenses, text: $form.monthlyExpenses, placeholder: "Expenses not added", keyboard: .decimalPad, prefix: "₹")
+                textRow("Emergency Fund", field: .emergencyFundAmount, text: $form.emergencyFundAmount, placeholder: "Emergency fund not added", keyboard: .decimalPad, prefix: "₹")
             }
         }
+        .scrollDismissesKeyboard(.interactively)
         .navigationTitle("Profile Information")
         .navigationBarTitleDisplayMode(.inline)
         .navigationBarBackButtonHidden(isEditing)
@@ -57,6 +69,7 @@ struct BasicInformationDetailView: View {
                 if isEditing {
                     Button {
                         loadProfile()
+                        focusedField = nil
                         isEditing = false
                     } label: {
                         Image(systemName: "xmark")
@@ -66,7 +79,12 @@ struct BasicInformationDetailView: View {
 
             ToolbarItem(placement: .topBarTrailing) {
                 Button {
-                    isEditing ? saveProfile() : beginEditing()
+                    if isEditing {
+                        focusedField = nil
+                        saveProfile()
+                    } else {
+                        beginEditing()
+                    }
                 } label: {
                     if isEditing {
                         Image(systemName: "checkmark").fontWeight(.semibold)
@@ -75,6 +93,14 @@ struct BasicInformationDetailView: View {
                     }
                 }
                 .disabled(isEditing && !canSave)
+            }
+
+            ToolbarItemGroup(placement: .keyboard) {
+                Spacer()
+                Button("Done") {
+                    focusedField = nil
+                }
+                .font(.body.weight(.semibold))
             }
         }
         .onAppear(perform: loadProfile)
@@ -86,6 +112,7 @@ struct BasicInformationDetailView: View {
     @ViewBuilder
     private func textRow(
         _ title: String,
+        field: Field,
         text: Binding<String>,
         placeholder: String,
         keyboard: UIKeyboardType = .default,
@@ -96,7 +123,7 @@ struct BasicInformationDetailView: View {
                 Text(title)
                 Spacer(minLength: 16)
 
-                HStack(spacing: 2) {
+                HStack(spacing: 4) {
                     if let prefix {
                         Text(prefix).foregroundStyle(.secondary)
                     }
@@ -104,8 +131,24 @@ struct BasicInformationDetailView: View {
                     TextField(placeholder, text: text)
                         .keyboardType(keyboard)
                         .multilineTextAlignment(.trailing)
+                        .focused($focusedField, equals: field)
+
+                    if !text.wrappedValue.isEmpty && focusedField == field {
+                        Button {
+                            text.wrappedValue = ""
+                        } label: {
+                            Image(systemName: "xmark.circle.fill")
+                                .font(.system(size: 14))
+                                .foregroundStyle(.secondary)
+                        }
+                        .buttonStyle(.plain)
+                    }
                 }
                 .frame(maxWidth: 190)
+            }
+            .contentShape(Rectangle())
+            .onTapGesture {
+                focusedField = field
             }
         } else {
             LabeledContent(title, value: displayValue(text.wrappedValue, placeholder: placeholder, prefix: prefix))
