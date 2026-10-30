@@ -8,6 +8,7 @@ struct PlannerView: View {
     @Environment(\.colorScheme) var colorScheme
     @Environment(AppStateManager.self) var appState
     @State private var showNewInvestmentPlan = false
+    @State private var showFinancialSimulators = false
     @State private var showCompanyAnalyzer = false
     @State private var projectionYears = 5
     @State private var emergencyFundState = EmergencyFundSectionState()
@@ -143,6 +144,9 @@ struct PlannerView: View {
         .background(AppTheme.appBackground(for: colorScheme))
         .navigationDestination(isPresented: $showNewInvestmentPlan) {
             PlanJourneyView()
+        }
+        .navigationDestination(isPresented: $showFinancialSimulators) {
+            FinancialSimulatorsHubView()
         }
         .navigationDestination(isPresented: $showDecisionCenter) {
             FinancialDecisionCenterView(openHealthPlanOnAppear: appState.showPersonalizedHealthPlan)
@@ -463,6 +467,13 @@ struct PlannerView: View {
                 icon: "chart.line.uptrend.xyaxis.circle.fill",
                 gradientColors: [Color(hex: "#007AFF"), Color(hex: "#5E5CE6")],
                 action: { showNewInvestmentPlan = true }
+            )
+            ActionButton(
+                title: "Financial Simulators",
+                subtitle: "Fixed-Income Ladder, REITs & Retirement SWP",
+                icon: "slider.horizontal.2.square.badge.arrow.right",
+                gradientColors: [Color(hex: "#BF5AF2"), Color(hex: "#5E5CE6")],
+                action: { showFinancialSimulators = true }
             )
 //            ActionButton(
 //                title: "Company Analysis",

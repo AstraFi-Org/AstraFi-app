@@ -759,7 +759,17 @@ struct PlanNavigationLink: View {
         }
         .buttonStyle(PlainButtonStyle())
         .navigationDestination(isPresented: $navigateToPlan) {
-            if plan.name.contains("Pure Investment") {
+            if plan.name.contains("Fixed-Income Ladder") {
+                let capital = Double(plan.input.amount.replacingOccurrences(of: ",", with: "")) ?? 1_000_000
+                FixedIncomeLadderResultView(input: FixedIncomeLadderInput(totalCapitalAvailable: capital))
+            } else if plan.name.contains("REIT") {
+                let initial = Double(plan.input.amount.replacingOccurrences(of: ",", with: "")) ?? 500_000
+                let horizon = Int(plan.input.timePeriod) ?? 10
+                REITSimulatorResultView(input: REITSimulatorInput(initialLumpSumInvestment: initial, investmentHorizonYears: horizon))
+            } else if plan.name.contains("Retirement SWP") || plan.name.contains("Retirement Income") {
+                let sip = Double(plan.input.amount.replacingOccurrences(of: ",", with: "")) ?? 30_000
+                RetirementSWPResultView(input: RetirementSWPInput(monthlySIPPreRetirement: sip))
+            } else if plan.name.contains("Pure Investment") {
                 Plan1DetailView(input: plan.input, result: full.plan1, isFromTracker: true)
             } else if plan.name.contains("Loan Strategy") {
                 Plan2DetailView(input: plan.input, result: full.plan2 ?? Plan2Result.empty(), isFromTracker: true)
