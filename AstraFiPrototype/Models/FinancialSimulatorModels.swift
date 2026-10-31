@@ -176,6 +176,45 @@ enum FixedIncomeReinvestmentAction: String, Codable, CaseIterable, Identifiable 
     var id: String { rawValue }
 }
 
+enum LadderReinvestmentMode: String, Codable, CaseIterable, Identifiable {
+    case principalOnly = "Reinvest Principal"
+    case principalPlusInterest = "Reinvest Principal + Interest"
+    case partialAmount = "Reinvest Part of Proceeds"
+
+    var id: String { rawValue }
+}
+
+struct LadderReinvestmentConfiguration: Codable, Equatable {
+    var mode: LadderReinvestmentMode
+    var partialReinvestmentAmount: Double
+    var destinationInstrumentType: FixedIncomeInstrumentType
+    var destinationTenureYears: Int
+    var destinationRatePct: Double
+    var destinationPayoutFrequency: FixedIncomePayoutFrequency
+    var destinationTaxRatePct: Double
+    var destinationFeePct: Double
+
+    init(
+        mode: LadderReinvestmentMode = .principalOnly,
+        partialReinvestmentAmount: Double = 100_000,
+        destinationInstrumentType: FixedIncomeInstrumentType = .bankFD,
+        destinationTenureYears: Int = 1,
+        destinationRatePct: Double = 7.0,
+        destinationPayoutFrequency: FixedIncomePayoutFrequency = .quarterlyCompounding,
+        destinationTaxRatePct: Double = 20.0,
+        destinationFeePct: Double = 0.0
+    ) {
+        self.mode = mode
+        self.partialReinvestmentAmount = max(0, partialReinvestmentAmount)
+        self.destinationInstrumentType = destinationInstrumentType
+        self.destinationTenureYears = max(1, destinationTenureYears)
+        self.destinationRatePct = destinationRatePct
+        self.destinationPayoutFrequency = destinationPayoutFrequency
+        self.destinationTaxRatePct = max(0, destinationTaxRatePct)
+        self.destinationFeePct = max(0, destinationFeePct)
+    }
+}
+
 struct FixedIncomeEntry: Codable, Identifiable, Equatable {
     var id: UUID
     var instrumentName: String
@@ -191,6 +230,9 @@ struct FixedIncomeEntry: Codable, Identifiable, Equatable {
     var reinvestmentAction: FixedIncomeReinvestmentAction
     var reinvestmentRatePct: Double
     var plannedWithdrawalAtMaturity: Double
+    var reinvestmentConfiguration: LadderReinvestmentConfiguration?
+    var simulatedStartDate: Date?
+    var simulatedMaturityDate: Date?
 
     init(
         id: UUID = UUID(),
@@ -206,7 +248,10 @@ struct FixedIncomeEntry: Codable, Identifiable, Equatable {
         feePct: Double = 0.0,
         reinvestmentAction: FixedIncomeReinvestmentAction = .reinvestLadder,
         reinvestmentRatePct: Double = 7.0,
-        plannedWithdrawalAtMaturity: Double = 0.0
+        plannedWithdrawalAtMaturity: Double = 0.0,
+        reinvestmentConfiguration: LadderReinvestmentConfiguration? = nil,
+        simulatedStartDate: Date? = nil,
+        simulatedMaturityDate: Date? = nil
     ) {
         self.id = id
         self.instrumentName = instrumentName
@@ -222,6 +267,9 @@ struct FixedIncomeEntry: Codable, Identifiable, Equatable {
         self.reinvestmentAction = reinvestmentAction
         self.reinvestmentRatePct = reinvestmentRatePct
         self.plannedWithdrawalAtMaturity = plannedWithdrawalAtMaturity
+        self.reinvestmentConfiguration = reinvestmentConfiguration
+        self.simulatedStartDate = simulatedStartDate
+        self.simulatedMaturityDate = simulatedMaturityDate
     }
 
     var maturityYearOffset: Int {
@@ -235,19 +283,22 @@ struct FixedIncomeLadderInput: Codable, Equatable {
     var ladderEntries: [FixedIncomeEntry]
     var inflationAssumptionPct: Double
     var scenarioKind: PlanningScenarioKind
+    var simulationStartDate: Date?
 
     init(
         totalCapitalAvailable: Double = 1_000_000,
         desiredLiquidityReserve: Double = 100_000,
         ladderEntries: [FixedIncomeEntry]? = nil,
         inflationAssumptionPct: Double = 6.0,
-        scenarioKind: PlanningScenarioKind = .base
+        scenarioKind: PlanningScenarioKind = .base,
+        simulationStartDate: Date? = Date()
     ) {
         self.totalCapitalAvailable = totalCapitalAvailable
         self.desiredLiquidityReserve = desiredLiquidityReserve
         self.ladderEntries = ladderEntries ?? Self.defaultLadder()
         self.inflationAssumptionPct = inflationAssumptionPct
         self.scenarioKind = scenarioKind
+        self.simulationStartDate = simulationStartDate
     }
 
     static func defaultLadder() -> [FixedIncomeEntry] {
@@ -318,6 +369,7 @@ struct FixedIncomeLadderInput: Codable, Equatable {
 
 struct LadderCashFlowEvent: Codable, Identifiable, Equatable {
     var id: UUID
+    var entryID: UUID?
     var yearOffset: Int
     var instrumentName: String
     var instrumentType: FixedIncomeInstrumentType
@@ -336,9 +388,11 @@ struct LadderCashFlowEvent: Codable, Identifiable, Equatable {
         grossCashInflow: Double,
         taxAndFeesDeducted: Double,
         netCashInflow: Double,
-        isMaturityPrincipal: Bool
+        isMaturityPrincipal: Bool,
+        entryID: UUID? = nil
     ) {
         self.id = id
+        self.entryID = entryID
         self.yearOffset = yearOffset
         self.instrumentName = instrumentName
         self.instrumentType = instrumentType
@@ -362,6 +416,36 @@ struct LadderYearlySummary: Codable, Identifiable, Equatable {
     var endingLadderInvestedBalance: Double
 
     var id: Int { yearOffset }
+}
+
+struct LadderReinvestmentRecord: Codable, Identifiable, Equatable {
+    var id: UUID
+    var yearOffset: Int
+    var sourceEntryID: UUID?
+    var sourceTrancheName: String
+    var destinationTranche: FixedIncomeEntry
+    var principalReinvested: Double
+    var interestReinvested: Double
+
+    var totalAmount: Double { principalReinvested + interestReinvested }
+
+    init(
+        id: UUID = UUID(),
+        yearOffset: Int,
+        sourceEntryID: UUID? = nil,
+        sourceTrancheName: String,
+        destinationTranche: FixedIncomeEntry,
+        principalReinvested: Double,
+        interestReinvested: Double
+    ) {
+        self.id = id
+        self.yearOffset = yearOffset
+        self.sourceEntryID = sourceEntryID
+        self.sourceTrancheName = sourceTrancheName
+        self.destinationTranche = destinationTranche
+        self.principalReinvested = principalReinvested
+        self.interestReinvested = interestReinvested
+    }
 }
 
 struct LadderStressScenario: Codable, Identifiable, Equatable {
@@ -445,6 +529,8 @@ struct FixedIncomeLadderResult: Codable, Equatable {
     var feasibility: PlanFeasibility
     var feasibilityExplanation: String
     var stressTestResults: [String: Double] // scenarioId -> endingCash
+    var simulatedLadderEntries: [FixedIncomeEntry]?
+    var reinvestmentRecords: [LadderReinvestmentRecord]?
 
     init(
         totalCapitalAllocated: Double,
@@ -465,7 +551,9 @@ struct FixedIncomeLadderResult: Codable, Equatable {
         concentrationWarnings: [String],
         feasibility: PlanFeasibility,
         feasibilityExplanation: String,
-        stressTestResults: [String: Double] = [:]
+        stressTestResults: [String: Double] = [:],
+        simulatedLadderEntries: [FixedIncomeEntry] = [],
+        reinvestmentRecords: [LadderReinvestmentRecord] = []
     ) {
         self.totalCapitalAllocated = totalCapitalAllocated
         self.unallocatedCapital = unallocatedCapital
@@ -486,6 +574,8 @@ struct FixedIncomeLadderResult: Codable, Equatable {
         self.feasibility = feasibility
         self.feasibilityExplanation = feasibilityExplanation
         self.stressTestResults = stressTestResults
+        self.simulatedLadderEntries = simulatedLadderEntries
+        self.reinvestmentRecords = reinvestmentRecords
     }
 
     static func empty() -> FixedIncomeLadderResult {

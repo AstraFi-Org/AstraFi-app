@@ -85,6 +85,11 @@ struct FixedIncomeLadderInputView: View {
             Text("Stagger bond, deposit, and T-bill maturities across 1–5+ years to lock in yields, optimize liquidity, and minimize reinvestment risk.")
                 .font(.auraCaption())
                 .foregroundStyle(.secondary)
+
+            Text("This plan assumes the full capital pool is available today. Each tranche is one investment with its own term and maturity date.")
+                .font(.system(size: 12, weight: .medium))
+                .foregroundStyle(.secondary)
+                .padding(.top, 2)
         }
         .auraCardStyle(radius: 20)
     }
@@ -94,6 +99,10 @@ struct FixedIncomeLadderInputView: View {
             HStack {
                 Text("Total Capital Available")
                     .font(.auraHeader(size: 16))
+                InfoHintButton(
+                    title: "Capital available today",
+                    message: "Enter the total pool you have available now. The ladder divides this amount among investments and leaves any unallocated amount as cash. This screen does not model a new contribution arriving each year."
+                )
                 Spacer()
                 Text(totalCapital.toCurrency())
                     .font(.auraDigital(size: 18))
@@ -145,7 +154,7 @@ struct FixedIncomeLadderInputView: View {
             HStack {
                 SimulatorSectionHeader(
                     title: "Ladder Tranches (\(entries.count))",
-                    subtitle: "Tap a tranche to configure tenure, coupon, and reinvestment",
+                    subtitle: "Each tranche is invested now for its listed term. For example, 1-Yr FD means it matures after one year, not that you invest in year one.",
                     icon: "list.bullet.rectangle.fill"
                 )
                 Spacer()
@@ -254,6 +263,19 @@ private struct TrancheRowView: View {
     let onDelete: () -> Void
     let onDuplicate: () -> Void
 
+    private var maturityActionSummary: String {
+        guard entry.reinvestmentAction == .reinvestLadder else {
+            return entry.reinvestmentAction == .cashBalance ? "Cash out at maturity" : "Allocate to goal / expense"
+        }
+        let config = entry.reinvestmentConfiguration ?? LadderReinvestmentConfiguration(
+            partialReinvestmentAmount: entry.allocatedAmount,
+            destinationRatePct: entry.reinvestmentRatePct,
+            destinationTaxRatePct: entry.taxRatePct,
+            destinationFeePct: entry.feePct
+        )
+        return "Then \(config.destinationInstrumentType.shortName) • \(config.destinationTenureYears)Y • \(String(format: "%.2f", config.destinationRatePct))%"
+    }
+
     var body: some View {
         Button(action: onEdit) {
             HStack(spacing: 12) {
@@ -283,9 +305,10 @@ private struct TrancheRowView: View {
                         .font(.system(size: 15, weight: .bold, design: .rounded))
                         .foregroundStyle(.primary)
 
-                    Text(entry.reinvestmentAction == .reinvestLadder ? "Reinvest" : "Cash Out")
+                    Text(maturityActionSummary)
                         .font(.system(size: 11, weight: .medium))
                         .foregroundStyle(entry.reinvestmentAction == .reinvestLadder ? AppTheme.auraGreen : .orange)
+                        .lineLimit(2)
                 }
 
                 Menu {
@@ -317,10 +340,17 @@ private struct TrancheRowView: View {
 struct FixedIncomeEntryEditorSheet: View {
     @Environment(\.dismiss) private var dismiss
     @State private var entry: FixedIncomeEntry
+    @State private var reinvestmentConfiguration: LadderReinvestmentConfiguration
     let onSave: (FixedIncomeEntry) -> Void
 
     init(entry: FixedIncomeEntry, onSave: @escaping (FixedIncomeEntry) -> Void) {
         self._entry = State(initialValue: entry)
+        self._reinvestmentConfiguration = State(initialValue: entry.reinvestmentConfiguration ?? LadderReinvestmentConfiguration(
+            partialReinvestmentAmount: entry.allocatedAmount,
+            destinationRatePct: entry.reinvestmentRatePct,
+            destinationTaxRatePct: entry.taxRatePct,
+            destinationFeePct: entry.feePct
+        ))
         self.onSave = onSave
     }
 
@@ -342,6 +372,10 @@ struct FixedIncomeEntryEditorSheet: View {
 
                     HStack {
                         Text("Tenure (Years)")
+                        InfoHintButton(
+                            title: "Tenure",
+                            message: "Tenure is how long this investment runs from today before it matures. A 1-year FD matures after one year; it does not mean the money is first invested in year one."
+                        )
                         Spacer()
                         Stepper("\(entry.tenureYears) Years", value: $entry.tenureYears, in: 1...20)
                     }
@@ -390,10 +424,100 @@ struct FixedIncomeEntryEditorSheet: View {
                     }
 
                     if entry.reinvestmentAction == .reinvestLadder {
+                        HStack(alignment: .top, spacing: 8) {
+                            Text("At maturity, this tranche settles and the amount you choose below creates a separate new tranche with its own term and cash flows.")
+                                .font(.system(size: 12))
+                                .foregroundStyle(.secondary)
+                            InfoHintButton(
+                                title: "How reinvestment is simulated",
+                                message: "The original investment closes at maturity. Its net principal, and optionally this same investment’s net interest paid in the maturity year, fund a new tranche using the terms below. Earlier coupons and interest from other investments stay in cash. Any proceeds not reinvested go to available cash. The newly created tranche is simulated through its own maturity, then transfers to cash; automatic rollover continues only for configured original tranches."
+                            )
+                        }
+                        Text("‘Principal + Interest’ includes only this tranche’s net interest paid at maturity. Earlier coupon payments and interest from other investments stay in available cash.")
+                            .font(.system(size: 12))
+                            .foregroundStyle(.secondary)
+
+                        Picker("What to reinvest", selection: $reinvestmentConfiguration.mode) {
+                            ForEach(LadderReinvestmentMode.allCases) { mode in
+                                Text(mode.rawValue).tag(mode)
+                            }
+                        }
+
+                        if reinvestmentConfiguration.mode == .principalOnly || reinvestmentConfiguration.mode == .partialAmount {
+                            SimulatorInputField(
+                                title: reinvestmentConfiguration.mode == .principalOnly
+                                    ? "Principal Amount to Reinvest"
+                                    : "Amount of Proceeds to Reinvest",
+                                value: $reinvestmentConfiguration.partialReinvestmentAmount,
+                                step: 25_000,
+                                range: 0...50_000_000
+                            )
+                        }
+
+                        Picker("New Investment Type", selection: $reinvestmentConfiguration.destinationInstrumentType) {
+                            ForEach(FixedIncomeInstrumentType.allCases) { type in
+                                Text(type.shortName).tag(type)
+                            }
+                        }
+                        .onChange(of: reinvestmentConfiguration.destinationInstrumentType) { _, type in
+                            reinvestmentConfiguration.destinationRatePct = type.defaultRatePct
+                            reinvestmentConfiguration.destinationPayoutFrequency = type.defaultFrequency
+                        }
+
                         HStack {
-                            Text("Assumed Reinvestment Rate")
+                            Text("New Tenure")
                             Spacer()
-                            TextField("Rate", value: $entry.reinvestmentRatePct, format: .number)
+                            Stepper("\(reinvestmentConfiguration.destinationTenureYears) years", value: $reinvestmentConfiguration.destinationTenureYears, in: 1...20)
+                        }
+
+                        HStack {
+                            Text("New Annual Rate / Yield")
+                            LadderReferenceInfoButton(
+                                title: "Where the rate comes from",
+                                explanation: "The displayed 7% is an editable app default, not a live rate or a quote from one bank. Actual rates vary by institution, instrument, tenure, deposit size, customer category, payout option, and date. Check the provider’s current rate card or market/auction yield for the selected product.",
+                                sources: [
+                                    LadderReferenceSource(title: "SBI retail term deposit rates (FD example)", url: "https://sbi.co.in/web/interest-rates/deposit-rates/retail-domestic-term-deposits"),
+                                    LadderReferenceSource(title: "RBI: deposit rate rules and factors", url: "https://website.rbi.org.in/documents/d/rbi/handbookg27022025d0f3f53f5d3c4310a6bb2f8ac2175d3a"),
+                                    LadderReferenceSource(title: "RBI: T-Bill and Government Security auctions", url: "https://m.rbi.org.in/commonman/english/scripts/FAQs.aspx?Id=711"),
+                                    LadderReferenceSource(title: "NSE: corporate bond traded yields", url: "https://www.nseindia.com/market-data/debt-market-reporting-corporate-bonds-traded-on-exchange")
+                                ]
+                            )
+                            Spacer()
+                            TextField("Rate", value: $reinvestmentConfiguration.destinationRatePct, format: .number)
+                                .keyboardType(.decimalPad)
+                                .multilineTextAlignment(.trailing)
+                                .frame(width: 70)
+                            Text("%")
+                        }
+
+                        Picker("New Payout / Compounding", selection: $reinvestmentConfiguration.destinationPayoutFrequency) {
+                            ForEach(FixedIncomePayoutFrequency.allCases) { frequency in
+                                Text(frequency.rawValue).tag(frequency)
+                            }
+                        }
+
+                        HStack {
+                            Text("Estimated Tax on Interest")
+                            LadderReferenceInfoButton(
+                                title: "Why the tax is 20%",
+                                explanation: "20% is a simplified, editable simulator assumption. It is not a universal FD tax rate or the bank’s TDS rate. Actual tax on deposit interest depends on your total taxable income, tax regime, deductions/rebates, and taxpayer status. The simulator applies one flat percentage to modeled interest; it does not calculate your tax return.",
+                                sources: [
+                                    LadderReferenceSource(title: "Income Tax Department: AY 2026–27 tax slabs", url: "https://www.incometax.gov.in/iec/foportal/help/individual/return-applicable-1"),
+                                    LadderReferenceSource(title: "Income Tax Department: reporting deposit interest", url: "https://www.incometax.gov.in/iec/foportal/help/all-topics/e-filing-services/file-itr-2-online")
+                                ]
+                            )
+                            Spacer()
+                            TextField("Tax", value: $reinvestmentConfiguration.destinationTaxRatePct, format: .number)
+                                .keyboardType(.decimalPad)
+                                .multilineTextAlignment(.trailing)
+                                .frame(width: 60)
+                            Text("%")
+                        }
+
+                        HStack {
+                            Text("New Investment Fee")
+                            Spacer()
+                            TextField("Fee", value: $reinvestmentConfiguration.destinationFeePct, format: .number)
                                 .keyboardType(.decimalPad)
                                 .multilineTextAlignment(.trailing)
                                 .frame(width: 60)
@@ -417,11 +541,94 @@ struct FixedIncomeEntryEditorSheet: View {
                 }
                 ToolbarItem(placement: .confirmationAction) {
                     Button("Done") {
+                        entry.reinvestmentConfiguration = reinvestmentConfiguration
+                        entry.reinvestmentRatePct = reinvestmentConfiguration.destinationRatePct
                         onSave(entry)
                         dismiss()
                     }
                 }
             }
+        }
+    }
+}
+
+struct InfoHintButton: View {
+    let title: String
+    let message: String
+    @State private var showingInfo = false
+
+    var body: some View {
+        Button {
+            showingInfo = true
+        } label: {
+            Image(systemName: "info.circle")
+                .font(.system(size: 15, weight: .medium))
+                .foregroundStyle(AppTheme.auraIndigo)
+                .accessibilityLabel("More information: \(title)")
+        }
+        .buttonStyle(.plain)
+        .alert(title, isPresented: $showingInfo) {
+            Button("Got it", role: .cancel) {}
+        } message: {
+            Text(message)
+        }
+    }
+}
+
+private struct LadderReferenceSource: Identifiable {
+    let title: String
+    let url: String
+    var id: String { url }
+}
+
+private struct LadderReferenceInfoButton: View {
+    let title: String
+    let explanation: String
+    let sources: [LadderReferenceSource]
+    @State private var showingSources = false
+
+    var body: some View {
+        Button {
+            showingSources = true
+        } label: {
+            Image(systemName: "info.circle")
+                .font(.system(size: 15, weight: .medium))
+                .foregroundStyle(AppTheme.auraIndigo)
+                .accessibilityLabel("Sources and details: \(title)")
+        }
+        .buttonStyle(.plain)
+        .sheet(isPresented: $showingSources) {
+            NavigationStack {
+                ScrollView {
+                    VStack(alignment: .leading, spacing: 16) {
+                        Text(explanation)
+                            .font(.system(size: 15))
+                            .foregroundStyle(.primary)
+
+                        VStack(alignment: .leading, spacing: 12) {
+                            Text("Official references")
+                                .font(.system(size: 16, weight: .bold, design: .rounded))
+                            ForEach(sources) { source in
+                                if let url = URL(string: source.url) {
+                                    Link(destination: url) {
+                                        Label(source.title, systemImage: "arrow.up.right.square")
+                                            .font(.system(size: 14, weight: .medium))
+                                    }
+                                }
+                            }
+                        }
+                    }
+                    .padding(20)
+                }
+                .navigationTitle(title)
+                .navigationBarTitleDisplayMode(.inline)
+                .toolbar {
+                    ToolbarItem(placement: .confirmationAction) {
+                        Button("Done") { showingSources = false }
+                    }
+                }
+            }
+            .presentationDetents([.medium, .large])
         }
     }
 }

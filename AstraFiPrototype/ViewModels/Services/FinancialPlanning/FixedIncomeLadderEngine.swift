@@ -4,6 +4,17 @@ import Foundation
 /// Deterministic, instrument-aware cash flow calculation adhering to AstraFi architecture.
 enum FixedIncomeLadderEngine {
 
+    private static func derivedID(from sourceID: UUID, year: Int, salt: UInt8) -> UUID {
+        var bytes = sourceID.uuid
+        withUnsafeMutableBytes(of: &bytes) { buffer in
+            buffer[12] = UInt8(truncatingIfNeeded: year >> 24)
+            buffer[13] = UInt8(truncatingIfNeeded: year >> 16)
+            buffer[14] = UInt8(truncatingIfNeeded: year >> 8) ^ salt
+            buffer[15] = UInt8(truncatingIfNeeded: year) ^ 0xA5
+        }
+        return UUID(uuid: bytes)
+    }
+
     // MARK: - Primary Simulation Entry Point
 
     static func simulate(
@@ -16,108 +27,160 @@ enum FixedIncomeLadderEngine {
         }
 
         let stress = appliedStress ?? LadderStressScenario.standardScenarios[0]
+        let totalAllocated = input.ladderEntries.reduce(0) { $0 + $1.allocatedAmount }
+        var allEntries = input.ladderEntries
         var timelineEvents: [LadderCashFlowEvent] = []
-        var totalAllocated = 0.0
         var totalGrossInterest = 0.0
         var totalNetInterest = 0.0
         var totalMaturityProceedsGross = 0.0
         var totalTaxesAndFees = 0.0
         var totalReinvested = 0.0
         var totalWithdrawalsPaid = 0.0
-
+        var reinvestmentRecords: [LadderReinvestmentRecord] = []
         var allocationByInstrument: [String: Double] = [:]
         var allocationByMaturityYear: [Int: Double] = [:]
 
-        // Determine max horizon
-        let maxMaturityYear = input.ladderEntries.map { $0.startYearOffset + $0.tenureYears }.max() ?? 5
-        let simulationHorizonYears = max(5, maxMaturityYear)
+        func addEntryEvents(_ entry: FixedIncomeEntry) {
+            let simulated = simulateEntry(entry: entry, stress: stress)
+            timelineEvents.append(contentsOf: simulated.events)
+            totalGrossInterest += simulated.grossInterest
+            totalNetInterest += simulated.netInterest
+            totalMaturityProceedsGross += simulated.maturityProceedsGross
+            totalTaxesAndFees += simulated.taxesAndFees
+        }
 
-        // Process each entry's cash flows
         for entry in input.ladderEntries {
-            totalAllocated += entry.allocatedAmount
-            allocationByInstrument[entry.instrumentType.rawValue, default: 0.0] += entry.allocatedAmount
-            let matYear = entry.startYearOffset + entry.tenureYears
-            allocationByMaturityYear[matYear, default: 0.0] += entry.allocatedAmount
-
-            let (entryEvents, grossInt, netInt, matGross, taxFee, reinvested, withdrawn) = simulateEntry(
-                entry: entry,
-                stress: stress,
-                inflationRate: input.inflationAssumptionPct / 100.0
-            )
-
-            timelineEvents.append(contentsOfKey: entryEvents)
-            totalGrossInterest += grossInt
-            totalNetInterest += netInt
-            totalMaturityProceedsGross += matGross
-            totalTaxesAndFees += taxFee
-            totalReinvested += reinvested
-            totalWithdrawalsPaid += withdrawn
+            allocationByInstrument[entry.instrumentType.rawValue, default: 0] += entry.allocatedAmount
+            allocationByMaturityYear[entry.maturityYearOffset, default: 0] += entry.allocatedAmount
+            addEntryEvents(entry)
         }
 
-        // Sort timeline events chronologically
-        timelineEvents.sort {
-            if $0.yearOffset != $1.yearOffset {
-                return $0.yearOffset < $1.yearOffset
-            }
-            return $0.isMaturityPrincipal && !$1.isMaturityPrincipal
-        }
+        let originalHorizon = input.ladderEntries.map(\.maturityYearOffset).max() ?? 5
+        let maxNewTenure = input.ladderEntries
+            .filter { $0.reinvestmentAction == .reinvestLadder }
+            .map { ($0.reinvestmentConfiguration?.destinationTenureYears ?? 1) }
+            .max() ?? 0
+        // One real follow-on investment is simulated for each configured original tranche.
+        // Follow-on legs mature to cash, preventing an unbounded automatic rollover loop.
+        let simulationHorizonYears = max(5, originalHorizon + maxNewTenure)
 
-        // Generate yearly summary
         var yearlySummaries: [LadderYearlySummary] = []
         var runningCash = max(0, input.totalCapitalAvailable - totalAllocated)
         var runningInvested = totalAllocated
-
-        var concentrationWarnings: [String] = []
         var liquidityGaps: [String] = []
 
-        // Concentration check: Check if single non-sovereign instrument > 35% of total allocated
-        for (instName, amount) in allocationByInstrument {
-            let pct = (amount / max(1.0, totalAllocated)) * 100.0
-            let isSovereign = instName.contains("G-Sec") || instName.contains("Treasury") || instName.contains("SGB")
-            if !isSovereign && pct > 35.0 {
-                concentrationWarnings.append(
-                    "Concentration Risk: \(instName) represents \(String(format: "%.1f", pct))% of allocated ladder (recommended max 35% for non-sovereign credit)."
-                )
-            }
-        }
-
         if totalAllocated > input.totalCapitalAvailable {
-            concentrationWarnings.append(
-                "Capital Shortfall: Allocated capital (\(formatCurrency(totalAllocated))) exceeds available capital (\(formatCurrency(input.totalCapitalAvailable)))."
-            )
+            // Keep the original feasibility warning below; a negative unallocated amount
+            // must not be silently added to cash.
+            runningCash = 0
         }
 
         for year in 1...simulationHorizonYears {
             let yearEvents = timelineEvents.filter { $0.yearOffset == year }
-            let yearInterest = yearEvents.filter { !$0.isMaturityPrincipal }.reduce(0.0) { $0 + $1.netCashInflow }
-            let yearMatPrincipal = yearEvents.filter { $0.isMaturityPrincipal }.reduce(0.0) { $0 + $1.netCashInflow }
+            let interestEvents = yearEvents.filter { !$0.isMaturityPrincipal }
+            let principalEvents = yearEvents.filter(\.isMaturityPrincipal)
+            let yearInterest = interestEvents.reduce(0.0) { $0 + $1.netCashInflow }
+            let yearMatPrincipal = principalEvents.reduce(0.0) { $0 + $1.netCashInflow }
             let yearTaxFee = yearEvents.reduce(0.0) { $0 + $1.taxAndFeesDeducted }
-
-            // Entries maturing in this year
-            let maturingThisYear = input.ladderEntries.filter { ($0.startYearOffset + $0.tenureYears) == year }
+            let maturingEntries = allEntries.filter { $0.maturityYearOffset == year }
             var yearReinvested = 0.0
             var yearWithdrawals = 0.0
+            var yearInvestedPrincipalMaturing = 0.0
+            var children: [FixedIncomeEntry] = []
 
-            for m in maturingThisYear {
-                let withdrawalNeed = m.plannedWithdrawalAtMaturity * pow(1.0 + (input.inflationAssumptionPct + stress.expenseInflationIncreasePct) / 100.0, Double(year))
-                yearWithdrawals += withdrawalNeed
+            for matured in maturingEntries {
+                guard let principalEvent = principalEvents.first(where: { $0.entryID == matured.id }) else { continue }
+                let withdrawal = matured.plannedWithdrawalAtMaturity * pow(
+                    1.0 + (input.inflationAssumptionPct + stress.expenseInflationIncreasePct) / 100.0,
+                    Double(year)
+                )
+                yearWithdrawals += withdrawal
+                yearInvestedPrincipalMaturing += matured.allocatedAmount
 
-                if m.reinvestmentAction == .reinvestLadder {
-                    let eligibleProceeds = max(0, m.allocatedAmount - withdrawalNeed)
-                    yearReinvested += eligibleProceeds
+                guard matured.reinvestmentAction == .reinvestLadder else { continue }
+
+                let config = matured.reinvestmentConfiguration ?? LadderReinvestmentConfiguration(
+                    mode: .principalOnly,
+                    partialReinvestmentAmount: matured.allocatedAmount,
+                    destinationInstrumentType: .bankFD,
+                    destinationTenureYears: 1,
+                    destinationRatePct: matured.reinvestmentRatePct,
+                    destinationPayoutFrequency: .quarterlyCompounding,
+                    destinationTaxRatePct: matured.taxRatePct,
+                    destinationFeePct: matured.feePct
+                )
+                let maturityInterest = interestEvents
+                    .filter { $0.entryID == matured.id }
+                    .reduce(0.0) { $0 + $1.netCashInflow }
+                let eligiblePrincipal = max(0, principalEvent.netCashInflow - withdrawal)
+                let withdrawalBeyondPrincipal = max(0, withdrawal - principalEvent.netCashInflow)
+                let eligibleInterest = max(0, maturityInterest - withdrawalBeyondPrincipal)
+                let amountToReinvest: Double
+                switch config.mode {
+                case .principalOnly:
+                    amountToReinvest = min(max(0, config.partialReinvestmentAmount), eligiblePrincipal)
+                case .principalPlusInterest:
+                    amountToReinvest = eligiblePrincipal + eligibleInterest
+                case .partialAmount:
+                    amountToReinvest = min(config.partialReinvestmentAmount, eligiblePrincipal + eligibleInterest)
                 }
+                guard amountToReinvest > 0 else { continue }
+
+                let principalPart = min(amountToReinvest, eligiblePrincipal)
+                let interestPart = min(eligibleInterest, max(0, amountToReinvest - principalPart))
+                let destinationName = "Reinvested from \(matured.instrumentName) — \(config.destinationInstrumentType.shortName)"
+                let modeledStartDate = input.simulationStartDate.flatMap {
+                    Calendar.current.date(byAdding: .year, value: year, to: $0)
+                }
+                let modeledMaturityDate = modeledStartDate.flatMap {
+                    Calendar.current.date(byAdding: .year, value: config.destinationTenureYears, to: $0)
+                }
+                let destination = FixedIncomeEntry(
+                    id: derivedID(from: matured.id, year: year, salt: 0x31),
+                    instrumentName: destinationName,
+                    instrumentType: config.destinationInstrumentType,
+                    allocatedAmount: amountToReinvest,
+                    startYearOffset: year,
+                    tenureYears: config.destinationTenureYears,
+                    annualInterestRatePct: config.destinationRatePct,
+                    payoutFrequency: config.destinationPayoutFrequency,
+                    compounding: config.destinationInstrumentType.defaultFrequency.isCumulative ? .quarterly : matured.compounding,
+                    taxRatePct: config.destinationTaxRatePct,
+                    feePct: config.destinationFeePct,
+                    reinvestmentAction: .cashBalance,
+                    reinvestmentRatePct: config.destinationRatePct,
+                    simulatedStartDate: modeledStartDate,
+                    simulatedMaturityDate: modeledMaturityDate
+                )
+                children.append(destination)
+                yearReinvested += amountToReinvest
+                reinvestmentRecords.append(
+                    LadderReinvestmentRecord(
+                        id: derivedID(from: matured.id, year: year, salt: 0x72),
+                        yearOffset: year,
+                        sourceEntryID: matured.id,
+                        sourceTrancheName: matured.instrumentName,
+                        destinationTranche: destination,
+                        principalReinvested: principalPart,
+                        interestReinvested: interestPart
+                    )
+                )
             }
 
-            // Cash addition from interest and non-reinvested maturity principal
-            let netCashAddition = yearInterest + max(0, yearMatPrincipal - yearReinvested - yearWithdrawals)
-            runningCash += netCashAddition
-            runningInvested = max(0, runningInvested - yearMatPrincipal + yearReinvested)
+            for child in children {
+                allEntries.append(child)
+                addEntryEvents(child)
+            }
+
+            totalReinvested += yearReinvested
+            totalWithdrawalsPaid += yearWithdrawals
+            let cashAddition = yearInterest + yearMatPrincipal - yearReinvested - yearWithdrawals
+            runningCash += cashAddition
+            runningInvested = max(0, runningInvested - yearInvestedPrincipalMaturing + yearReinvested)
 
             if runningCash < input.desiredLiquidityReserve {
                 liquidityGaps.append("Year \(year): Available cash (\(formatCurrency(runningCash))) falls below desired liquidity reserve (\(formatCurrency(input.desiredLiquidityReserve))).")
             }
-
-            // Check if there are zero maturities and zero interest in this year
             if yearMatPrincipal == 0 && yearInterest == 0 {
                 liquidityGaps.append("Year \(year): Maturity gap — no ladder tranches mature or generate cash flow in this period.")
             }
@@ -135,6 +198,26 @@ enum FixedIncomeLadderEngine {
                     endingLadderInvestedBalance: runningInvested
                 )
             )
+        }
+
+        timelineEvents.sort {
+            if $0.yearOffset != $1.yearOffset { return $0.yearOffset < $1.yearOffset }
+            return $0.isMaturityPrincipal && !$1.isMaturityPrincipal
+        }
+
+        var concentrationWarnings: [String] = []
+        let initialAllocationByInstrument = input.ladderEntries.reduce(into: [String: Double]()) { result, entry in
+            result[entry.instrumentType.rawValue, default: 0] += entry.allocatedAmount
+        }
+        for (instrument, amount) in initialAllocationByInstrument {
+            let pct = amount / max(1.0, totalAllocated) * 100.0
+            let isSovereign = instrument.contains("G-Sec") || instrument.contains("Treasury") || instrument.contains("SGB")
+            if !isSovereign && pct > 35.0 {
+                concentrationWarnings.append("Concentration Risk: \(instrument) represents \(String(format: "%.1f", pct))% of allocated ladder (recommended max 35% for non-sovereign credit).")
+            }
+        }
+        if totalAllocated > input.totalCapitalAvailable {
+            concentrationWarnings.append("Capital Shortfall: Allocated capital (\(formatCurrency(totalAllocated))) exceeds available capital (\(formatCurrency(input.totalCapitalAvailable))).")
         }
 
         // Feasibility check
@@ -182,7 +265,9 @@ enum FixedIncomeLadderEngine {
             concentrationWarnings: concentrationWarnings,
             feasibility: feasibility,
             feasibilityExplanation: explanation,
-            stressTestResults: stressResults
+            stressTestResults: stressResults,
+            simulatedLadderEntries: allEntries,
+            reinvestmentRecords: reinvestmentRecords
         )
     }
 
@@ -190,16 +275,13 @@ enum FixedIncomeLadderEngine {
 
     private static func simulateEntry(
         entry: FixedIncomeEntry,
-        stress: LadderStressScenario,
-        inflationRate: Double
+        stress: LadderStressScenario
     ) -> (
         events: [LadderCashFlowEvent],
         grossInterest: Double,
         netInterest: Double,
         maturityProceedsGross: Double,
-        taxesAndFees: Double,
-        reinvested: Double,
-        withdrawalsPaid: Double
+        taxesAndFees: Double
     ) {
         var events: [LadderCashFlowEvent] = []
         let p = entry.allocatedAmount
@@ -240,7 +322,8 @@ enum FixedIncomeLadderEngine {
                         grossCashInflow: totalInterest,
                         taxAndFeesDeducted: tax + fee,
                         netCashInflow: netInterest,
-                        isMaturityPrincipal: false
+                        isMaturityPrincipal: false,
+                        entryID: entry.id
                     )
                 )
             } else {
@@ -264,7 +347,8 @@ enum FixedIncomeLadderEngine {
                             grossCashInflow: annualInterest,
                             taxAndFeesDeducted: annualTax + annualFee,
                             netCashInflow: annualNet,
-                            isMaturityPrincipal: false
+                            isMaturityPrincipal: false,
+                            entryID: entry.id
                         )
                     )
                 }
@@ -291,7 +375,8 @@ enum FixedIncomeLadderEngine {
                     grossCashInflow: discountInterest,
                     taxAndFeesDeducted: tax + fee,
                     netCashInflow: netInterest,
-                    isMaturityPrincipal: false
+                    isMaturityPrincipal: false,
+                    entryID: entry.id
                 )
             )
 
@@ -316,7 +401,8 @@ enum FixedIncomeLadderEngine {
                         grossCashInflow: annualCoupon,
                         taxAndFeesDeducted: annualTax + annualFee,
                         netCashInflow: annualNetCoupon,
-                        isMaturityPrincipal: false
+                        isMaturityPrincipal: false,
+                        entryID: entry.id
                     )
                 )
             }
@@ -347,28 +433,17 @@ enum FixedIncomeLadderEngine {
                 grossCashInflow: p,
                 taxAndFeesDeducted: principalTaxFee,
                 netCashInflow: principalRepaid,
-                isMaturityPrincipal: true
+                isMaturityPrincipal: true,
+                entryID: entry.id
             )
         )
-
-        // Calculate reinvestment vs withdrawal
-        let inflatedWithdrawal = entry.plannedWithdrawalAtMaturity * pow(1.0 + inflationRate, Double(maturityYear))
-        let netAvailableFromPrincipal = max(0, principalRepaid - inflatedWithdrawal)
-        let reinvested: Double
-        if entry.reinvestmentAction == .reinvestLadder {
-            reinvested = netAvailableFromPrincipal
-        } else {
-            reinvested = 0.0
-        }
 
         return (
             events: events,
             grossInterest: grossInterestTotal,
             netInterest: netInterestTotal,
             maturityProceedsGross: p,
-            taxesAndFees: totalTaxFee + principalTaxFee,
-            reinvested: reinvested,
-            withdrawalsPaid: min(principalRepaid, inflatedWithdrawal)
+            taxesAndFees: totalTaxFee + principalTaxFee
         )
     }
 
