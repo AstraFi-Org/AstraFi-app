@@ -181,11 +181,15 @@ struct ProfileView: View {
         .navigationTitle("Profile")
         .scrollContentBackground(.hidden)
         .background(Color(uiColor: .systemGroupedBackground))
+        .onAppear {
+            appState.syncProfilePhotoToSupabaseIfNeeded()
+        }
         .onChange(of: selectedPhotoItem) { _, newItem in
             Task {
                 guard let data = try? await newItem?.loadTransferable(type: Data.self),
                       UIImage(data: data) != nil else { return }
                 profileImageData = data
+                appState.uploadProfilePhoto(data)
             }
         }
     }

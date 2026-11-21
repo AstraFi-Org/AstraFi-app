@@ -1,9 +1,11 @@
 import SwiftUI
 import Charts
+import UIKit
 
 struct DashboardView: View {
     @Environment(\.colorScheme) var colorScheme
     @Environment(AppStateManager.self) var appState
+    @AppStorage("profileImageData") private var profileImageData: Data?
     
     @State private var showNotifications = false
     @State private var navigateToProfile = false
@@ -81,8 +83,17 @@ struct DashboardView: View {
                             showAuthPrompt = true
                         }
                     } label: {
-                        Image(systemName: "person.crop.circle")
-                            .font(.system(size: 20, weight: .regular))
+                        if let profileImageData, let uiImage = UIImage(data: profileImageData) {
+                            Image(uiImage: uiImage)
+                                .resizable()
+                                .scaledToFill()
+                                .frame(width: 26, height: 26)
+                                .clipShape(Circle())
+                                .overlay(Circle().stroke(Color.primary.opacity(0.15), lineWidth: 1))
+                        } else {
+                            Image(systemName: "person.crop.circle")
+                                .font(.system(size: 20, weight: .regular))
+                        }
                     }
                 }
             }
@@ -141,6 +152,9 @@ struct DashboardView: View {
         .task(id: shouldLoadInvestmentIntelligence) {
             guard shouldLoadInvestmentIntelligence else { return }
             await investmentIntelligence.load()
+        }
+        .onAppear {
+            appState.syncProfilePhotoToSupabaseIfNeeded()
         }
     }
 
@@ -367,8 +381,7 @@ struct DashboardView: View {
                                 icon: priorityIcon(for: item.parameter),
                                 color: priorityColor(for: item.parameter),
                                 title: item.title,
-                                subtitle: item.reason,
-                                actionLabel: item.actionTitle
+                                subtitle: item.reason
                             )
                         }
                         .buttonStyle(.plain)
@@ -423,10 +436,9 @@ struct DashboardView: View {
         let color: Color
         let title: String
         let subtitle: String
-        let actionLabel: String
         
         var body: some View {
-            HStack(alignment: .top, spacing: 12) {
+            HStack(alignment: .center, spacing: 12) {
                 ZStack {
                     RoundedRectangle(cornerRadius: 10, style: .continuous)
                         .fill(color.opacity(0.12))
@@ -435,30 +447,24 @@ struct DashboardView: View {
                         .foregroundStyle(color)
                         .font(.system(size: 17))
                 }
+                
                 VStack(alignment: .leading, spacing: 3) {
                     Text(title)
                         .font(.system(size: 14, weight: .semibold))
-                        .lineLimit(2)
+                        .lineLimit(1)
                         .multilineTextAlignment(.leading)
                     Text(subtitle)
                         .font(.system(size: 13))
                         .foregroundStyle(.secondary)
-                        .lineLimit(4)
+                        .lineLimit(2)
                         .multilineTextAlignment(.leading)
-                        .fixedSize(horizontal: false, vertical: true)
                 }
                 .frame(maxWidth: .infinity, alignment: .leading)
-                .layoutPriority(1)
 
-                HStack(spacing: 6) {
-                    Text(actionLabel)
-                        .font(.system(size: 12, weight: .semibold))
-                    Image(systemName: "chevron.right")
-                        .font(.system(size: 11, weight: .bold))
-                }
-                .foregroundStyle(color)
-                .padding(.top, 4)
-                .fixedSize(horizontal: true, vertical: false)
+                Image(systemName: "chevron.right")
+                    .font(.system(size: 13, weight: .semibold))
+                    .foregroundStyle(color)
+                    .padding(.trailing, 2)
             }
             .frame(maxWidth: .infinity, alignment: .leading)
             .contentShape(Rectangle())

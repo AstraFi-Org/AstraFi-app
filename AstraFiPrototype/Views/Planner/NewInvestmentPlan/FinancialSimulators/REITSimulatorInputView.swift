@@ -40,7 +40,7 @@ struct REITSimulatorInputView: View {
     }
 
     var body: some View {
-        ScrollView {
+        ScrollView(.vertical, showsIndicators: false) {
             VStack(spacing: 20) {
                 // Header card
                 headerCard
@@ -59,7 +59,10 @@ struct REITSimulatorInputView: View {
             }
             .padding(.horizontal, 16)
             .padding(.vertical, 16)
+            .frame(maxWidth: .infinity)
         }
+        .frame(maxWidth: .infinity)
+        .scrollBounceBehavior(.basedOnSize)
         .background(AppTheme.appBackground(for: colorScheme))
         .navigationTitle("REIT & Listed Assets")
         .navigationBarTitleDisplayMode(.inline)
