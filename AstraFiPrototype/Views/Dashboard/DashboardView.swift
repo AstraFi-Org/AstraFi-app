@@ -11,6 +11,12 @@ struct DashboardView: View {
     @State private var showingMonthlyAssessmentPrompt = false
     @State private var showingMonthlyAssessment = false
     @State private var investmentIntelligence = InvestmentIntelligenceHomeViewModel()
+    @State private var showAddInvestment = false
+    @State private var showEmergencyFundSetup = false
+    @State private var showAddInsurance = false
+    @State private var showAddLoan = false
+    @State private var showHealthPlan = false
+    @State private var emergencyFundState = EmergencyFundSectionState()
     
     private var profile: AstraUserProfile? { appState.currentProfile }
     private var investments: [AstraInvestment] { profile?.investments ?? [] }
@@ -56,8 +62,16 @@ struct DashboardView: View {
             ToolbarItem(placement: .topBarTrailing) {
                 HStack(spacing: 16) {
                     NavigationLink(destination: NotificationsView()) {
-                        Image(systemName: "bell")
-                            .font(.system(size: 18, weight: .semibold))
+                        ZStack(alignment: .topTrailing) {
+                            Image(systemName: "bell")
+                                .font(.system(size: 18, weight: .semibold))
+                            if AstraNotificationManager.shared.unreadCount > 0 {
+                                Circle()
+                                    .fill(Color.red)
+                                    .frame(width: 8, height: 8)
+                                    .offset(x: 2, y: -2)
+                            }
+                        }
                     }
 
                     Button {
@@ -104,6 +118,26 @@ struct DashboardView: View {
                 AuthenticationFlowView()
             }
         }
+        .sheet(isPresented: $showAddInvestment) {
+            AddInvestmentView()
+                .environment(appState)
+        }
+        .sheet(isPresented: $showAddInsurance) {
+            AddInsuranceView()
+                .environment(appState)
+        }
+        .sheet(isPresented: $showAddLoan) {
+            AddLoanView()
+                .environment(appState)
+        }
+        .navigationDestination(isPresented: $showEmergencyFundSetup) {
+            EmergencyFundSetupView(plannerState: emergencyFundState)
+                .environment(appState)
+        }
+        .navigationDestination(isPresented: $showHealthPlan) {
+            PersonalizedHealthPlanView()
+                .environment(appState)
+        }
         .task(id: shouldLoadInvestmentIntelligence) {
             guard shouldLoadInvestmentIntelligence else { return }
             await investmentIntelligence.load()
@@ -115,41 +149,13 @@ struct DashboardView: View {
         appState.isMonthlyAssessmentDue() || !dashboardActionItems.isEmpty
     }
 
-    private var dashboardActionItems: [DashboardActionItem] {
-        guard let profile else {
-            return appState.isMonthlyAssessmentDue() ? [monthlyAssessmentActionItem] : []
-        }
-
-        let concerns = FinancialAssessmentInsights.build(profile: profile, data: nil).activeConcerns
-        var items: [DashboardActionItem] = []
-
-        if appState.isMonthlyAssessmentDue() {
-            items.append(monthlyAssessmentActionItem)
-        }
-
-        items.append(contentsOf: concerns.prefix(3).map { concern in
-            DashboardActionItem(
-                icon: concernIcon(for: concern.parameter),
-                color: concern.status == .concern ? Color(hex: "#FF453A") : Color(hex: "#FF9F0A"),
-                title: concern.title,
-                subtitle: concern.recommendation,
-                actionLabel: actionLabel(for: concern.parameter),
-                destination: destination(for: concern.parameter)
-            )
-        })
-
-        return items
+    private var reportModel: FinancialHealthReportModel {
+        FinancialHealthEngine.evaluate(profile: profile, data: nil)
     }
 
-    private var monthlyAssessmentActionItem: DashboardActionItem {
-        DashboardActionItem(
-            icon: "calendar.badge.exclamationmark",
-            color: AppTheme.auraIndigo,
-            title: "Update monthly assessment",
-            subtitle: "Refresh this month's income, expenses, investments, loans, and insurance.",
-            actionLabel: "Start",
-            destination: .monthlyAssessment
-        )
+    private var dashboardActionItems: [FinancialHealthPriorityItem] {
+        guard let profile else { return [] }
+        return reportModel.priorities.filter { !appState.completedPlanActionIDs.contains($0.id) }
     }
 
     
@@ -176,15 +182,17 @@ struct DashboardView: View {
                         .minimumScaleFactor(0.5)
                         .lineLimit(1)
                     
-                    HStack(spacing: 6) {
+                    HStack(spacing: 5) {
                         Image(systemName: returnsPositive ? "arrow.up.right" : "arrow.down.right")
                             .font(.system(size: 11, weight: .bold))
                         Text(totalReturns.toCurrency())
-                            .font(.system(size: 13, weight: .semibold))
+                            .font(.system(size: 12, weight: .semibold))
                         Text(returnsPositive ? "total returns" : "total loss")
-                            .font(.system(size: 13))
+                            .font(.system(size: 12))
                             .opacity(0.8)
                     }
+                    .lineLimit(1)
+                    .fixedSize(horizontal: true, vertical: false)
                     .padding(.horizontal, 10)
                     .padding(.vertical, 5)
                     .background(.black.opacity(0.3))
@@ -308,73 +316,64 @@ struct DashboardView: View {
     // MARK: Action Required Card
     private var nextStepCard: some View {
         let items = dashboardActionItems
+        let displayItems = Array(items.prefix(2))
         
         return VStack(alignment: .leading, spacing: 18) {
             HStack {
                 VStack(alignment: .leading, spacing: 2) {
                     Text("Action Required")
                         .font(.system(size: 18, weight: .bold))
-                    Text(items.isEmpty ? "All vitals healthy" : "\(items.count) next step\(items.count > 1 ? "s" : "") for you")
+                    Text(displayItems.isEmpty ? "All actions completed" : "\(displayItems.count) next step\(displayItems.count > 1 ? "s" : "") for you")
                         .font(.system(size: 12))
                         .foregroundStyle(.secondary)
                 }
                 Spacer()
-                ZStack {
-                    Circle()
-                        .fill(AppTheme.auraGold.opacity(0.15))
-                        .frame(width: 38, height: 38)
-                    Image(systemName: "bolt.fill")
-                        .font(.system(size: 15))
-                        .foregroundStyle(AppTheme.auraGold)
+                Button {
+                    showHealthPlan = true
+                } label: {
+                    ZStack {
+                        Circle()
+                            .fill(AppTheme.auraGold.opacity(0.15))
+                            .frame(width: 38, height: 38)
+                        Image(systemName: "arrow.right")
+                            .font(.system(size: 15, weight: .bold))
+                            .foregroundStyle(AppTheme.auraGold)
+                    }
                 }
+                .buttonStyle(.plain)
             }
             
             VStack(alignment: .leading, spacing: 12) {
-                if items.isEmpty {
-                    Button {
-                        appState.selectedTab = 1
-                    } label: {
-                        ActionRow(
-                            icon: "checkmark.shield.fill",
-                            color: Color(hex: "#30D158"),
-                            title: "All vitals are healthy",
-                            subtitle: "Keep maintaining your current savings rate for optimal growth.",
-                            actionLabel: "Plan"
-                        )
+                if displayItems.isEmpty {
+                    HStack(spacing: 12) {
+                        Image(systemName: "checkmark.circle.fill")
+                            .font(.system(size: 24))
+                            .foregroundStyle(Color(hex: "#30D158"))
+                        VStack(alignment: .leading, spacing: 2) {
+                            Text("All diagnosed actions completed!")
+                                .font(.system(size: 14, weight: .bold))
+                            Text("Your financial health plan is up to date.")
+                                .font(.system(size: 12))
+                                .foregroundStyle(.secondary)
+                        }
                     }
-                    .buttonStyle(.plain)
+                    .padding(.vertical, 8)
                 } else {
-                    ForEach(items) { item in
+                    ForEach(displayItems) { item in
                         Button {
-                            handleAction(item.destination)
+                            handlePriorityAction(item)
                         } label: {
                             ActionRow(
-                                icon: item.icon,
-                                color: item.color,
+                                icon: priorityIcon(for: item.parameter),
+                                color: priorityColor(for: item.parameter),
                                 title: item.title,
-                                subtitle: item.subtitle,
-                                actionLabel: item.actionLabel
+                                subtitle: item.reason,
+                                actionLabel: item.actionTitle
                             )
                         }
                         .buttonStyle(.plain)
                     }
                 }
-            }
-            
-            NavigationLink(destination: PlannerView()) {
-                HStack(spacing: 8) {
-                    Text("View Full Analysis")
-                        .font(.system(size: 14, weight: .semibold))
-                    Spacer()
-                    Image(systemName: "arrow.right")
-                        .font(.system(size: 12, weight: .bold))
-                }
-                .foregroundStyle(.white)
-                .padding(.horizontal, 18)
-                .padding(.vertical, 13)
-                .background(AppTheme.accentGradient)
-                .clipShape(RoundedRectangle(cornerRadius: 14, style: .continuous))
-                .shadow(color: Color(hex: "#007AFF").opacity(0.3), radius: 10, x: 0, y: 5)
             }
         }
         .padding(20)
@@ -384,43 +383,38 @@ struct DashboardView: View {
         .shadow(color: AppTheme.adaptiveShadow, radius: 14, x: 0, y: 5)
     }
 
-    private func handleAction(_ destination: DashboardActionDestination) {
-        switch destination {
-        case .monthlyAssessment:
-            showingMonthlyAssessmentPrompt = true
-        case .planner:
-            appState.selectedTab = 1
-        case .tracker:
-            appState.selectedTab = 2
+    private func handlePriorityAction(_ item: FinancialHealthPriorityItem) {
+        switch item.destination {
+        case .protection:
+            showAddInsurance = true
+        case .investments:
+            showAddInvestment = true
+        case .emergencyPlanner:
+            showEmergencyFundSetup = true
+        case .loanTracker:
+            showAddLoan = true
+        case .vitals, .goals:
+            showHealthPlan = true
         }
     }
-    
-    private func concernIcon(for parameter: AssessmentParameter) -> String {
+
+    private func priorityIcon(for parameter: AssessmentParameter) -> String {
         switch parameter {
-        case .vitals:         return "heart.text.square.fill"
-        case .investment:     return "chart.line.downtrend.xyaxis"
-        case .emergencyFund:  return "exclamationmark.shield.fill"
         case .insurance:      return "cross.case.fill"
+        case .investment:     return "chart.line.downtrend.xyaxis"
+        case .emergencyFund:  return "shield.lefthalf.filled"
         case .liabilities:    return "creditcard.trianglebadge.exclamationmark"
+        case .vitals:         return "heart.text.square.fill"
         }
     }
 
-    private func actionLabel(for parameter: AssessmentParameter) -> String {
+    private func priorityColor(for parameter: AssessmentParameter) -> Color {
         switch parameter {
-        case .vitals:         return "Review"
-        case .investment:     return "Plan"
-        case .emergencyFund:  return "Build"
-        case .insurance:      return "Track"
-        case .liabilities:    return "Review"
-        }
-    }
-
-    private func destination(for parameter: AssessmentParameter) -> DashboardActionDestination {
-        switch parameter {
-        case .vitals, .investment, .emergencyFund:
-            return .planner
-        case .insurance, .liabilities:
-            return .tracker
+        case .insurance:      return Color(hex: "#FF453A")
+        case .investment:     return Color(hex: "#FF9F0A")
+        case .emergencyFund:  return Color(hex: "#007AFF")
+        case .liabilities:    return Color(hex: "#FF3B30")
+        case .vitals:         return Color(hex: "#30D158")
         }
     }
     
@@ -471,21 +465,6 @@ struct DashboardView: View {
         }
     }
 
-    private struct DashboardActionItem: Identifiable {
-        let id = UUID()
-        let icon: String
-        let color: Color
-        let title: String
-        let subtitle: String
-        let actionLabel: String
-        let destination: DashboardActionDestination
-    }
-
-    private enum DashboardActionDestination {
-        case monthlyAssessment
-        case planner
-        case tracker
-    }
     
     // MARK: Investment Intelligence
     private var investmentIntelligenceSection: some View {

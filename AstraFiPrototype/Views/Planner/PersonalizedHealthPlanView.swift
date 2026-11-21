@@ -299,6 +299,41 @@ struct PersonalizedHealthPlanView: View {
                 }
             }
 
+            // Advisory & Action Guide Section
+            VStack(alignment: .leading, spacing: 10) {
+                HStack(spacing: 6) {
+                    Image(systemName: "sparkles")
+                        .font(.system(size: 11, weight: .bold))
+                        .foregroundStyle(AppTheme.auraIndigo)
+                    Text("ADVISORY & ACTION GUIDE")
+                        .font(.system(size: 10, weight: .bold))
+                        .foregroundStyle(AppTheme.auraIndigo)
+                }
+
+                VStack(alignment: .leading, spacing: 3) {
+                    Text("1. What to choose & Key benefits")
+                        .font(.system(size: 12, weight: .bold))
+                        .foregroundStyle(.primary)
+                    Text(advisoryBenefit(for: item))
+                        .font(.system(size: 12))
+                        .foregroundStyle(.secondary)
+                        .lineSpacing(2)
+                }
+
+                VStack(alignment: .leading, spacing: 3) {
+                    Text("2. How to apply & Recommended platforms")
+                        .font(.system(size: 12, weight: .bold))
+                        .foregroundStyle(.primary)
+                    Text(advisoryPlatforms(for: item))
+                        .font(.system(size: 12))
+                        .foregroundStyle(.secondary)
+                        .lineSpacing(2)
+                }
+            }
+            .padding(12)
+            .background(Color(uiColor: .secondarySystemBackground))
+            .clipShape(RoundedRectangle(cornerRadius: 12, style: .continuous))
+
             HStack {
                 Spacer()
                 Button {
@@ -494,6 +529,37 @@ struct PersonalizedHealthPlanView: View {
             : (state == .completed ? Color.primary.opacity(0.06) : Color.primary.opacity(0.03))
         )
         .clipShape(Capsule())
+    }
+
+    // MARK: - Advisory Content
+    private func advisoryBenefit(for item: FinancialHealthPriorityItem) -> String {
+        switch item.parameter {
+        case .insurance:
+            return "Get a pure Term Life Insurance (10–15× annual income coverage) for family security at low annual premium (~₹8k–₹12k/yr), plus a Comprehensive Health Cover (₹10L–₹25L) so hospital bills never erode your investments."
+        case .investment:
+            return "100% in high risk causes severe drawdown risk during market corrections. Move part of new monthly allocations into low-risk/debt (T-bills, corporate bond funds, arbitrage funds) to build a stable foundation."
+        case .emergencyFund:
+            return "Keep 6 months of living expenses liquid (rent + food + bills) split 30% in Savings, 40% in Sweep-in FDs, and 30% in Treasury Bills so you never sell stocks at a loss in emergencies."
+        case .liabilities:
+            return "High EMIs limit your investing capacity. Use the Debt Avalanche strategy: aggressively prepay high-interest debt (credit cards at 36%+ or personal loans at 12%+) first while paying minimums on low-interest debt."
+        case .vitals:
+            return "Follow the 50/30/20 budget framework: 50% Needs, 30% Wants, 20%+ Savings. Automate monthly investment transfers on salary day ('pay yourself first')."
+        }
+    }
+
+    private func advisoryPlatforms(for item: FinancialHealthPriorityItem) -> String {
+        switch item.parameter {
+        case .insurance:
+            return "Compare policies with >98% claim settlement ratio on Policybazaar (policybazaar.com) or Ditto (joinditto.in), or buy directly from HDFC Ergo, Max Life, or Tata AIA. Record policy details in AstraFi Tracker."
+        case .investment:
+            return "Explore AstraFi's Investment Intelligence tab to analyze fund ratings and fundamentals. Start SIPs on Zerodha (Coin), Groww, or Kuvera, then connect your holdings in Tracker."
+        case .emergencyFund:
+            return "Activate Sweep-in FD in your primary bank app (HDFC, ICICI, SBI) and buy sovereign T-Bills with zero brokerage on RBI Retail Direct (rbiretaildirect.org.in). Manage allocations in Emergency Fund."
+        case .liabilities:
+            return "Request balance transfer or rate negotiation with your lender. Track payoff progress and amortization schedules in AstraFi Loan Tracker."
+        case .vitals:
+            return "Upload your bank statement in AstraFi Spending Insights to identify recurring spending leaks and optimize monthly cashflow."
+        }
     }
 }
 
