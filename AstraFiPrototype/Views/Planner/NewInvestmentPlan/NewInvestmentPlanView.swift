@@ -528,7 +528,16 @@ struct NewInvestmentPlanView: View {
         var finalInput = input
         finalInput.monthlyIncome = profileIncome
         finalInput.existingEMIs = profileEMIs
-        finalInput.savedAmount = profileSavings > 0 ? String(format: "%.0f", profileSavings) : input.savedAmount
+        let userEnteredSaved = Double(input.savedAmount.replacingOccurrences(of: ",", with: "").replacingOccurrences(of: "₹", with: "").trimmingCharacters(in: .whitespacesAndNewlines)) ?? 0
+        if userEnteredSaved > 0 {
+            finalInput.savedAmount = input.savedAmount
+        } else if let matchingGoal = profile?.goals.first(where: { $0.goalName.localizedCaseInsensitiveCompare(initialGoal) == .orderedSame }), matchingGoal.currentAmount > 0 {
+            finalInput.savedAmount = String(format: "%.0f", matchingGoal.currentAmount)
+        } else if let matchingDraft = profile?.planningJourney?.goalDrafts.first(where: { $0.name.localizedCaseInsensitiveCompare(initialGoal) == .orderedSame || $0.category.localizedCaseInsensitiveCompare(initialGoal) == .orderedSame }), let draftSaved = matchingDraft.savedAmount, draftSaved > 0 {
+            finalInput.savedAmount = String(format: "%.0f", draftSaved)
+        } else {
+            finalInput.savedAmount = input.savedAmount
+        }
         return finalInput
     }
 

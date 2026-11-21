@@ -34,8 +34,8 @@ struct ReportFooterCTA: View {
                     showSaveAlert = true
                 } else {
                     if let data = data {
-                        appState.saveAssessmentToHistory(score: score, status: status, insights: insights, assessmentInsights: assessmentInsights)
                         appState.updateProfile(from: data)
+                        appState.saveAssessmentToHistory(score: score, status: status, insights: insights, assessmentInsights: assessmentInsights)
                         appState.isAssessmentSkipped = false
                     }
                     appState.showDashboard = true
