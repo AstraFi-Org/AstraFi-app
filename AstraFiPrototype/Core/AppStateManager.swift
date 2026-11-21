@@ -445,104 +445,121 @@ final class AppStateManager {
         Task {
             await restoreSession()
         }
+        // AMFI NAV sync runs entirely in the background — never on the critical path
         Task {
-            try? await Task.sleep(nanoseconds: 2_000_000_000) // wait 2 seconds
+            try? await Task.sleep(nanoseconds: 3_000_000_000) // 3 s after launch
             await syncMutualFundNAVs()
         }
     }
 
-    func restoreSession() async {
-        await MainActor.run { isLoading = true }
-        async let minimumDelay: () = Task.sleep(nanoseconds: 1_500_000_000)
-        do {
-            let session = try await supabase.auth.session
+    // MARK: - Startup timeout helper
+    /// Runs `operation` and cancels it after `seconds` seconds, throwing `CancellationError` on timeout.
+    private func withStartupTimeout<T: Sendable>(seconds: Double, operation: @Sendable @escaping () async throws -> T) async throws -> T {
+        try await withThrowingTaskGroup(of: T.self) { group in
+            group.addTask { try await operation() }
+            group.addTask {
+                try await Task.sleep(nanoseconds: UInt64(seconds * 1_000_000_000))
+                throw CancellationError()
+            }
+            let result = try await group.next()!
+            group.cancelAll()
+            return result
+        }
+    }
 
-            if let profile = try? await SupabaseRepository.shared.fetchFullProfile(userId: session.user.id) {
-                if let plans = try? await SupabaseRepository.shared.fetchSavedPlans(userId: session.user.id) {
-                    await MainActor.run {
+    func restoreSession() async {
+        print("⏱️ [STARTUP] restoreSession begin")
+        let startTime = Date()
+        await MainActor.run { isLoading = true }
+
+        // Read biometric prefs synchronously from UserDefaults — no network needed
+        let biometricEnabled = UserDefaults.standard.bool(forKey: "securityBiometricUnlockEnabled")
+        let requireOnLaunch = UserDefaults.standard.object(forKey: "securityRequireUnlockOnLaunch") as? Bool ?? true
+
+        do {
+            // ── Step 1: Resolve auth session — hard 8-second timeout ─────────
+            // supabase.auth.session performs a local token check and may trigger
+            // a token refresh over the network. If the network is slow the SDK
+            // can block for up to 60 s.  We cap this at 8 s; anything longer
+            // is treated the same as an unauthenticated launch.
+            let session = try await withStartupTimeout(seconds: 8) {
+                try await supabase.auth.session
+            }
+            print("⏱️ [STARTUP] session resolved in \(String(format: "%.2f", Date().timeIntervalSince(startTime)))s — user: \(session.user.id)")
+
+            // ── Step 2: Check MFA requirement (non-blocking, best-effort) ─────
+            // This is a lightweight local SDK call in most versions; allow 4 s.
+            let aal = try? await withStartupTimeout(seconds: 4) {
+                try await supabase.auth.mfa.getAuthenticatorAssuranceLevel()
+            }
+
+            let needsMFA: Bool
+            var mfaFactor: Factor? = nil
+            if aal?.nextLevel == "aal2" && aal?.currentLevel == "aal1" {
+                let factors = try? await withStartupTimeout(seconds: 4) {
+                    try await supabase.auth.mfa.listFactors()
+                }
+                mfaFactor = factors?.all.first(where: { $0.status == FactorStatus.verified })
+                needsMFA = mfaFactor != nil
+            } else {
+                needsMFA = false
+            }
+
+            // ── Step 3: Dismiss splash immediately with minimal auth state ────
+            // Profile and plans are loaded in the background below.
+            await MainActor.run {
+                self.isAuthenticated = true
+                self.hasCompletedOnboarding = true
+                self.showDashboard = true
+                self.isGuest = false
+                if needsMFA, let factor = mfaFactor {
+                    self.mfaFactorId = factor.id
+                    self.requiresMFAChallenge = true
+                }
+                if biometricEnabled && requireOnLaunch {
+                    self.isLockedByBiometric = true
+                }
+                self.isLoading = false  // ← splash dismissed here
+            }
+            print("⏱️ [STARTUP] splash dismissed in \(String(format: "%.2f", Date().timeIntervalSince(startTime)))s")
+
+            // ── Step 4: Fetch profile + plans in the background ───────────────
+            // These network requests must NOT block the splash screen.
+            Task {
+                async let profileResult = SupabaseRepository.shared.fetchFullProfile(userId: session.user.id)
+                async let plansResult  = SupabaseRepository.shared.fetchSavedPlans(userId: session.user.id)
+
+                let profile = try? await profileResult
+                let plans   = try? await plansResult
+
+                await MainActor.run {
+                    if let plans {
                         self.savedPlans = plans
                     }
-                }
-                _ = try? await minimumDelay
-                
-                // Check if biometric lock should be shown
-                // Note: requireUnlockOnLaunch defaults to true in @AppStorage,
-                // so we must use the same default here since the key may never
-                // have been explicitly written to UserDefaults.
-                let biometricEnabled = UserDefaults.standard.bool(forKey: "securityBiometricUnlockEnabled")
-                let requireOnLaunch = UserDefaults.standard.object(forKey: "securityRequireUnlockOnLaunch") as? Bool ?? true
-                
-                let aal = try? await supabase.auth.mfa.getAuthenticatorAssuranceLevel()
-                if aal?.nextLevel == "aal2" && aal?.currentLevel == "aal1" {
-                    if let factors = try? await supabase.auth.mfa.listFactors(), let factor = factors.all.first(where: { $0.status == FactorStatus.verified }) {
-                        await MainActor.run {
-                            self.mfaFactorId = factor.id
-                            self.requiresMFAChallenge = true
-                            var sanitizedProfile = profile
-                            sanitizedProfile.createdAt = session.user.createdAt
-                            if sanitizedProfile.signUp.email.isEmpty, let email = session.user.email, !email.isEmpty {
-                                sanitizedProfile.signUp.email = email
-                            }
-                            // Deduplicate any stale duplicate entities that may already be in Supabase
-                            sanitizedProfile.goals = sanitizedProfile.goals.deduplicated()
-                            sanitizedProfile.investments = sanitizedProfile.investments.deduplicated()
-                            sanitizedProfile.loans = sanitizedProfile.loans.deduplicated()
-                            sanitizedProfile.insurances = sanitizedProfile.insurances.deduplicated()
-                            self.applySavedEmergencyFundComposition(to: &sanitizedProfile, userID: session.user.id)
-                            self.currentProfile = sanitizedProfile
-                            self.isAuthenticated = true
-                            self.hasCompletedOnboarding = true
-                            self.showDashboard = true
-                            self.isLoading = false
-                            
-                            if biometricEnabled && requireOnLaunch {
-                                self.isLockedByBiometric = true
-                            }
+                    if var p = profile {
+                        p.createdAt = session.user.createdAt
+                        if p.signUp.email.isEmpty, let email = session.user.email, !email.isEmpty {
+                            p.signUp.email = email
                         }
-                        recalculateFinancials()
-                        return
+                        // Deduplicate any stale duplicate entities that may already be in Supabase
+                        p.goals        = p.goals.deduplicated()
+                        p.investments  = p.investments.deduplicated()
+                        p.loans        = p.loans.deduplicated()
+                        p.insurances   = p.insurances.deduplicated()
+                        self.applySavedEmergencyFundComposition(to: &p, userID: session.user.id)
+                        self.currentProfile = p
                     }
                 }
-                
-                await MainActor.run {
-                    var sanitizedProfile = profile
-                    sanitizedProfile.createdAt = session.user.createdAt
-                    if sanitizedProfile.signUp.email.isEmpty, let email = session.user.email, !email.isEmpty {
-                        sanitizedProfile.signUp.email = email
-                    }
-                    // Deduplicate any stale duplicate entities that may already be in Supabase
-                    sanitizedProfile.goals = sanitizedProfile.goals.deduplicated()
-                    sanitizedProfile.investments = sanitizedProfile.investments.deduplicated()
-                    sanitizedProfile.loans = sanitizedProfile.loans.deduplicated()
-                    sanitizedProfile.insurances = sanitizedProfile.insurances.deduplicated()
-                    self.applySavedEmergencyFundComposition(to: &sanitizedProfile, userID: session.user.id)
-                    self.currentProfile = sanitizedProfile
-                    self.isAuthenticated = true
-                    self.hasCompletedOnboarding = true
-                    self.showDashboard = true
-                    self.isLoading = false
-                    self.isGuest = false
-                    
-                    if biometricEnabled && requireOnLaunch {
-                        self.isLockedByBiometric = true
-                    }
-                }
-                recalculateFinancials()
-            } else {
-                _ = try? await supabase.auth.signOut(scope: .local)
-                _ = try? await minimumDelay
-                await MainActor.run {
-                    self.hasCompletedOnboarding = false
-                    self.isLoading = false
-                    
-                }
+                if profile != nil { recalculateFinancials() }
+                print("⏱️ [STARTUP] background profile load done in \(String(format: "%.2f", Date().timeIntervalSince(startTime)))s")
             }
 
         } catch {
-            _ = try? await minimumDelay
+            // Session unavailable (not signed in, token expired beyond refresh, or network timeout)
+            print("⏱️ [STARTUP] no valid session (\(error)) — routing to onboarding in \(String(format: "%.2f", Date().timeIntervalSince(startTime)))s")
             await MainActor.run {
                 self.hasCompletedOnboarding = false
-                isLoading = false
+                self.isLoading = false
             }
         }
     }
@@ -1538,7 +1555,8 @@ final class AppStateManager {
         
         let efTarget = profile.basicDetails.monthlyIncome * 6.0
         let efMonths = efTarget > 0 ? ((profile.basicDetails.emergencyFundAmount / efTarget) * 6.0).safeFinite : 0
-        let healthScore = FinancialAssessmentInsights.build(profile: profile, data: nil).overallScore.safeInt
+        let currentInsights = FinancialAssessmentInsights.build(profile: profile, data: nil)
+        let healthScore = currentInsights.overallScore.safeInt
         
         profile.financialHealthReport = AstraFinancialHealthReport(
             netWorth: netWorth,
@@ -1547,6 +1565,17 @@ final class AppStateManager {
             investmentScore: healthScore,
             emergencyFundMonths: efMonths
         )
+
+        let cal = Calendar.current
+        if let idx = profile.monthlyHealthAssessments.firstIndex(where: { cal.isDate($0.date, equalTo: Date(), toGranularity: .month) }) {
+            profile.monthlyHealthAssessments[idx].score = healthScore
+            profile.monthlyHealthAssessments[idx].status = FinancialAssessmentInsights.statusTitle(for: healthScore)
+            profile.monthlyHealthAssessments[idx].insights = currentInsights
+            let concerns = currentInsights.activeConcerns.map(\.title)
+            if !concerns.isEmpty {
+                profile.monthlyHealthAssessments[idx].keyInsights = concerns
+            }
+        }
         
         // Sync goal currentAmount with dynamic total and detect goal achievement
         for i in 0..<profile.goals.count {
@@ -1626,6 +1655,29 @@ final class AppStateManager {
         profile.masterFinancialPlan = plan
         currentProfile = profile
         syncProfile()
+    }
+
+    /// Completely deletes the current financial planning journey, all active/planned goals,
+    /// and resets the financial roadmap so the user can start completely fresh.
+    func deleteFinancialPlanAndJourney() {
+        guard var profile = currentProfile else { return }
+        let goalsToDelete = profile.goals
+        let plansToDelete = savedPlans
+        profile.goals.removeAll()
+        profile.planningJourney = FinancialPlanningJourney()
+        profile.masterFinancialPlan = nil
+        currentProfile = profile
+        savedPlans.removeAll()
+        recalculateFinancials()
+        syncProfile()
+        Task {
+            for goal in goalsToDelete {
+                _ = try? await SupabaseRepository.shared.deleteGoal(goal.id)
+            }
+            for plan in plansToDelete {
+                _ = try? await SupabaseRepository.shared.deleteSavedPlan(plan.id)
+            }
+        }
     }
     
     func addGoal(_ goal: AstraGoal) {

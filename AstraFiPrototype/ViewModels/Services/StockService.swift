@@ -11,8 +11,28 @@ struct AstraStock: Identifiable, Codable, Hashable {
     var priceChangePercentage: Double
 }
 
+extension AstraStock {
+    var marketContext: SecurityMarketContext {
+        SecurityMarketContext.forStock(self)
+    }
+
+    var formattedPrice: String {
+        guard currentPrice > 0 else { return "—" }
+        return marketContext.formatPrice(currentPrice)
+    }
+}
+
+
 class StockService {
     static let shared = StockService()
+
+    private let session: URLSession = {
+        let configuration = URLSessionConfiguration.ephemeral
+        configuration.timeoutIntervalForRequest = 15
+        configuration.timeoutIntervalForResource = 30
+        configuration.waitsForConnectivity = false
+        return URLSession(configuration: configuration)
+    }()
     
     private let baseURL = "https://finnhub.io/api/v1"
     private var apiKey: String { Secrets.finnhubApiKey }
@@ -196,7 +216,7 @@ class StockService {
         }
 
         do {
-            let (data, _) = try await URLSession.shared.data(from: url)
+            let (data, _) = try await session.data(from: url)
             let response = try JSONDecoder().decode(BinanceExchangeInfoResponse.self, from: data)
             let results = response.symbols
                 .filter { symbol in
@@ -233,7 +253,7 @@ class StockService {
         guard let url = URL(string: urlString) else { return [] }
         
         do {
-            let (data, _) = try await URLSession.shared.data(from: url)
+            let (data, _) = try await session.data(from: url)
             let response = try JSONDecoder().decode(FinnhubSearchResponse.self, from: data)
             
             return response.result.compactMap { item in
@@ -261,7 +281,7 @@ class StockService {
         }
 
         do {
-            let (data, _) = try await URLSession.shared.data(from: url)
+            let (data, _) = try await session.data(from: url)
             let response = try JSONDecoder().decode(YahooSearchResponse.self, from: data)
 
             return response.quotes.compactMap { quote in
@@ -402,7 +422,7 @@ class StockService {
         
         do {
             print("Finnhub Symbol:", finnhubSymbol)
-            let (data, response) = try await URLSession.shared.data(from: url)
+            let (data, response) = try await session.data(from: url)
             guard isValidJSONResponse(data: data, response: response, provider: "Finnhub", context: symbol) else {
                 return await fetchPriceFromYahoo(symbol: symbol)
             }
@@ -487,7 +507,7 @@ class StockService {
         }
 
         do {
-            let (data, _) = try await URLSession.shared.data(from: url)
+            let (data, _) = try await session.data(from: url)
             let response = try JSONDecoder().decode(BinanceTickerPriceResponse.self, from: data)
             return Double(response.price)
         } catch {
@@ -505,7 +525,7 @@ class StockService {
         guard let url = URL(string: urlString) else { return nil }
 
         do {
-            let (data, _) = try await URLSession.shared.data(from: url)
+            let (data, _) = try await session.data(from: url)
             let rows = try JSONDecoder().decode([[BinanceKlineValue]].self, from: data)
             guard let row = rows.first, row.count > 4 else {
                 return await fetchCurrentCryptoUSDPrice(pair: pair)
@@ -526,7 +546,7 @@ class StockService {
         }
 
         do {
-            let (data, _) = try await URLSession.shared.data(from: url)
+            let (data, _) = try await session.data(from: url)
             let response = try JSONDecoder().decode(YahooChartResponse.self, from: data)
             return response.chart.result?.first?.meta.regularMarketPrice
         } catch {
@@ -544,7 +564,7 @@ class StockService {
         }
 
         do {
-            let (data, response) = try await URLSession.shared.data(from: url)
+            let (data, response) = try await session.data(from: url)
             guard isValidJSONResponse(data: data, response: response, provider: "Yahoo Finance", context: symbol) else {
                 return nil
             }
@@ -639,7 +659,7 @@ class StockService {
         }
 
         do {
-            let (data, _) = try await URLSession.shared.data(from: url)
+            let (data, _) = try await session.data(from: url)
             let response = try JSONDecoder().decode(YahooChartResponse.self, from: data)
             if let result = response.chart.result?.first,
                let closes = result.indicators?.quote?.first?.close {
@@ -686,7 +706,7 @@ class StockService {
             return []
         }
         do {
-            let (data, _) = try await URLSession.shared.data(from: url)
+            let (data, _) = try await session.data(from: url)
             let response  = try JSONDecoder().decode(YahooChartResponse.self, from: data)
             guard let result = response.chart.result?.first,
                   let timestamps = result.timestamps,
@@ -721,7 +741,7 @@ class StockService {
         guard let url = URL(string: urlString) else { return [] }
 
         do {
-            let (data, _) = try await URLSession.shared.data(from: url)
+            let (data, _) = try await session.data(from: url)
             let rows = try JSONDecoder().decode([[BinanceKlineValue]].self, from: data)
             let usdInr = await fetchUSDINRRate() ?? 83.0
             let formatter = DateFormatter()

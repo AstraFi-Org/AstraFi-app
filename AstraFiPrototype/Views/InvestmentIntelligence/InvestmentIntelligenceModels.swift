@@ -238,13 +238,28 @@ extension Double {
         String(format: "%.2f%%", self)
     }
 
-    func formattedCurrency(for symbol: String, exchange: String? = nil, country: String? = nil) -> String {
-        let context = SecurityMarketContext.forSymbol(symbol, exchange: exchange, country: country)
+    func formattedCurrency(for asset: InvestmentSummaryAsset) -> String {
+        asset.marketContext.formatPrice(self)
+    }
+
+    func formattedCurrency(for symbol: String, exchange: String? = nil, country: String? = nil, isMutualFund: Bool = false) -> String {
+        let context = SecurityMarketContext.forSymbol(symbol, exchange: exchange, country: country, isMutualFund: isMutualFund)
         return context.formatPrice(self)
     }
 
-    func formattedMarketCap(for symbol: String, exchange: String? = nil, country: String? = nil) -> String {
-        let context = SecurityMarketContext.forSymbol(symbol, exchange: exchange, country: country)
+    func formattedMarketCap(for asset: InvestmentSummaryAsset) -> String {
+        asset.marketContext.formatMarketCap(self)
+    }
+
+    func formattedMarketCap(for symbol: String, exchange: String? = nil, country: String? = nil, isMutualFund: Bool = false) -> String {
+        let context = SecurityMarketContext.forSymbol(symbol, exchange: exchange, country: country, isMutualFund: isMutualFund)
         return context.formatMarketCap(self)
     }
 }
+
+extension InvestmentSummaryAsset {
+    var marketContext: SecurityMarketContext {
+        SecurityMarketContext.forAsset(self)
+    }
+}
+

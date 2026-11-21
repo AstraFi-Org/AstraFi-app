@@ -14,12 +14,26 @@ struct Plan1DetailView: View {
     var input: InvestmentPlanInputModel
     var result: Plan1Result
     var isFromTracker: Bool = false
+    var isFromFinancialJourney: Bool = false
+    var onSaveJourneyPlan: ((InvestmentPlanInputModel, Plan1Result) -> Void)? = nil
 
     @State private var currentResult: Plan1Result? = nil
     @State private var selectedRisk: AstraRiskLevel = .mid
     @State private var sipOverride: Double = 0
     @State private var tenureOverride: Int = 0
     @State private var showingAllAssetsInfo = false
+
+    // Plan Customization & Dynamic Target Amount State
+    @State private var dynamicTargetAmount: Double = 0
+    @State private var baseCost: Double = 0
+    @State private var goalInflation: Double = 0.06
+    @State private var hasUnsavedChanges: Bool = false
+    @State private var isSaving: Bool = false
+    @State private var showSavedToast: Bool = false
+    @State private var showDiscardAlert: Bool = false
+    @State private var initialSIP: Double = 0
+    @State private var initialTenure: Int = 0
+    @State private var initialRisk: AstraRiskLevel = .mid
 
     private var activeResult: Plan1Result { currentResult ?? result }
 
@@ -39,8 +53,7 @@ struct Plan1DetailView: View {
                     //investmentRecommendations
                 }
                 .padding(.horizontal, 16)
-
-                .padding(.bottom, 120) 
+                .padding(.bottom, (!isFromTracker && !isFromFinancialJourney) ? 120 : 36) 
                 .frame(maxWidth: .infinity)
             }
             .background(AppTheme.appBackground(for: colorScheme))
@@ -54,9 +67,65 @@ struct Plan1DetailView: View {
                 recalculate()
             }
 
-            if !isFromTracker {
+            if !isFromTracker && !isFromFinancialJourney {
                 savePlanFooter
             }
+        }
+        .navigationBarBackButtonHidden(isFromFinancialJourney && hasUnsavedChanges)
+        .toolbar {
+            if isFromFinancialJourney && hasUnsavedChanges {
+                ToolbarItem(placement: .topBarLeading) {
+                    Button {
+                        showDiscardAlert = true
+                    } label: {
+                        Image(systemName: "chevron.left")
+                            .font(.system(size: 15, weight: .semibold))
+                    }
+                    .accessibilityLabel("Go back")
+                }
+            }
+
+            ToolbarItem(placement: .topBarTrailing) {
+                if isFromFinancialJourney {
+                    Button {
+                        saveFinancialJourneyCustomization()
+                    } label: {
+                        if isSaving {
+                            ProgressView()
+                                .scaleEffect(0.8)
+                        } else if showSavedToast {
+                            HStack(spacing: 4) {
+                                Image(systemName: "checkmark")
+                                    .font(.caption.weight(.bold))
+                                Text("Saved")
+                                    .font(.subheadline.weight(.semibold))
+                            }
+                            .foregroundStyle(.green)
+                        } else {
+                            Text("Save")
+                                .font(.subheadline.weight(.semibold))
+                                .foregroundStyle(hasUnsavedChanges ? Color.accentColor : Color.secondary.opacity(0.35))
+                        }
+                    }
+                    .disabled(!hasUnsavedChanges || isSaving)
+                }
+            }
+        }
+        .confirmationDialog(
+            "Unsaved Customization",
+            isPresented: $showDiscardAlert,
+            titleVisibility: .visible
+        ) {
+            Button("Save Changes") {
+                saveFinancialJourneyCustomization()
+                dismiss()
+            }
+            Button("Discard Changes", role: .destructive) {
+                dismiss()
+            }
+            Button("Cancel", role: .cancel) { }
+        } message: {
+            Text("You have unsaved customizations to this plan. Do you want to save or discard them before leaving?")
         }
         .alert("Action Successful", isPresented: $showingSaveAlert) {
              Button("View in Tracker") { 
@@ -83,8 +152,6 @@ struct Plan1DetailView: View {
     }
 
     private func setupInitialValues() {
-        // if selectedRisk is default, set to portfolio risk
-        // In this case .mid is default, we can leave it or try to map riskLabel
         let portfolioRisk = AstraRiskLevel(rawValue: result.portfolio.riskLabel.lowercased()) ?? .mid
         if selectedRisk == .mid && portfolioRisk != .mid {
             selectedRisk = portfolioRisk
@@ -92,22 +159,38 @@ struct Plan1DetailView: View {
         if tenureOverride == 0 {
             tenureOverride = result.tenure
         }
+
+        let targetAmt = InvestmentPlannerEngine.parseAmount(input.targetAmount)
+        let infl = input.inflationRate ?? 0.06
+        goalInflation = infl
+        if let base = input.baseGoalCost, base > 0 {
+            baseCost = base
+        } else {
+            let initialYears = Double(max(1, Int(input.timePeriod) ?? result.tenure))
+            baseCost = max(1, targetAmt / pow(1 + infl, initialYears))
+        }
+        dynamicTargetAmount = baseCost * pow(1 + infl, Double(tenureOverride))
+
         if sipOverride == 0 {
-            let targetAmt = InvestmentPlannerEngine.parseAmount(input.targetAmount)
             let lumpsum = InvestmentPlannerEngine.parseAmount(input.savedAmount)
             let currentSip = InvestmentPlannerEngine.parseAmount(input.amount)
             let cagr = result.portfolio.blendedCAGR
             
-            let reqSip = InvestmentPlannerEngine.computeRequiredSIP(target: targetAmt, lumpsum: lumpsum, cagr: cagr, years: result.tenure)
+            let reqSip = InvestmentPlannerEngine.computeRequiredSIP(target: dynamicTargetAmount, lumpsum: lumpsum, cagr: cagr, years: result.tenure)
             
             if reqSip > currentSip {
                 sipOverride = ceil(reqSip / 500.0) * 500.0
             } else {
-                sipOverride = currentSip
+                sipOverride = currentSip > 0 ? currentSip : 5000
             }
             
-            recalculate()
+            recalculate(updateUnsavedState: false)
         }
+
+        initialSIP = sipOverride
+        initialTenure = tenureOverride
+        initialRisk = selectedRisk
+        hasUnsavedChanges = false
     }
 
     private var savePlanFooter: some View {
@@ -233,20 +316,133 @@ struct Plan1DetailView: View {
 //        .shadow(color: AppTheme.adaptiveShadow, radius: 10, x: 0, y: 4)
 //    }
 
-    private func recalculate() {
+    private func recalculate(updateUnsavedState: Bool = true) {
+        let years = Double(max(1, tenureOverride))
+        let infl = input.inflationRate ?? goalInflation
+        if baseCost > 0 {
+            dynamicTargetAmount = baseCost * pow(1 + infl, years)
+        }
+
+        var updatedInput = input
+        updatedInput.timePeriod = String(tenureOverride)
+        updatedInput.amount = String(format: "%.0f", sipOverride)
+        if dynamicTargetAmount > 0 {
+            updatedInput.targetAmount = String(format: "%.0f", dynamicTargetAmount)
+        }
+        if baseCost > 0 {
+            updatedInput.baseGoalCost = baseCost
+        }
+        updatedInput.inflationRate = infl
+
         let newResult = InvestmentPlannerEngine.recalculatePlan1(
-            input: input,
+            input: updatedInput,
             overridenRisk: selectedRisk,
             overridenSIP: sipOverride,
             overridenTenure: tenureOverride
         )
+
+        if updateUnsavedState {
+            hasUnsavedChanges = (
+                abs(sipOverride - initialSIP) > 1 ||
+                tenureOverride != initialTenure ||
+                selectedRisk != initialRisk
+            )
+        }
+
         withAnimation {
             currentResult = newResult
         }
     }
 
+    private func saveFinancialJourneyCustomization() {
+        guard !isSaving else { return }
+        isSaving = true
+        UIImpactFeedbackGenerator(style: .medium).impactOccurred()
+
+        var updatedInput = input
+        updatedInput.amount = String(format: "%.0f", sipOverride)
+        updatedInput.timePeriod = String(tenureOverride)
+        updatedInput.riskType = selectedRisk.rawValue.capitalized
+        if dynamicTargetAmount > 0 {
+            updatedInput.targetAmount = String(format: "%.0f", dynamicTargetAmount)
+        }
+        if baseCost > 0 {
+            updatedInput.baseGoalCost = baseCost
+        }
+        let infl = input.inflationRate ?? goalInflation
+        updatedInput.inflationRate = infl
+
+        let purpose = input.purposeOfInvestment.isEmpty ? "General" : input.purposeOfInvestment
+        let planName = "Pure Investment - \(purpose)"
+        let planModel = InvestmentPlanModel(
+            name: planName,
+            dateSaved: DateFormatter.localizedString(from: Date(), dateStyle: .medium, timeStyle: .none),
+            targetGoal: purpose,
+            input: updatedInput,
+            isFollowed: trackerVM.followedPlanNames.contains(planName)
+        )
+        appState.updatePlan(planModel)
+
+        // Update Financial Planning Journey goal draft
+        if var journey = appState.currentProfile?.planningJourney {
+            if let idx = journey.goalDrafts.firstIndex(where: {
+                $0.name.localizedCaseInsensitiveCompare(purpose) == .orderedSame ||
+                $0.category.localizedCaseInsensitiveCompare(purpose) == .orderedSame ||
+                purpose.localizedCaseInsensitiveContains($0.name) ||
+                $0.name.localizedCaseInsensitiveContains(purpose)
+            }) {
+                if dynamicTargetAmount > 0 {
+                    journey.goalDrafts[idx].customTargetCorpus = dynamicTargetAmount
+                    if journey.goalDrafts[idx].targetAmount == nil || journey.goalDrafts[idx].targetAmount == 0 {
+                        journey.goalDrafts[idx].targetAmount = baseCost > 0 ? baseCost : dynamicTargetAmount
+                    }
+                }
+                journey.goalDrafts[idx].customTenure = tenureOverride
+                journey.goalDrafts[idx].targetYearsFromNow = tenureOverride
+                journey.goalDrafts[idx].targetDate = Calendar.current.date(byAdding: .year, value: tenureOverride, to: Date())
+                journey.goalDrafts[idx].customSIP = sipOverride
+                journey.goalDrafts[idx].customInflationRate = infl
+                appState.updateFinancialPlanningJourney(journey)
+            }
+        }
+
+        // Update matching AstraGoal if present
+        if var profile = appState.currentProfile {
+            if let goalIdx = profile.goals.firstIndex(where: {
+                $0.goalName.localizedCaseInsensitiveCompare(purpose) == .orderedSame ||
+                purpose.localizedCaseInsensitiveContains($0.goalName) ||
+                $0.goalName.localizedCaseInsensitiveContains(purpose)
+            }) {
+                if dynamicTargetAmount > 0 {
+                    profile.goals[goalIdx].targetAmount = dynamicTargetAmount
+                }
+                profile.goals[goalIdx].targetDate = Calendar.current.date(byAdding: .year, value: tenureOverride, to: Date()) ?? profile.goals[goalIdx].targetDate
+                appState.currentProfile = profile
+                appState.syncProfile()
+            }
+        }
+
+        onSaveJourneyPlan?(updatedInput, activeResult)
+
+        initialSIP = sipOverride
+        initialTenure = tenureOverride
+        initialRisk = selectedRisk
+        hasUnsavedChanges = false
+        isSaving = false
+
+        UINotificationFeedbackGenerator().notificationOccurred(.success)
+        withAnimation {
+            showSavedToast = true
+        }
+        DispatchQueue.main.asyncAfter(deadline: .now() + 2.0) {
+            withAnimation {
+                showSavedToast = false
+            }
+        }
+    }
+
     private var targetVsEstimatedCard: some View {
-        let target = InvestmentPlannerEngine.parseAmount(input.targetAmount)
+        let target = dynamicTargetAmount > 0 ? dynamicTargetAmount : InvestmentPlannerEngine.parseAmount(input.targetAmount)
         let projected = activeResult.projectedValue
         
         return HStack(spacing: 16) {

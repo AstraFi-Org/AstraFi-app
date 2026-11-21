@@ -11,6 +11,7 @@ final class InvestmentIntelligenceHomeViewModel {
     var isRefreshingRecommendations = false
     var errorMessage: String?
     private var recommendationOffset = 0
+    @ObservationIgnored private var loadGeneration = 0
 
     private let repository: InvestmentIntelligenceRepository
 
@@ -19,15 +20,23 @@ final class InvestmentIntelligenceHomeViewModel {
     }
 
     func load() async {
-        guard !isLoading else { return }
+        loadGeneration += 1
+        let generation = loadGeneration
         isLoading = true
-        defer { isLoading = false }
+        defer {
+            if loadGeneration == generation {
+                isLoading = false
+            }
+        }
 
         let assets = await repository.homeAssets()
+        guard !Task.isCancelled, generation == loadGeneration else { return }
         stocks = assets.stocks
         mutualFunds = assets.funds
         goldETFs = assets.gold
-        recommendations = await InvestmentRecommendationEngine.shared.dailyRecommendations(from: stocks)
+        let updatedRecommendations = await InvestmentRecommendationEngine.shared.dailyRecommendations(from: assets.stocks)
+        guard !Task.isCancelled, generation == loadGeneration else { return }
+        recommendations = updatedRecommendations
         errorMessage = (stocks.isEmpty && mutualFunds.isEmpty && goldETFs.isEmpty)
             ? "No verified market data loaded. Check FINNHUB_API_KEY, network access, and AMFI availability."
             : nil

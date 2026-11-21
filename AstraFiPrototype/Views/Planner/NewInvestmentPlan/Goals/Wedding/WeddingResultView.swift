@@ -2,9 +2,10 @@ import SwiftUI
 
 struct WeddingResultView: View {
     var input: InvestmentPlanInputModel
+    var isFromFinancialJourney: Bool = false
     
     var body: some View {
-        InvestmentPlanResultView(input: input)
+        InvestmentPlanResultView(input: input, isFromFinancialJourney: isFromFinancialJourney)
             .navigationTitle("Wedding Plan")
     }
 }

@@ -15,6 +15,8 @@ struct InvestmentDetailsScreen: View {
     
     @State private var showingBreakdown = false
     @State private var breakdownEntry: AssessmentInvestmentEntry? = nil
+    @State private var investmentCalculationTasks: [UUID: Task<Void, Never>] = [:]
+    @State private var fundSearchTask: Task<Void, Never>?
 
     init(
         data: CompleteAssessmentData,
@@ -161,11 +163,28 @@ struct InvestmentDetailsScreen: View {
                                                 .multilineTextAlignment(.trailing)
                                                 .frame(width: 150)
                                                 .onChange(of: entry.fundName) { _, newValue in
+                                                    fundSearchTask?.cancel()
                                                     if entry.type == .mutualFund && !newValue.isEmpty {
-                                                        activeEntryID = entry.id
-                                                        mfSearchResults = MFService.shared.searchSchemes(query: newValue)
-                                                        showSuggestions = !mfSearchResults.isEmpty
+                                                        let entryID = entry.id
+                                                        activeEntryID = entryID
+                                                        let query = newValue
+                                                        showSuggestions = false
+                                                        fundSearchTask = Task {
+                                                            do {
+                                                                try await Task.sleep(for: .milliseconds(250))
+                                                            } catch {
+                                                                return
+                                                            }
+                                                            let currentEntry = data.investmentEntries.first { $0.id == entryID }
+                                                            guard !Task.isCancelled,
+                                                                  activeEntryID == entryID,
+                                                                  currentEntry?.fundName == query,
+                                                                  currentEntry?.type == .mutualFund else { return }
+                                                            mfSearchResults = MFService.shared.searchSchemes(query: query)
+                                                            showSuggestions = !mfSearchResults.isEmpty
+                                                        }
                                                     } else {
+                                                        mfSearchResults = []
                                                         showSuggestions = false
                                                     }
                                                 }
@@ -351,6 +370,11 @@ struct InvestmentDetailsScreen: View {
                 InvestmentBreakdownSheet(entry: entry)
             }
         }
+        .onDisappear {
+            investmentCalculationTasks.values.forEach { $0.cancel() }
+            investmentCalculationTasks.removeAll()
+            fundSearchTask?.cancel()
+        }
     }
     
     
@@ -382,42 +406,59 @@ struct InvestmentDetailsScreen: View {
     }
     
     private func recalculateInvestment(entry: Binding<AssessmentInvestmentEntry>) {
-        guard let investedAmount = Double(entry.wrappedValue.amount), investedAmount > 0 else { return }
-        let type = entry.wrappedValue.type
-        let isSIP = entry.wrappedValue.mode == .sip
-        let startDate = entry.wrappedValue.startDate
-        
-        Task {
+        let source = entry.wrappedValue
+        investmentCalculationTasks[source.id]?.cancel()
+        guard let investedAmount = Double(source.amount), investedAmount > 0 else { return }
+
+        investmentCalculationTasks[source.id] = Task {
+            do {
+                try await Task.sleep(for: .milliseconds(350))
+            } catch {
+                return
+            }
+            guard !Task.isCancelled else { return }
+
             var result: (totalUnits: Double, totalInvested: Double, installments: [AstraInvestmentTransaction]) = (0, 0, [])
+            var livePrice: Double?
             
-            if type == .stocks, let symbol = entry.wrappedValue.symbol {
-                if isSIP {
-                    result = await StockService.shared.calculateHistoricalSIPUnits(symbol: symbol, monthlyAmount: investedAmount, startDate: startDate, frequency: entry.wrappedValue.frequency)
+            if source.type == .stocks, let symbol = source.symbol {
+                if source.mode == .sip {
+                    result = await StockService.shared.calculateHistoricalSIPUnits(symbol: symbol, monthlyAmount: investedAmount, startDate: source.startDate, frequency: source.frequency)
                 } else {
-                    result = await StockService.shared.calculateLumpsumUnits(symbol: symbol, amount: investedAmount, startDate: startDate)
+                    result = await StockService.shared.calculateLumpsumUnits(symbol: symbol, amount: investedAmount, startDate: source.startDate)
                 }
-                let live = await StockService.shared.fetchPrice(symbol: symbol)
-                await MainActor.run {
-                    entry.wrappedValue.livePrice = live?.currentPrice
-                    finalizeCalculation(entry: entry, result: result)
-                }
-            } else if type == .mutualFund, let isin = entry.wrappedValue.isin {
-                if isSIP {
-                    result = await MFService.shared.calculateHistoricalSIPUnits(schemeCode: entry.wrappedValue.schemeCode ?? "", monthlyAmount: investedAmount, startDate: startDate, frequency: entry.wrappedValue.frequency)
+                guard !Task.isCancelled else { return }
+                livePrice = await StockService.shared.fetchPrice(symbol: symbol)?.currentPrice
+            } else if source.type == .mutualFund, let isin = source.isin {
+                if source.mode == .sip {
+                    result = await MFService.shared.calculateHistoricalSIPUnits(schemeCode: source.schemeCode ?? "", monthlyAmount: investedAmount, startDate: source.startDate, frequency: source.frequency)
+                } else if let nav = await MFService.shared.fetchHistoricalNAV(schemeCode: source.schemeCode ?? "", date: source.startDate) {
+                    let units = investedAmount / nav
+                    let tx = AstraInvestmentTransaction(date: source.startDate, type: .buy, amount: investedAmount, nav: nav, units: units)
+                    result = (units, investedAmount, [tx])
                 } else {
-                    if let nav = await MFService.shared.fetchHistoricalNAV(schemeCode: entry.wrappedValue.schemeCode ?? "", date: startDate) {
-                        let units = investedAmount / nav
-                        let tx = AstraInvestmentTransaction(date: startDate, type: .buy, amount: investedAmount, nav: nav, units: units)
-                        result = (units, investedAmount, [tx])
-                    } else {
-                        result = (0, investedAmount, [])
-                    }
+                    result = (0, investedAmount, [])
                 }
-                let scheme = MFService.shared.getSchemeByISIN(isin)
-                await MainActor.run {
-                    entry.wrappedValue.livePrice = scheme?.nav
-                    finalizeCalculation(entry: entry, result: result)
-                }
+                livePrice = MFService.shared.getSchemeByISIN(isin)?.nav
+            } else {
+                return
+            }
+
+            guard !Task.isCancelled else { return }
+            await MainActor.run {
+                defer { investmentCalculationTasks[source.id] = nil }
+                guard let index = data.investmentEntries.firstIndex(where: { $0.id == source.id }) else { return }
+                let current = data.investmentEntries[index]
+                guard current.amount == source.amount,
+                      current.type == source.type,
+                      current.mode == source.mode,
+                      current.startDate == source.startDate,
+                      current.schemeCode == source.schemeCode,
+                      current.isin == source.isin,
+                      current.symbol == source.symbol else { return }
+
+                data.investmentEntries[index].livePrice = livePrice
+                finalizeCalculation(entry: $data.investmentEntries[index], result: result)
             }
         }
     }

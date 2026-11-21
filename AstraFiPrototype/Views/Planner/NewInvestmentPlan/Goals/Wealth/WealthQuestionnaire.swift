@@ -166,8 +166,8 @@ struct WealthQuestionnaire: View {
                     totalCorpus: additionalNeedValue,
                     goalAccentColor: goalAccentColor,
                     onSave: {
-                        syncToPlanningJourney()
                         let trackerInput = buildTrackerInput()
+                        saveWealthGoalToJourney()
                         let planModel = InvestmentPlanModel(
                             name: "Wealth Plan",
                             dateSaved: DateFormatter.localizedString(from: Date(), dateStyle: .medium, timeStyle: .none),
@@ -189,10 +189,8 @@ struct WealthQuestionnaire: View {
             if let draft = appState.currentProfile?.planningJourney?.goalDrafts.first(where: {
                 $0.category.localizedCaseInsensitiveContains("Wealth") || $0.name.localizedCaseInsensitiveContains("Wealth")
             }) {
-                if input.targetYears.isEmpty {
-                    let years = draft.targetYearsFromNow
-                        ?? draft.targetDate.map { max(1, Calendar.current.dateComponents([.year], from: Date(), to: $0).year ?? 10) }
-                        ?? 10
+                if input.targetYears.isEmpty, let targetDate = draft.targetDate {
+                    let years = max(1, Calendar.current.dateComponents([.year], from: Date(), to: targetDate).year ?? 10)
                     input.targetYears = "\(years)"
                 }
                 if input.targetAmount.isEmpty, let amount = draft.targetAmount {
@@ -202,12 +200,12 @@ struct WealthQuestionnaire: View {
                     input.savedAmount = String(format: "%.0f", saved)
                 }
                 if input.wealthStrategy == nil {
-                    input.wealthStrategy = .moderate
+                    input.wealthStrategy = draft.planVariant.flatMap(WealthStrategy.init(rawValue:)) ?? .moderate
                 }
             }
         }
         .onDisappear {
-            syncToPlanningJourney()
+            saveWealthGoalToJourney()
         }
     }
     
@@ -243,36 +241,58 @@ struct WealthQuestionnaire: View {
         let futureValueOfSavings = savedAmt * pow(1 + expectedReturn, years)
         return max(0, targetAmt - futureValueOfSavings)
     }
-
-    private func syncToPlanningJourney() {
-        let cleanCost = input.targetAmount.replacingOccurrences(of: ",", with: "").replacingOccurrences(of: "₹", with: "").trimmingCharacters(in: .whitespacesAndNewlines)
-        guard let currentCost = Double(cleanCost), currentCost > 0 else { return }
+    
+    private func saveWealthGoalToJourney() {
+        guard let targetAmt = Double(input.targetAmount), targetAmt.isFinite, targetAmt >= 0 else { return }
         var journey = appState.currentProfile?.planningJourney ?? FinancialPlanningJourney()
-        let years = max(1, Int(input.targetYears.trimmingCharacters(in: .whitespacesAndNewlines)) ?? 10)
-        let targetDate = Calendar.current.date(byAdding: .year, value: years, to: Date())
-        let cleanSaved = input.savedAmount.replacingOccurrences(of: ",", with: "").replacingOccurrences(of: "₹", with: "").trimmingCharacters(in: .whitespacesAndNewlines)
-        let savedAmt = Double(cleanSaved) ?? 0
+        let years = max(1, Int(input.targetYears) ?? 10)
+        let targetDate = Calendar.current.date(
+            byAdding: .year,
+            value: years,
+            to: Date()
+        )
+        let variant = input.wealthStrategy?.rawValue
 
         if let index = journey.goalDrafts.firstIndex(where: {
-            $0.category.localizedCaseInsensitiveContains("Wealth") || $0.name.localizedCaseInsensitiveContains("Wealth")
+            $0.category.localizedCaseInsensitiveContains("Wealth")
+                || $0.name.localizedCaseInsensitiveContains("Wealth")
         }) {
-            journey.goalDrafts[index].targetAmount = currentCost
+            journey.goalDrafts[index].targetAmount = targetAmt
             journey.goalDrafts[index].targetDate = targetDate
-            journey.goalDrafts[index].targetYearsFromNow = years
-            journey.goalDrafts[index].savedAmount = savedAmt
+            journey.goalDrafts[index].planVariant = variant
+            journey.goalDrafts[index].customTargetCorpus = targetAmt
+            if let saved = Double(input.savedAmount) {
+                journey.goalDrafts[index].savedAmount = saved
+            }
         } else {
-            journey.goalDrafts.append(FinancialPlanningGoalDraft(
+            var draft = FinancialPlanningGoalDraft(
                 name: "Wealth Creation",
-                category: "Wealth",
+                category: "Wealth Creation",
                 targetDate: targetDate,
-                targetAmount: currentCost,
-                targetYearsFromNow: years,
-                savedAmount: savedAmt
-            ))
+                targetAmount: targetAmt
+            )
+            draft.planVariant = variant
+            draft.customTargetCorpus = targetAmt
+            if let saved = Double(input.savedAmount) {
+                draft.savedAmount = saved
+            }
+            journey.goalDrafts.append(draft)
         }
         appState.updateFinancialPlanningJourney(journey)
+
+        if var profile = appState.currentProfile,
+           let goalIdx = profile.goals.firstIndex(where: {
+               $0.goalName.localizedCaseInsensitiveContains("Wealth")
+           }) {
+            profile.goals[goalIdx].targetAmount = targetAmt
+            if let targetDate = targetDate {
+                profile.goals[goalIdx].targetDate = targetDate
+            }
+            appState.currentProfile = profile
+            appState.syncProfile()
+        }
     }
-    
+
     private func buildTrackerInput() -> InvestmentPlanInputModel {
         var trackerInput = InvestmentPlanInputModel(
             investmentType: "Monthly SIP",
@@ -287,6 +307,8 @@ struct WealthQuestionnaire: View {
             savedAmount: input.savedAmount.isEmpty ? "0" : input.savedAmount,
             hasEmergencyFund: true
         )
+        trackerInput.baseGoalCost = Double(input.targetAmount)
+        trackerInput.customTargetCorpus = Double(input.targetAmount)
         // Wealth-specific data
         trackerInput.wealthIntent = input.wealthStrategy?.rawValue
         trackerInput.goalPlanType = savingPlan?.rawValue

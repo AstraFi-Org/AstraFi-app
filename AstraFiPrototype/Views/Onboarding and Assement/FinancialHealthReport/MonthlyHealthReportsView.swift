@@ -318,13 +318,22 @@ struct HealthReportDetailView: View {
 
     private func scoreColor(_ s: Int) -> Color { s >= 80 ? .green : s >= 70 ? .orange : .red }
 
+    private var effectiveInsights: FinancialAssessmentInsights? {
+        let isLatest = appState.currentProfile?.monthlyHealthAssessments.sorted(by: { $0.date > $1.date }).first?.id == report.id
+        let isCurrentMonth = Calendar.current.isDate(report.date, equalTo: Date(), toGranularity: .month)
+        if (isLatest || isCurrentMonth), let profile = appState.currentProfile {
+            return FinancialAssessmentInsights.build(profile: profile, data: nil)
+        }
+        return report.insights ?? (appState.currentProfile.map { FinancialAssessmentInsights.build(profile: $0, data: nil) })
+    }
+
     var body: some View {
         ScrollView {
             VStack(spacing: 0) {
-                if let insights = report.insights {
+                if let insights = effectiveInsights {
                     HeroCard(
                         name: appState.currentProfile?.basicDetails.name ?? "User",
-                        score: Double(report.score),
+                        score: Double(insights.overallScore.safeInt),
                         radarValues: insights.radarValues,
                         insights: insights
                     )
@@ -397,7 +406,7 @@ struct HealthReportDetailView: View {
         .navigationBarTitleDisplayMode(.inline)
         .background(AppTheme.appBackground(for: colorScheme).ignoresSafeArea())
         .navigationDestination(isPresented: $navigateToVitals) {
-            if let insights = report.insights {
+            if let insights = effectiveInsights {
                 VitalsDetailSheet(
                     income: insights.monthlyIncome,
                     expenses: insights.monthlyExpenses,
@@ -408,7 +417,7 @@ struct HealthReportDetailView: View {
             }
         }
         .navigationDestination(isPresented: $navigateToRisk) {
-            if let insights = report.insights {
+            if let insights = effectiveInsights {
                 RiskSheet(
                     insights: insights,
                     concerns: insights.activeConcerns.filter { $0.parameter == .investment }
@@ -416,7 +425,7 @@ struct HealthReportDetailView: View {
             }
         }
         .navigationDestination(isPresented: $navigateToLiability) {
-            if let insights = report.insights {
+            if let insights = effectiveInsights {
                 LiabilityDetailSheet(
                     insights: insights,
                     concerns: insights.activeConcerns.filter { $0.parameter == .liabilities }
@@ -424,7 +433,7 @@ struct HealthReportDetailView: View {
             }
         }
         .navigationDestination(isPresented: $navigateToInsurance) {
-            if let insights = report.insights {
+            if let insights = effectiveInsights {
                 InsuranceAdviceSheet(
                     adultDependents: appState.currentProfile?.basicDetails.adultDependents ?? 1,
                     concerns: insights.activeConcerns.filter { $0.parameter == .insurance }
@@ -432,7 +441,7 @@ struct HealthReportDetailView: View {
             }
         }
         .navigationDestination(isPresented: $navigateToEmergency) {
-            if let insights = report.insights {
+            if let insights = effectiveInsights {
                 EmergencyFundInsightSheet(insights: insights)
             }
         }

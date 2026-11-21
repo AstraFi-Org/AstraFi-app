@@ -8,10 +8,12 @@ struct PlannerView: View {
     @Environment(\.colorScheme) var colorScheme
     @Environment(AppStateManager.self) var appState
     @State private var showNewInvestmentPlan = false
+    @State private var showFinancialSimulators = false
     @State private var showCompanyAnalyzer = false
     @State private var projectionYears = 5
     @State private var emergencyFundState = EmergencyFundSectionState()
     @State private var plannerSelectedInvestmentIDs: Set<UUID> = []
+    @State private var showDecisionCenter = false
 
     private var profile: AstraUserProfile? { appState.currentProfile }
     private var investments: [AstraInvestment]  { profile?.investments ?? [] }
@@ -96,7 +98,6 @@ struct PlannerView: View {
 
         ScrollView(showsIndicators: false) {
             VStack(alignment: .leading, spacing: 22) {
-                personalizedPlanSection
                 financialVitalsSection
 
                 // MARK: - Emergency Fund Summary
@@ -144,12 +145,24 @@ struct PlannerView: View {
         .navigationDestination(isPresented: $showNewInvestmentPlan) {
             PlanJourneyView()
         }
+        .navigationDestination(isPresented: $showFinancialSimulators) {
+            FinancialSimulatorsHubView()
+        }
+        .navigationDestination(isPresented: $showDecisionCenter) {
+            FinancialDecisionCenterView(openHealthPlanOnAppear: appState.showPersonalizedHealthPlan)
+        }
         .navigationDestination(isPresented: $efState.showFundSetup) {
             EmergencyFundSetupView(plannerState: emergencyFundState)
                 .environment(appState)
         }
         .onAppear {
             includeEmergencyFundInvestmentsInGrowth()
+            if appState.showPersonalizedHealthPlan {
+                showDecisionCenter = true
+            }
+        }
+        .onChange(of: appState.showPersonalizedHealthPlan) { _, isOn in
+            if isOn { showDecisionCenter = true }
         }
         .onChange(of: profile?.emergencyFundLinkedInvestmentIDs ?? []) { _, _ in
             includeEmergencyFundInvestmentsInGrowth()
@@ -163,51 +176,6 @@ struct PlannerView: View {
     }
 
     // MARK: - Extracted Sections (Fixes SwiftUI type-checking timeout)
-
-    private var personalizedPlanSection: some View {
-        Group {
-            if appState.showPersonalizedHealthPlan {
-                PersonalizedHealthPlanView()
-                    .transition(.move(edge: .top).combined(with: .opacity))
-            } else {
-                Button {
-                    withAnimation {
-                        appState.showPersonalizedHealthPlan = true
-                    }
-                } label: {
-                    HStack(spacing: 10) {
-                        Image(systemName: "sparkles")
-                            .font(.system(size: 16, weight: .bold))
-                            .foregroundStyle(AppTheme.auraIndigo)
-
-                        VStack(alignment: .leading, spacing: 2) {
-                            Text("Personalized Financial Health Plan")
-                                .font(.system(size: 15, weight: .bold))
-                                .foregroundStyle(.primary)
-
-                            Text("View action plan from your assessment diagnosis")
-                                .font(.caption)
-                                .foregroundStyle(.secondary)
-                        }
-
-                        Spacer()
-
-                        Image(systemName: "chevron.right")
-                            .font(.caption.weight(.bold))
-                            .foregroundStyle(AppTheme.auraIndigo)
-                    }
-                    .padding(14)
-                    .background(AppTheme.auraIndigo.opacity(0.08))
-                    .clipShape(RoundedRectangle(cornerRadius: 14, style: .continuous))
-                    .overlay(
-                        RoundedRectangle(cornerRadius: 14, style: .continuous)
-                            .stroke(AppTheme.auraIndigo.opacity(0.2), lineWidth: 1)
-                    )
-                }
-                .buttonStyle(.plain)
-            }
-        }
-    }
 
     private var financialVitalsSection: some View {
         VStack(alignment: .leading, spacing: 14) {
@@ -499,6 +467,13 @@ struct PlannerView: View {
                 icon: "chart.line.uptrend.xyaxis.circle.fill",
                 gradientColors: [Color(hex: "#007AFF"), Color(hex: "#5E5CE6")],
                 action: { showNewInvestmentPlan = true }
+            )
+            ActionButton(
+                title: "Financial Simulators",
+                subtitle: "Fixed-Income Ladder, REITs & Retirement SWP",
+                icon: "slider.horizontal.2.square.badge.arrow.right",
+                gradientColors: [Color(hex: "#BF5AF2"), Color(hex: "#5E5CE6")],
+                action: { showFinancialSimulators = true }
             )
 //            ActionButton(
 //                title: "Company Analysis",

@@ -50,7 +50,6 @@ enum LifestyleOption: String, CaseIterable, Identifiable {
 class EducationPlanInputModel {
     var yearsUntilCourse: String = ""
     var courseAmount: String = ""
-    var savedAmount: String = ""
     var location: EducationLocation? = nil
     var lifestyle: LifestyleOption? = nil
     var savingPlan: SavingPlanOption? = nil
@@ -112,7 +111,7 @@ class EducationPlanInputModel {
             scheduleSIPDate: Date(),
             purposeOfInvestment: "Education",
             targetAmount: String(format: "%.0f", totalCorpus),
-            savedAmount: savedAmount.isEmpty ? "0" : savedAmount,
+            savedAmount: "0",
             hasEmergencyFund: true,
             investmentMentality: .mutualFunds,
             educationFor: "Self",
@@ -120,6 +119,8 @@ class EducationPlanInputModel {
             educationLocation: location == .india ? "India" : "Abroad",
             yearsUntilEducation: Int(yearsUntilCourse)
         )
+        model.baseGoalCost = Double(courseAmount)
+        model.customTargetCorpus = totalCorpus
         model.goalPlanType = savingPlan?.rawValue
         model.goalSIPAmount = expectedSIPAmount
         return model
@@ -373,8 +374,8 @@ struct EducationQuestionnaire: View {
                         totalCorpus: input.totalCorpus,
                         goalAccentColor: goalAccentColor,
                         onSave: {
-                            syncToPlanningJourney()
                             let trackerInput = input.toTrackerModel()
+                            saveEducationGoalToJourney()
                             let planModel = InvestmentPlanModel(
                                 name: "Education Plan",
                                 dateSaved: DateFormatter.localizedString(from: Date(), dateStyle: .medium, timeStyle: .none),
@@ -401,17 +402,12 @@ struct EducationQuestionnaire: View {
             if let draft = appState.currentProfile?.planningJourney?.goalDrafts.first(where: {
                 $0.category.localizedCaseInsensitiveContains("Education") || $0.name.localizedCaseInsensitiveContains("Education")
             }) {
-                if input.yearsUntilCourse.isEmpty {
-                    let years = draft.targetYearsFromNow
-                        ?? draft.targetDate.map { max(1, Calendar.current.dateComponents([.year], from: Date(), to: $0).year ?? 5) }
-                        ?? 5
+                if input.yearsUntilCourse.isEmpty, let targetDate = draft.targetDate {
+                    let years = max(1, Calendar.current.dateComponents([.year], from: Date(), to: targetDate).year ?? 5)
                     input.yearsUntilCourse = "\(years)"
                 }
                 if input.courseAmount.isEmpty, let amount = draft.targetAmount {
                     input.courseAmount = String(format: "%.0f", amount)
-                }
-                if input.savedAmount.isEmpty, let saved = draft.savedAmount {
-                    input.savedAmount = String(format: "%.0f", saved)
                 }
                 if input.location == nil {
                     input.location = .india
@@ -422,39 +418,53 @@ struct EducationQuestionnaire: View {
             }
         }
         .onDisappear {
-            syncToPlanningJourney()
+            saveEducationGoalToJourney()
         }
     }
 
-    private func syncToPlanningJourney() {
-        let cleanCost = input.courseAmount.replacingOccurrences(of: ",", with: "").replacingOccurrences(of: "₹", with: "").trimmingCharacters(in: .whitespacesAndNewlines)
-        guard let currentCost = Double(cleanCost), currentCost > 0 else { return }
+    private func saveEducationGoalToJourney() {
+        guard let currentCost = Double(input.courseAmount), currentCost.isFinite, currentCost >= 0 else { return }
         var journey = appState.currentProfile?.planningJourney ?? FinancialPlanningJourney()
-        let years = max(1, Int(input.yearsUntilCourse.trimmingCharacters(in: .whitespacesAndNewlines)) ?? 5)
-        let targetDate = Calendar.current.date(byAdding: .year, value: years, to: Date())
-        let cleanSaved = input.savedAmount.replacingOccurrences(of: ",", with: "").replacingOccurrences(of: "₹", with: "").trimmingCharacters(in: .whitespacesAndNewlines)
-        let savedAmt = Double(cleanSaved) ?? 0
+        let years = max(1, Int(input.yearsUntilCourse) ?? 5)
+        let targetDate = Calendar.current.date(
+            byAdding: .year,
+            value: years,
+            to: Date()
+        )
+        let netTarget = input.totalCorpus
 
         if let index = journey.goalDrafts.firstIndex(where: {
-            $0.category.localizedCaseInsensitiveContains("Education") || $0.name.localizedCaseInsensitiveContains("Education")
+            $0.category.localizedCaseInsensitiveContains("Education")
+                || $0.name.localizedCaseInsensitiveContains("Education")
         }) {
             journey.goalDrafts[index].targetAmount = currentCost
             journey.goalDrafts[index].targetDate = targetDate
-            journey.goalDrafts[index].targetYearsFromNow = years
-            if savedAmt > 0 || journey.goalDrafts[index].savedAmount == nil {
-                journey.goalDrafts[index].savedAmount = savedAmt
-            }
+            journey.goalDrafts[index].customTargetCorpus = netTarget
         } else {
-            journey.goalDrafts.append(FinancialPlanningGoalDraft(
+            var draft = FinancialPlanningGoalDraft(
                 name: "Education",
                 category: "Education",
                 targetDate: targetDate,
-                targetAmount: currentCost,
-                targetYearsFromNow: years,
-                savedAmount: savedAmt
-            ))
+                targetAmount: currentCost
+            )
+            draft.customTargetCorpus = netTarget
+            journey.goalDrafts.append(draft)
         }
         appState.updateFinancialPlanningJourney(journey)
+
+        if var profile = appState.currentProfile,
+           let goalIdx = profile.goals.firstIndex(where: {
+               $0.goalName.localizedCaseInsensitiveContains("Education")
+           }) {
+            if netTarget > 0 {
+                profile.goals[goalIdx].targetAmount = netTarget
+            }
+            if let targetDate = targetDate {
+                profile.goals[goalIdx].targetDate = targetDate
+            }
+            appState.currentProfile = profile
+            appState.syncProfile()
+        }
     }
 
     private var showInsights: Bool {

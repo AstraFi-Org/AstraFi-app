@@ -14,6 +14,7 @@ struct Plan2DetailView: View {
     var input: InvestmentPlanInputModel
     var result: Plan2Result
     var isFromTracker: Bool = false
+    var isFromFinancialJourney: Bool = false
 
     @State private var currentResult: Plan2Result? = nil
     @State private var loanOverride: Double = 0
@@ -38,12 +39,12 @@ struct Plan2DetailView: View {
                     loanMetrics
                 }
                 .padding(.horizontal, 20)
-                .padding(.bottom, 120)
+                .padding(.bottom, (!isFromTracker && !isFromFinancialJourney) ? 120 : 36)
                 .frame(maxWidth: .infinity)
             }
             .background(AppTheme.appBackground(for: colorScheme))
 
-            if !isFromTracker {
+            if !isFromTracker && !isFromFinancialJourney {
                 savePlanFooter
             }
         }

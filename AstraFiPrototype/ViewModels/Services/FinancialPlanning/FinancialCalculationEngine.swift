@@ -146,28 +146,102 @@ enum FinancialCalculationEngine {
 
     // MARK: - 6. Annual Step-Up SIP Calculator
     
-    /// Computes accumulated corpus with an annual step-up (e.g. 10% annual increase matching salary raises).
+    /// Year-by-year corpus with an annual SIP step-up. Existing investments are projected, not subtracted as cash.
     static func stepUpFutureValue(
         initialMonthlySIP: Double,
         annualStepUpRate: Double,
         annualReturnRate: Double,
-        years: Int
+        years: Int,
+        initialLumpSum: Double = 0
     ) -> Double {
-        guard years > 0, initialMonthlySIP > 0 else { return 0 }
-        var currentMonthlySIP = initialMonthlySIP
-        var accumulatedCorpus = 0.0
-        let monthlyRate = annualReturnRate / 12.0
+        guard years > 0 else { return max(0, initialLumpSum) }
+        var corpus = max(0, initialLumpSum)
+        var currentMonthlySIP = max(0, initialMonthlySIP)
         
         for _ in 1...years {
-            // Compound existing corpus for 12 months
-            accumulatedCorpus *= pow(1.0 + monthlyRate, 12.0)
-            // Add FV of this year's 12 SIP installments
-            let yearSIP_FV = futureValue(monthlySIP: currentMonthlySIP, annualRate: annualReturnRate, months: 12)
-            accumulatedCorpus += yearSIP_FV
-            // Step-up monthly contribution for next year
+            corpus = futureValue(
+                monthlySIP: currentMonthlySIP,
+                annualRate: annualReturnRate,
+                months: 12,
+                initialLumpSum: corpus
+            )
             currentMonthlySIP *= (1.0 + annualStepUpRate)
         }
         
-        return accumulatedCorpus
+        return corpus
+    }
+
+    /// Future value of a lump sum using the same monthly compounding convention as SIP math.
+    static func futureValueOfExistingInvestments(
+        presentValue: Double,
+        annualReturnRate: Double,
+        years: Double
+    ) -> Double {
+        guard presentValue > 0, years > 0 else { return max(0, presentValue) }
+        let months = max(1, Int((years * 12.0).rounded()))
+        return futureValue(monthlySIP: 0, annualRate: annualReturnRate, months: months, initialLumpSum: presentValue)
+    }
+
+    static func grownAmount(presentValue: Double, annualRate: Double, years: Double) -> Double {
+        inflationAdjustedCost(currentCost: presentValue, annualInflationRate: annualRate, years: years)
+    }
+
+    /// Solves for the starting monthly SIP when contributions increase annually.
+    static func requiredStartingMonthlySIP(
+        targetCorpus: Double,
+        annualReturnRate: Double,
+        years: Int,
+        annualStepUpRate: Double,
+        currentInvestments: Double = 0
+    ) -> Double {
+        guard years > 0, targetCorpus > 0 else { return 0 }
+        let months = years * 12
+        if annualStepUpRate <= 0 {
+            return requiredMonthlySIP(
+                targetCorpus: targetCorpus,
+                annualReturnRate: annualReturnRate,
+                months: months,
+                currentSavings: currentInvestments
+            )
+        }
+
+        let alreadyGrown = futureValueOfExistingInvestments(
+            presentValue: currentInvestments,
+            annualReturnRate: annualReturnRate,
+            years: Double(years)
+        )
+        if alreadyGrown >= targetCorpus { return 0 }
+
+        var low = 0.0
+        var high = max(1_000, (targetCorpus - alreadyGrown) / 12.0)
+        for _ in 0..<16 {
+            let projected = stepUpFutureValue(
+                initialMonthlySIP: high,
+                annualStepUpRate: annualStepUpRate,
+                annualReturnRate: annualReturnRate,
+                years: years,
+                initialLumpSum: currentInvestments
+            )
+            if projected >= targetCorpus { break }
+            high *= 2
+            if high > 1_000_000_000 { break }
+        }
+
+        for _ in 0..<48 {
+            let mid = (low + high) / 2.0
+            let projected = stepUpFutureValue(
+                initialMonthlySIP: mid,
+                annualStepUpRate: annualStepUpRate,
+                annualReturnRate: annualReturnRate,
+                years: years,
+                initialLumpSum: currentInvestments
+            )
+            if projected >= targetCorpus {
+                high = mid
+            } else {
+                low = mid
+            }
+        }
+        return high
     }
 }

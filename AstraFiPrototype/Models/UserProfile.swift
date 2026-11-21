@@ -255,6 +255,10 @@ enum AstraInvestmentType: String, Codable, CaseIterable {
     case cashSavings = "Cash Savings"
     case emergencyFund = "Emergency Fund"
     case other = "Other"
+
+    static var allCases: [AstraInvestmentType] {
+        [.mutualFund, .stocks, .goldETF, .cryptocurrency, .deposits, .ppf, .nps, .other]
+    }
 }
 
 enum AstraInvestmentMode: String, Codable {
