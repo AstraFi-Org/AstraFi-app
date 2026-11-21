@@ -104,10 +104,10 @@ struct Plan1DetailView: View {
                         } else {
                             Text("Save")
                                 .font(.subheadline.weight(.semibold))
-                                .foregroundStyle(hasUnsavedChanges ? Color.accentColor : Color.secondary.opacity(0.35))
+                                .foregroundStyle(Color.accentColor)
                         }
                     }
-                    .disabled(!hasUnsavedChanges || isSaving)
+                    .disabled(isSaving)
                 }
             }
         }

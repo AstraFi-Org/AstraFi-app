@@ -421,6 +421,24 @@ final class AppStateManager {
         }
     }
 
+    /// Confirms one existing profile domain without reopening the full assessment.
+    func confirmFinancialData(_ domain: FinancialDataDomain, at date: Date = Date()) {
+        guard var profile = currentProfile else { return }
+        var records = profile.financialDataFreshness ?? []
+        let record = FinancialDataFreshnessRecord(
+            domain: domain,
+            source: .userConfirmed,
+            lastUpdatedAt: records.first(where: { $0.domain == domain })?.lastUpdatedAt ?? date,
+            lastVerifiedAt: date,
+            confidence: 1
+        )
+        records.removeAll { $0.domain == domain }
+        records.append(record)
+        profile.financialDataFreshness = records
+        currentProfile = profile
+        syncProfile()
+    }
+
     func deleteAssessmentFromHistory(_ assessment: AstraHealthAssessment) {
         guard var profile = currentProfile else { return }
         profile.monthlyHealthAssessments.removeAll { $0.id == assessment.id }
@@ -1571,6 +1589,16 @@ final class AppStateManager {
             }
         }
         
+        var freshness = profile.financialDataFreshness ?? []
+        let verifiedAt = Date()
+        for domain in FinancialDataDomain.allCases {
+            freshness.removeAll { $0.domain == domain }
+            freshness.append(FinancialDataFreshnessRecord(
+                domain: domain, source: .assessment, lastUpdatedAt: verifiedAt,
+                lastVerifiedAt: verifiedAt, confidence: 0.9
+            ))
+        }
+        profile.financialDataFreshness = freshness
         self.currentProfile = profile
     }
     
@@ -1586,6 +1614,18 @@ final class AppStateManager {
                 profile.basicDetails.monthlyIncome = detailedIncome
                 profile.basicDetails.monthlyIncomeAfterTax = detailedIncome
             }
+
+            var freshness = profile.financialDataFreshness ?? []
+            let updatedAt = Date()
+            let updatedDomains: [FinancialDataDomain] = detailedIncome > 0 ? [.income, .expenses] : [.expenses]
+            for domain in updatedDomains {
+                freshness.removeAll { $0.domain == domain }
+                freshness.append(FinancialDataFreshnessRecord(
+                    domain: domain, source: .cashFlowUpdate, lastUpdatedAt: updatedAt,
+                    lastVerifiedAt: updatedAt, confidence: 0.9
+                ))
+            }
+            profile.financialDataFreshness = freshness
             
             let df = DateFormatter()
             df.dateFormat = "yyyy-MM"

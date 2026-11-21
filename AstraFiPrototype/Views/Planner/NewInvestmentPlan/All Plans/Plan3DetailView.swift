@@ -11,6 +11,7 @@ struct Plan3DetailView: View {
     var result: Plan3Result
     var isFromTracker: Bool = false
     var isFromFinancialJourney: Bool = false
+    var onSaveJourneyPlan: ((InvestmentPlanInputModel) -> Void)? = nil
 
     @State private var selectedScenario: String = "Moderate"
     @State private var investmentMode: String = "Lumpsum"
@@ -19,6 +20,7 @@ struct Plan3DetailView: View {
     @State private var showingSaveAlert = false
     @State private var alertMessage = ""
     @State private var showAssumptionsAlert = false
+    @State private var journeyPlanSaved = false
 
     @State private var currentResult: Plan3Result? = nil
     @State private var loanOverride: Double = 0
@@ -135,6 +137,25 @@ struct Plan3DetailView: View {
         }
         .navigationTitle("Loan Stress Test")
         .navigationBarTitleDisplayMode(.inline)
+        .toolbar {
+            if isFromFinancialJourney {
+                ToolbarItem(placement: .topBarTrailing) {
+                    Button {
+                        var savedInput = input
+                        savedInput.targetAmount = String(Int(loanOverride))
+                        savedInput.timePeriod = String(tenureOverride)
+                        savedInput.bankName = bankName
+                        savedInput.interestRate = interestRate
+                        onSaveJourneyPlan?(savedInput)
+                        journeyPlanSaved = true
+                    } label: {
+                        Text(journeyPlanSaved ? "Saved" : "Save")
+                            .font(.subheadline.weight(.semibold))
+                            .foregroundStyle(journeyPlanSaved ? Color.green : Color.accentColor)
+                    }
+                }
+            }
+        }
         .alert("Action Successful", isPresented: $showingSaveAlert) {
              Button("View in Tracker") { 
                  appState.selectedTab = 2

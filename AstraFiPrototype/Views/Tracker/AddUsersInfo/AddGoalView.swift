@@ -7,6 +7,8 @@ struct AddGoalView: View {
     @State private var goalName = ""
     @State private var targetAmount = ""
     @State private var targetDate = Date().addingTimeInterval(60 * 60 * 24 * 365)
+    @State private var goalCategory: GoalPlanningCategory = .custom
+    @State private var goalLocation = ""
 
     @State private var linkInvestment = false
 
@@ -36,6 +38,13 @@ struct AddGoalView: View {
     @State private var linkExisting = false
     @State private var selectedExistingInvestmentIDs: Set<UUID> = []
 
+    private var canSaveGoal: Bool {
+        let nameIsValid = !goalName.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty
+        guard let amount = Double(targetAmount), amount.isFinite, amount > 0 else { return false }
+        let savingsValid = manualSavings.isEmpty || (Double(manualSavings).map { $0.isFinite && $0 >= 0 } ?? false)
+        return nameIsValid && savingsValid && !(linkInvestment && (invName.isEmpty || invAmount.isEmpty))
+    }
+
     var body: some View {
         NavigationStack {
             Form {
@@ -58,9 +67,9 @@ struct AddGoalView: View {
                     Button(action: saveGoal) {
                         Image(systemName: "checkmark")
                             .font(.system(size: 16, weight: .bold))
-                            .foregroundColor(goalName.isEmpty || targetAmount.isEmpty || (linkInvestment && (invName.isEmpty || invAmount.isEmpty)) ? .gray : .blue)
+                        .foregroundColor(canSaveGoal ? .blue : .gray)
                     }
-                    .disabled(goalName.isEmpty || targetAmount.isEmpty || (linkInvestment && (invName.isEmpty || invAmount.isEmpty)))
+                    .disabled(!canSaveGoal)
                 }
             }
             .onDisappear {
@@ -71,9 +80,11 @@ struct AddGoalView: View {
     }
 
     private func saveGoal() {
-        let amount = Double(targetAmount) ?? 0
+        guard canSaveGoal, let amount = Double(targetAmount) else { return }
         let savings = Double(manualSavings) ?? 0
-        let newGoal = AstraGoal(id: UUID(), goalName: goalName, targetAmount: amount, currentAmount: 0, manualSavingsContribution: savings, startDate: Date(), targetDate: targetDate)
+        let planning = GoalPlanningMetadata(category: goalCategory, location: goalLocation.isEmpty ? nil : goalLocation,
+                                            requirementType: "User-provided estimate")
+        let newGoal = AstraGoal(id: UUID(), goalName: goalName, targetAmount: amount, currentAmount: 0, manualSavingsContribution: savings, startDate: Date(), targetDate: targetDate, planning: planning)
         appState.addGoal(newGoal)
 
         // Link existing investments
@@ -118,10 +129,20 @@ struct AddGoalView: View {
     private var goalSection: some View {
         Section(header: Text("Goal Details")) {
             TextField("Goal Name (e.g. Dream Car)", text: $goalName)
+            Picker("Goal Category", selection: $goalCategory) {
+                ForEach(GoalPlanningCategory.allCases) { category in
+                    Text(category.rawValue).tag(category)
+                }
+            }
             HStack {
                 Text("₹")
-                TextField("Target Amount", text: $targetAmount).keyboardType(.decimalPad)
+                TextField("Current Estimated Cost", text: $targetAmount).keyboardType(.decimalPad)
             }
+            if goalCategory == .vehicle || goalCategory == .property || goalCategory == .healthcare || goalCategory == .marriage {
+                TextField("Location (optional)", text: $goalLocation)
+            }
+            Label("No live source is connected. This value will be saved as your estimate.", systemImage: "info.circle")
+                .font(.caption).foregroundStyle(.secondary)
             DatePicker("Target Date", selection: $targetDate, displayedComponents: .date)
             
             HStack {

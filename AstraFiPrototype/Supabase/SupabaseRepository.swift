@@ -130,6 +130,7 @@ final class SupabaseRepository {
         let manualSavingsContribution: Double
         let startDate: String
         let targetDate: String
+        let planningData: GoalPlanningMetadata?
 
         enum CodingKeys: String, CodingKey {
             case id, user_id
@@ -139,6 +140,7 @@ final class SupabaseRepository {
             case manualSavingsContribution = "manualSavingsContribution"
             case startDate = "startDate"
             case targetDate = "targetDate"
+            case planningData = "planningData"
         }
     }
 
@@ -419,6 +421,12 @@ final class SupabaseRepository {
 
     func saveUserProfile(_ profile: AstraUserProfile, userId: UUID) async throws {
         let uid = userId.uuidString
+        var persistedJourney = profile.planningJourney
+        if let freshness = profile.financialDataFreshness {
+            var journey = persistedJourney ?? FinancialPlanningJourney()
+            journey.profileDataFreshness = freshness
+            persistedJourney = journey
+        }
 
         try await supabase.from("user_profiles").upsert(UserProfileRow(
             user_id: uid,
@@ -439,7 +447,7 @@ final class SupabaseRepository {
             riskTolerance: profile.basicDetails.riskTolerance.rawValue,
             investmentHorizon: profile.basicDetails.investmentHorizon.rawValue,
             isSetuConnected: profile.isSetuConnected,
-            planningJourney: profile.planningJourney
+            planningJourney: persistedJourney
         ), onConflict: "user_id").execute()
 
         try await supabase.from("assets").upsert(AssetsRow(
@@ -479,7 +487,8 @@ final class SupabaseRepository {
             currentAmount: goal.currentAmount,
             manualSavingsContribution: goal.manualSavingsContribution,
             startDate: formatDate(goal.startDate),
-            targetDate: formatDate(goal.targetDate)
+            targetDate: formatDate(goal.targetDate),
+            planningData: goal.planning
         )).execute()
     }
 
@@ -492,6 +501,7 @@ final class SupabaseRepository {
             let manualSavingsContribution: Double
             let startDate: String
             let targetDate: String
+            let planningData: GoalPlanningMetadata?
         }
         let rows: [FetchRow] = try await supabase
             .from("goals").select()
@@ -506,7 +516,8 @@ final class SupabaseRepository {
                 currentAmount: row.currentAmount,
                 manualSavingsContribution: row.manualSavingsContribution,
                 startDate: parseDate(row.startDate) ?? Date(),
-                targetDate: parseDate(row.targetDate) ?? Date()
+                targetDate: parseDate(row.targetDate) ?? Date(),
+                planning: row.planningData
             )
         }
     }
@@ -1269,6 +1280,7 @@ ins.maturityDate = row.maturityDate.flatMap { parseDate($0) }
             isSetuConnected: profileRow.isSetuConnected ?? false,
             planningJourney: profileRow.planningJourney
         )
+        profile.financialDataFreshness = profileRow.planningJourney?.profileDataFreshness
         profile.monthlyCashflowSnapshots = snapshots
         return profile
     }
