@@ -1,7 +1,22 @@
 import SwiftUI
+import UserNotifications
+
+final class AstraAppDelegate: NSObject, UIApplicationDelegate {
+    private let notificationDelegate = AstraNotificationDelegate()
+
+    func application(
+        _ application: UIApplication,
+        didFinishLaunchingWithOptions launchOptions: [UIApplication.LaunchOptionsKey : Any]? = nil
+    ) -> Bool {
+        UNUserNotificationCenter.current().delegate = notificationDelegate
+        return true
+    }
+}
 
 @main
 struct AstraFiPrototypeApp: App {
+    @UIApplicationDelegateAdaptor(AstraAppDelegate.self) private var appDelegate
+    
     @State private var appState: AppStateManager = {
         #if DEBUG
         if ProcessInfo.processInfo.arguments.contains("-useSampleData") {
@@ -30,6 +45,15 @@ struct AstraFiPrototypeApp: App {
                     assert(failed.isEmpty, "InsuranceAnalysisVerification failed: \(failed.map { "\($0.name): \($0.detail)" })")
                     assert(FinancialHealthScoringVerification.allPassed(), "FinancialHealthScoringVerification failed")
                     #endif
+
+                    // Request notification permission and schedule real-time reminders
+                    _ = await AstraNotificationManager.shared.requestPermission()
+                    if let profile = appState.currentProfile {
+                        AstraNotificationManager.shared.scheduleAllNotifications(
+                            for: profile,
+                            assessmentDue: appState.isMonthlyAssessmentDue()
+                        )
+                    }
                 }
                 .onOpenURL { url in
                     Task {
@@ -43,6 +67,13 @@ struct AstraFiPrototypeApp: App {
 
                         if biometricEnabled && requireOnLaunch && appState.showDashboard {
                             appState.isLockedByBiometric = true
+                        }
+                    } else if newPhase == .active {
+                        if let profile = appState.currentProfile {
+                            AstraNotificationManager.shared.scheduleAllNotifications(
+                                for: profile,
+                                assessmentDue: appState.isMonthlyAssessmentDue()
+                            )
                         }
                     }
                 }

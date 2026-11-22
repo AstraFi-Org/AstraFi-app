@@ -82,6 +82,7 @@ struct PlanJourneyView: View {
     @State private var editedEvent: FinancialPlanningEvent?
     @State private var editingGoalDraft: FinancialPlanningGoalDraft?
     @State private var throughYear: Int?
+    @State private var branchMonthlyContribution: Double?
     @State private var hasStartedPlanning = false
     @State private var customGoalName = ""
     @State private var showPlanGoalSelection = false
@@ -102,6 +103,7 @@ struct PlanJourneyView: View {
     @State private var customizingGoalCategory: CalculatedGoalPlan? = nil
     // Tracks which plan (0=SIP, 1=Loan/Debt, 2=StressTest) user activated per goal
     @State private var chosenPlanIndex: [UUID: Int] = [:]
+    @State private var savedPlanInputsByGoal: [UUID: InvestmentPlanInputModel] = [:]
     // Overview Interactive State
     @State private var selectedAnalyticsTab = 0
     @State private var selectedGrowthScenario = 1
@@ -127,7 +129,13 @@ struct PlanJourneyView: View {
         }
     }
     private var position: FinancialPositionSummary { FinancialPlanningEngine.currentPosition(profile: profile) }
+    private var unifiedContext: UnifiedFinancialContext { UnifiedFinancialContextEngine.build(profile: profile) }
     private var impacts: [FinancialEventImpact] { FinancialPlanningEngine.eventImpacts(profile: profile, journey: journey) }
+    private var previewJourney: FinancialPlanningJourney {
+        var copy = journey
+        if let branchMonthlyContribution { copy.monthlyInvestmentWhatIf = branchMonthlyContribution }
+        return copy
+    }
     private var goals: [AstraGoal] { profile?.goals ?? [] }
 
     private var hasExistingJourney: Bool {
@@ -177,7 +185,13 @@ struct PlanJourneyView: View {
                 isEvent: true
             )
         }
-        return (uniqueGoals + draftEntries + eventEntries).sorted {
+        let loanEntries = UnifiedFinancialContextEngine.journeyEvents(profile: profile, journey: journey)
+            .filter { $0.sourceDomain == .liabilities }
+            .map {
+                JourneyTimelineEntry(id: $0.id, name: $0.title, detail: "Decision point · \($0.detail)",
+                    date: $0.date, amount: $0.amount, priority: 1, category: "Loan", isEvent: true)
+            }
+        return (uniqueGoals + draftEntries + eventEntries + loanEntries).sorted {
             ($0.date ?? .distantFuture) < ($1.date ?? .distantFuture)
         }
     }
@@ -340,6 +354,115 @@ struct PlanJourneyView: View {
         return position.monthlySurplus ?? 43_000
     }
 
+    private struct PriorityStartProjection {
+        let startYear: Int
+        let monthlySurplusAtStart: Double
+        let reason: String
+        let yearlySurpluses: [(year: Int, amount: Double)]
+    }
+
+    /// Projects net planning capacity month by month using the journey's income and
+    /// expense growth assumptions. A later goal starts when its commitment fits
+    /// alongside active EMIs, or when a prior SIP goal reaches its target.
+    private var priorityStartProjections: [UUID: PriorityStartProjection] {
+        let plans = calculatedGoalPlans
+        guard !plans.isEmpty else { return [:] }
+        let incomeGrowth = journey.assumptions.incomeGrowthRate ?? 0.05
+        let expenseGrowth = journey.assumptions.expenseGrowthRate ?? 0.04
+        let current = capacityBreakdown
+        let safetyReserve = max(0, current.grossMonthlySurplus - availableMonthlyCapacity)
+        let today = Date()
+        var starts: [UUID: PriorityStartProjection] = [:]
+        var active: [UUID] = []
+        var completed = Set<UUID>()
+        var monthsActive: [UUID: Int] = [:]
+        var balances: [UUID: Double] = [:]
+        let commitments = Dictionary(uniqueKeysWithValues: plans.map { plan in
+            let selected = chosenPlanIndex[plan.id] ?? 0
+            guard selected != 0 else {
+                let savedSIP = savedPlanInputsByGoal[plan.id].flatMap { Double($0.amount.replacingOccurrences(of: ",", with: "")) }
+                return (plan.id, savedSIP ?? plan.monthlySIP)
+            }
+            let full = InvestmentPlannerEngine.generateFullPlan(input: makeInputModel(for: plan), profile: profile)
+            let amount = selected == 1 ? (full.plan2?.monthlyEMI ?? plan.monthlySIP) : (full.plan3?.monthlyEMI ?? plan.monthlySIP)
+            return (plan.id, amount)
+        })
+
+        func capacity(at month: Int) -> Double {
+            let year = month / 12
+            let income = current.monthlyIncome * pow(1 + incomeGrowth, Double(year))
+            let expenses = current.monthlyExpenses * pow(1 + expenseGrowth, Double(year))
+            let fixed = current.existingDebtEMIs + current.insuranceCommitments
+            return max(0, income - expenses - fixed - safetyReserve)
+        }
+
+        func yearlySurpluses(startingAt month: Int, commitments monthlyCommitment: Double) -> [(year: Int, amount: Double)] {
+            let firstYear = Calendar.current.component(.year, from: today) + month / 12
+            return (0..<6).map { offset in
+                let futureYear = firstYear + offset
+                let futureMonth = month + offset * 12
+                return (futureYear, max(0, capacity(at: futureMonth) - monthlyCommitment))
+            }
+        }
+
+        for month in 0..<(plans.count * 12 * 60) {
+            let free = capacity(at: month)
+            var remaining = free
+            // Advance active goals and finish SIP goals when their projected corpus is met.
+            for plan in plans where active.contains(plan.id) && !completed.contains(plan.id) {
+                let selected = chosenPlanIndex[plan.id] ?? 0
+                monthsActive[plan.id, default: 0] += 1
+                let amount = commitments[plan.id] ?? plan.monthlySIP
+                if selected == 0 {
+                    let years = max(0, monthsActive[plan.id, default: 0] / 12)
+                    let rate = (years < 3 ? 0.07 : (years < 7 ? 0.10 : (journey.assumptions.investmentReturnRate ?? 0.11))) / 12
+                    let contribution = min(remaining, amount)
+                    remaining -= contribution
+                    balances[plan.id, default: 0] = balances[plan.id, default: 0] * (1 + rate) + contribution
+                    if balances[plan.id, default: 0] >= plan.inflationAdjustedAmount { completed.insert(plan.id) }
+                } else {
+                    remaining = max(0, remaining - amount)
+                    let duration = max(1, plan.yearsFromNow) * 12
+                    if monthsActive[plan.id, default: 0] >= duration { completed.insert(plan.id) }
+                }
+            }
+
+            let nextIndex = starts.count
+            guard nextIndex < plans.count else { continue }
+            if nextIndex == 0 {
+                let plan = plans[nextIndex]
+                let plannedCommitment = commitments[plan.id] ?? plan.monthlySIP
+                starts[plan.id] = PriorityStartProjection(
+                    startYear: Calendar.current.component(.year, from: today),
+                    monthlySurplusAtStart: max(0, free - plannedCommitment),
+                    reason: "First priority",
+                    yearlySurpluses: yearlySurpluses(startingAt: month, commitments: plannedCommitment)
+                )
+                active.append(plan.id)
+                continue
+            }
+
+            let previous = plans[nextIndex - 1]
+            let next = plans[nextIndex]
+            let previousFinished = completed.contains(previous.id)
+            let activeCommitments = plans.filter { active.contains($0.id) && !completed.contains($0.id) }.reduce(0) { $0 + (commitments[$1.id] ?? $1.monthlySIP) }
+            let nextCommitment = commitments[next.id] ?? next.monthlySIP
+            guard previousFinished || free >= activeCommitments + nextCommitment else { continue }
+
+            let surplusAfterStart = max(0, free - activeCommitments - nextCommitment)
+            let year = Calendar.current.component(.year, from: today) + month / 12
+            let combinedCommitment = activeCommitments + nextCommitment
+            starts[next.id] = PriorityStartProjection(
+                startYear: year,
+                monthlySurplusAtStart: surplusAfterStart,
+                reason: previousFinished ? "Starts after \(previous.name) completes" : "Starts when income growth covers both commitments",
+                yearlySurpluses: yearlySurpluses(startingAt: month, commitments: combinedCommitment)
+            )
+            active.append(next.id)
+        }
+        return starts
+    }
+
     private var multiGoalOptimization: MultiGoalOptimizationResult {
         MultiGoalOptimizer.optimize(
             goals: orderedGoalDrafts,
@@ -392,6 +515,14 @@ struct PlanJourneyView: View {
             input.customInflationRate = draft.customInflationRate
             input.customTargetCorpus = draft.customTargetCorpus
         }
+        if let savedInput = savedPlanInputsByGoal[plan.id] {
+            input.amount = savedInput.amount
+            input.timePeriod = savedInput.timePeriod
+            input.riskType = savedInput.riskType
+            input.targetAmount = savedInput.targetAmount
+            input.bankName = savedInput.bankName
+            input.interestRate = savedInput.interestRate
+        }
         return input
     }
 
@@ -408,23 +539,19 @@ struct PlanJourneyView: View {
     private var effectiveAllocations: [UUID: EffectiveGoalAllocation] {
         var allocations: [UUID: EffectiveGoalAllocation] = [:]
         var remainingCapacity = availableMonthlyCapacity
-        var hasUnlockedDualTrack = false
-        var unlockingGoalName: String? = nil
+        let startSchedule = priorityStartProjections
 
         for (index, plan) in calculatedGoalPlans.enumerated() {
             let chosenIdx = chosenPlanIndex[plan.id]
             let isFirst = index == 0
 
             if executionMode == .sequential {
-                if let idx = chosenIdx, idx == 1 { // Plan 2: Traditional Loan
+                if isFirst, let idx = chosenIdx, idx == 1 { // Plan 2: Traditional Loan
                     let input = makeInputModel(for: plan)
                     let full = InvestmentPlannerEngine.generateFullPlan(input: input, profile: profile)
                     let emi = full.plan2?.monthlyEMI ?? plan.monthlySIP
                     let allocated = min(remainingCapacity, emi)
                     remainingCapacity = max(0, remainingCapacity - allocated)
-                    hasUnlockedDualTrack = remainingCapacity > 0
-                    unlockingGoalName = plan.name
-
                     allocations[plan.id] = EffectiveGoalAllocation(
                         id: plan.id,
                         allocatedMonthlyCapacity: allocated,
@@ -432,19 +559,14 @@ struct PlanJourneyView: View {
                         isLoan: true,
                         isDualTrackUnlocked: false,
                         statusTitle: "Plan 2: Loan Active (\(allocated.toCurrency())/mo EMI)",
-                        statusDescription: remainingCapacity > 0
-                            ? "Residual surplus of \(remainingCapacity.toCurrency())/mo cascades directly into the next priority goal!"
-                            : "100% surplus servicing loan EMI."
+                        statusDescription: "Next goal starts when projected income can cover this EMI and the next plan payment, or when this obligation ends."
                     )
-                } else if let idx = chosenIdx, idx == 2 { // Plan 3: Loan Stress-Test
+                } else if isFirst, let idx = chosenIdx, idx == 2 { // Plan 3: Loan Stress-Test
                     let input = makeInputModel(for: plan)
                     let full = InvestmentPlannerEngine.generateFullPlan(input: input, profile: profile)
                     let emi = full.plan3?.monthlyEMI ?? plan.monthlySIP
                     let allocated = min(remainingCapacity, emi)
                     remainingCapacity = max(0, remainingCapacity - allocated)
-                    hasUnlockedDualTrack = remainingCapacity > 0
-                    unlockingGoalName = plan.name
-
                     allocations[plan.id] = EffectiveGoalAllocation(
                         id: plan.id,
                         allocatedMonthlyCapacity: allocated,
@@ -452,12 +574,10 @@ struct PlanJourneyView: View {
                         isLoan: true,
                         isDualTrackUnlocked: false,
                         statusTitle: "Plan 3: Stress-Test Active (\(allocated.toCurrency())/mo EMI)",
-                        statusDescription: remainingCapacity > 0
-                            ? "Residual surplus of \(remainingCapacity.toCurrency())/mo cascades directly into the next priority goal!"
-                            : "100% surplus servicing loan stress-test."
+                        statusDescription: "Next goal starts when projected income can cover this EMI and the next plan payment, or when this obligation ends."
                     )
                 } else { // Plan 1 or Default SIP
-                    let needed = plan.monthlySIP
+                    let needed = savedPlanInputsByGoal[plan.id].flatMap { Double($0.amount.replacingOccurrences(of: ",", with: "")) } ?? plan.monthlySIP
                     if isFirst {
                         let allocated = min(remainingCapacity, needed)
                         remainingCapacity = max(0, remainingCapacity - allocated)
@@ -470,30 +590,21 @@ struct PlanJourneyView: View {
                             statusTitle: "Priority First Focus: \(allocated.toCurrency())/mo allocated (100% focused)",
                             statusDescription: "Focuses all available savings until goal completion."
                         )
-                    } else if hasUnlockedDualTrack && remainingCapacity > 0 {
-                        // Cascaded surplus unlocked from prior loan!
-                        let allocated = min(remainingCapacity, needed)
-                        remainingCapacity = max(0, remainingCapacity - allocated)
-                        allocations[plan.id] = EffectiveGoalAllocation(
-                            id: plan.id,
-                            allocatedMonthlyCapacity: allocated,
-                            monthlyCommitment: needed,
-                            isLoan: false,
-                            isDualTrackUnlocked: true,
-                            statusTitle: "⚡ Dual-Track Activated: \(allocated.toCurrency())/mo invested concurrently",
-                            statusDescription: "Unlocked by loan financing on \(unlockingGoalName ?? "Goal 1"). Starts investing immediately!"
-                        )
                     } else {
-                        // Regular queue
-                        let priorGoal = calculatedGoalPlans.first
+                        let projection = startSchedule[plan.id]
+                        let queuedCommitment: Double = {
+                            guard let idx = chosenIdx, idx == 1 || idx == 2 else { return plan.monthlySIP }
+                            let full = InvestmentPlannerEngine.generateFullPlan(input: makeInputModel(for: plan), profile: profile)
+                            return idx == 1 ? (full.plan2?.monthlyEMI ?? plan.monthlySIP) : (full.plan3?.monthlyEMI ?? plan.monthlySIP)
+                        }()
                         allocations[plan.id] = EffectiveGoalAllocation(
                             id: plan.id,
                             allocatedMonthlyCapacity: 0,
-                            monthlyCommitment: needed,
+                            monthlyCommitment: queuedCommitment,
                             isLoan: false,
                             isDualTrackUnlocked: false,
-                            statusTitle: "Sequential Queue: Starts after \(priorGoal?.name ?? "Goal 1") completes in \(priorGoal?.targetDate.formatted(date: .abbreviated, time: .omitted) ?? "Year 2")",
-                            statusDescription: "Subsequent goal in queue."
+                            statusTitle: projection.map { "Priority start: \($0.startYear) · projected surplus \($0.monthlySurplusAtStart.toCurrency())/mo" } ?? "Waiting for affordability",
+                            statusDescription: projection?.reason ?? "This priority goal is not affordable within the 60-year projection using the current growth assumptions."
                         )
                     }
                 }
@@ -753,7 +864,7 @@ struct PlanJourneyView: View {
                     }
                 } label: {
                     HStack(spacing: 8) {
-                        Text(phase == .actions ? "Save & Activate Complete Plan" : phase == .today ? "Continue to Goals" : "Continue")
+                        Text(phase == .actions ? "Save Priority Plan" : phase == .today ? "Continue to Goals" : "Continue")
                             .font(.headline.weight(.semibold))
                         if phase == .actions {
                             Image(systemName: "checkmark.circle.fill")
@@ -2212,6 +2323,8 @@ struct PlanJourneyView: View {
                 .padding(16)
             }
 
+            financialContextCard
+
             // Monthly Cash Flow Card
             journeySection("Monthly Cash Flow", icon: "banknote.fill", tint: .green) {
                 HStack(spacing: 8) {
@@ -2257,6 +2370,80 @@ struct PlanJourneyView: View {
                     profileLinkRow("Insurance Policies", destination: AnyView(InsuranceListView()), isDone: position.insuranceCoverage != nil)
                 }
             }
+        }
+    }
+
+    private var financialContextCard: some View {
+        let prompts = UnifiedFinancialContextEngine.reverificationPrompts(profile: profile, purpose: .generalPlanning)
+        return journeySection("Your financial context", icon: "arrow.trianglehead.2.clockwise.rotate.90", tint: .blue) {
+            Text("Plans use the income, spending, reserve, investments, loans and goals already saved in your profile. Updating a shared value refreshes future projections; previously saved snapshots keep their original assumptions.")
+                .font(.caption)
+                .foregroundStyle(.secondary)
+
+            HStack(spacing: 8) {
+                contextMetric("Gap to 6-mo reserve", value: unifiedContext.emergencyReserveGap.toCurrency(), tint: unifiedContext.emergencyReserveGap > 0 ? .orange : .green)
+                contextMetric("Debt at 10%+", value: unifiedContext.highCostDebtAmount.toCurrency(), tint: unifiedContext.highCostDebtAmount > 0 ? .orange : .green)
+                contextMetric("Upcoming goals", value: "\(unifiedContext.upcomingGoals.count)", tint: .blue)
+            }
+
+            if prompts.isEmpty {
+                Label("No stored details need confirmation for this overview.", systemImage: "checkmark.circle.fill")
+                    .font(.caption.weight(.medium))
+                    .foregroundStyle(.secondary)
+            } else {
+                VStack(alignment: .leading, spacing: 8) {
+                    Text("Quick profile check")
+                        .font(.subheadline.weight(.semibold))
+                    ForEach(prompts) { prompt in
+                        HStack(alignment: .top, spacing: 8) {
+                            VStack(alignment: .leading, spacing: 2) {
+                                Text("Is \(prompt.domain.title.lowercased()) still \(prompt.currentValueDescription)?")
+                                    .font(.caption.weight(.medium))
+                                Text(prompt.reason).font(.caption2).foregroundStyle(.secondary)
+                            }
+                            Spacer(minLength: 4)
+                            Button("Yes") { appState.confirmFinancialData(prompt.domain) }
+                                .font(.caption.weight(.bold))
+                                .buttonStyle(.borderedProminent)
+                                .tint(AppTheme.auraIndigo)
+                            NavigationLink("Update") {
+                                profileUpdateDestination(for: prompt.domain)
+                            }
+                            .font(.caption.weight(.semibold))
+                        }
+                    }
+                    Text("To change a value, use the profile links below; you do not need to repeat the full assessment.")
+                        .font(.caption2)
+                        .foregroundStyle(.secondary)
+                }
+                .padding(.top, 4)
+            }
+        }
+    }
+
+    private func contextMetric(_ title: String, value: String, tint: Color) -> some View {
+        VStack(alignment: .leading, spacing: 4) {
+            Text(title).font(.caption2).foregroundStyle(.secondary)
+            Text(value).font(.caption.weight(.bold)).foregroundStyle(tint).lineLimit(1).minimumScaleFactor(0.8)
+        }
+        .frame(maxWidth: .infinity, alignment: .leading)
+        .padding(9)
+        .background(tint.opacity(0.08), in: RoundedRectangle(cornerRadius: 10, style: .continuous))
+    }
+
+    @ViewBuilder
+    private func profileUpdateDestination(for domain: FinancialDataDomain) -> some View {
+        switch domain {
+        case .income, .expenses, .cashReserve:
+            FinancialProfileDetailView()
+        case .investments:
+            FullInvestmentListView()
+        case .liabilities:
+            LoanTrackerView()
+        case .goals:
+            GoalListView()
+        case .household, .preferences:
+            BasicInformationDetailView()
         }
     }
 
@@ -2994,7 +3181,7 @@ struct PlanJourneyView: View {
 
             // Interactive What-If Monthly Contribution
             journeySection("What-If? Investment Simulator", icon: "slider.horizontal.2.square", tint: .purple) {
-                Text("Simulate how altering your monthly investment impacts long-term goals.")
+                Text("Explore a separate contribution scenario. It will not change your original plan unless you save it as a named branch.")
                     .font(.caption)
                     .foregroundStyle(.secondary)
 
@@ -3016,29 +3203,47 @@ struct PlanJourneyView: View {
 
                 HStack(spacing: 8) {
                     GoalDraftAmountField(
-                        amount: journey.monthlyInvestmentWhatIf,
+                        amount: branchMonthlyContribution,
                         placeholder: "Enter monthly scenario amount · e.g. 50000"
                     ) { amount in
-                        var updated = journey
-                        updated.monthlyInvestmentWhatIf = amount
-                        appState.updateFinancialPlanningJourney(updated)
+                        branchMonthlyContribution = amount
                     }
                 }
             }
 
             // Projection Horizon
-            if let year = throughYear, let rows = FinancialPlanningEngine.projection(profile: profile, journey: journey, throughYear: year) {
+            if let year = throughYear, let rows = FinancialPlanningEngine.projection(profile: profile, journey: previewJourney, throughYear: year) {
                 journeySection("Hypothetical Projection to \(year)", icon: "chart.line.uptrend.xyaxis", tint: .green) {
                     ForEach(rows.prefix(4)) { row in
                         HStack {
                             Text("Year \(row.year)")
                                 .font(.subheadline.weight(.bold))
                             Spacer()
-                            Text("Est. Balance: \(row.investmentBalance?.toCurrency() ?? "—")")
-                                .font(.caption.weight(.semibold))
-                                .foregroundStyle(.blue)
+                            VStack(alignment: .trailing, spacing: 2) {
+                                Text("Scenario: \(row.investmentBalance?.toCurrency() ?? "—")")
+                                    .font(.caption.weight(.semibold)).foregroundStyle(.blue)
+                                Text("Current path: \(row.currentPathInvestmentBalance?.toCurrency() ?? "—")")
+                                    .font(.caption2).foregroundStyle(.secondary)
+                            }
                         }
                         .padding(.vertical, 4)
+                    }
+                    if let amount = branchMonthlyContribution,
+                       let branch = UnifiedFinancialContextEngine.makeContributionBranch(
+                            profile: profile, journey: journey, monthlyContribution: amount, throughYear: year
+                       ) {
+                        Button {
+                            var updated = journey
+                            updated.scenarioBranches.append(branch)
+                            appState.updateFinancialPlanningJourney(updated)
+                        } label: {
+                            Label("Save this as a separate scenario", systemImage: "square.stack.3d.up.fill")
+                                .font(.subheadline.weight(.bold))
+                                .frame(maxWidth: .infinity)
+                                .padding(.vertical, 11)
+                        }
+                        .buttonStyle(.borderedProminent)
+                        .tint(AppTheme.auraIndigo)
                     }
                 }
             } else if let latestYear = latestPlanningYear {
@@ -3057,17 +3262,37 @@ struct PlanJourneyView: View {
                     .tint(.blue)
                 }
             }
+
+            if !journey.scenarioBranches.isEmpty {
+                journeySection("Saved scenario branches", icon: "square.stack.3d.up.fill", tint: .indigo) {
+                    Text("Each branch keeps the profile values and assumptions from when it was saved. It is a simulation only; it does not execute a contribution.")
+                        .font(.caption).foregroundStyle(.secondary)
+                    ForEach(journey.scenarioBranches) { branch in
+                        VStack(alignment: .leading, spacing: 5) {
+                            Text(branch.name).font(.subheadline.weight(.bold))
+                            Text("₹\(Int(branch.baselineMonthlyContribution).formatted())/mo → ₹\(Int(branch.scenarioMonthlyContribution).formatted())/mo through \(branch.horizonYear)")
+                                .font(.caption).foregroundStyle(.secondary)
+                            Text("Projected investment balance: \(branch.baselineEndingInvestments.toCurrency()) → \(branch.scenarioEndingInvestments.toCurrency())")
+                                .font(.caption.weight(.semibold)).foregroundStyle(.blue)
+                            Text("Saved with income \(branch.monthlyIncomeAtSave.toCurrency())/mo, expenses \(branch.monthlyExpensesAtSave.toCurrency())/mo, and \(branch.assumptions.source) assumptions.")
+                                .font(.caption2).foregroundStyle(.secondary)
+                            Text("Starting investments: \(branch.startingInvestmentsAtSave.toCurrency()) · reserve: \(branch.reserveAtSave.toCurrency()) · saved goals/events: \(branch.goalsAtSave.count)/\(branch.plannedEventsAtSave.count)")
+                                .font(.caption2).foregroundStyle(.secondary)
+                        }
+                        .frame(maxWidth: .infinity, alignment: .leading)
+                        .padding(10)
+                        .background(Color.indigo.opacity(0.07), in: RoundedRectangle(cornerRadius: 12))
+                    }
+                }
+            }
         }
     }
 
     private func bumpContributionChip(_ label: String, _ addAmount: Double) -> some View {
         Button {
             UIImpactFeedbackGenerator(style: .light).impactOccurred()
-            let base = position.monthlyInvestmentContribution ?? 41_653
-            let newAmount = base + addAmount
-            var updated = journey
-            updated.monthlyInvestmentWhatIf = newAmount
-            appState.updateFinancialPlanningJourney(updated)
+            let base = branchMonthlyContribution ?? position.monthlyInvestmentContribution ?? 41_653
+            branchMonthlyContribution = base + addAmount
         } label: {
             Text(label)
                 .font(.caption2.weight(.bold))
@@ -3393,22 +3618,6 @@ struct PlanJourneyView: View {
                             .foregroundStyle(executionMode == .sequential ? .white : .primary)
                         }
 
-                        Button {
-                            UIImpactFeedbackGenerator(style: .light).impactOccurred()
-                            withAnimation(.spring(response: 0.35, dampingFraction: 0.8)) {
-                                executionMode = .activateAll
-                            }
-                        } label: {
-                            HStack(spacing: 6) {
-                                Image(systemName: "bolt.horizontal.fill")
-                                Text("Activate All")
-                            }
-                            .font(.subheadline.weight(.semibold))
-                            .frame(maxWidth: .infinity)
-                            .padding(.vertical, 10)
-                            .background(executionMode == .activateAll ? Color.accentColor : Color(UIColor.secondarySystemGroupedBackground), in: RoundedRectangle(cornerRadius: 12))
-                            .foregroundStyle(executionMode == .activateAll ? .white : .primary)
-                        }
                     }
 
                     // Explanatory Banner
@@ -3418,7 +3627,7 @@ struct PlanJourneyView: View {
                                 Image(systemName: "info.circle.fill")
                                     .foregroundStyle(Color.accentColor)
                                     .font(.caption)
-                                Text("Focusing 100% of capacity (**\(min(availableMonthlyCapacity, firstGoal.monthlySIP).toCurrency())/mo**) on **\(firstGoal.name)** first. When it completes, start the next priority goal from that date with rolled-over capacity.")
+                                Text("Goals follow priority order. Income grows \(Int((journey.assumptions.incomeGrowthRate ?? 0.05) * 100))% and expenses \(Int((journey.assumptions.expenseGrowthRate ?? 0.04) * 100))% per year. The next goal starts when its payment fits alongside active EMIs, or when the previous SIP goal is complete.")
                                     .font(.caption2)
                                     .foregroundStyle(.secondary)
                                     .lineSpacing(2)
@@ -3426,18 +3635,6 @@ struct PlanJourneyView: View {
                             .padding(10)
                             .background(Color.blue.opacity(0.06), in: RoundedRectangle(cornerRadius: 10))
                         }
-                    } else {
-                        HStack(alignment: .top, spacing: 8) {
-                            Image(systemName: "bolt.fill")
-                                .foregroundStyle(.orange)
-                                .font(.caption)
-                            Text("All \(calculatedGoalPlans.count) goals active simultaneously! Monthly capacity of \(availableMonthlyCapacity.toCurrency()) is distributed across every goal concurrently.")
-                                .font(.caption2)
-                                .foregroundStyle(.secondary)
-                                .lineSpacing(2)
-                        }
-                        .padding(10)
-                        .background(Color.orange.opacity(0.06), in: RoundedRectangle(cornerRadius: 10))
                     }
                 }
                 .padding(14)
@@ -3469,6 +3666,7 @@ struct PlanJourneyView: View {
     @ViewBuilder
     private func completeGoalPlanCard(_ plan: CalculatedGoalPlan) -> some View {
         let chosenIdx = chosenPlanIndex[plan.id]
+        let startProjection = priorityStartProjections[plan.id]
         let chosenPlanNames = ["Plan 1: SIP", "Plan 2: Loan", "Plan 3: Stress-Test"]
         Button {
             UIImpactFeedbackGenerator(style: .medium).impactOccurred()
@@ -3624,8 +3822,7 @@ struct PlanJourneyView: View {
                                 .font(.caption2.weight(.bold))
                                 .foregroundStyle(Color.green)
                         } else {
-                            let priorGoal = calculatedGoalPlans.first
-                            Text("Sequential Queue: Starts after \(alloc?.queueStartsAfterGoalName ?? (priorGoal?.name ?? "Goal 1")) completes in \(priorGoal?.targetDate.formatted(date: .abbreviated, time: .omitted) ?? "Year 2")")
+                            Text(eff?.statusTitle ?? startProjection.map { "Priority start: \($0.startYear)" } ?? "Waiting for affordability")
                                 .font(.caption2.weight(.medium))
                                 .foregroundStyle(.secondary)
                         }
@@ -3661,6 +3858,28 @@ struct PlanJourneyView: View {
                 }
                 .padding(8)
                 .background(Color.orange.opacity(0.08), in: RoundedRectangle(cornerRadius: 10))
+            }
+
+            HStack(spacing: 6) {
+                Image(systemName: "chart.line.uptrend.xyaxis")
+                    .foregroundStyle(Color.accentColor)
+                if let startProjection {
+                    Text("Projected free surplus at start: \(startProjection.monthlySurplusAtStart.toCurrency())/mo · \(startProjection.reason)")
+                        .foregroundStyle(.secondary)
+                } else {
+                    Text("Projected surplus: this goal is not affordable within the current growth projection.")
+                        .foregroundStyle(.secondary)
+                }
+            }
+            .font(.system(size: 10, weight: .medium))
+            .padding(.horizontal, 4)
+
+            if let startProjection {
+                Text("Year by year free surplus after this plan: " + startProjection.yearlySurpluses.map { "\($0.year) · \($0.amount.toCurrency())/mo" }.joined(separator: "  |  "))
+                    .font(.system(size: 9, weight: .medium))
+                    .foregroundStyle(.secondary)
+                    .fixedSize(horizontal: false, vertical: true)
+                    .padding(.horizontal, 4)
             }
 
             // Recommended Allocation & Fund Types
@@ -4006,8 +4225,9 @@ struct PlanJourneyView: View {
                             input: input,
                             result: fullPlan.plan1,
                             isFromFinancialJourney: true,
-                            onSaveJourneyPlan: { _, _ in
+                            onSaveJourneyPlan: { savedInput, _ in
                                 chosenPlanIndex[plan.id] = 0
+                                savedPlanInputsByGoal[plan.id] = savedInput
                             }
                         )
                         .environment(appState)
@@ -4024,7 +4244,7 @@ struct PlanJourneyView: View {
                     planSelectionCard(
                         planNumber: 2,
                         title: "Traditional Loan / Debt",
-                        subtitle: "Bank loan for immediate acquisition. EMI is fixed; surplus flows to the next priority goal.",
+                    subtitle: "Bank loan for immediate acquisition. The next goal waits until income can cover both commitments, or this loan is repaid.",
                         icon: "banknote.fill",
                         color: .purple,
                         tag: "Immediate Access",
@@ -4044,7 +4264,11 @@ struct PlanJourneyView: View {
                             Plan2DetailView(
                                 input: input,
                                 result: plan2Result,
-                                isFromFinancialJourney: true
+                                isFromFinancialJourney: true,
+                                onSaveJourneyPlan: { savedInput in
+                                    chosenPlanIndex[plan.id] = 1
+                                    savedPlanInputsByGoal[plan.id] = savedInput
+                                }
                             )
                             .environment(appState)
                         )
@@ -4061,7 +4285,7 @@ struct PlanJourneyView: View {
                     planSelectionCard(
                         planNumber: 3,
                         title: "Loan Stress-Test Scenario",
-                        subtitle: "Debt-funded investing simulation. High-risk: shows how leverage amplifies gains & losses.",
+                        subtitle: "Debt-funded investing simulation. High-risk; the next goal waits until both commitments fit or this loan is repaid.",
                         icon: "arrow.up.right.circle.fill",
                         color: .orange,
                         tag: "High-Risk Simulation",
@@ -4081,7 +4305,11 @@ struct PlanJourneyView: View {
                             Plan3DetailView(
                                 input: input,
                                 result: plan3Result,
-                                isFromFinancialJourney: true
+                                isFromFinancialJourney: true,
+                                onSaveJourneyPlan: { savedInput in
+                                    chosenPlanIndex[plan.id] = 2
+                                    savedPlanInputsByGoal[plan.id] = savedInput
+                                }
                             )
                             .environment(appState)
                         )

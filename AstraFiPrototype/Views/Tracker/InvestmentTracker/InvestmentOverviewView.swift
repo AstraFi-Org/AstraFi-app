@@ -57,7 +57,7 @@ struct InvestmentOverviewView: View {
 
     @State private var chartMode: ChartMode = .monthly
     @State private var showingAddInvestment = false
-    @State private var isBreakdownExpanded = true
+    @State private var isBreakdownExpanded = false
 
     // ── Profile helpers
     private var monthlyIncome:   Double { appState.currentProfile?.basicDetails.monthlyIncomeAfterTax ?? 0 }

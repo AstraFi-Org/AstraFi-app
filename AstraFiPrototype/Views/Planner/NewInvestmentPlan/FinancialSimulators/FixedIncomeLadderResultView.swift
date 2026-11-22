@@ -4,6 +4,7 @@ import Charts
 struct FixedIncomeLadderResultView: View {
     @Environment(\.colorScheme) private var colorScheme
     @Environment(\.dismiss) private var dismiss
+    @Environment(AppStateManager.self) private var appState
 
     let input: FixedIncomeLadderInput
 
@@ -119,6 +120,8 @@ struct FixedIncomeLadderResultView: View {
 
                 outcomeSummaryCard
 
+                maturityContextCard
+
                 // Key metrics 2x2 grid
                 metricsGrid
 
@@ -152,6 +155,31 @@ struct FixedIncomeLadderResultView: View {
         .background(AppTheme.appBackground(for: colorScheme))
         .navigationTitle("Ladder Strategy Results")
         .navigationBarTitleDisplayMode(.inline)
+    }
+
+    private var maturityContextCard: some View {
+        let points = UnifiedFinancialContextEngine.maturityDecisionSummary(
+            profile: appState.currentProfile,
+            proceeds: result.totalMaturityProceedsGross
+        )
+        return VStack(alignment: .leading, spacing: 10) {
+            Label("What to consider when cash matures", systemImage: "arrow.triangle.2.circlepath")
+                .font(.system(size: 16, weight: .bold))
+                .foregroundStyle(AppTheme.auraIndigo)
+            Text("These are profile facts to help compare scenarios, not instructions to invest.")
+                .font(.caption)
+                .foregroundStyle(.secondary)
+            ForEach(points, id: \.self) { point in
+                Label(point, systemImage: "info.circle.fill")
+                    .font(.caption)
+                    .foregroundStyle(.primary)
+                    .frame(maxWidth: .infinity, alignment: .leading)
+            }
+            Text("Maturity and income figures below are projections from the instrument terms entered in this simulator. No transaction is executed.")
+                .font(.caption2)
+                .foregroundStyle(.secondary)
+        }
+        .auraCardStyle(radius: 20)
     }
 
     private var metricsGrid: some View {

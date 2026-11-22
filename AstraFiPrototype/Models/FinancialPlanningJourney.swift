@@ -172,9 +172,12 @@ struct FinancialPlanningJourney: Codable, Equatable {
     var goalPriorityIDs: [UUID] = []
     var assumptions = FinancialPlanningAssumptions()
     var monthlyInvestmentWhatIf: Double?
+    /// Serialized inside the existing planningJourney JSON column to avoid a schema migration.
+    var profileDataFreshness: [FinancialDataFreshnessRecord]? = nil
+    var scenarioBranches: [FinancialPlanningScenarioBranch] = []
 
     enum CodingKeys: String, CodingKey {
-        case currentPhase, goalDrafts, events, goalPriorityIDs, assumptions, monthlyInvestmentWhatIf
+        case currentPhase, goalDrafts, events, goalPriorityIDs, assumptions, monthlyInvestmentWhatIf, profileDataFreshness, scenarioBranches
     }
 
     init(
@@ -183,7 +186,9 @@ struct FinancialPlanningJourney: Codable, Equatable {
         events: [FinancialPlanningEvent] = [],
         goalPriorityIDs: [UUID] = [],
         assumptions: FinancialPlanningAssumptions = FinancialPlanningAssumptions(),
-        monthlyInvestmentWhatIf: Double? = nil
+        monthlyInvestmentWhatIf: Double? = nil,
+        profileDataFreshness: [FinancialDataFreshnessRecord]? = nil,
+        scenarioBranches: [FinancialPlanningScenarioBranch] = []
     ) {
         self.currentPhase = currentPhase
         self.goalDrafts = goalDrafts
@@ -191,6 +196,8 @@ struct FinancialPlanningJourney: Codable, Equatable {
         self.goalPriorityIDs = goalPriorityIDs
         self.assumptions = assumptions
         self.monthlyInvestmentWhatIf = monthlyInvestmentWhatIf
+        self.profileDataFreshness = profileDataFreshness
+        self.scenarioBranches = scenarioBranches
     }
 
     init(from decoder: Decoder) throws {
@@ -201,6 +208,8 @@ struct FinancialPlanningJourney: Codable, Equatable {
         goalPriorityIDs = try values.decodeIfPresent([UUID].self, forKey: .goalPriorityIDs) ?? []
         assumptions = try values.decodeIfPresent(FinancialPlanningAssumptions.self, forKey: .assumptions) ?? FinancialPlanningAssumptions()
         monthlyInvestmentWhatIf = try values.decodeIfPresent(Double.self, forKey: .monthlyInvestmentWhatIf)
+        profileDataFreshness = try values.decodeIfPresent([FinancialDataFreshnessRecord].self, forKey: .profileDataFreshness)
+        scenarioBranches = try values.decodeIfPresent([FinancialPlanningScenarioBranch].self, forKey: .scenarioBranches) ?? []
     }
 }
 

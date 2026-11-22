@@ -169,6 +169,7 @@ struct AuraCardView<Content: View>: View {
 
     var body: some View {
         content
+            .frame(maxWidth: .infinity, alignment: .leading)
             .padding(20)
             .background(AppTheme.cardBackground)
             .clipShape(RoundedRectangle(cornerRadius: radius, style: .continuous))

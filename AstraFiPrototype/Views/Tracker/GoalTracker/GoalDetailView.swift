@@ -254,6 +254,9 @@ struct GoalDetailView: View {
     @State private var showingWithdrawalSheet = false
     @State private var withdrawalAmountText = ""
     @State private var selectedPerformanceRecord: InvestmentPerformanceRecord? = nil
+    @State private var conservativeRateText = ""
+    @State private var moderateRateText = ""
+    @State private var highRateText = ""
 
     private var isAchieved: Bool {
         (targetAmount > 0 && currentAmount >= targetAmount) ||
@@ -279,6 +282,7 @@ struct GoalDetailView: View {
                 sipContributionCard
                 monthlyEarningsSection
                 detailInfoCard
+                goalPlanningCard
             }
             .padding()
             .padding(.bottom, 30)
@@ -332,6 +336,115 @@ struct GoalDetailView: View {
             Text("Are you sure you want to remove this goal?")
         }
         .background(AppTheme.appBackground(for: colorScheme))
+    }
+
+    private var goalPlanningCard: some View {
+        let category = goal?.planning?.category ?? GoalPlanningCategory.infer(from: goalName)
+        let assumptions = goal?.planning?.assumptions ?? .defaults(for: category)
+        let years = GoalPlanningCalculator.years(until: goal?.targetDate ?? Date())
+        let costs = GoalPlanningCalculator.costScenarios(current: targetAmount, years: years, assumptions: assumptions)
+        let selectedCost = costs.first(where: { $0.name == "Moderate" })?.futureCost ?? targetAmount
+        let gap = max(0, selectedCost - currentAmount)
+        let months = max(0, Calendar.current.dateComponents([.month], from: Date(), to: goal?.targetDate ?? Date()).month ?? 0)
+        let plans = GoalPlanningCalculator.investmentScenarios(target: selectedCost, months: months, existingSavings: currentAmount)
+
+        return VStack(alignment: .leading, spacing: 14) {
+            Label("Data Sources & Calculation", systemImage: "doc.text.magnifyingglass")
+                .font(.headline)
+            HStack {
+                VStack(alignment: .leading, spacing: 4) {
+                    Text("Current estimated cost").font(.caption).foregroundStyle(.secondary)
+                    Text(targetAmount.toCurrency()).font(.title3.weight(.semibold))
+                }
+                Spacer()
+                Text(goal?.planning?.source?.verification.rawValue ?? "User-provided estimate")
+                    .font(.caption.weight(.medium)).padding(8)
+                    .background(Color.orange.opacity(0.12), in: Capsule())
+            }
+            if let source = goal?.planning?.source {
+                Text("\(source.name) · \(source.sourceType) · \(source.confidence) confidence")
+                    .font(.caption).foregroundStyle(.secondary)
+                if let url = source.validURL { Link("View Original Source", destination: url).font(.subheadline) }
+                Text("Retrieved \(source.retrievedAt.formatted(date: .abbreviated, time: .shortened)) · \(source.calculationMethod)")
+                    .font(.caption2).foregroundStyle(.secondary)
+            } else {
+                Text("No price source is attached. AstraFi has not verified this amount; confirm it with an official provider or enter a quotation.")
+                    .font(.caption).foregroundStyle(.secondary)
+            }
+
+            Divider()
+            Text("Future cost scenarios").font(.subheadline.weight(.semibold))
+            ForEach(costs) { scenario in
+                HStack {
+                    Text(scenario.name)
+                    Spacer()
+                    Text(scenario.futureCost.toCurrency()).fontWeight(.medium)
+                    Text("\(scenario.rate * 100, specifier: "%.1f")%")
+                        .font(.caption.monospacedDigit()).foregroundStyle(.secondary).frame(width: 45, alignment: .trailing)
+                }
+                .font(.subheadline)
+            }
+            Text(assumptions.rationale + " These are assumptions, not measured or guaranteed inflation.")
+                .font(.caption).foregroundStyle(.secondary)
+            HStack {
+                TextField("Low %", text: $conservativeRateText).keyboardType(.decimalPad)
+                TextField("Moderate %", text: $moderateRateText).keyboardType(.decimalPad)
+                TextField("High %", text: $highRateText).keyboardType(.decimalPad)
+            }
+            .textFieldStyle(.roundedBorder)
+            .font(.caption)
+            Button("Save cost assumptions") { saveGoalAssumptions(category: category, assumptions: assumptions) }
+                .buttonStyle(.bordered)
+
+            Divider()
+            Text("Funding requirement").font(.subheadline.weight(.semibold))
+            planningRow("Moderate future requirement", selectedCost)
+            planningRow("Savings already arranged", currentAmount)
+            planningRow("Remaining funding gap", gap)
+
+            Text("Monthly investment illustrations · end-of-month contributions")
+                .font(.caption.weight(.semibold))
+            ForEach(plans) { plan in
+                VStack(alignment: .leading, spacing: 4) {
+                    HStack {
+                        Text(plan.name).font(.subheadline.weight(.medium))
+                        Spacer()
+                        Text("\(plan.monthlyContribution.toCurrency()) / month").font(.subheadline.weight(.semibold))
+                    }
+                    Text("Assumed return \(plan.annualReturn * 100, specifier: "%.0f")% · \(plan.risk) · projected value \(plan.projectedValue.toCurrency())")
+                        .font(.caption).foregroundStyle(.secondary)
+                }
+            }
+            Text("Illustrations only, not investment recommendations or guarantees. Returns are nominal annual rates divided by 12; existing savings are assumed invested at the same rate. Check household affordability and avoid counting the same monthly surplus across goals.")
+                .font(.caption2).foregroundStyle(.secondary)
+        }
+        .padding(16)
+        .frame(maxWidth: .infinity, alignment: .leading)
+        .background(Color(uiColor: .secondarySystemGroupedBackground), in: RoundedRectangle(cornerRadius: 18))
+        .onAppear {
+            conservativeRateText = String(format: "%.1f", assumptions.conservativeRate * 100)
+            moderateRateText = String(format: "%.1f", assumptions.moderateRate * 100)
+            highRateText = String(format: "%.1f", assumptions.highRate * 100)
+        }
+    }
+
+    private func planningRow(_ title: String, _ amount: Double) -> some View {
+        HStack { Text(title).foregroundStyle(.secondary); Spacer(); Text(amount.toCurrency()).fontWeight(.medium) }
+            .font(.subheadline)
+    }
+
+    private func saveGoalAssumptions(category: GoalPlanningCategory, assumptions: GoalCostAssumptions) {
+        guard var updated = goal,
+              let conservative = Double(conservativeRateText),
+              let moderate = Double(moderateRateText),
+              let high = Double(highRateText),
+              [conservative, moderate, high].allSatisfy({ $0.isFinite && (0...100).contains($0) }) else { return }
+        var metadata = updated.planning ?? GoalPlanningMetadata(category: category)
+        metadata.assumptions = GoalCostAssumptions(conservativeRate: conservative / 100, moderateRate: moderate / 100,
+                                                   highRate: high / 100, rationale: assumptions.rationale,
+                                                   isUserCustomized: true)
+        updated.planning = metadata
+        appState.updateGoal(updated)
     }
 
     private var heroCard: some View {

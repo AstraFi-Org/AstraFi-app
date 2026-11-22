@@ -144,6 +144,21 @@ struct AuraMoneyFlowChart: View {
         return months[max(0, min(11, parsedMonth - 1))]
     }
 
+    static func calculateGrowth(profile: AstraUserProfile) -> (pct: Double, up: Bool)? {
+        let snapshots = profile.monthlyCashflowSnapshots
+        let sorted = snapshots.keys.sorted()
+        guard sorted.count >= 2 else {
+            return (pct: 0, up: true)
+        }
+        let lastKey = sorted[sorted.count - 1]
+        let prevKey = sorted[sorted.count - 2]
+        let lastI = snapshots[lastKey]?.totalIncome ?? profile.basicDetails.monthlyIncome
+        let prevI = snapshots[prevKey]?.totalIncome ?? profile.basicDetails.monthlyIncome
+        guard prevI > 0 else { return (pct: 0, up: true) }
+        let diff = lastI - prevI
+        return (pct: ((abs(diff) / prevI) * 100).safeFinite, up: diff >= 0)
+    }
+
     private func monthKey(year: Int, month: Int) -> String {
         String(format: "%d-%02d", year, month)
     }
@@ -269,19 +284,7 @@ struct AuraMoneyFlowChart: View {
         HStack(spacing: 20) {
             legendDot(color: incomeGreen, label: "Income")
             legendDot(color: expenseRed,  label: "Expenses")
-            if let g = growthInfo {
-                Spacer()
-                HStack(spacing: 4) {
-                    Image(systemName: g.up ? "arrow.up.right" : "arrow.down.right")
-                        .font(.system(size: 10, weight: .bold))
-                    Text(String(format: "%.0f%% vs last month", g.pct))
-                        .font(.system(size: 11, weight: .semibold))
-                }
-                .foregroundStyle(g.up ? incomeGreen : expenseRed)
-                .padding(.horizontal, 10).padding(.vertical, 4)
-                .background((g.up ? incomeGreen : expenseRed).opacity(0.1))
-                .clipShape(Capsule())
-            }
+            Spacer()
         }
     }
 
@@ -290,6 +293,8 @@ struct AuraMoneyFlowChart: View {
             Circle().fill(color).frame(width: 8, height: 8)
             Text(label)
                 .font(.system(size: 12, weight: .medium))
+                .lineLimit(1)
+                .fixedSize(horizontal: true, vertical: false)
                 .foregroundStyle(Color.secondary)
         }
     }
