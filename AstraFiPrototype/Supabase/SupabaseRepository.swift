@@ -1,5 +1,6 @@
 import Supabase
 import Foundation
+import UIKit
 
 @Observable @MainActor
 final class SupabaseRepository {
@@ -48,6 +49,7 @@ final class SupabaseRepository {
         let riskTolerance: String
         let investmentHorizon: String
         let isSetuConnected: Bool
+        let planningJourney: FinancialPlanningJourney?
 
         enum CodingKeys: String, CodingKey {
             case user_id
@@ -66,6 +68,7 @@ final class SupabaseRepository {
             case riskTolerance = "riskTolerance"
             case investmentHorizon = "investmentHorizon"
             case isSetuConnected = "isSetuConnected"
+            case planningJourney = "planningJourney"
         }
     }
 
@@ -128,6 +131,7 @@ final class SupabaseRepository {
         let manualSavingsContribution: Double
         let startDate: String
         let targetDate: String
+        let planningData: GoalPlanningMetadata?
 
         enum CodingKeys: String, CodingKey {
             case id, user_id
@@ -137,6 +141,7 @@ final class SupabaseRepository {
             case manualSavingsContribution = "manualSavingsContribution"
             case startDate = "startDate"
             case targetDate = "targetDate"
+            case planningData = "planningData"
         }
     }
 
@@ -417,6 +422,12 @@ final class SupabaseRepository {
 
     func saveUserProfile(_ profile: AstraUserProfile, userId: UUID) async throws {
         let uid = userId.uuidString
+        var persistedJourney = profile.planningJourney
+        if let freshness = profile.financialDataFreshness {
+            var journey = persistedJourney ?? FinancialPlanningJourney()
+            journey.profileDataFreshness = freshness
+            persistedJourney = journey
+        }
 
         try await supabase.from("user_profiles").upsert(UserProfileRow(
             user_id: uid,
@@ -436,7 +447,8 @@ final class SupabaseRepository {
             activeInvestment: profile.basicDetails.activeInvestment,
             riskTolerance: profile.basicDetails.riskTolerance.rawValue,
             investmentHorizon: profile.basicDetails.investmentHorizon.rawValue,
-            isSetuConnected: profile.isSetuConnected
+            isSetuConnected: profile.isSetuConnected,
+            planningJourney: persistedJourney
         ), onConflict: "user_id").execute()
 
         try await supabase.from("assets").upsert(AssetsRow(
@@ -476,7 +488,8 @@ final class SupabaseRepository {
             currentAmount: goal.currentAmount,
             manualSavingsContribution: goal.manualSavingsContribution,
             startDate: formatDate(goal.startDate),
-            targetDate: formatDate(goal.targetDate)
+            targetDate: formatDate(goal.targetDate),
+            planningData: goal.planning
         )).execute()
     }
 
@@ -489,6 +502,7 @@ final class SupabaseRepository {
             let manualSavingsContribution: Double
             let startDate: String
             let targetDate: String
+            let planningData: GoalPlanningMetadata?
         }
         let rows: [FetchRow] = try await supabase
             .from("goals").select()
@@ -503,7 +517,8 @@ final class SupabaseRepository {
                 currentAmount: row.currentAmount,
                 manualSavingsContribution: row.manualSavingsContribution,
                 startDate: parseDate(row.startDate) ?? Date(),
-                targetDate: parseDate(row.targetDate) ?? Date()
+                targetDate: parseDate(row.targetDate) ?? Date(),
+                planning: row.planningData
             )
         }
     }
@@ -1153,6 +1168,7 @@ ins.maturityDate = row.maturityDate.flatMap { parseDate($0) }
             let emergencyFundAmount: Double?; let activeInvestment: Bool?
             let riskTolerance: String?; let investmentHorizon: String?
             let isSetuConnected: Bool?
+            let planningJourney: FinancialPlanningJourney?
         }
         struct AssetsFetchRow: Decodable {
             let savingsAccountAmount: Double?; let currentAccountAmount: Double?
@@ -1174,15 +1190,24 @@ ins.maturityDate = row.maturityDate.flatMap { parseDate($0) }
             .single().execute().value
         else { return nil }
 
-        let assetsRow: AssetsFetchRow?      = try? await supabase.from("assets").select().eq("user_id", value: userId.uuidString).single().execute().value
-        let liabilitiesRow: LiabilitiesFetchRow? = try? await supabase.from("liabilities").select().eq("user_id", value: userId.uuidString).single().execute().value
+        // Fetch related profile entities concurrently over the dedicated HTTP/2 session
+        async let assetsTask: AssetsFetchRow? = try? await supabase.from("assets").select().eq("user_id", value: userId.uuidString).single().execute().value
+        async let liabilitiesTask: LiabilitiesFetchRow? = try? await supabase.from("liabilities").select().eq("user_id", value: userId.uuidString).single().execute().value
+        async let goalsTask = try? await fetchGoals(userId: userId)
+        async let investmentsTask = try? await fetchInvestments(userId: userId)
+        async let loansTask = try? await fetchLoans(userId: userId)
+        async let insurancesTask = try? await fetchInsurances(userId: userId)
+        async let snapshotsTask = try? await fetchCashflowSnapshots(userId: userId)
+        async let assessmentsTask = try? await fetchHealthAssessments(userId: userId)
 
-        let rawGoals       = (try? await fetchGoals(userId: userId)) ?? []
-        let rawInvestments = (try? await fetchInvestments(userId: userId)) ?? []
-        let rawLoans       = (try? await fetchLoans(userId: userId)) ?? []
-        let rawInsurances  = (try? await fetchInsurances(userId: userId)) ?? []
-        let snapshots      = (try? await fetchCashflowSnapshots(userId: userId)) ?? [:]
-        let assessments    = (try? await fetchHealthAssessments(userId: userId)) ?? []
+        let assetsRow      = await assetsTask
+        let liabilitiesRow = await liabilitiesTask
+        let rawGoals       = (await goalsTask) ?? []
+        let rawInvestments = (await investmentsTask) ?? []
+        let rawLoans       = (await loansTask) ?? []
+        let rawInsurances  = (await insurancesTask) ?? []
+        let snapshots      = (await snapshotsTask) ?? [:]
+        let assessments    = (await assessmentsTask) ?? []
 
         // Apply entity deduplication
         let goals       = rawGoals.deduplicated()
@@ -1253,13 +1278,93 @@ ins.maturityDate = row.maturityDate.flatMap { parseDate($0) }
             financialHealthReport: nil,
             cashflowData: snapshots.keys.sorted().last.flatMap { snapshots[$0] },
             monthlyHealthAssessments: assessments,
-            isSetuConnected: profileRow.isSetuConnected ?? false
+            isSetuConnected: profileRow.isSetuConnected ?? false,
+            planningJourney: profileRow.planningJourney
         )
+        profile.financialDataFreshness = profileRow.planningJourney?.profileDataFreshness
         profile.monthlyCashflowSnapshots = snapshots
         return profile
     }
     func deleteSavedPlan(_ planId: UUID) async throws {
         try await supabase.from("saved_plans")
             .delete().eq("id", value: planId.uuidString).execute()
+    }
+
+    // MARK: - Avatar Upload & Sync
+
+    /// Uploads the user avatar to Supabase Storage ('avatars' bucket) and updates user metadata.
+    func uploadAvatar(data: Data, userId: UUID) async throws -> URL? {
+        guard let uiImage = UIImage(data: data),
+              let jpegData = uiImage.jpegData(compressionQuality: 0.8) else {
+            return nil
+        }
+
+        let filePath = "\(userId.uuidString.lowercased())/avatar.jpg"
+        var avatarURLString: String? = nil
+
+        // 1. Try uploading to Supabase Storage bucket 'avatars'
+        do {
+            _ = try await supabase.storage
+                .from("avatars")
+                .upload(
+                    filePath,
+                    data: jpegData,
+                    options: FileOptions(contentType: "image/jpeg", upsert: true)
+                )
+            if let publicURL = try? supabase.storage.from("avatars").getPublicURL(path: filePath) {
+                avatarURLString = publicURL.absoluteString
+            }
+            print("SupabaseRepository: avatar uploaded successfully to storage: \(filePath)")
+        } catch {
+            print("SupabaseRepository: storage upload note: \(error)")
+        }
+
+        // 2. Always persist avatar in Supabase Auth user metadata
+        do {
+            var metadata: [String: AnyJSON] = [:]
+            if let avatarURLString {
+                metadata["avatar_url"] = .string(avatarURLString)
+            }
+            // Embed base64 if small enough (< 80KB) for resilient local/offline restore
+            if jpegData.count < 80_000 {
+                metadata["avatar_base64"] = .string(jpegData.base64EncodedString())
+            }
+            if !metadata.isEmpty {
+                _ = try await supabase.auth.update(user: UserAttributes(data: metadata))
+                print("SupabaseRepository: updated user metadata with avatar info")
+            }
+        } catch {
+            print("SupabaseRepository: user metadata update note: \(error)")
+        }
+
+        return avatarURLString.flatMap { URL(string: $0) }
+    }
+
+    /// Fetches the user avatar from Supabase Storage or user metadata.
+    func fetchAvatar(userId: UUID) async -> Data? {
+        let filePath = "\(userId.uuidString.lowercased())/avatar.jpg"
+
+        // 1. Try downloading from storage bucket
+        if let data = try? await supabase.storage.from("avatars").download(path: filePath),
+           UIImage(data: data) != nil {
+            return data
+        }
+
+        // 2. Try fetching from user metadata
+        if let session = try? await supabase.auth.session {
+            if let base64 = session.user.userMetadata["avatar_base64"]?.stringValue,
+               let data = Data(base64Encoded: base64),
+               UIImage(data: data) != nil {
+                return data
+            }
+            if let urlString = session.user.userMetadata["avatar_url"]?.stringValue,
+               let url = URL(string: urlString),
+               let (data, _) = try? await URLSession.shared.data(from: url),
+               UIImage(data: data) != nil {
+                return data
+            }
+        }
+
+        return nil
     }
 }

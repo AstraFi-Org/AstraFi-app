@@ -178,6 +178,7 @@ struct BusinessQuestionnaire: View {
                     goalAccentColor: goalAccentColor,
                     onSave: {
                         let trackerInput = buildTrackerInput()
+                        saveBusinessGoalToJourney()
                         let planModel = InvestmentPlanModel(
                             name: "Business Plan",
                             dateSaved: DateFormatter.localizedString(from: Date(), dateStyle: .medium, timeStyle: .none),
@@ -195,6 +196,28 @@ struct BusinessQuestionnaire: View {
         }
         .animation(.spring(response: 0.5, dampingFraction: 0.8), value: input.businessType)
         .animation(.spring(response: 0.5, dampingFraction: 0.8), value: showInsights)
+        .onAppear {
+            if let draft = appState.currentProfile?.planningJourney?.goalDrafts.first(where: {
+                $0.category.localizedCaseInsensitiveContains("Business") || $0.name.localizedCaseInsensitiveContains("Business")
+            }) {
+                if input.yearsUntilStart.isEmpty, let targetDate = draft.targetDate {
+                    let years = max(1, Calendar.current.dateComponents([.year], from: Date(), to: targetDate).year ?? 5)
+                    input.yearsUntilStart = "\(years)"
+                }
+                if input.initialCapitalNeeded.isEmpty, let amount = draft.targetAmount {
+                    input.initialCapitalNeeded = String(format: "%.0f", amount)
+                }
+                if input.savedAmount.isEmpty, let saved = draft.savedAmount {
+                    input.savedAmount = String(format: "%.0f", saved)
+                }
+                if input.businessType == nil {
+                    input.businessType = draft.planVariant.flatMap(BusinessType.init(rawValue:)) ?? .serviceAgency
+                }
+            }
+        }
+        .onDisappear {
+            saveBusinessGoalToJourney()
+        }
     }
     
     private var showInsights: Bool {
@@ -230,6 +253,63 @@ struct BusinessQuestionnaire: View {
         return max(0, futureCapital - savedAmt)
     }
     
+    private func saveBusinessGoalToJourney() {
+        guard let currentCost = Double(input.initialCapitalNeeded), currentCost.isFinite, currentCost >= 0 else { return }
+        var journey = appState.currentProfile?.planningJourney ?? FinancialPlanningJourney()
+        let years = max(1, Int(input.yearsUntilStart) ?? 5)
+        let targetDate = Calendar.current.date(
+            byAdding: .year,
+            value: years,
+            to: Date()
+        )
+        let inflation = input.businessType?.annualInflation ?? 0.08
+        let variant = input.businessType?.rawValue
+        let netTarget = netTargetValue
+
+        if let index = journey.goalDrafts.firstIndex(where: {
+            $0.category.localizedCaseInsensitiveContains("Business")
+                || $0.name.localizedCaseInsensitiveContains("Business")
+        }) {
+            journey.goalDrafts[index].targetAmount = currentCost
+            journey.goalDrafts[index].targetDate = targetDate
+            journey.goalDrafts[index].planVariant = variant
+            journey.goalDrafts[index].customInflationRate = inflation
+            journey.goalDrafts[index].customTargetCorpus = netTarget
+            if let saved = Double(input.savedAmount) {
+                journey.goalDrafts[index].savedAmount = saved
+            }
+        } else {
+            var draft = FinancialPlanningGoalDraft(
+                name: "Business Fund",
+                category: "Business",
+                targetDate: targetDate,
+                targetAmount: currentCost
+            )
+            draft.planVariant = variant
+            draft.customInflationRate = inflation
+            draft.customTargetCorpus = netTarget
+            if let saved = Double(input.savedAmount) {
+                draft.savedAmount = saved
+            }
+            journey.goalDrafts.append(draft)
+        }
+        appState.updateFinancialPlanningJourney(journey)
+
+        if var profile = appState.currentProfile,
+           let goalIdx = profile.goals.firstIndex(where: {
+               $0.goalName.localizedCaseInsensitiveContains("Business")
+           }) {
+            if netTarget > 0 {
+                profile.goals[goalIdx].targetAmount = netTarget
+            }
+            if let targetDate = targetDate {
+                profile.goals[goalIdx].targetDate = targetDate
+            }
+            appState.currentProfile = profile
+            appState.syncProfile()
+        }
+    }
+
     private func buildTrackerInput() -> InvestmentPlanInputModel {
         var trackerInput = InvestmentPlanInputModel(
             investmentType: "Monthly SIP",
@@ -244,6 +324,10 @@ struct BusinessQuestionnaire: View {
             savedAmount: input.savedAmount.isEmpty ? "0" : input.savedAmount,
             hasEmergencyFund: true
         )
+        trackerInput.baseGoalCost = Double(input.initialCapitalNeeded)
+        trackerInput.inflationRate = input.businessType?.annualInflation ?? 0.08
+        trackerInput.customInflationRate = input.businessType?.annualInflation ?? 0.08
+        trackerInput.customTargetCorpus = netTargetValue
         // Business-specific data
         trackerInput.goalPlanType = savingPlan?.rawValue
         trackerInput.goalSIPAmount = expectedSIPAmount

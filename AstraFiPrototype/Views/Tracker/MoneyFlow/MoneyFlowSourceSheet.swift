@@ -61,20 +61,12 @@ struct MoneyFlowSourceSheet: View {
             .navigationBarTitleDisplayMode(.inline)
             .toolbar {
                 ToolbarItem(placement: .navigationBarLeading) {
-                    ToolbarCircleButton(
-                        systemName: "xmark",
-                        iconColor: AppTheme.auraIndigo,
-                        fillColor: Color(uiColor: .secondarySystemGroupedBackground)
-                    ) {
+                    Button("Cancel") {
                         dismiss()
                     }
                 }
                 ToolbarItem(placement: .navigationBarTrailing) {
-                    ToolbarCircleButton(
-                        systemName: "checkmark",
-                        iconColor: AppTheme.auraIndigo,
-                        fillColor: Color(uiColor: .secondarySystemGroupedBackground)
-                    ) {
+                    Button("Done") {
                         saveData()
                         dismiss()
                     }
@@ -137,10 +129,11 @@ struct MoneyFlowSourceSheet: View {
                         .frame(width: 8)
                     
                     Button(action: onAdd) {
-                        Text("Add")
+                        Text(title == "Income Sources" ? "Add income" : "Add expense")
                             .font(.system(size: 14, weight: .semibold))
                             .foregroundStyle(.white)
-                            .frame(width: 54, height: 28)
+                            .frame(height: 32)
+                            .padding(.horizontal, 10)
                             .background(color)
                             .clipShape(Capsule())
                     }

@@ -10,6 +10,7 @@ final class AppStateManager {
     static let defaultTaxRate: Double = 0.0
 
     private var isSyncing = false
+    private var profileSyncTask: Task<Void, Never>?
 
     // The current Supabase profile schema stores the emergency-fund total but not
     // its composition. Keep the composition per signed-in user so a profile reload
@@ -75,7 +76,7 @@ final class AppStateManager {
                 adultDependents: 1, childDependents: 1,
                 incomeType: .fixed,
                 monthlyIncome: 120000, monthlyIncomeAfterTax: 95000,
-                monthlyExpenses: 55000, emergencyFundAmount: 300000,
+                monthlyExpenses: 52000, emergencyFundAmount: 300000,
                 activeInvestment: true,
                 riskTolerance: .high,
                 investmentHorizon: .longTerm
@@ -91,10 +92,10 @@ final class AppStateManager {
                 jewelleryAmount: 0
             ),
             liabilities: AstraLiabilities(
-                homeLoanAmount: 7500000,
-                vehicleLoanAmount: 900000,
+                homeLoanAmount: 0,
+                vehicleLoanAmount: 0,
                 creditCardBills: 0,
-                educationLoanAmount: 500000,
+                educationLoanAmount: 0,
                 otherLoanAmount: 0,
                 otherDebtAmount: 0
             ),
@@ -120,17 +121,7 @@ final class AppStateManager {
                                 investmentName: "HDFC Fixed Deposit", investmentAmount: 200000,
                                 startDate: monthsAgo(8), mode: .lumpsum),
             ],
-            loans: [
-                AstraLoan(loanType: .homeLoan, lender: .hdfcBank,
-                          loanAmount: 7500000, interestRate: 8.5,
-                          loanStartDate: monthsAgo(5), loanTenureMonths: 180),
-                AstraLoan(loanType: .carLoan, lender: .iciciBank,
-                          loanAmount: 900000, interestRate: 9.2,
-                          loanStartDate: monthsAgo(22), loanTenureMonths: 60),
-                AstraLoan(loanType: .educationLoan, lender: .stateBankOfIndia,
-                          loanAmount: 500000, interestRate: 7.0,
-                          loanStartDate: monthsAgo(12), loanTenureMonths: 84)
-            ],
+            loans: [],
             insurances: [
                 AstraInsurance(insuranceType: .health, provider: "Star Health",
                                policyNumber: "SH-2024-00123", sumAssured: 500000,
@@ -183,6 +174,48 @@ final class AppStateManager {
             ],
             isSetuConnected: false
         )
+
+        let draftMarriage = FinancialPlanningGoalDraft(
+            name: "Marriage / Wedding",
+            category: "Wedding",
+            targetDate: yearsFromNow(2),
+            targetAmount: 2_500_000,
+            priority: 1
+        )
+        let draftHome = FinancialPlanningGoalDraft(
+            name: "Home Purchase",
+            category: "Home Purchase",
+            targetDate: yearsFromNow(4),
+            targetAmount: 7_500_000,
+            priority: 2
+        )
+        let draftCar = FinancialPlanningGoalDraft(
+            name: "Car Purchase",
+            category: "Vehicle",
+            targetDate: yearsFromNow(3),
+            targetAmount: 1_800_000,
+            priority: 3
+        )
+        mgr.currentProfile?.planningJourney = FinancialPlanningJourney(
+            currentPhase: .actions,
+            goalDrafts: [draftMarriage, draftHome, draftCar],
+            events: [],
+            goalPriorityIDs: [draftMarriage.id, draftHome.id, draftCar.id],
+            assumptions: FinancialPlanningAssumptions(
+                version: 1,
+                enteredAt: Date(),
+                inflationRate: 0.06,
+                incomeGrowthRate: 0.08,
+                expenseGrowthRate: 0.05,
+                investmentReturnRate: 0.12,
+                source: "Preset"
+            )
+        )
+
+        mgr.isAuthenticated = true
+        mgr.hasCompletedOnboarding = true
+        mgr.showDashboard = true
+        mgr.selectedTab = 1
         return mgr
     }
     
@@ -243,6 +276,7 @@ final class AppStateManager {
     
     var isAuthenticated: Bool = false
     var authError: String? = nil
+    var authNotice: String? = nil
     var isAuthLoading: Bool = false
     
     var showDashboard: Bool = false
@@ -369,16 +403,40 @@ final class AppStateManager {
     }
 
     func syncProfile() {
-        guard let profile = currentProfile else { return }
-        Task {
-            if let session = try? await supabase.auth.session {
-                do {
-                    try await SupabaseRepository.shared.syncFullProfile(profile, userId: session.user.id)
-                } catch {
-                    print("Supabase profile sync failed: \(error)")
-                }
+        profileSyncTask?.cancel()
+        profileSyncTask = Task { [weak self] in
+            do {
+                try await Task.sleep(for: .milliseconds(350))
+            } catch {
+                return
+            }
+
+            guard !Task.isCancelled, let self, let profile = self.currentProfile,
+                  let session = try? await supabase.auth.session else { return }
+            do {
+                try await SupabaseRepository.shared.syncFullProfile(profile, userId: session.user.id)
+            } catch {
+                print("Supabase profile sync failed: \(error)")
             }
         }
+    }
+
+    /// Confirms one existing profile domain without reopening the full assessment.
+    func confirmFinancialData(_ domain: FinancialDataDomain, at date: Date = Date()) {
+        guard var profile = currentProfile else { return }
+        var records = profile.financialDataFreshness ?? []
+        let record = FinancialDataFreshnessRecord(
+            domain: domain,
+            source: .userConfirmed,
+            lastUpdatedAt: records.first(where: { $0.domain == domain })?.lastUpdatedAt ?? date,
+            lastVerifiedAt: date,
+            confidence: 1
+        )
+        records.removeAll { $0.domain == domain }
+        records.append(record)
+        profile.financialDataFreshness = records
+        currentProfile = profile
+        syncProfile()
     }
 
     func deleteAssessmentFromHistory(_ assessment: AstraHealthAssessment) {
@@ -397,104 +455,129 @@ final class AppStateManager {
         Task {
             await restoreSession()
         }
+        // AMFI NAV sync runs entirely in the background — never on the critical path
         Task {
-            try? await Task.sleep(nanoseconds: 2_000_000_000) // wait 2 seconds
+            try? await Task.sleep(nanoseconds: 3_000_000_000) // 3 s after launch
             await syncMutualFundNAVs()
         }
     }
 
-    func restoreSession() async {
-        await MainActor.run { isLoading = true }
-        async let minimumDelay: () = Task.sleep(nanoseconds: 1_500_000_000)
-        do {
-            let session = try await supabase.auth.session
+    // MARK: - Startup timeout helper
+    /// Runs `operation` and cancels it after `seconds` seconds, throwing `CancellationError` on timeout.
+    private func withStartupTimeout<T: Sendable>(seconds: Double, operation: @Sendable @escaping () async throws -> T) async throws -> T {
+        try await withThrowingTaskGroup(of: T.self) { group in
+            group.addTask { try await operation() }
+            group.addTask {
+                try await Task.sleep(nanoseconds: UInt64(seconds * 1_000_000_000))
+                throw CancellationError()
+            }
+            let result = try await group.next()!
+            group.cancelAll()
+            return result
+        }
+    }
 
-            if let profile = try? await SupabaseRepository.shared.fetchFullProfile(userId: session.user.id) {
-                if let plans = try? await SupabaseRepository.shared.fetchSavedPlans(userId: session.user.id) {
-                    await MainActor.run {
+    func restoreSession() async {
+        print("⏱️ [STARTUP] restoreSession begin")
+        let startTime = Date()
+        await MainActor.run { isLoading = true }
+
+        // Read biometric prefs synchronously from UserDefaults — no network needed
+        let biometricEnabled = UserDefaults.standard.bool(forKey: "securityBiometricUnlockEnabled")
+        let requireOnLaunch = UserDefaults.standard.object(forKey: "securityRequireUnlockOnLaunch") as? Bool ?? true
+
+        do {
+            // ── Step 1: Resolve auth session — hard 8-second timeout ─────────
+            // supabase.auth.session performs a local token check and may trigger
+            // a token refresh over the network. If the network is slow the SDK
+            // can block for up to 60 s.  We cap this at 8 s; anything longer
+            // is treated the same as an unauthenticated launch.
+            let session = try await withStartupTimeout(seconds: 8) {
+                try await supabase.auth.session
+            }
+            print("⏱️ [STARTUP] session resolved in \(String(format: "%.2f", Date().timeIntervalSince(startTime)))s — user: \(session.user.id)")
+
+            // ── Step 2: Check MFA requirement (non-blocking, best-effort) ─────
+            // This is a lightweight local SDK call in most versions; allow 4 s.
+            let aal = try? await withStartupTimeout(seconds: 4) {
+                try await supabase.auth.mfa.getAuthenticatorAssuranceLevel()
+            }
+
+            let needsMFA: Bool
+            var mfaFactor: Factor? = nil
+            if aal?.nextLevel == "aal2" && aal?.currentLevel == "aal1" {
+                let factors = try? await withStartupTimeout(seconds: 4) {
+                    try await supabase.auth.mfa.listFactors()
+                }
+                mfaFactor = factors?.all.first(where: { $0.status == FactorStatus.verified })
+                needsMFA = mfaFactor != nil
+            } else {
+                needsMFA = false
+            }
+
+            // ── Step 3: Dismiss splash immediately with minimal auth state ────
+            // Profile and plans are loaded in the background below.
+            await MainActor.run {
+                self.isAuthenticated = true
+                self.hasCompletedOnboarding = true
+                self.showDashboard = true
+                self.isGuest = false
+                if needsMFA, let factor = mfaFactor {
+                    self.mfaFactorId = factor.id
+                    self.requiresMFAChallenge = true
+                }
+                if biometricEnabled && requireOnLaunch {
+                    self.isLockedByBiometric = true
+                }
+                self.isLoading = false  // ← splash dismissed here
+            }
+            print("⏱️ [STARTUP] splash dismissed in \(String(format: "%.2f", Date().timeIntervalSince(startTime)))s")
+
+            // ── Step 4: Fetch profile + plans in the background ───────────────
+            // These network requests must NOT block the splash screen.
+            Task {
+                async let profileResult = SupabaseRepository.shared.fetchFullProfile(userId: session.user.id)
+                async let plansResult  = SupabaseRepository.shared.fetchSavedPlans(userId: session.user.id)
+
+                let profile = try? await profileResult
+                let plans   = try? await plansResult
+
+                await MainActor.run {
+                    if let plans {
                         self.savedPlans = plans
                     }
-                }
-                _ = try? await minimumDelay
-                
-                // Check if biometric lock should be shown
-                // Note: requireUnlockOnLaunch defaults to true in @AppStorage,
-                // so we must use the same default here since the key may never
-                // have been explicitly written to UserDefaults.
-                let biometricEnabled = UserDefaults.standard.bool(forKey: "securityBiometricUnlockEnabled")
-                let requireOnLaunch = UserDefaults.standard.object(forKey: "securityRequireUnlockOnLaunch") as? Bool ?? true
-                
-                let aal = try? await supabase.auth.mfa.getAuthenticatorAssuranceLevel()
-                if aal?.nextLevel == "aal2" && aal?.currentLevel == "aal1" {
-                    if let factors = try? await supabase.auth.mfa.listFactors(), let factor = factors.all.first(where: { $0.status == FactorStatus.verified }) {
-                        await MainActor.run {
-                            self.mfaFactorId = factor.id
-                            self.requiresMFAChallenge = true
-                            var sanitizedProfile = profile
-                            sanitizedProfile.createdAt = session.user.createdAt
-                            if sanitizedProfile.signUp.email.isEmpty, let email = session.user.email, !email.isEmpty {
-                                sanitizedProfile.signUp.email = email
-                            }
-                            // Deduplicate any stale duplicate entities that may already be in Supabase
-                            sanitizedProfile.goals = sanitizedProfile.goals.deduplicated()
-                            sanitizedProfile.investments = sanitizedProfile.investments.deduplicated()
-                            sanitizedProfile.loans = sanitizedProfile.loans.deduplicated()
-                            sanitizedProfile.insurances = sanitizedProfile.insurances.deduplicated()
-                            self.applySavedEmergencyFundComposition(to: &sanitizedProfile, userID: session.user.id)
-                            self.currentProfile = sanitizedProfile
-                            self.isAuthenticated = true
-                            self.hasCompletedOnboarding = true
-                            self.showDashboard = true
-                            self.isLoading = false
-                            
-                            if biometricEnabled && requireOnLaunch {
-                                self.isLockedByBiometric = true
-                            }
+                    if var p = profile {
+                        p.createdAt = session.user.createdAt
+                        if p.signUp.email.isEmpty, let email = session.user.email, !email.isEmpty {
+                            p.signUp.email = email
                         }
-                        recalculateFinancials()
-                        return
+                        // Deduplicate any stale duplicate entities that may already be in Supabase
+                        p.goals        = p.goals.deduplicated()
+                        p.investments  = p.investments.deduplicated()
+                        p.loans        = p.loans.deduplicated()
+                        p.insurances   = p.insurances.deduplicated()
+                        self.applySavedEmergencyFundComposition(to: &p, userID: session.user.id)
+                        self.currentProfile = p
                     }
+                }
+                if profile != nil { recalculateFinancials() }
+                
+                // Sync profile photo with Supabase
+                if let localData = UserDefaults.standard.data(forKey: "profileImageData") {
+                    _ = try? await SupabaseRepository.shared.uploadAvatar(data: localData, userId: session.user.id)
+                } else if let remoteData = await SupabaseRepository.shared.fetchAvatar(userId: session.user.id) {
+                    UserDefaults.standard.set(remoteData, forKey: "profileImageData")
                 }
                 
-                await MainActor.run {
-                    var sanitizedProfile = profile
-                    sanitizedProfile.createdAt = session.user.createdAt
-                    if sanitizedProfile.signUp.email.isEmpty, let email = session.user.email, !email.isEmpty {
-                        sanitizedProfile.signUp.email = email
-                    }
-                    // Deduplicate any stale duplicate entities that may already be in Supabase
-                    sanitizedProfile.goals = sanitizedProfile.goals.deduplicated()
-                    sanitizedProfile.investments = sanitizedProfile.investments.deduplicated()
-                    sanitizedProfile.loans = sanitizedProfile.loans.deduplicated()
-                    sanitizedProfile.insurances = sanitizedProfile.insurances.deduplicated()
-                    self.applySavedEmergencyFundComposition(to: &sanitizedProfile, userID: session.user.id)
-                    self.currentProfile = sanitizedProfile
-                    self.isAuthenticated = true
-                    self.hasCompletedOnboarding = true
-                    self.showDashboard = true
-                    self.isLoading = false
-                    self.isGuest = false
-                    
-                    if biometricEnabled && requireOnLaunch {
-                        self.isLockedByBiometric = true
-                    }
-                }
-                recalculateFinancials()
-            } else {
-                _ = try? await supabase.auth.signOut(scope: .local)
-                _ = try? await minimumDelay
-                await MainActor.run {
-                    self.hasCompletedOnboarding = false
-                    self.isLoading = false
-                    
-                }
+                print("⏱️ [STARTUP] background profile load done in \(String(format: "%.2f", Date().timeIntervalSince(startTime)))s")
             }
 
         } catch {
-            _ = try? await minimumDelay
+            // Session unavailable (not signed in, token expired beyond refresh, or network timeout)
+            print("⏱️ [STARTUP] no valid session (\(error)) — routing to onboarding in \(String(format: "%.2f", Date().timeIntervalSince(startTime)))s")
             await MainActor.run {
                 self.hasCompletedOnboarding = false
-                isLoading = false
+                self.isLoading = false
             }
         }
     }
@@ -503,11 +586,30 @@ final class AppStateManager {
         isLockedByBiometric = false
     }
 
+    func uploadProfilePhoto(_ data: Data) {
+        UserDefaults.standard.set(data, forKey: "profileImageData")
+        Task {
+            if let session = try? await supabase.auth.session {
+                _ = try? await SupabaseRepository.shared.uploadAvatar(data: data, userId: session.user.id)
+            }
+        }
+    }
+
+    func syncProfilePhotoToSupabaseIfNeeded() {
+        guard let localData = UserDefaults.standard.data(forKey: "profileImageData") else { return }
+        Task {
+            if let session = try? await supabase.auth.session {
+                _ = try? await SupabaseRepository.shared.uploadAvatar(data: localData, userId: session.user.id)
+            }
+        }
+    }
+
     func signUp(name: String, email: String, password: String) async -> Bool {
         isAuthLoading = true
         authError = nil
+        authNotice = nil
         do {
-            let session = try await supabase.auth.signUp(
+            let response = try await supabase.auth.signUp(
                 email: email,
                 password: password,
                 data: [
@@ -515,7 +617,12 @@ final class AppStateManager {
                     "full_name": .string(name)
                 ]
             )
-            try? await supabase.from("users").insert([
+            guard let session = response.session else {
+                authNotice = "Your account was created. Check \(email) for the confirmation link, then sign in."
+                isAuthLoading = false
+                return false
+            }
+            _ = try? await supabase.from("users").insert([
                 "id": session.user.id.uuidString,
                 "email": email
             ]).execute()
@@ -650,7 +757,7 @@ final class AppStateManager {
                 print("AppStateManager: Supabase sign in succeeded for user: \(session.user.id)")
                 
                 // Try to insert user record (will silently fail if already exists)
-                try? await supabase.from("users").insert([
+                _ = try? await supabase.from("users").insert([
                     "id": session.user.id.uuidString,
                     "email": session.user.email ?? ""
                 ]).execute()
@@ -1209,17 +1316,6 @@ final class AppStateManager {
             emergencyFundMonths: efMonths
         )
         
-        let initialScore = report.investmentScore
-        let status = initialScore >= 80 ? "Excellent" : initialScore >= 70 ? "Good" : "Needs Work"
-        let firstAssessment = AstraHealthAssessment(
-            date: Date(),
-            score: initialScore,
-            status: status,
-            keyInsights: ["First assessment generated from initial data",
-                          "Emergency fund covers \(String(format: "%.1f", efMonths)) months",
-                          "Savings rate stands at \(savingsRate.safeInt)%"]
-        )
-        
         let newInvestments = profileInvestments
         let newLoans = profileLoans
         let newInsurances = profileInsurances
@@ -1478,7 +1574,8 @@ final class AppStateManager {
         
         let efTarget = profile.basicDetails.monthlyIncome * 6.0
         let efMonths = efTarget > 0 ? ((profile.basicDetails.emergencyFundAmount / efTarget) * 6.0).safeFinite : 0
-        let healthScore = FinancialAssessmentInsights.build(profile: profile, data: nil).overallScore.safeInt
+        let currentInsights = FinancialAssessmentInsights.build(profile: profile, data: nil)
+        let healthScore = currentInsights.overallScore.safeInt
         
         profile.financialHealthReport = AstraFinancialHealthReport(
             netWorth: netWorth,
@@ -1487,6 +1584,17 @@ final class AppStateManager {
             investmentScore: healthScore,
             emergencyFundMonths: efMonths
         )
+
+        let cal = Calendar.current
+        if let idx = profile.monthlyHealthAssessments.firstIndex(where: { cal.isDate($0.date, equalTo: Date(), toGranularity: .month) }) {
+            profile.monthlyHealthAssessments[idx].score = healthScore
+            profile.monthlyHealthAssessments[idx].status = FinancialAssessmentInsights.statusTitle(for: healthScore)
+            profile.monthlyHealthAssessments[idx].insights = currentInsights
+            let concerns = currentInsights.activeConcerns.map(\.title)
+            if !concerns.isEmpty {
+                profile.monthlyHealthAssessments[idx].keyInsights = concerns
+            }
+        }
         
         // Sync goal currentAmount with dynamic total and detect goal achievement
         for i in 0..<profile.goals.count {
@@ -1507,6 +1615,16 @@ final class AppStateManager {
             }
         }
         
+        var freshness = profile.financialDataFreshness ?? []
+        let verifiedAt = Date()
+        for domain in FinancialDataDomain.allCases {
+            freshness.removeAll { $0.domain == domain }
+            freshness.append(FinancialDataFreshnessRecord(
+                domain: domain, source: .assessment, lastUpdatedAt: verifiedAt,
+                lastVerifiedAt: verifiedAt, confidence: 0.9
+            ))
+        }
+        profile.financialDataFreshness = freshness
         self.currentProfile = profile
     }
     
@@ -1522,6 +1640,18 @@ final class AppStateManager {
                 profile.basicDetails.monthlyIncome = detailedIncome
                 profile.basicDetails.monthlyIncomeAfterTax = detailedIncome
             }
+
+            var freshness = profile.financialDataFreshness ?? []
+            let updatedAt = Date()
+            let updatedDomains: [FinancialDataDomain] = detailedIncome > 0 ? [.income, .expenses] : [.expenses]
+            for domain in updatedDomains {
+                freshness.removeAll { $0.domain == domain }
+                freshness.append(FinancialDataFreshnessRecord(
+                    domain: domain, source: .cashFlowUpdate, lastUpdatedAt: updatedAt,
+                    lastVerifiedAt: updatedAt, confidence: 0.9
+                ))
+            }
+            profile.financialDataFreshness = freshness
             
             let df = DateFormatter()
             df.dateFormat = "yyyy-MM"
@@ -1547,6 +1677,43 @@ final class AppStateManager {
                         print("Cashflow/UserProfile save failed: \(error)")
                     }
                 }
+            }
+        }
+    }
+
+    func updateFinancialPlanningJourney(_ journey: FinancialPlanningJourney) {
+        guard var profile = currentProfile else { return }
+        profile.planningJourney = journey
+        currentProfile = profile
+        syncProfile()
+    }
+
+    func updateMasterFinancialPlan(_ plan: MasterFinancialPlan) {
+        guard var profile = currentProfile else { return }
+        profile.masterFinancialPlan = plan
+        currentProfile = profile
+        syncProfile()
+    }
+
+    /// Completely deletes the current financial planning journey, all active/planned goals,
+    /// and resets the financial roadmap so the user can start completely fresh.
+    func deleteFinancialPlanAndJourney() {
+        guard var profile = currentProfile else { return }
+        let goalsToDelete = profile.goals
+        let plansToDelete = savedPlans
+        profile.goals.removeAll()
+        profile.planningJourney = FinancialPlanningJourney()
+        profile.masterFinancialPlan = nil
+        currentProfile = profile
+        savedPlans.removeAll()
+        recalculateFinancials()
+        syncProfile()
+        Task {
+            for goal in goalsToDelete {
+                _ = try? await SupabaseRepository.shared.deleteGoal(goal.id)
+            }
+            for plan in plansToDelete {
+                _ = try? await SupabaseRepository.shared.deleteSavedPlan(plan.id)
             }
         }
     }

@@ -92,6 +92,7 @@ struct InvestmentDetailView: View {
     @State private var history: [MFHistoryPoint] = []
     @State private var isLoadingHistory = false
     @State private var selectedFundRange: InvestmentFundChartRange = .sip
+    @State private var selectedChartPointIndex: Int? = nil
 
     private var sipInstallments: [AstraInvestmentTransaction] {
         inv?.installments.sorted(by: { $0.date > $1.date }) ?? []
@@ -499,11 +500,11 @@ struct InvestmentDetailView: View {
                 let yTicks: [Double] = [minVal, minVal + range*0.33, minVal + range*0.66, maxVal]
                 let transactionPoints = purchaseChartPoints(for: chartData)
                 let highlightedPoint: InvestmentHistoryChartPoint? = {
-                    if let lastSipIndex = transactionPoints.last?.index,
-                       let point = chartData.first(where: { $0.index == lastSipIndex }) {
+                    if let selectedChartPointIndex,
+                       let point = chartData.first(where: { $0.index == selectedChartPointIndex }) {
                         return point
                     }
-                    return chartData[safe: max(0, chartData.count / 2)]
+                    return nil
                 }()
 
                 fundAnalysisStatsHeader(chartData: chartData)
@@ -521,24 +522,26 @@ struct InvestmentDetailView: View {
                         )
                         .foregroundStyle(
                             LinearGradient(
-                                colors: [lineColor.opacity(0.25), lineColor.opacity(0.03)],
+                                colors: [lineColor.opacity(0.18), lineColor.opacity(0.0)],
                                 startPoint: .top,
                                 endPoint: .bottom
                             )
                         )
+                        .interpolationMethod(.monotone)
 
                         LineMark(
                             x: .value("Point", point.index),
                             y: .value("NAV", point.value)
                         )
                         .foregroundStyle(lineColor)
-                        .lineStyle(StrokeStyle(lineWidth: 2))
+                        .lineStyle(StrokeStyle(lineWidth: 2.2))
+                        .interpolationMethod(.monotone)
                     }
 
                     if let highlightedPoint {
                         RuleMark(x: .value("Selected Date", highlightedPoint.index))
                             .foregroundStyle(Color.secondary.opacity(0.35))
-                            .lineStyle(StrokeStyle(lineWidth: 1, dash: [5, 4]))
+                            .lineStyle(StrokeStyle(lineWidth: 1, dash: [4, 4]))
 
                         PointMark(
                             x: .value("Selected Date", highlightedPoint.index),
@@ -548,21 +551,21 @@ struct InvestmentDetailView: View {
                         .symbol {
                             Circle()
                                 .fill(lineColor)
-                                .frame(width: 11, height: 11)
+                                .frame(width: 10, height: 10)
                                 .overlay(Circle().stroke(Color.white, lineWidth: 2))
                                 .shadow(color: lineColor.opacity(0.35), radius: 4)
                         }
                         .annotation(position: .top, alignment: .center) {
                             VStack(alignment: .leading, spacing: 3) {
                                 Text("₹ \(String(format: "%.2f", highlightedPoint.value))")
-                                    .font(.system(size: 14, weight: .bold))
+                                    .font(.system(size: 13, weight: .bold))
                                     .foregroundColor(.primary)
                                 Text(displayDateLabel(for: highlightedPoint.date))
-                                    .font(.system(size: 11, weight: .medium))
+                                    .font(.system(size: 10, weight: .medium))
                                     .foregroundColor(.secondary)
                             }
                             .padding(.horizontal, 10)
-                            .padding(.vertical, 8)
+                            .padding(.vertical, 6)
                             .background(
                                 RoundedRectangle(cornerRadius: 8, style: .continuous)
                                     .fill(Color(uiColor: .secondarySystemGroupedBackground))
@@ -580,7 +583,7 @@ struct InvestmentDetailView: View {
                         .symbol {
                             Circle()
                                 .fill(Color.blue)
-                                .frame(width: 8, height: 8)
+                                .frame(width: 7, height: 7)
                                 .overlay(Circle().stroke(Color.white, lineWidth: 1.5))
                         }
                     }
@@ -594,7 +597,7 @@ struct InvestmentDetailView: View {
                         .symbol {
                             Circle()
                                 .fill(lineColor)
-                                .frame(width: 8, height: 8)
+                                .frame(width: 7, height: 7)
                                 .overlay(Circle().stroke(Color.white, lineWidth: 1.5))
                         }
                     }
@@ -608,9 +611,10 @@ struct InvestmentDetailView: View {
                         .symbol {
                             Circle()
                                 .fill(Color.purple)
-                                .frame(width: 7, height: 7)
-                                .overlay(Circle().stroke(Color.white, lineWidth: 1.2))
-                                .shadow(color: .purple.opacity(0.4), radius: 2)
+                                .frame(width: transactionPoints.count > 10 ? 3.5 : 5, height: transactionPoints.count > 10 ? 3.5 : 5)
+                                .overlay(
+                                    transactionPoints.count > 10 ? nil : Circle().stroke(Color.white, lineWidth: 1)
+                                )
                         }
                     }
                 }
@@ -624,10 +628,6 @@ struct InvestmentDetailView: View {
                 }
                 .chartXAxis {
                     AxisMarks(values: monthLabels.map(\.index)) { value in
-                        AxisTick(stroke: StrokeStyle(lineWidth: 1))
-                            .foregroundStyle(lineColor)
-                        AxisGridLine(stroke: StrokeStyle(lineWidth: 1))
-                            .foregroundStyle(lineColor.opacity(0.65))
                         AxisValueLabel {
                             if let index = value.as(Int.self),
                                let label = monthLabels.first(where: { $0.index == index })?.label {
@@ -638,7 +638,26 @@ struct InvestmentDetailView: View {
                         }
                     }
                 }
-                .frame(height: 300)
+                .chartOverlay { proxy in
+                    GeometryReader { geo in
+                        Rectangle()
+                            .fill(Color.clear)
+                            .contentShape(Rectangle())
+                            .gesture(
+                                DragGesture(minimumDistance: 0)
+                                    .onChanged { value in
+                                        if let index: Int = proxy.value(atX: value.location.x) {
+                                            let clamped = max(0, min(chartData.count - 1, index))
+                                            selectedChartPointIndex = clamped
+                                        }
+                                    }
+                                    .onEnded { _ in
+                                        selectedChartPointIndex = nil
+                                    }
+                            )
+                    }
+                }
+                .frame(height: 280)
 
                 // ── Legend ───────────────────────────────────────────────────
                 HStack(spacing: 16) {
@@ -700,32 +719,34 @@ struct InvestmentDetailView: View {
     }
 
     private var fundRangeSelector: some View {
-        ScrollView(.horizontal, showsIndicators: false) {
-            HStack(spacing: 0) {
-                ForEach(InvestmentFundChartRange.allCases) { range in
-                    Button {
-                        withAnimation(.spring(response: 0.25, dampingFraction: 0.9)) {
-                            selectedFundRange = range
-                        }
-                    } label: {
-                        Text(range.rawValue)
-                            .font(.system(size: 14, weight: .bold))
-                            .foregroundColor(selectedFundRange == range ? .white : .primary)
-                            .frame(minWidth: 54, minHeight: 38)
-                            .background(
-                                Rectangle()
-                                    .fill(selectedFundRange == range ? Color.primary.opacity(0.92) : Color.clear)
-                            )
+        HStack(spacing: 4) {
+            ForEach(InvestmentFundChartRange.allCases) { range in
+                Button {
+                    withAnimation(.spring(response: 0.25, dampingFraction: 0.85)) {
+                        selectedFundRange = range
                     }
-                    .buttonStyle(.plain)
+                } label: {
+                    Text(range.rawValue)
+                        .font(.system(size: 13, weight: selectedFundRange == range ? .bold : .medium))
+                        .foregroundColor(selectedFundRange == range ? .primary : .secondary)
+                        .frame(maxWidth: .infinity)
+                        .frame(height: 32)
+                        .background(
+                            selectedFundRange == range
+                                ? RoundedRectangle(cornerRadius: 8, style: .continuous)
+                                    .fill(Color(uiColor: .secondarySystemGroupedBackground))
+                                    .shadow(color: .black.opacity(colorScheme == .dark ? 0.35 : 0.08), radius: 3, y: 1)
+                                : nil
+                        )
                 }
-            }
-            .clipShape(RoundedRectangle(cornerRadius: 7, style: .continuous))
-            .overlay {
-                RoundedRectangle(cornerRadius: 7, style: .continuous)
-                    .stroke(Color.secondary.opacity(0.35), lineWidth: 1)
+                .buttonStyle(.plain)
             }
         }
+        .padding(3)
+        .background(
+            RoundedRectangle(cornerRadius: 10, style: .continuous)
+                .fill(Color(uiColor: .tertiarySystemFill))
+        )
     }
 
     @ViewBuilder

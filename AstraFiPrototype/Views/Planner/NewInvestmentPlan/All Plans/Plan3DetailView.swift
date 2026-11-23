@@ -10,6 +10,8 @@ struct Plan3DetailView: View {
     var input: InvestmentPlanInputModel
     var result: Plan3Result
     var isFromTracker: Bool = false
+    var isFromFinancialJourney: Bool = false
+    var onSaveJourneyPlan: ((InvestmentPlanInputModel) -> Void)? = nil
 
     @State private var selectedScenario: String = "Moderate"
     @State private var investmentMode: String = "Lumpsum"
@@ -18,6 +20,7 @@ struct Plan3DetailView: View {
     @State private var showingSaveAlert = false
     @State private var alertMessage = ""
     @State private var showAssumptionsAlert = false
+    @State private var journeyPlanSaved = false
 
     @State private var currentResult: Plan3Result? = nil
     @State private var loanOverride: Double = 0
@@ -28,6 +31,7 @@ struct Plan3DetailView: View {
     @State private var interestType: InterestType = .compounded
     @State private var historicalPeriodYears: Int = 10
     @State private var selectedYearIndex: Int = 0
+    @State private var expandedMonth: String? = "Jan"
     @State private var showingAllAssetsInfo = false
 
     private var activeResult: Plan3Result { currentResult ?? result }
@@ -90,7 +94,7 @@ struct Plan3DetailView: View {
 
     var body: some View {
         ZStack(alignment: .bottom) {
-            ScrollView {
+            ScrollView(.vertical, showsIndicators: true) {
                 VStack(spacing: 16) {
                     targetVsEstimatedCard
                     assumptionsWarningSection
@@ -112,15 +116,18 @@ struct Plan3DetailView: View {
                 }
                 .padding(.horizontal, 16)
                 .padding(.top, 16)
-                .padding(.bottom, 120)
+                .padding(.bottom, (!isFromTracker && !isFromFinancialJourney) ? 120 : 36)
                 .frame(maxWidth: .infinity)
             }
+            .scrollBounceBehavior(.basedOnSize, axes: .horizontal)
+            .scrollDismissesKeyboard(.interactively)
             .background(AppTheme.appBackground(for: colorScheme))
 
-            if !isFromTracker {
+            if !isFromTracker && !isFromFinancialJourney {
                 savePlanFooter
             }
         }
+        .ignoresSafeArea(.keyboard)
         .onAppear {
             loanOverride = InvestmentPlannerEngine.parseAmount(input.targetAmount)
             tenureOverride = Int(input.timePeriod) ?? 5
@@ -130,6 +137,25 @@ struct Plan3DetailView: View {
         }
         .navigationTitle("Loan Stress Test")
         .navigationBarTitleDisplayMode(.inline)
+        .toolbar {
+            if isFromFinancialJourney {
+                ToolbarItem(placement: .topBarTrailing) {
+                    Button {
+                        var savedInput = input
+                        savedInput.targetAmount = String(Int(loanOverride))
+                        savedInput.timePeriod = String(tenureOverride)
+                        savedInput.bankName = bankName
+                        savedInput.interestRate = interestRate
+                        onSaveJourneyPlan?(savedInput)
+                        journeyPlanSaved = true
+                    } label: {
+                        Text(journeyPlanSaved ? "Saved" : "Save")
+                            .font(.subheadline.weight(.semibold))
+                            .foregroundStyle(journeyPlanSaved ? Color.green : Color.accentColor)
+                    }
+                }
+            }
+        }
         .alert("Action Successful", isPresented: $showingSaveAlert) {
              Button("View in Tracker") { 
                  appState.selectedTab = 2
@@ -267,23 +293,16 @@ struct Plan3DetailView: View {
 
     private var riskTypeSection: some View {
         VStack(alignment: .leading, spacing: 16) {
-            Text("Investment Profile")
+            Text("Investment risk level")
                 .font(.headline)
             
-            HStack(spacing: 12) {
-                RiskOptionCard(title: "Low", icon: "shield.fill", color: .green, isSelected: selectedScenario == "Conservative") {
-                    selectedScenario = "Conservative"
-                    recalculate()
-                }
-                RiskOptionCard(title: "Mid", icon: "chart.bar.fill", color: .orange, isSelected: selectedScenario == "Moderate") {
-                    selectedScenario = "Moderate"
-                    recalculate()
-                }
-                RiskOptionCard(title: "High", icon: "flame.fill", color: .red, isSelected: selectedScenario == "Aggressive") {
-                    selectedScenario = "Aggressive"
-                    recalculate()
-                }
+            Picker("Investment risk level", selection: $selectedScenario) {
+                Text("Low").tag("Conservative")
+                Text("Medium").tag("Moderate")
+                Text("High").tag("Aggressive")
             }
+            .pickerStyle(.segmented)
+            .onChange(of: selectedScenario) { _, _ in recalculate() }
         }
         .padding(20)                          // ← add this
             .background(AppTheme.cardBackground)  // ← add this
@@ -555,9 +574,7 @@ struct Plan3DetailView: View {
             emiFromPocket: !isEMIDeductionOn,
             historicalPeriodYears: historicalPeriodYears
         )
-        withAnimation {
-            currentResult = newResult
-        }
+        currentResult = newResult
     }
 
 
@@ -621,6 +638,8 @@ struct Plan3DetailView: View {
                     .foregroundStyle(.gray.opacity(0.5))
             }
             .frame(height: 180)
+            .chartScrollableAxes([])
+            .allowsHitTesting(false)
             .chartXScale(domain: 1...Swift.max(2, activeResult.tenure))
             .chartYAxis {
                 AxisMarks(position: .trailing, values: .automatic) { value in
@@ -814,7 +833,12 @@ struct Plan3DetailView: View {
                     .font(.title3)
                     .fontWeight(.bold)
                 Spacer()
-                Text("\(historicalPeriodYears)Y history")
+                VStack(alignment: .trailing, spacing: 2) {
+                    Text("Historical basis")
+                    Text("\(historicalPeriodYears) years")
+                        .font(.caption2)
+                        .foregroundStyle(.secondary)
+                }
                     .font(.caption)
                     .fontWeight(.semibold)
                     .foregroundColor(.blue)
@@ -833,7 +857,7 @@ struct Plan3DetailView: View {
                         
                         VStack(spacing: 8) {
                             let corpusValue = year.monthlySteps.last?.endValue ?? 0
-                            Text(formatL(corpusValue))
+                            Text("₹\(formatL(corpusValue))")
                                 .font(.system(size: 10, weight: .bold))
                                 .foregroundColor(.green)
                             
@@ -845,13 +869,14 @@ struct Plan3DetailView: View {
                                 .frame(width: 45, height: max(10, CGFloat(barHeight)))
                                 .onTapGesture {
                                     selectedYearIndex = index
+                                    expandedMonth = year.monthlySteps.first?.month
                                 }
                             
                             Text("\(Calendar.current.component(.year, from: Date()) + index)")
                                 .font(.system(size: 11, weight: .bold))
                                 .foregroundColor(isSelected ? .primary : .secondary)
                             
-                            Text(formatL(year.monthlySteps.last?.loanOutstanding ?? 0))
+                            Text("₹\(formatL(year.monthlySteps.last?.loanOutstanding ?? 0))")
                                 .font(.system(size: 10))
                                 .foregroundColor(.secondary)
                         }
@@ -860,6 +885,7 @@ struct Plan3DetailView: View {
                 .padding(.vertical, 8)
                 .padding(.horizontal, 4)
             }
+            .scrollBounceBehavior(.basedOnSize, axes: .vertical)
         }
         .padding(16)
         .background(AppTheme.cardBackground)
@@ -868,7 +894,11 @@ struct Plan3DetailView: View {
     }
 
     private var monthlyPerformanceTable: some View {
-        VStack(alignment: .leading, spacing: 16) {
+        let selectedYear = currentStrategy.yearlyBreakdown.indices.contains(selectedYearIndex)
+            ? currentStrategy.yearlyBreakdown[selectedYearIndex]
+            : nil
+
+        return VStack(alignment: .leading, spacing: 16) {
             VStack(alignment: .leading, spacing: 4) {
                 Text("Monthly Performance")
                     .font(.title2)
@@ -878,22 +908,15 @@ struct Plan3DetailView: View {
                     .foregroundColor(.secondary)
             }
 
-            VStack(spacing: 0) {
-                monthlyPerformanceHeader
-                    .padding(.vertical, 12)
+            if let year = selectedYear {
+                monthlyYearCharts(year)
 
-                Divider()
-
-                let selectedYear = currentStrategy.yearlyBreakdown.indices.contains(selectedYearIndex) ? currentStrategy.yearlyBreakdown[selectedYearIndex] : nil
-
-                if let year = selectedYear {
-                    ForEach(year.monthlySteps) { step in
-                        monthlyPerformanceRow(step)
-                            .padding(.vertical, 8)
-
-                        Divider()
+                VStack(spacing: 10) {
+                    ForEach(Array(year.monthlySteps.enumerated()), id: \.offset) { _, step in
+                        monthlyPerformanceRow(step, year: year)
                     }
                 }
+                .animation(nil, value: expandedMonth)
             }
         }
         .padding(16)
@@ -902,76 +925,324 @@ struct Plan3DetailView: View {
         .shadow(color: AppTheme.adaptiveShadow.opacity(0.15), radius: 8)
     }
 
-    private var monthlyPerformanceHeader: some View {
-        Grid(horizontalSpacing: 10, verticalSpacing: 0) {
-            GridRow {
-                monthlyHeaderText("Month", alignment: .leading)
-                monthlyHeaderText("Start", alignment: .trailing)
-                monthlyHeaderText("Return", alignment: .trailing)
-                monthlyHeaderText("Gain", alignment: .trailing)
-                if isEMIDeductionOn {
-                    monthlyHeaderText("EMI", alignment: .trailing)
-                }
-                monthlyHeaderText("Net", alignment: .trailing)
-                monthlyHeaderText("End", alignment: .trailing)
+    private func monthlyYearCharts(_ year: Plan3YearlyDetail) -> some View {
+        let steps = year.monthlySteps
+        let peakValue = max(steps.map(\.endValue).max() ?? 1, 1)
+        let peakReturn = max(abs(steps.map(\.historicalReturnPercent).max() ?? 1), abs(steps.map(\.historicalReturnPercent).min() ?? 1), 0.5)
+
+        return VStack(alignment: .leading, spacing: 14) {
+            HStack {
+                Text("Portfolio value")
+                    .font(.caption.weight(.semibold))
+                    .foregroundStyle(.secondary)
+                Spacer()
+                Text("₹\(formatL(steps.last?.endValue ?? 0)) year-end")
+                    .font(.caption.weight(.semibold))
+                    .foregroundStyle(Color(red: 0.15, green: 0.39, blue: 0.92))
             }
-        }
-    }
 
-    private func monthlyPerformanceRow(_ step: Plan3MonthlyStep) -> some View {
-        Grid(horizontalSpacing: 10, verticalSpacing: 0) {
-            GridRow {
-                Text(step.month)
-                    .font(.system(size: 12, weight: .medium))
-                    .frame(maxWidth: .infinity, alignment: .leading)
+            Chart {
+                ForEach(Array(steps.enumerated()), id: \.offset) { index, step in
+                    AreaMark(
+                        x: .value("Month", index),
+                        y: .value("Value", step.endValue)
+                    )
+                    .interpolationMethod(.catmullRom)
+                    .foregroundStyle(
+                        LinearGradient(
+                            colors: [Color(red: 0.15, green: 0.39, blue: 0.92).opacity(0.28), Color(red: 0.15, green: 0.39, blue: 0.92).opacity(0.02)],
+                            startPoint: .top,
+                            endPoint: .bottom
+                        )
+                    )
 
-                HStack(spacing: 2) {
-                    Text(formatL(step.startValue))
-                    if step.investment > 0 {
-                        Text("+\(formatL(step.investment))")
-                            .foregroundColor(.blue)
-                            .font(.system(size: 9, weight: .bold))
+                    LineMark(
+                        x: .value("Month", index),
+                        y: .value("Value", step.endValue)
+                    )
+                    .interpolationMethod(.catmullRom)
+                    .foregroundStyle(Color(red: 0.15, green: 0.39, blue: 0.92))
+                    .lineStyle(StrokeStyle(lineWidth: 2.5))
+
+                    if step.month == expandedMonth {
+                        PointMark(
+                            x: .value("Month", index),
+                            y: .value("Value", step.endValue)
+                        )
+                        .foregroundStyle(Color(red: 0.15, green: 0.39, blue: 0.92))
+                        .symbolSize(48)
                     }
                 }
-                .font(.system(size: 12))
-                .frame(maxWidth: .infinity, alignment: .trailing)
-
-                Text("\(step.historicalReturnPercent >= 0 ? "+" : "")\(String(format: "%.2f", step.historicalReturnPercent))%")
-                    .font(.system(size: 12, weight: .semibold))
-                    .foregroundColor(step.historicalReturnPercent >= 0 ? .green : .red)
-                    .frame(maxWidth: .infinity, alignment: .trailing)
-
-                Text("\(step.growth >= 0 ? "+" : "")\(formatL(step.growth))")
-                    .font(.system(size: 12, weight: .bold))
-                    .foregroundColor(step.growth >= 0 ? .green : .red)
-                    .frame(maxWidth: .infinity, alignment: .trailing)
-
-                if isEMIDeductionOn {
-                    Text(formatL(step.emiFromPocket > 0 ? step.emiFromPocket : activeResult.monthlyEMI))
-                        .font(.system(size: 12))
-                        .foregroundColor(.orange)
-                        .frame(maxWidth: .infinity, alignment: .trailing)
-                }
-
-                Text("\(step.netChange >= 0 ? "+" : "")\(formatL(step.netChange))")
-                    .font(.system(size: 12, weight: .bold))
-                    .foregroundColor(step.netChange >= 0 ? .green : .red)
-                    .frame(maxWidth: .infinity, alignment: .trailing)
-
-                Text(formatL(step.endValue))
-                    .font(.system(size: 12, weight: .bold))
-                    .foregroundColor(step.endValue >= 0 ? .primary : .red)
-                    .frame(maxWidth: .infinity, alignment: .trailing)
             }
+            .chartXAxis {
+                AxisMarks(values: Array(steps.indices)) { value in
+                    AxisValueLabel {
+                        if let index = value.as(Int.self), steps.indices.contains(index) {
+                            Text(String(steps[index].month.prefix(1)))
+                                .font(.system(size: 9, weight: .medium))
+                        }
+                    }
+                }
+            }
+            .chartYAxis {
+                AxisMarks(position: .trailing, values: .automatic(desiredCount: 3)) { value in
+                    AxisGridLine().foregroundStyle(.secondary.opacity(0.12))
+                    AxisValueLabel {
+                        if let amount = value.as(Double.self) {
+                            Text("₹\(formatL(amount))")
+                                .font(.system(size: 9))
+                        }
+                    }
+                }
+            }
+            .chartYScale(domain: 0...peakValue * 1.08)
+            .chartScrollableAxes([])
+            .allowsHitTesting(false)
+            .frame(height: 132)
+
+            HStack {
+                Text("Monthly return")
+                    .font(.caption.weight(.semibold))
+                    .foregroundStyle(.secondary)
+                Spacer()
+                HStack(spacing: 10) {
+                    legendDot(Color(red: 0.07, green: 0.72, blue: 0.47), "Gain")
+                    legendDot(Color(red: 0.94, green: 0.27, blue: 0.32), "Loss")
+                }
+            }
+
+            Chart {
+                ForEach(Array(steps.enumerated()), id: \.offset) { index, step in
+                    let positive = step.historicalReturnPercent >= 0
+                    BarMark(
+                        x: .value("Month", index),
+                        y: .value("Return", step.historicalReturnPercent)
+                    )
+                    .foregroundStyle(
+                        step.month == expandedMonth
+                            ? (positive ? Color(red: 0.07, green: 0.72, blue: 0.47) : Color(red: 0.94, green: 0.27, blue: 0.32))
+                            : (positive ? Color(red: 0.07, green: 0.72, blue: 0.47).opacity(0.38) : Color(red: 0.94, green: 0.27, blue: 0.32).opacity(0.38))
+                    )
+                    .cornerRadius(4)
+                }
+                RuleMark(y: .value("Zero", 0))
+                    .foregroundStyle(.secondary.opacity(0.35))
+                    .lineStyle(StrokeStyle(lineWidth: 1))
+            }
+            .chartXAxis {
+                AxisMarks(values: Array(steps.indices)) { value in
+                    AxisValueLabel {
+                        if let index = value.as(Int.self), steps.indices.contains(index) {
+                            Text(String(steps[index].month.prefix(1)))
+                                .font(.system(size: 9, weight: .medium))
+                        }
+                    }
+                }
+            }
+            .chartYAxis {
+                AxisMarks(position: .trailing, values: .automatic(desiredCount: 3)) { value in
+                    AxisGridLine().foregroundStyle(.secondary.opacity(0.12))
+                    AxisValueLabel {
+                        if let pct = value.as(Double.self) {
+                            Text(String(format: "%.1f%%", pct))
+                                .font(.system(size: 9))
+                        }
+                    }
+                }
+            }
+            .chartYScale(domain: -peakReturn...peakReturn)
+            .chartScrollableAxes([])
+            .allowsHitTesting(false)
+            .frame(height: 96)
+        }
+        .padding(14)
+        .background(Color.secondary.opacity(0.05), in: RoundedRectangle(cornerRadius: 16, style: .continuous))
+    }
+
+    private func monthlyPerformanceRow(_ step: Plan3MonthlyStep, year: Plan3YearlyDetail) -> some View {
+        let isExpanded = expandedMonth == step.month
+        let returnPositive = step.historicalReturnPercent >= 0
+        let emiAmount = isEMIDeductionOn ? (step.emiFromPocket > 0 ? step.emiFromPocket : activeResult.monthlyEMI) : 0
+
+        return VStack(spacing: 0) {
+            Button {
+                expandedMonth = isExpanded ? nil : step.month
+            } label: {
+                HStack(spacing: 12) {
+                    Circle()
+                        .fill(returnPositive ? Color(red: 0.07, green: 0.72, blue: 0.47) : Color(red: 0.94, green: 0.27, blue: 0.32))
+                        .frame(width: 8, height: 8)
+
+                    VStack(alignment: .leading, spacing: 2) {
+                        Text(step.month)
+                            .font(.subheadline.weight(.semibold))
+                            .foregroundStyle(.primary)
+                        Text("\(returnPositive ? "+" : "")\(String(format: "%.2f", step.historicalReturnPercent))% return")
+                            .font(.caption2.weight(.medium))
+                            .foregroundStyle(returnPositive ? Color(red: 0.07, green: 0.72, blue: 0.47) : Color(red: 0.94, green: 0.27, blue: 0.32))
+                    }
+
+                    Spacer()
+
+                    Text("₹\(formatL(step.endValue))")
+                        .font(.subheadline.weight(.semibold))
+                        .foregroundStyle(.primary)
+
+                    Image(systemName: "chevron.right")
+                        .font(.caption.weight(.bold))
+                        .foregroundStyle(.secondary)
+                        .rotationEffect(.degrees(isExpanded ? 90 : 0))
+                }
+                .padding(.vertical, 12)
+                .padding(.horizontal, 4)
+                .contentShape(Rectangle())
+            }
+            .buttonStyle(.plain)
+
+            if isExpanded {
+                monthlyExpandedDetail(step, year: year, emiAmount: emiAmount)
+                    .padding(.bottom, 12)
+                    .transition(.opacity)
+            }
+        }
+        .padding(.horizontal, 10)
+        .background(
+            RoundedRectangle(cornerRadius: 16, style: .continuous)
+                .fill(isExpanded ? Color.secondary.opacity(0.06) : Color.clear)
+        )
+    }
+
+    private func monthlyExpandedDetail(_ step: Plan3MonthlyStep, year: Plan3YearlyDetail, emiAmount: Double) -> some View {
+        let gainPositive = step.growth >= 0
+        let flowRows: [(String, Double, Color, String)] = {
+            var rows: [(String, Double, Color, String)] = [
+                ("Starting", step.startValue, Color.secondary, "circle"),
+                ("Contribution", step.investment, Color(red: 0.15, green: 0.39, blue: 0.92), "plus.circle.fill"),
+                ("Market gain", step.growth, gainPositive ? Color(red: 0.07, green: 0.72, blue: 0.47) : Color(red: 0.94, green: 0.27, blue: 0.32), gainPositive ? "arrow.up.right.circle.fill" : "arrow.down.right.circle.fill")
+            ]
+            if isEMIDeductionOn && emiAmount > 0 {
+                rows.append(("EMI deducted", -emiAmount, Color(red: 0.96, green: 0.52, blue: 0.16), "minus.circle.fill"))
+            }
+            rows.append(("Month-end", step.endValue, Color(red: 0.35, green: 0.34, blue: 0.84), "checkmark.circle.fill"))
+            return rows
+        }()
+        let maxFlow = max(flowRows.map { abs($0.1) }.max() ?? 1, 1)
+
+        return VStack(alignment: .leading, spacing: 14) {
+            HStack(alignment: .firstTextBaseline) {
+                VStack(alignment: .leading, spacing: 3) {
+                    Text("Month-end portfolio")
+                        .font(.caption)
+                        .foregroundStyle(.secondary)
+                    Text("₹\(formatL(step.endValue))")
+                        .font(.title3.weight(.bold))
+                }
+                Spacer()
+                Text("\(step.netChange >= 0 ? "+" : "−")₹\(formatL(abs(step.netChange)))")
+                    .font(.subheadline.weight(.semibold))
+                    .foregroundStyle(step.netChange >= 0 ? Color(red: 0.07, green: 0.72, blue: 0.47) : Color(red: 0.94, green: 0.27, blue: 0.32))
+                    .padding(.horizontal, 10)
+                    .padding(.vertical, 6)
+                    .background(
+                        (step.netChange >= 0 ? Color(red: 0.07, green: 0.72, blue: 0.47) : Color(red: 0.94, green: 0.27, blue: 0.32)).opacity(0.12),
+                        in: Capsule()
+                    )
+            }
+
+            Chart {
+                ForEach(Array(year.monthlySteps.enumerated()), id: \.offset) { index, monthStep in
+                    BarMark(
+                        x: .value("Month", index),
+                        y: .value("Return", monthStep.historicalReturnPercent)
+                    )
+                    .foregroundStyle(
+                        monthStep.month == step.month
+                            ? (monthStep.historicalReturnPercent >= 0 ? Color(red: 0.07, green: 0.72, blue: 0.47) : Color(red: 0.94, green: 0.27, blue: 0.32))
+                            : Color.secondary.opacity(0.18)
+                    )
+                    .cornerRadius(3)
+                }
+            }
+            .chartXAxis(.hidden)
+            .chartYAxis(.hidden)
+            .chartScrollableAxes([])
+            .allowsHitTesting(false)
+            .frame(height: 44)
+            .accessibilityHidden(true)
+
+            VStack(spacing: 8) {
+                ForEach(flowRows, id: \.0) { row in
+                    HStack(spacing: 10) {
+                        Image(systemName: row.3)
+                            .font(.system(size: 14, weight: .semibold))
+                            .foregroundStyle(row.2)
+                            .frame(width: 18)
+
+                        Text(row.0)
+                            .font(.caption.weight(.medium))
+                            .foregroundStyle(.secondary)
+
+                        GeometryReader { geo in
+                            let width = max(6, geo.size.width * CGFloat(abs(row.1) / maxFlow))
+                            Capsule()
+                                .fill(row.2.opacity(0.85))
+                                .frame(width: width, height: 7)
+                                .frame(maxWidth: .infinity, alignment: .leading)
+                        }
+                        .frame(height: 7)
+
+                        Text("\(row.1 < 0 ? "−" : "")₹\(formatL(abs(row.1)))")
+                            .font(.caption.weight(.semibold))
+                            .foregroundStyle(row.2)
+                            .frame(width: 62, alignment: .trailing)
+                    }
+                }
+            }
+
+            HStack(spacing: 8) {
+                monthlyMetric(title: "Starting", value: "₹\(formatL(step.startValue))", tint: Color.secondary)
+                monthlyMetric(
+                    title: "Return",
+                    value: "\(String(format: "%.2f", step.historicalReturnPercent))%",
+                    tint: returnPositiveColor(step.historicalReturnPercent)
+                )
+                monthlyMetric(
+                    title: "Gain",
+                    value: "\(step.growth >= 0 ? "+" : "−")₹\(formatL(abs(step.growth)))",
+                    tint: step.growth >= 0 ? Color(red: 0.07, green: 0.72, blue: 0.47) : Color(red: 0.94, green: 0.27, blue: 0.32)
+                )
+            }
+        }
+        .padding(.top, 4)
+        .accessibilityLabel("Monthly cash flows: contribution ₹\(formatL(step.investment)), investment gain ₹\(formatL(step.growth))\(isEMIDeductionOn ? ", EMI ₹\(formatL(emiAmount))" : "")")
+    }
+
+    private func returnPositiveColor(_ value: Double) -> Color {
+        value >= 0 ? Color(red: 0.35, green: 0.34, blue: 0.84) : Color(red: 0.94, green: 0.27, blue: 0.32)
+    }
+
+    private func legendDot(_ color: Color, _ title: String) -> some View {
+        HStack(spacing: 4) {
+            Circle().fill(color).frame(width: 7, height: 7)
+            Text(title).font(.caption2).foregroundStyle(.secondary)
         }
     }
 
-    private func monthlyHeaderText(_ text: String, alignment: Alignment) -> some View {
-        Text(text)
-            .font(.caption)
-            .fontWeight(.bold)
-            .foregroundColor(.secondary)
-            .frame(maxWidth: .infinity, alignment: alignment)
+    private func monthlyMetric(title: String, value: String, tint: Color) -> some View {
+        VStack(alignment: .leading, spacing: 4) {
+            Text(title.uppercased())
+                .font(.system(size: 9, weight: .bold, design: .rounded))
+                .tracking(0.5)
+                .foregroundStyle(.secondary)
+            Text(value)
+                .font(.system(size: 12, weight: .semibold, design: .rounded))
+                .foregroundStyle(tint)
+                .lineLimit(1)
+                .minimumScaleFactor(0.8)
+        }
+        .frame(maxWidth: .infinity, alignment: .leading)
+        .padding(10)
+        .background(tint.opacity(0.10), in: RoundedRectangle(cornerRadius: 12, style: .continuous))
     }
 
     private var recommendationCard: some View {
@@ -1001,10 +1272,14 @@ struct Plan3DetailView: View {
             HStack {
                 VStack(alignment: .leading, spacing: 4) {
                     Text("Strategy Builder").font(.headline)
-                    Text("Phase-wise capital injection").font(.caption).foregroundColor(.secondary)
+                    Text("\(lumpsumPhases) equal investments across 12 months")
+                        .font(.caption)
+                        .foregroundColor(.secondary)
                 }
                 Spacer()
                 Stepper("", value: $lumpsumPhases, in: 1...12)
+                    .labelsHidden()
+                    .accessibilityLabel("Number of investment phases")
                     .onChange(of: lumpsumPhases) { _, _ in recalculate() }
             }
 
@@ -1061,6 +1336,8 @@ struct StrategyCircularChart: View {
                 }
             }
             .chartLegend(.hidden)
+            .chartScrollableAxes([])
+            .allowsHitTesting(false)
             .frame(width: 170, height: 170)
             .rotationEffect(.degrees(-90))
 

@@ -124,13 +124,15 @@ struct PostAuthOnboardingView: View {
                 }
 
                 // Sign Out Action (Destructive Red)
-                ToolbarItem(placement: .topBarTrailing) {
-                    Button(role: .destructive) {
-                        showingSignOutAlert = true
-                    } label: {
-                        Text("Sign Out")
-                            .font(.system(size: 15, weight: .medium))
-                            .foregroundColor(.red)
+                if appState.isAuthenticated {
+                    ToolbarItem(placement: .topBarTrailing) {
+                        Button(role: .destructive) {
+                            showingSignOutAlert = true
+                        } label: {
+                            Text("Sign Out")
+                                .font(.system(size: 15, weight: .medium))
+                                .foregroundColor(.red)
+                        }
                     }
                 }
             }
@@ -152,5 +154,4 @@ struct PostAuthOnboardingView: View {
     PostAuthOnboardingView()
         .environment(AppStateManager())
 }
-
 

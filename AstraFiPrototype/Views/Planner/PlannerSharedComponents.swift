@@ -63,6 +63,21 @@ struct InvestmentTableRow: View {
     var growthText: String? = nil
     var sourceURL: String? = nil
 
+    private var displayedRole: String {
+        let role = asset.role.trimmingCharacters(in: .whitespacesAndNewlines)
+        guard role.isEmpty else { return role }
+
+        let category = asset.name.lowercased()
+        if category.contains("gold") { return "Diversifier" }
+        if category.contains("liquid") || category.contains("deposit") || category.contains("debt") || category.contains("bond") {
+            return "Stability"
+        }
+        if category.contains("equity") || category.contains("stock") || category.contains("cap") {
+            return "Growth"
+        }
+        return "Core holding"
+    }
+
     var body: some View {
         HStack(spacing: 4) {
             // Asset Category
@@ -94,7 +109,7 @@ struct InvestmentTableRow: View {
                 }
                 .frame(width: 80, alignment: .trailing)
             } else {
-                Text(asset.role)
+                Text(displayedRole)
                     .font(.system(size: 10))
                     .foregroundColor(.secondary)
                     .frame(width: 80, alignment: .trailing)

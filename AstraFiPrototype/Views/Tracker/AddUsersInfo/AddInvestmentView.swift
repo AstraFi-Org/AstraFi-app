@@ -6,13 +6,8 @@ enum InvestmentType: String, CaseIterable, Identifiable, Hashable {
     case goldETF = "Gold ETF"
     case crypto = "Cryptocurrency"
     case fixedDeposit = "Fixed Deposits"
-    case physicalGold = "Physical Gold"
     case ppf = "PPF"
     case nps = "NPS"
-    case bond = "Bonds"
-    case realEstate = "Real Estate"
-    case cashSavings = "Cash Savings"
-    case emergencyFund = "Emergency Fund"
     case other = "Other"
 
     var id: String { rawValue }
@@ -24,13 +19,8 @@ enum InvestmentType: String, CaseIterable, Identifiable, Hashable {
         case .goldETF: return .goldETF
         case .crypto: return .cryptocurrency
         case .fixedDeposit: return .deposits
-        case .physicalGold: return .physicalGold
         case .ppf: return .ppf
         case .nps: return .nps
-        case .bond: return .bonds
-        case .realEstate: return .realEstate
-        case .cashSavings: return .cashSavings
-        case .emergencyFund: return .emergencyFund
         case .other: return .other
         }
     }
@@ -42,19 +32,15 @@ enum InvestmentType: String, CaseIterable, Identifiable, Hashable {
         case .goldETF: self = .goldETF
         case .cryptocurrency: self = .crypto
         case .deposits: self = .fixedDeposit
-        case .physicalGold: self = .physicalGold
         case .ppf: self = .ppf
         case .nps: self = .nps
-        case .bonds: self = .bond
-        case .realEstate: self = .realEstate
-        case .cashSavings: self = .cashSavings
-        case .emergencyFund: self = .emergencyFund
-        case .other: self = .other
+        case .physicalGold, .bonds, .realEstate, .cashSavings, .emergencyFund, .other:
+            self = .other
         }
     }
 
     var supportsMode: Bool {
-        [.mutualFund, .goldETF, .crypto].contains(self)
+        [.mutualFund, .stock, .goldETF, .crypto].contains(self)
     }
 
     var supportsQuantity: Bool {
@@ -115,15 +101,6 @@ struct FDInvestment: TrackerInvestmentFormModel {
     var tenureYears: Double
 }
 
-struct PhysicalGoldInvestment: TrackerInvestmentFormModel {
-    var name: String
-    var investedAmount: Double
-    var currentValue: Double
-    var startDate: Date
-    var goldType: String
-    var weightGrams: Double
-}
-
 struct PPFInvestment: TrackerInvestmentFormModel {
     var name: String
     var investedAmount: Double
@@ -138,38 +115,6 @@ struct NPSInvestment: TrackerInvestmentFormModel {
     var currentValue: Double
     var startDate: Date
     var category: String
-}
-
-struct BondInvestment: TrackerInvestmentFormModel {
-    var name: String
-    var investedAmount: Double
-    var currentValue: Double
-    var startDate: Date
-    var couponRate: Double
-    var maturityDate: Date
-}
-
-struct RealEstateInvestment: TrackerInvestmentFormModel {
-    var name: String
-    var investedAmount: Double
-    var currentValue: Double
-    var startDate: Date
-}
-
-struct CashSavingsInvestment: TrackerInvestmentFormModel {
-    var name: String
-    var investedAmount: Double
-    var currentValue: Double
-    var startDate: Date
-    var bankName: String
-}
-
-struct EmergencyFundInvestment: TrackerInvestmentFormModel {
-    var name: String
-    var investedAmount: Double
-    var currentValue: Double
-    var startDate: Date
-    var purpose: String
 }
 
 final class InvestmentFormViewModel {
@@ -235,6 +180,8 @@ struct AddInvestmentView: View {
     @State private var showingStockSearch = false
     @State private var isSearchingMarket = false
     @State private var marketSearchTask: Task<Void, Never>?
+    @State private var calculationTask: Task<Void, Never>?
+    @State private var fundSearchTask: Task<Void, Never>?
     @State private var quantity = ""
     @State private var historicalPriceOnDate: Double?
     @State private var isFetchingHistoricalQty = false
@@ -242,12 +189,7 @@ struct AddInvestmentView: View {
     @State private var bankName = "SBI"
     @State private var interestRate = ""
     @State private var tenureYears = ""
-    @State private var goldType = "24K"
-    @State private var goldWeight = ""
     @State private var npsCategory = "Equity (E)"
-    @State private var bondType = "Government Bond"
-    @State private var maturityDate = Calendar.current.date(byAdding: .year, value: 5, to: Date()) ?? Date()
-    @State private var purpose = ""
     @State private var notes = ""
 
     var body: some View {
@@ -298,6 +240,11 @@ struct AddInvestmentView: View {
                     .disabled(!canSave)
                 }
             }
+            .onDisappear {
+                calculationTask?.cancel()
+                marketSearchTask?.cancel()
+                fundSearchTask?.cancel()
+            }
         }
     }
 
@@ -314,20 +261,10 @@ struct AddInvestmentView: View {
             cryptoFields
         case .fixedDeposit:
             fixedDepositFields
-        case .physicalGold:
-            physicalGoldFields
         case .ppf:
             ppfFields
         case .nps:
             npsFields
-        case .bond:
-            bondFields
-        case .realEstate:
-            realEstateFields
-        case .cashSavings:
-            cashSavingsFields
-        case .emergencyFund:
-            emergencyFundFields
         case .other:
             otherFields
         }
@@ -358,7 +295,8 @@ struct AddInvestmentView: View {
                 }
                 .presentationDetents([.medium, .large])
             }
-            amountField("Total Investment Value")
+            modePicker
+            amountField(mode == .sip ? "Monthly SIP Amount" : "Lumpsum Amount")
                 .onChange(of: amount) { _, _ in recalculateMarketQuantity() }
             quantityPreview(label: "Qty")
             DatePicker("Start Date", selection: $startDate, displayedComponents: .date)
@@ -410,19 +348,6 @@ struct AddInvestmentView: View {
         }
     }
 
-    private var physicalGoldFields: some View {
-        Group {
-            Picker("Gold Type", selection: $goldType) {
-                ForEach(InvestmentFormViewModel.goldTypes, id: \.self) { Text($0) }
-            }
-            TextField("Weight (grams)", text: $goldWeight).keyboardType(.decimalPad)
-            amountField("Purchase Price")
-            TextField("Current Value", text: $currentValue).keyboardType(.decimalPad)
-            DatePicker("Purchase Date", selection: $startDate, displayedComponents: .date)
-            projectionRow("Total Value", value: physicalGoldCurrentValue)
-        }
-    }
-
     private var ppfFields: some View {
         Group {
             rateCard(title: "Current Interest Rate", value: "7.1%")
@@ -443,43 +368,6 @@ struct AddInvestmentView: View {
         }
     }
 
-    private var bondFields: some View {
-        Group {
-            Picker("Bond Type", selection: $bondType) {
-                ForEach(InvestmentFormViewModel.bondTypes, id: \.self) { Text($0) }
-            }
-            TextField("Bond Name", text: $name)
-            TextField("Coupon Rate (%)", text: $interestRate).keyboardType(.decimalPad)
-            amountField("Amount")
-            DatePicker("Purchase Date", selection: $startDate, displayedComponents: .date)
-            DatePicker("Maturity Date", selection: $maturityDate, displayedComponents: .date)
-            projectionRow("Maturity Value", value: bondMaturityValue)
-        }
-    }
-
-    private var realEstateFields: some View {
-        Group {
-            TextField("Property Name", text: $name)
-            amountField("Purchase Price")
-            TextField("Current Value", text: $currentValue).keyboardType(.decimalPad)
-            DatePicker("Purchase Date", selection: $startDate, displayedComponents: .date)
-        }
-    }
-
-    private var cashSavingsFields: some View {
-        Group {
-            amountField("Amount")
-            TextField("Bank Name", text: $bankName)
-        }
-    }
-
-    private var emergencyFundFields: some View {
-        Group {
-            amountField("Amount")
-            TextField("Purpose", text: $purpose)
-        }
-    }
-
     private var otherFields: some View {
         Group {
             TextField("Investment Name", text: $name)
@@ -492,12 +380,26 @@ struct AddInvestmentView: View {
         VStack(alignment: .leading, spacing: 6) {
             TextField("Fund / Investment Name", text: $name)
                 .onChange(of: name) { _, newValue in
+                    fundSearchTask?.cancel()
                     guard selectedSchemeCode == nil, !newValue.isEmpty else {
+                        searchResults = []
                         showSearch = false
                         return
                     }
-                    searchResults = MFService.shared.searchSchemes(query: newValue)
-                    showSearch = !searchResults.isEmpty
+                    let query = newValue
+                    showSearch = false
+                    fundSearchTask = Task {
+                        do {
+                            try await Task.sleep(for: .milliseconds(250))
+                        } catch {
+                            return
+                        }
+                        guard !Task.isCancelled,
+                              query == name,
+                              selectedSchemeCode == nil else { return }
+                        searchResults = MFService.shared.searchSchemes(query: query)
+                        showSearch = !searchResults.isEmpty
+                    }
                 }
 
             if let code = selectedSchemeCode {
@@ -578,7 +480,7 @@ struct AddInvestmentView: View {
                             Spacer()
                             let price = displayedMarketPrice(for: asset)
                             if price > 0 {
-                                Text("₹\(String(format: "%.2f", price))")
+                                Text(asset.marketContext.formatPrice(price))
                                     .font(.caption)
                                     .fontWeight(.semibold)
                                     .foregroundColor(.green)
@@ -767,7 +669,7 @@ struct AddInvestmentView: View {
                 VStack(alignment: .trailing, spacing: 2) {
                     Text(quantity).fontWeight(.medium)
                     if let price = historicalPriceOnDate {
-                        Text("@ ₹\(String(format: "%.2f", price))")
+                        Text(mode == .sip && selectedType.supportsMode ? "Avg @ ₹\(String(format: "%.2f", price))" : "@ ₹\(String(format: "%.2f", price))")
                             .foregroundColor(.secondary)
                             .font(.caption2)
                     }
@@ -848,25 +750,12 @@ struct AddInvestmentView: View {
         )
     }
 
-    private var physicalGoldCurrentValue: Double {
-        Double(currentValue) ?? Double(amount) ?? 0
-    }
-
     private var ppfMaturityValue: Double {
         formViewModel.futureValueOfMonthlyContribution(monthly: Double(amount) ?? 0, annualRate: 7.1, years: 15)
     }
 
     private var npsProjectedCorpus: Double {
         formViewModel.futureValueOfMonthlyContribution(monthly: Double(amount) ?? 0, annualRate: 10, years: 20)
-    }
-
-    private var bondMaturityValue: Double {
-        let years = max(Calendar.current.dateComponents([.day], from: startDate, to: maturityDate).day.map { Double($0) / 365.0 } ?? 0, 0)
-        return formViewModel.maturityValue(
-            principal: Double(amount) ?? 0,
-            annualRate: Double(interestRate) ?? 0,
-            years: years
-        )
     }
 
     private var canSave: Bool {
@@ -877,17 +766,7 @@ struct AddInvestmentView: View {
             return selectedMarketAsset != nil && (Double(amount) ?? 0) > 0
         case .fixedDeposit:
             return (Double(amount) ?? 0) > 0 && !(name.isEmpty && bankName.isEmpty)
-        case .physicalGold:
-            return (Double(amount) ?? 0) > 0 && (Double(goldWeight) ?? 0) > 0
         case .ppf, .nps:
-            return (Double(amount) ?? 0) > 0
-        case .bond:
-            return !name.isEmpty && (Double(amount) ?? 0) > 0
-        case .realEstate:
-            return !name.isEmpty && (Double(amount) ?? 0) > 0
-        case .cashSavings:
-            return (Double(amount) ?? 0) > 0 && !bankName.isEmpty
-        case .emergencyFund:
             return (Double(amount) ?? 0) > 0
         case .other:
             return !name.isEmpty && (Double(currentValue) ?? 0) > 0
@@ -918,6 +797,9 @@ struct AddInvestmentView: View {
     }
 
     private func resetTypeSpecificFields() {
+        calculationTask?.cancel()
+        marketSearchTask?.cancel()
+        fundSearchTask?.cancel()
         name = ""
         amount = ""
         currentValue = ""
@@ -931,9 +813,10 @@ struct AddInvestmentView: View {
         showSearch = false
         marketSearchQuery = ""
         historicalPriceOnDate = nil
+        isCalculatingUnits = false
+        isFetchingHistoricalQty = false
         mode = selectedType.supportsMode ? .sip : .lumpsum
         if selectedType == .fixedDeposit { name = bankName }
-        if selectedType == .cashSavings { bankName = "" }
     }
 
     @MainActor
@@ -1013,18 +896,10 @@ struct AddInvestmentView: View {
         switch selectedType {
         case .fixedDeposit:
             return name.isEmpty ? "\(bankName) Fixed Deposit" : name
-        case .physicalGold:
-            return "\(goldType) Physical Gold"
         case .ppf:
             return "PPF"
         case .nps:
             return "NPS - \(npsCategory)"
-        case .bond:
-            return name.isEmpty ? bondType : name
-        case .cashSavings:
-            return "\(bankName) Cash Savings"
-        case .emergencyFund:
-            return purpose.isEmpty ? "Emergency Fund" : "Emergency Fund - \(purpose)"
         case .other:
             return name
         default:
@@ -1036,17 +911,9 @@ struct AddInvestmentView: View {
         switch selectedType {
         case .fixedDeposit:
             return fdMaturityValue > 0 ? min(fdMaturityValue, investedAmount * 10) : investedAmount
-        case .physicalGold:
-            return physicalGoldCurrentValue
         case .ppf:
             return investedAmount * elapsedContributionCount
         case .nps:
-            return investedAmount
-        case .bond:
-            return investedAmount
-        case .realEstate:
-            return Double(currentValue) ?? investedAmount
-        case .cashSavings, .emergencyFund:
             return investedAmount
         case .other:
             return Double(currentValue) ?? investedAmount
@@ -1081,74 +948,147 @@ struct AddInvestmentView: View {
     }
 
     private func recalculateMarketQuantity() {
+        calculationTask?.cancel()
         guard let asset = selectedMarketAsset, let invested = Double(amount), invested > 0 else {
             quantity = ""
+            isFetchingHistoricalQty = false
             return
         }
 
         isFetchingHistoricalQty = true
-        Task {
-            var price: Double?
-
-            if selectedType == .crypto {
-                price = await StockService.shared.fetchCryptoINRPrice(symbol: asset.symbol, date: startDate)
-            } else if selectedType == .goldETF || selectedType == .stock {
-                price = await StockService.shared.fetchHistoricalPrice(symbol: asset.symbol, date: startDate)
+        let calculationType = selectedType
+        let calculationDate = startDate
+        let calculationMode = mode
+        calculationTask = Task {
+            do {
+                try await Task.sleep(for: .milliseconds(300))
+            } catch {
+                return
             }
+            guard !Task.isCancelled else { return }
 
-            if price == nil || price == 0 {
-                price = await StockService.shared.fetchPrice(symbol: asset.symbol)?.currentPrice
-            }
+            if calculationMode == .sip && calculationType.supportsMode {
+                let sipResult = await StockService.shared.calculateHistoricalSIPUnits(
+                    symbol: asset.symbol,
+                    monthlyAmount: invested,
+                    startDate: calculationDate
+                )
+                guard !Task.isCancelled else { return }
 
-            if price == nil || price == 0 {
-                price = asset.currentPrice
-            }
+                await MainActor.run {
+                    guard selectedMarketAsset?.symbol == asset.symbol,
+                          selectedType == calculationType,
+                          mode == calculationMode,
+                          startDate == calculationDate,
+                          Double(amount) == invested else { return }
 
-            await MainActor.run {
-                if let price, price > 0 {
-                    historicalPriceOnDate = price
-                    quantity = selectedType == .crypto ? String(format: "%.6f", invested / price) : String(format: "%.3f", invested / price)
-                    if selectedType == .crypto, var current = selectedMarketAsset {
-                        current.currentPrice = price
-                        selectedMarketAsset = current
+                    if sipResult.totalUnits > 0 {
+                        quantity = calculationType == .crypto ? String(format: "%.6f", sipResult.totalUnits) : String(format: "%.3f", sipResult.totalUnits)
+                        historicalPriceOnDate = sipResult.totalInvested > 0 ? (sipResult.totalInvested / sipResult.totalUnits) : nil
+                        if calculationType == .crypto, var current = selectedMarketAsset {
+                            if let avg = historicalPriceOnDate {
+                                current.currentPrice = avg
+                                selectedMarketAsset = current
+                            }
+                        }
+                    } else {
+                        historicalPriceOnDate = nil
+                        quantity = ""
                     }
-                } else {
-                    historicalPriceOnDate = nil
-                    quantity = ""
+                    isFetchingHistoricalQty = false
                 }
-                isFetchingHistoricalQty = false
+            } else {
+                var price: Double?
+
+                if calculationType == .crypto {
+                    price = await StockService.shared.fetchCryptoINRPrice(symbol: asset.symbol, date: calculationDate)
+                } else if calculationType == .goldETF || calculationType == .stock {
+                    price = await StockService.shared.fetchHistoricalPrice(symbol: asset.symbol, date: calculationDate)
+                }
+                guard !Task.isCancelled else { return }
+
+                if price == nil || price == 0 {
+                    price = await StockService.shared.fetchPrice(symbol: asset.symbol)?.currentPrice
+                }
+                guard !Task.isCancelled else { return }
+
+                if price == nil || price == 0 {
+                    price = asset.currentPrice
+                }
+
+                await MainActor.run {
+                    guard selectedMarketAsset?.symbol == asset.symbol,
+                          selectedType == calculationType,
+                          mode == calculationMode,
+                          startDate == calculationDate,
+                          Double(amount) == invested else { return }
+                    if let price, price > 0 {
+                        historicalPriceOnDate = price
+                        quantity = calculationType == .crypto ? String(format: "%.6f", invested / price) : String(format: "%.3f", invested / price)
+                        if calculationType == .crypto, var current = selectedMarketAsset {
+                            current.currentPrice = price
+                            selectedMarketAsset = current
+                        }
+                    } else {
+                        historicalPriceOnDate = nil
+                        quantity = ""
+                    }
+                    isFetchingHistoricalQty = false
+                }
             }
         }
     }
 
     private func performMutualFundAutoCalculation() {
+        calculationTask?.cancel()
         guard selectedType == .mutualFund,
               let code = selectedSchemeCode,
               let invested = Double(amount),
-              invested > 0 else { return }
+              invested > 0 else {
+            isCalculatingUnits = false
+            return
+        }
 
         isCalculatingUnits = true
-        Task {
-            if mode == .sip {
+        let calculationMode = mode
+        let calculationDate = startDate
+        calculationTask = Task {
+            do {
+                try await Task.sleep(for: .milliseconds(300))
+            } catch {
+                return
+            }
+            guard !Task.isCancelled else { return }
+
+            let calculatedUnits: Double?
+            let calculatedNAV: Double?
+            if calculationMode == .sip {
                 let result = await MFService.shared.calculateHistoricalSIPUnits(
                     schemeCode: code,
                     monthlyAmount: invested,
-                    startDate: startDate
+                    startDate: calculationDate
                 )
-                await MainActor.run {
-                    units = String(format: "%.4f", result.totalUnits)
-                    isCalculatingUnits = false
-                }
-            } else if let nav = await MFService.shared.fetchHistoricalNAV(schemeCode: code, date: startDate) {
-                await MainActor.run {
-                    units = String(format: "%.4f", invested / nav)
-                    historicalPriceOnDate = nav
-                    isCalculatingUnits = false
-                }
+                calculatedUnits = result.totalUnits
+                calculatedNAV = nil
             } else {
-                await MainActor.run {
-                    isCalculatingUnits = false
+                calculatedNAV = await MFService.shared.fetchHistoricalNAV(schemeCode: code, date: calculationDate)
+                calculatedUnits = calculatedNAV.map { invested / $0 }
+            }
+
+            guard !Task.isCancelled else { return }
+            await MainActor.run {
+                guard selectedSchemeCode == code,
+                      selectedType == .mutualFund,
+                      mode == calculationMode,
+                      startDate == calculationDate,
+                      Double(amount) == invested else { return }
+                if let calculatedUnits {
+                    units = String(format: "%.4f", calculatedUnits)
                 }
+                if let calculatedNAV {
+                    historicalPriceOnDate = calculatedNAV
+                }
+                isCalculatingUnits = false
             }
         }
     }

@@ -7,6 +7,8 @@ struct AddGoalView: View {
     @State private var goalName = ""
     @State private var targetAmount = ""
     @State private var targetDate = Date().addingTimeInterval(60 * 60 * 24 * 365)
+    @State private var goalCategory: GoalPlanningCategory = .custom
+    @State private var goalLocation = ""
 
     @State private var linkInvestment = false
 
@@ -25,6 +27,8 @@ struct AddGoalView: View {
     @State private var isFetchingPrice = false
     @State private var isCalculating = false
     @State private var isCalculatingUnits = false
+    @State private var autoCalculationTask: Task<Void, Never>?
+    @State private var fundSearchTask: Task<Void, Never>?
     
     @State private var searchResults: [MFScheme] = []
     @State private var selectedSchemeCode: String?
@@ -33,6 +37,13 @@ struct AddGoalView: View {
     
     @State private var linkExisting = false
     @State private var selectedExistingInvestmentIDs: Set<UUID> = []
+
+    private var canSaveGoal: Bool {
+        let nameIsValid = !goalName.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty
+        guard let amount = Double(targetAmount), amount.isFinite, amount > 0 else { return false }
+        let savingsValid = manualSavings.isEmpty || (Double(manualSavings).map { $0.isFinite && $0 >= 0 } ?? false)
+        return nameIsValid && savingsValid && !(linkInvestment && (invName.isEmpty || invAmount.isEmpty))
+    }
 
     var body: some View {
         NavigationStack {
@@ -56,18 +67,24 @@ struct AddGoalView: View {
                     Button(action: saveGoal) {
                         Image(systemName: "checkmark")
                             .font(.system(size: 16, weight: .bold))
-                            .foregroundColor(goalName.isEmpty || targetAmount.isEmpty || (linkInvestment && (invName.isEmpty || invAmount.isEmpty)) ? .gray : .blue)
+                        .foregroundColor(canSaveGoal ? .blue : .gray)
                     }
-                    .disabled(goalName.isEmpty || targetAmount.isEmpty || (linkInvestment && (invName.isEmpty || invAmount.isEmpty)))
+                    .disabled(!canSaveGoal)
                 }
+            }
+            .onDisappear {
+                autoCalculationTask?.cancel()
+                fundSearchTask?.cancel()
             }
         }
     }
 
     private func saveGoal() {
-        let amount = Double(targetAmount) ?? 0
+        guard canSaveGoal, let amount = Double(targetAmount) else { return }
         let savings = Double(manualSavings) ?? 0
-        let newGoal = AstraGoal(id: UUID(), goalName: goalName, targetAmount: amount, currentAmount: 0, manualSavingsContribution: savings, startDate: Date(), targetDate: targetDate)
+        let planning = GoalPlanningMetadata(category: goalCategory, location: goalLocation.isEmpty ? nil : goalLocation,
+                                            requirementType: "User-provided estimate")
+        let newGoal = AstraGoal(id: UUID(), goalName: goalName, targetAmount: amount, currentAmount: 0, manualSavingsContribution: savings, startDate: Date(), targetDate: targetDate, planning: planning)
         appState.addGoal(newGoal)
 
         // Link existing investments
@@ -112,10 +129,20 @@ struct AddGoalView: View {
     private var goalSection: some View {
         Section(header: Text("Goal Details")) {
             TextField("Goal Name (e.g. Dream Car)", text: $goalName)
+            Picker("Goal Category", selection: $goalCategory) {
+                ForEach(GoalPlanningCategory.allCases) { category in
+                    Text(category.rawValue).tag(category)
+                }
+            }
             HStack {
                 Text("₹")
-                TextField("Target Amount", text: $targetAmount).keyboardType(.decimalPad)
+                TextField("Current Estimated Cost", text: $targetAmount).keyboardType(.decimalPad)
             }
+            if goalCategory == .vehicle || goalCategory == .property || goalCategory == .healthcare || goalCategory == .marriage {
+                TextField("Location (optional)", text: $goalLocation)
+            }
+            Label("No live source is connected. This value will be saved as your estimate.", systemImage: "info.circle")
+                .font(.caption).foregroundStyle(.secondary)
             DatePicker("Target Date", selection: $targetDate, displayedComponents: .date)
             
             HStack {
@@ -217,11 +244,28 @@ struct AddGoalView: View {
             } else {
                 TextField("Investment / Fund Name", text: $invName)
                     .onChange(of: invName) { _, newValue in
-                        if invType == .mutualFund && !newValue.isEmpty && selectedSchemeCode == nil {
-                            searchResults = MFService.shared.searchSchemes(query: newValue)
-                            showSearch = !searchResults.isEmpty
-                        } else {
+                        fundSearchTask?.cancel()
+                        guard invType == .mutualFund,
+                              !newValue.isEmpty,
+                              selectedSchemeCode == nil else {
+                            searchResults = []
                             showSearch = false
+                            return
+                        }
+                        let query = newValue
+                        showSearch = false
+                        fundSearchTask = Task {
+                            do {
+                                try await Task.sleep(for: .milliseconds(250))
+                            } catch {
+                                return
+                            }
+                            guard !Task.isCancelled,
+                                  query == invName,
+                                  invType == .mutualFund,
+                                  selectedSchemeCode == nil else { return }
+                            searchResults = MFService.shared.searchSchemes(query: query)
+                            showSearch = !searchResults.isEmpty
                         }
                     }
                 
@@ -276,6 +320,9 @@ struct AddGoalView: View {
                 Text("Lumpsum").tag(AstraInvestmentMode.lumpsum)
             }
             .pickerStyle(.segmented)
+            .onChange(of: invMode) { _, _ in
+                if invType == .mutualFund { performAutoCalculation() }
+            }
 
             HStack {
                 Text("₹")
@@ -361,31 +408,47 @@ struct AddGoalView: View {
     }
 
     private func performAutoCalculation() {
-        guard invType == .mutualFund, let code = selectedSchemeCode, let amt = Double(invAmount), amt > 0 else { return }
+        autoCalculationTask?.cancel()
+        guard invType == .mutualFund, let code = selectedSchemeCode, let amt = Double(invAmount), amt > 0 else {
+            isCalculatingUnits = false
+            return
+        }
 
         isCalculatingUnits = true
-        Task {
-            if invMode == .sip {
+        let calculationMode = invMode
+        let calculationDate = invStartDate
+        autoCalculationTask = Task {
+            do {
+                try await Task.sleep(for: .milliseconds(350))
+            } catch {
+                return
+            }
+            guard !Task.isCancelled else { return }
+
+            let calculatedUnits: Double?
+            if calculationMode == .sip {
                 let (sipUnits, _, _) = await MFService.shared.calculateHistoricalSIPUnits(
                     schemeCode: code,
                     monthlyAmount: amt,
-                    startDate: invStartDate
+                    startDate: calculationDate
                 )
-                await MainActor.run {
-                    self.units = String(format: "%.4f", sipUnits)
-                    self.isCalculatingUnits = false
-                }
+                calculatedUnits = sipUnits
             } else {
-                if let nav = await MFService.shared.fetchHistoricalNAV(schemeCode: code, date: invStartDate) {
-                    await MainActor.run {
-                        self.units = String(format: "%.4f", amt / nav)
-                        self.isCalculatingUnits = false
-                    }
-                } else {
-                    await MainActor.run {
-                        self.isCalculatingUnits = false
-                    }
+                let nav = await MFService.shared.fetchHistoricalNAV(schemeCode: code, date: calculationDate)
+                calculatedUnits = nav.map { amt / $0 }
+            }
+
+            guard !Task.isCancelled else { return }
+            await MainActor.run {
+                guard selectedSchemeCode == code,
+                      invType == .mutualFund,
+                      invMode == calculationMode,
+                      invStartDate == calculationDate,
+                      Double(invAmount) == amt else { return }
+                if let calculatedUnits {
+                    units = String(format: "%.4f", calculatedUnits)
                 }
+                isCalculatingUnits = false
             }
         }
     }

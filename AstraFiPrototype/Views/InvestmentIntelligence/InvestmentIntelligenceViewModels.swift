@@ -4,10 +4,14 @@ import Observation
 @Observable
 final class InvestmentIntelligenceHomeViewModel {
     var stocks: [InvestmentSummaryAsset] = []
+    var recommendations: [InvestmentSummaryAsset] = []
     var mutualFunds: [InvestmentSummaryAsset] = []
     var goldETFs: [InvestmentSummaryAsset] = []
     var isLoading = false
+    var isRefreshingRecommendations = false
     var errorMessage: String?
+    private var recommendationOffset = 0
+    @ObservationIgnored private var loadGeneration = 0
 
     private let repository: InvestmentIntelligenceRepository
 
@@ -16,17 +20,37 @@ final class InvestmentIntelligenceHomeViewModel {
     }
 
     func load() async {
-        guard !isLoading else { return }
+        loadGeneration += 1
+        let generation = loadGeneration
         isLoading = true
-        defer { isLoading = false }
+        defer {
+            if loadGeneration == generation {
+                isLoading = false
+            }
+        }
 
         let assets = await repository.homeAssets()
+        guard !Task.isCancelled, generation == loadGeneration else { return }
         stocks = assets.stocks
         mutualFunds = assets.funds
         goldETFs = assets.gold
+        let updatedRecommendations = await InvestmentRecommendationEngine.shared.dailyRecommendations(from: assets.stocks)
+        guard !Task.isCancelled, generation == loadGeneration else { return }
+        recommendations = updatedRecommendations
         errorMessage = (stocks.isEmpty && mutualFunds.isEmpty && goldETFs.isEmpty)
             ? "No verified market data loaded. Check FINNHUB_API_KEY, network access, and AMFI availability."
             : nil
+    }
+
+    func refreshRecommendations() async {
+        guard !isRefreshingRecommendations, !stocks.isEmpty else { return }
+        isRefreshingRecommendations = true
+        defer { isRefreshingRecommendations = false }
+        recommendationOffset += 1
+        let refreshed = await InvestmentRecommendationEngine.shared.dailyRecommendations(from: stocks, offset: recommendationOffset)
+        if !refreshed.isEmpty {
+            recommendations = refreshed
+        }
     }
 }
 
@@ -66,12 +90,16 @@ final class InvestmentSearchViewModel {
             return
         }
 
+        // Wait for the user to pause typing before making a network request.
+        // The generation check also prevents older keystrokes from starting work.
+        try? await Task.sleep(for: .milliseconds(300))
+        guard generation == searchGeneration,
+              query.trimmingCharacters(in: .whitespacesAndNewlines) == trimmed else { return }
+
         isSearching = true
         let matchingResults = await searchService.search(query: trimmed)
 
-        // A network-backed search is launched for each keystroke. Ignore an older
-        // request that completes after a newer query, rather than replacing the
-        // current results with stale matches.
+        // Ignore an older request that completes after a newer query.
         guard generation == searchGeneration,
               query.trimmingCharacters(in: .whitespacesAndNewlines) == trimmed else { return }
         results = matchingResults
@@ -193,7 +221,7 @@ final class InvestmentCategoryListViewModel {
 
     func selectFilter(_ filter: String) async {
         selectedFilter = filter
-        if kind == .mutualFund && searchText.isEmpty {
+        if searchText.isEmpty {
             isLoading = true
             defer { isLoading = false }
             categoryAssets = await repository.categoryAssets(kind: kind, filter: filter == "All" ? nil : filter)
@@ -211,6 +239,10 @@ final class InvestmentCategoryListViewModel {
             return
         }
 
+        try? await Task.sleep(for: .milliseconds(300))
+        guard generation == searchGeneration,
+              searchText.trimmingCharacters(in: .whitespacesAndNewlines) == trimmed else { return }
+
         isSearching = true
         let results = await repository.searchCategory(kind: kind, query: trimmed)
 
@@ -220,4 +252,3 @@ final class InvestmentCategoryListViewModel {
         isSearching = false
     }
 }
-

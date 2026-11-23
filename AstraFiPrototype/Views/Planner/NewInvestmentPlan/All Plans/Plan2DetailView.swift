@@ -10,10 +10,13 @@ struct Plan2DetailView: View {
     @State private var animateChart = false
     @State private var showingSaveAlert = false
     @State private var alertMessage = ""
+    @State private var journeyPlanSaved = false
 
     var input: InvestmentPlanInputModel
     var result: Plan2Result
     var isFromTracker: Bool = false
+    var isFromFinancialJourney: Bool = false
+    var onSaveJourneyPlan: ((InvestmentPlanInputModel) -> Void)? = nil
 
     @State private var currentResult: Plan2Result? = nil
     @State private var loanOverride: Double = 0
@@ -38,12 +41,12 @@ struct Plan2DetailView: View {
                     loanMetrics
                 }
                 .padding(.horizontal, 20)
-                .padding(.bottom, 120)
+                .padding(.bottom, (!isFromTracker && !isFromFinancialJourney) ? 120 : 36)
                 .frame(maxWidth: .infinity)
             }
             .background(AppTheme.appBackground(for: colorScheme))
 
-            if !isFromTracker {
+            if !isFromTracker && !isFromFinancialJourney {
                 savePlanFooter
             }
         }
@@ -58,6 +61,23 @@ struct Plan2DetailView: View {
         }
         .navigationTitle("Debt Scenario")
         .navigationBarTitleDisplayMode(.inline)
+        .toolbar {
+            if isFromFinancialJourney {
+                ToolbarItem(placement: .topBarTrailing) {
+                    Button {
+                        var savedInput = input
+                        savedInput.targetAmount = String(Int(loanOverride))
+                        savedInput.timePeriod = String(tenureOverride)
+                        onSaveJourneyPlan?(savedInput)
+                        journeyPlanSaved = true
+                    } label: {
+                        Text(journeyPlanSaved ? "Saved" : "Save")
+                            .font(.subheadline.weight(.semibold))
+                            .foregroundStyle(journeyPlanSaved ? Color.green : Color.accentColor)
+                    }
+                }
+            }
+        }
         .onAppear {
             if loanOverride == 0 {
                 loanOverride = InvestmentPlannerEngine.parseAmount(input.targetAmount)

@@ -11,8 +11,28 @@ struct AstraStock: Identifiable, Codable, Hashable {
     var priceChangePercentage: Double
 }
 
+extension AstraStock {
+    var marketContext: SecurityMarketContext {
+        SecurityMarketContext.forStock(self)
+    }
+
+    var formattedPrice: String {
+        guard currentPrice > 0 else { return "—" }
+        return marketContext.formatPrice(currentPrice)
+    }
+}
+
+
 class StockService {
     static let shared = StockService()
+
+    private let session: URLSession = {
+        let configuration = URLSessionConfiguration.ephemeral
+        configuration.timeoutIntervalForRequest = 15
+        configuration.timeoutIntervalForResource = 30
+        configuration.waitsForConnectivity = false
+        return URLSession(configuration: configuration)
+    }()
     
     private let baseURL = "https://finnhub.io/api/v1"
     private var apiKey: String { Secrets.finnhubApiKey }
@@ -21,9 +41,9 @@ class StockService {
     // provider's search API does not return Indian equities reliably.
     private var mockStocks: [AstraStock] = [
         AstraStock(symbol: "RADICO.NS", name: "Radico Khaitan Ltd", exchange: "NSE", currentPrice: 0, priceChange: 0, priceChangePercentage: 0),
-        AstraStock(symbol: "RELIANCE.NS", name: "Reliance Industries Ltd", exchange: "NSE", currentPrice: 2450.50, priceChange: 15.20, priceChangePercentage: 0.62),
-        AstraStock(symbol: "TCS.NS", name: "Tata Consultancy Services", exchange: "NSE", currentPrice: 3520.00, priceChange: -25.50, priceChangePercentage: -0.72),
-        AstraStock(symbol: "HDFCBANK.NS", name: "HDFC Bank Ltd", exchange: "NSE", currentPrice: 1680.75, priceChange: 4.30, priceChangePercentage: 0.26),
+        AstraStock(symbol: "RELIANCE.NS", name: "Reliance Industries Ltd", exchange: "NSE", currentPrice: 0, priceChange: 0, priceChangePercentage: 0),
+        AstraStock(symbol: "TCS.NS", name: "Tata Consultancy Services", exchange: "NSE", currentPrice: 0, priceChange: 0, priceChangePercentage: 0),
+        AstraStock(symbol: "HDFCBANK.NS", name: "HDFC Bank Ltd", exchange: "NSE", currentPrice: 0, priceChange: 0, priceChangePercentage: 0),
         AstraStock(symbol: "INFY.NS", name: "Infosys Ltd", exchange: "NSE", currentPrice: 0, priceChange: 0, priceChangePercentage: 0),
         AstraStock(symbol: "ICICIBANK.NS", name: "ICICI Bank Ltd", exchange: "NSE", currentPrice: 0, priceChange: 0, priceChangePercentage: 0),
         AstraStock(symbol: "BAJFINANCE.NS", name: "Bajaj Finance Ltd", exchange: "NSE", currentPrice: 0, priceChange: 0, priceChangePercentage: 0),
@@ -94,7 +114,7 @@ class StockService {
         AstraStock(symbol: "POLICYBZR.NS", name: "PB Fintech Ltd (PolicyBazaar)", exchange: "NSE", currentPrice: 0, priceChange: 0, priceChangePercentage: 0),
         AstraStock(symbol: "BSE.NS", name: "BSE Ltd", exchange: "NSE", currentPrice: 0, priceChange: 0, priceChangePercentage: 0),
         AstraStock(symbol: "CDSL.NS", name: "Central Depository Services", exchange: "NSE", currentPrice: 0, priceChange: 0, priceChangePercentage: 0),
-        AstraStock(symbol: "AAPL", name: "Apple Inc", exchange: "NASDAQ", currentPrice: 185.20, priceChange: 1.25, priceChangePercentage: 0.68),
+        AstraStock(symbol: "AAPL", name: "Apple Inc", exchange: "NASDAQ", currentPrice: 0, priceChange: 0, priceChangePercentage: 0),
         AstraStock(symbol: "MSFT", name: "Microsoft Corporation", exchange: "NASDAQ", currentPrice: 0, priceChange: 0, priceChangePercentage: 0),
         AstraStock(symbol: "GOOGL", name: "Alphabet Inc", exchange: "NASDAQ", currentPrice: 0, priceChange: 0, priceChangePercentage: 0),
         AstraStock(symbol: "AMZN", name: "Amazon.com Inc", exchange: "NASDAQ", currentPrice: 0, priceChange: 0, priceChangePercentage: 0),
@@ -196,7 +216,7 @@ class StockService {
         }
 
         do {
-            let (data, _) = try await URLSession.shared.data(from: url)
+            let (data, _) = try await session.data(from: url)
             let response = try JSONDecoder().decode(BinanceExchangeInfoResponse.self, from: data)
             let results = response.symbols
                 .filter { symbol in
@@ -233,7 +253,7 @@ class StockService {
         guard let url = URL(string: urlString) else { return [] }
         
         do {
-            let (data, _) = try await URLSession.shared.data(from: url)
+            let (data, _) = try await session.data(from: url)
             let response = try JSONDecoder().decode(FinnhubSearchResponse.self, from: data)
             
             return response.result.compactMap { item in
@@ -261,7 +281,7 @@ class StockService {
         }
 
         do {
-            let (data, _) = try await URLSession.shared.data(from: url)
+            let (data, _) = try await session.data(from: url)
             let response = try JSONDecoder().decode(YahooSearchResponse.self, from: data)
 
             return response.quotes.compactMap { quote in
@@ -402,7 +422,7 @@ class StockService {
         
         do {
             print("Finnhub Symbol:", finnhubSymbol)
-            let (data, response) = try await URLSession.shared.data(from: url)
+            let (data, response) = try await session.data(from: url)
             guard isValidJSONResponse(data: data, response: response, provider: "Finnhub", context: symbol) else {
                 return await fetchPriceFromYahoo(symbol: symbol)
             }
@@ -487,7 +507,7 @@ class StockService {
         }
 
         do {
-            let (data, _) = try await URLSession.shared.data(from: url)
+            let (data, _) = try await session.data(from: url)
             let response = try JSONDecoder().decode(BinanceTickerPriceResponse.self, from: data)
             return Double(response.price)
         } catch {
@@ -505,7 +525,7 @@ class StockService {
         guard let url = URL(string: urlString) else { return nil }
 
         do {
-            let (data, _) = try await URLSession.shared.data(from: url)
+            let (data, _) = try await session.data(from: url)
             let rows = try JSONDecoder().decode([[BinanceKlineValue]].self, from: data)
             guard let row = rows.first, row.count > 4 else {
                 return await fetchCurrentCryptoUSDPrice(pair: pair)
@@ -526,7 +546,7 @@ class StockService {
         }
 
         do {
-            let (data, _) = try await URLSession.shared.data(from: url)
+            let (data, _) = try await session.data(from: url)
             let response = try JSONDecoder().decode(YahooChartResponse.self, from: data)
             return response.chart.result?.first?.meta.regularMarketPrice
         } catch {
@@ -540,13 +560,13 @@ class StockService {
         let yahooSymbol = toYahooSymbol(symbol)
         guard let encoded = yahooSymbol.addingPercentEncoding(withAllowedCharacters: .urlQueryAllowed),
               let url = URL(string: "https://query1.finance.yahoo.com/v8/finance/chart/\(encoded)?interval=1d&range=5d") else {
-            return mockStocks.first { $0.symbol == symbol }
+            return nil
         }
 
         do {
-            let (data, response) = try await URLSession.shared.data(from: url)
+            let (data, response) = try await session.data(from: url)
             guard isValidJSONResponse(data: data, response: response, provider: "Yahoo Finance", context: symbol) else {
-                return mockStocks.first { $0.symbol == symbol }
+                return nil
             }
 
             let chartResponse = try JSONDecoder().decode(YahooChartResponse.self, from: data)
@@ -571,7 +591,7 @@ class StockService {
         } catch {
             print("Yahoo Finance Quote Error: \(error)")
         }
-        return mockStocks.first { $0.symbol == symbol }
+        return nil
     }
 
     private func isValidJSONResponse(data: Data, response: URLResponse, provider: String, context: String) -> Bool {
@@ -639,7 +659,7 @@ class StockService {
         }
 
         do {
-            let (data, _) = try await URLSession.shared.data(from: url)
+            let (data, _) = try await session.data(from: url)
             let response = try JSONDecoder().decode(YahooChartResponse.self, from: data)
             if let result = response.chart.result?.first,
                let closes = result.indicators?.quote?.first?.close {
@@ -686,7 +706,7 @@ class StockService {
             return []
         }
         do {
-            let (data, _) = try await URLSession.shared.data(from: url)
+            let (data, _) = try await session.data(from: url)
             let response  = try JSONDecoder().decode(YahooChartResponse.self, from: data)
             guard let result = response.chart.result?.first,
                   let timestamps = result.timestamps,
@@ -721,7 +741,7 @@ class StockService {
         guard let url = URL(string: urlString) else { return [] }
 
         do {
-            let (data, _) = try await URLSession.shared.data(from: url)
+            let (data, _) = try await session.data(from: url)
             let rows = try JSONDecoder().decode([[BinanceKlineValue]].self, from: data)
             let usdInr = await fetchUSDINRRate() ?? 83.0
             let formatter = DateFormatter()

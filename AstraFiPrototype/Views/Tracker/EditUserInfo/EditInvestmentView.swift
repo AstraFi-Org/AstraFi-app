@@ -14,6 +14,7 @@ struct EditInvestmentView: View {
     @State private var selectedGoalID: UUID? = nil
     @State private var units = ""
     @State private var isCalculatingUnits = false
+    @State private var calculationTask: Task<Void, Never>?
 
     var body: some View {
         NavigationStack {
@@ -108,6 +109,8 @@ struct EditInvestmentView: View {
             .onChange(of: startDate) { _, _ in if supportsAutoCalculation { performAutoCalculation() } }
             .onChange(of: amount) { _, _ in if supportsAutoCalculation { performAutoCalculation() } }
             .onChange(of: mode) { _, _ in if supportsAutoCalculation { performAutoCalculation() } }
+            .onChange(of: type) { _, _ in if supportsAutoCalculation { performAutoCalculation() } }
+            .onDisappear { calculationTask?.cancel() }
             .toolbar {
                 ToolbarItem(placement: .navigationBarLeading) {
                     Button { dismiss() } label: {
@@ -148,57 +151,67 @@ struct EditInvestmentView: View {
     }
 
     private func performAutoCalculation() {
-        guard let amt = Double(amount), amt > 0 else { return }
+        calculationTask?.cancel()
+        guard let amt = Double(amount), amt > 0 else {
+            isCalculatingUnits = false
+            return
+        }
 
         isCalculatingUnits = true
-        Task {
-            if type == .mutualFund, let code = investment.schemeCode {
-                if mode == .sip {
+        let calculationType = type
+        let calculationMode = mode
+        let calculationDate = startDate
+        let code = investment.schemeCode
+        let symbol = investment.symbol
+        calculationTask = Task {
+            do {
+                try await Task.sleep(for: .milliseconds(350))
+            } catch {
+                return
+            }
+            guard !Task.isCancelled else { return }
+
+            var calculatedUnits: Double?
+            if calculationType == .mutualFund, let code {
+                if calculationMode == .sip {
                     let result = await MFService.shared.calculateHistoricalSIPUnits(
                         schemeCode: code,
                         monthlyAmount: amt,
-                        startDate: startDate
+                        startDate: calculationDate
                     )
-                    await MainActor.run {
-                        self.units = String(format: "%.4f", result.totalUnits)
-                        self.isCalculatingUnits = false
-                    }
+                    calculatedUnits = result.totalUnits
                 } else {
-                    if let nav = await MFService.shared.fetchHistoricalNAV(schemeCode: code, date: startDate) {
-                        await MainActor.run {
-                            self.units = String(format: "%.4f", amt / nav)
-                            self.isCalculatingUnits = false
-                        }
-                    } else {
-                        await MainActor.run {
-                            self.isCalculatingUnits = false
-                        }
-                    }
+                    let nav = await MFService.shared.fetchHistoricalNAV(schemeCode: code, date: calculationDate)
+                    calculatedUnits = nav.map { amt / $0 }
                 }
-            } else if isMarketPricedInvestment(type), let symbol = investment.symbol {
+            } else if isMarketPricedInvestment(calculationType), let symbol {
                 let result: (totalUnits: Double, totalInvested: Double, installments: [AstraInvestmentTransaction])
-                if mode == .sip {
+                if calculationMode == .sip {
                     result = await StockService.shared.calculateHistoricalSIPUnits(
                         symbol: symbol,
                         monthlyAmount: amt,
-                        startDate: startDate
+                        startDate: calculationDate
                     )
                 } else {
                     result = await StockService.shared.calculateLumpsumUnits(
                         symbol: symbol,
                         amount: amt,
-                        startDate: startDate
+                        startDate: calculationDate
                     )
                 }
+                calculatedUnits = result.totalUnits
+            }
 
-                await MainActor.run {
-                    self.units = String(format: type == .cryptocurrency ? "%.6f" : "%.4f", result.totalUnits)
-                    self.isCalculatingUnits = false
+            guard !Task.isCancelled else { return }
+            await MainActor.run {
+                guard Double(amount) == amt,
+                      type == calculationType,
+                      mode == calculationMode,
+                      startDate == calculationDate else { return }
+                if let calculatedUnits {
+                    units = String(format: calculationType == .cryptocurrency ? "%.6f" : "%.4f", calculatedUnits)
                 }
-            } else {
-                await MainActor.run {
-                    self.isCalculatingUnits = false
-                }
+                isCalculatingUnits = false
             }
         }
     }

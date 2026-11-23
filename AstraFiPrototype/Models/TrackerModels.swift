@@ -111,9 +111,19 @@ struct InvestmentPlanInputModel: Codable, Hashable {
     var interestRate: Double?
     var loanAmount: Double?
 
+    // Customization & Inflation Tracking
+    var baseGoalCost: Double?
+    var inflationRate: Double?
+    var customInflationRate: Double?
+    var customTargetCorpus: Double?
+
     var currentAge: Int?
     var retirementAge: Int?
     var yearsPostRetirement: Int?
+    /// Today's monthly retirement lifestyle cost, collected from the user or their profile.
+    var retirementMonthlyExpensesToday: Double?
+    /// Optional healthcare portion of monthly expenses; modeled with healthcare inflation.
+    var retirementMonthlyHealthcareToday: Double?
     var lifestylePreference: String?
     var yearlyStepUpPct: Double?
     var withdrawalPreference: String?

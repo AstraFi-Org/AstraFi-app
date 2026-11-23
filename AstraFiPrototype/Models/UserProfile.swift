@@ -23,6 +23,10 @@ struct AstraUserProfile: Codable, Identifiable, Equatable {
     var emergencyFundLinkedInvestmentIDs: [UUID]? = nil
     var performanceRecords: [InvestmentPerformanceRecord]? = []
     var transferHistory: [FinancialTransferRecord]? = []
+    var planningJourney: FinancialPlanningJourney? = nil
+    var masterFinancialPlan: MasterFinancialPlan? = nil
+    /// Freshness metadata for profile-owned financial values. Optional for older saved profiles.
+    var financialDataFreshness: [FinancialDataFreshnessRecord]? = nil
 
     var safePerformanceRecords: [InvestmentPerformanceRecord] {
         get { performanceRecords ?? [] }
@@ -253,6 +257,10 @@ enum AstraInvestmentType: String, Codable, CaseIterable {
     case cashSavings = "Cash Savings"
     case emergencyFund = "Emergency Fund"
     case other = "Other"
+
+    static var allCases: [AstraInvestmentType] {
+        [.mutualFund, .stocks, .goldETF, .cryptocurrency, .deposits, .ppf, .nps, .other]
+    }
 }
 
 enum AstraInvestmentMode: String, Codable {
@@ -705,10 +713,11 @@ struct AstraGoal: Codable, Identifiable, Equatable {
     var protectedCashAmount: Double = 0
     var isProtectionModeEnabled: Bool = false
     var achievementMessageDismissed: Bool = false
+    var planning: GoalPlanningMetadata?
 
     enum CodingKeys: String, CodingKey {
         case id, goalName, targetAmount, currentAmount, manualSavingsContribution, startDate, targetDate
-        case status, protectedCashAmount, isProtectionModeEnabled, achievementMessageDismissed
+        case status, protectedCashAmount, isProtectionModeEnabled, achievementMessageDismissed, planning
     }
 
     init(
@@ -722,7 +731,8 @@ struct AstraGoal: Codable, Identifiable, Equatable {
         status: GoalStrategyStatus = .active,
         protectedCashAmount: Double = 0,
         isProtectionModeEnabled: Bool = false,
-        achievementMessageDismissed: Bool = false
+        achievementMessageDismissed: Bool = false,
+        planning: GoalPlanningMetadata? = nil
     ) {
         self.id = id
         self.goalName = goalName
@@ -735,6 +745,7 @@ struct AstraGoal: Codable, Identifiable, Equatable {
         self.protectedCashAmount = protectedCashAmount
         self.isProtectionModeEnabled = isProtectionModeEnabled
         self.achievementMessageDismissed = achievementMessageDismissed
+        self.planning = planning
     }
 
     init(from decoder: Decoder) throws {
@@ -750,6 +761,7 @@ struct AstraGoal: Codable, Identifiable, Equatable {
         protectedCashAmount = try container.decodeIfPresent(Double.self, forKey: .protectedCashAmount) ?? 0
         isProtectionModeEnabled = try container.decodeIfPresent(Bool.self, forKey: .isProtectionModeEnabled) ?? false
         achievementMessageDismissed = try container.decodeIfPresent(Bool.self, forKey: .achievementMessageDismissed) ?? false
+        planning = try container.decodeIfPresent(GoalPlanningMetadata.self, forKey: .planning)
     }
 }
 

@@ -2,10 +2,11 @@ import SwiftUI
 
 struct RetirementResultView: View {
     var input: InvestmentPlanInputModel
-    
+    var isFromFinancialJourney: Bool = false
+
     var body: some View {
-        InvestmentPlanResultView(input: input)
-            .navigationTitle("Retirement Illustration")
+        InvestmentPlanResultView(input: input, isFromFinancialJourney: isFromFinancialJourney)
+            .navigationTitle("Retirement Plan")
     }
 }
 

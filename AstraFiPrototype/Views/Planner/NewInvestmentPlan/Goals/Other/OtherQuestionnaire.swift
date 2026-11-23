@@ -125,6 +125,7 @@ struct OtherQuestionnaire: View {
                     goalAccentColor: goalAccentColor,
                     onSave: {
                         let trackerInput = buildTrackerInput()
+                        saveOtherGoalToJourney()
                         let planModel = InvestmentPlanModel(
                             name: input.goalName.isEmpty ? "My Goal" : input.goalName,
                             dateSaved: DateFormatter.localizedString(from: Date(), dateStyle: .medium, timeStyle: .none),
@@ -141,6 +142,28 @@ struct OtherQuestionnaire: View {
             Spacer(minLength: 40)
         }
         .animation(.spring(response: 0.5, dampingFraction: 0.8), value: showInsights)
+        .onAppear {
+            if let draft = appState.currentProfile?.planningJourney?.goalDrafts.first(where: {
+                $0.category.localizedCaseInsensitiveContains("Other")
+            }) {
+                if input.targetYears.isEmpty, let targetDate = draft.targetDate {
+                    let years = max(1, Calendar.current.dateComponents([.year], from: Date(), to: targetDate).year ?? 5)
+                    input.targetYears = "\(years)"
+                }
+                if input.targetAmount.isEmpty, let amount = draft.targetAmount {
+                    input.targetAmount = String(format: "%.0f", amount)
+                }
+                if input.savedAmount.isEmpty, let saved = draft.savedAmount {
+                    input.savedAmount = String(format: "%.0f", saved)
+                }
+                if input.goalName.isEmpty {
+                    input.goalName = draft.name
+                }
+            }
+        }
+        .onDisappear {
+            saveOtherGoalToJourney()
+        }
     }
     
     private var showInsights: Bool {
@@ -175,6 +198,59 @@ struct OtherQuestionnaire: View {
         return max(0, futureCost - savedAmt)
     }
     
+    private func saveOtherGoalToJourney() {
+        guard let currentCost = Double(input.targetAmount), currentCost.isFinite, currentCost >= 0 else { return }
+        var journey = appState.currentProfile?.planningJourney ?? FinancialPlanningJourney()
+        let years = max(1, Int(input.targetYears) ?? 5)
+        let targetDate = Calendar.current.date(
+            byAdding: .year,
+            value: years,
+            to: Date()
+        )
+        let netTarget = netTargetValue
+        let goalName = input.goalName.isEmpty ? "Other" : input.goalName
+
+        if let index = journey.goalDrafts.firstIndex(where: {
+            $0.name.localizedCaseInsensitiveContains(goalName) || $0.category.localizedCaseInsensitiveContains("Other")
+        }) {
+            journey.goalDrafts[index].targetAmount = currentCost
+            journey.goalDrafts[index].targetDate = targetDate
+            journey.goalDrafts[index].customInflationRate = 0.07
+            journey.goalDrafts[index].customTargetCorpus = netTarget
+            if let saved = Double(input.savedAmount) {
+                journey.goalDrafts[index].savedAmount = saved
+            }
+        } else {
+            var draft = FinancialPlanningGoalDraft(
+                name: goalName,
+                category: "Other",
+                targetDate: targetDate,
+                targetAmount: currentCost
+            )
+            draft.customInflationRate = 0.07
+            draft.customTargetCorpus = netTarget
+            if let saved = Double(input.savedAmount) {
+                draft.savedAmount = saved
+            }
+            journey.goalDrafts.append(draft)
+        }
+        appState.updateFinancialPlanningJourney(journey)
+
+        if var profile = appState.currentProfile,
+           let goalIdx = profile.goals.firstIndex(where: {
+               $0.goalName.localizedCaseInsensitiveContains(goalName) || $0.goalName.localizedCaseInsensitiveContains("Other")
+           }) {
+            if netTarget > 0 {
+                profile.goals[goalIdx].targetAmount = netTarget
+            }
+            if let targetDate = targetDate {
+                profile.goals[goalIdx].targetDate = targetDate
+            }
+            appState.currentProfile = profile
+            appState.syncProfile()
+        }
+    }
+
     private func buildTrackerInput() -> InvestmentPlanInputModel {
         var trackerInput = InvestmentPlanInputModel(
             investmentType: "Monthly SIP",
@@ -189,6 +265,10 @@ struct OtherQuestionnaire: View {
             savedAmount: input.savedAmount.isEmpty ? "0" : input.savedAmount,
             hasEmergencyFund: true
         )
+        trackerInput.baseGoalCost = Double(input.targetAmount)
+        trackerInput.inflationRate = 0.07
+        trackerInput.customInflationRate = 0.07
+        trackerInput.customTargetCorpus = netTargetValue
         trackerInput.wealthIntent = input.goalName
         trackerInput.goalPlanType = savingPlan?.rawValue
         trackerInput.goalSIPAmount = expectedSIPAmount

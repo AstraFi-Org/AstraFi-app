@@ -121,7 +121,7 @@ enum InsuranceAnalysisVerification {
     }
 
     private static func criticalIllness() -> CaseResult {
-        var policy = basePolicy(type: .criticalIllness, cover: 1_000_000, annual: 9_000)
+        let policy = basePolicy(type: .criticalIllness, cover: 1_000_000, annual: 9_000)
         let result = InsuranceAnalysisEngine.analyze(policy: policy, profile: profile(), now: now)
         let passed = result.productKind == .criticalIllness
             && result.scenarios.contains { $0.title.contains("diagnosis") }

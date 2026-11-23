@@ -1,5 +1,5 @@
 import SwiftUI
-import PhotosUI
+internal import UniformTypeIdentifiers
 
 struct SpendingInsightsView: View {
     @Environment(\.dismiss) private var dismiss
@@ -16,8 +16,11 @@ struct SpendingInsightsView: View {
     @State private var misc:          Double = 0
 
     @State private var showSuccessAlert = false
-    @State private var photoItem: PhotosPickerItem? = nil
+    @State private var showingFileImporter = false
+    @State private var showUploadOptions = false
+    @State private var isProcessingFile = false
     @State private var uploadedFileName: String? = nil
+    @State private var extractionSuccessMessage: String? = nil
 
     private var draftCashflow: CashflowEntry {
         var cf = appState.currentProfile?.cashflowData ?? CashflowEntry()
@@ -29,6 +32,20 @@ struct SpendingInsightsView: View {
         cf.shopping = shopping
         cf.entertainment = entertainment
         cf.misc = misc
+        
+        var sources: [CashflowEntry.DetailedItem] = []
+        if rent > 0 { sources.append(.init(name: "House Rent / EMI", amount: rent)) }
+        if groceries > 0 { sources.append(.init(name: "Groceries", amount: groceries)) }
+        if utilities > 0 { sources.append(.init(name: "Utilities & Bills", amount: utilities)) }
+        if dining > 0 { sources.append(.init(name: "Dining & Delivery", amount: dining)) }
+        if transport > 0 { sources.append(.init(name: "Transport", amount: transport)) }
+        if shopping > 0 { sources.append(.init(name: "Shopping", amount: shopping)) }
+        if entertainment > 0 { sources.append(.init(name: "Entertainment", amount: entertainment)) }
+        if misc > 0 { sources.append(.init(name: "Other / Misc", amount: misc)) }
+        
+        if !sources.isEmpty {
+            cf.expenseSources = sources
+        }
         return cf
     }
 
@@ -82,28 +99,81 @@ struct SpendingInsightsView: View {
                             Text("We'll auto-extract your monthly cashflow")
                                 .font(.caption).foregroundColor(.secondary)
                         }
+                        Spacer()
+                        if uploadedFileName != nil {
+                            Button("Reset") {
+                                withAnimation {
+                                    uploadedFileName = nil
+                                    extractionSuccessMessage = nil
+                                    rent = 0; groceries = 0; utilities = 0; dining = 0
+                                    transport = 0; shopping = 0; entertainment = 0; misc = 0
+                                }
+                            }
+                            .font(.caption.bold())
+                            .foregroundStyle(.secondary)
+                        }
                     }
 
-                    PhotosPicker(selection: $photoItem, matching: .any(of: [.images, .not(.images)])) {
+                    Button {
+                        showUploadOptions = true
+                    } label: {
                         ZStack {
                             RoundedRectangle(cornerRadius: 12)
                                 .strokeBorder(Color.blue.opacity(0.3), style: StrokeStyle(lineWidth: 1.5, dash: [6, 4]))
                                 .background(Color.blue.opacity(0.04))
                                 .frame(height: 100)
 
-                            VStack(spacing: 8) {
-                                Image(systemName: "doc.badge.plus")
-                                    .font(.title2)
-                                    .foregroundColor(.blue)
-                                Text(uploadedFileName ?? "Tap to upload PDF or CSV")
-                                    .font(.subheadline)
-                                    .foregroundColor(.blue)
+                            if isProcessingFile {
+                                HStack(spacing: 8) {
+                                    ProgressView()
+                                    Text("Extracting expenses...")
+                                        .font(.subheadline)
+                                        .foregroundColor(.blue)
+                                }
+                            } else {
+                                VStack(spacing: 6) {
+                                    Image(systemName: uploadedFileName != nil ? "checkmark.circle.fill" : "doc.badge.plus")
+                                        .font(.title2)
+                                        .foregroundColor(uploadedFileName != nil ? .green : .blue)
+                                    Text(uploadedFileName ?? "Tap to upload PDF or CSV")
+                                        .font(.subheadline.bold())
+                                        .foregroundColor(uploadedFileName != nil ? .primary : .blue)
+                                    if let msg = extractionSuccessMessage {
+                                        Text(msg)
+                                            .font(.caption)
+                                            .foregroundColor(.green)
+                                    } else {
+                                        Text("PDF or CSV statement supported")
+                                            .font(.caption2)
+                                            .foregroundColor(.secondary)
+                                    }
+                                }
+                                .padding(.horizontal, 12)
                             }
                         }
                     }
-                    .onChange(of: photoItem) { _, newItem in
-                        if newItem != nil {
-                            uploadedFileName = "bank_statement_march.pdf"
+                    .buttonStyle(.plain)
+                    .confirmationDialog("Upload Statement", isPresented: $showUploadOptions, titleVisibility: .visible) {
+                        Button("Upload PDF or CSV File") {
+                            showingFileImporter = true
+                        }
+                        Button("Use Sample Statement (Instant Demo)") {
+                            loadSampleStatement()
+                        }
+                        Button("Cancel", role: .cancel) {}
+                    }
+                    .fileImporter(
+                        isPresented: $showingFileImporter,
+                        allowedContentTypes: [.pdf, .commaSeparatedText, .plainText],
+                        allowsMultipleSelection: false
+                    ) { result in
+                        switch result {
+                        case .success(let urls):
+                            if let url = urls.first {
+                                processStatement(url: url)
+                            }
+                        case .failure:
+                            break
                         }
                     }
                 }
@@ -182,6 +252,41 @@ struct SpendingInsightsView: View {
             Button("OK") { dismiss() }
         } message: {
             Text("Your monthly spending insights have been updated successfully.")
+        }
+    }
+
+    private func loadSampleStatement() {
+        isProcessingFile = true
+        DispatchQueue.main.asyncAfter(deadline: .now() + 0.4) {
+            let res = BankStatementCashflowParser.sampleDummyStatement()
+            applyExtractedResult(res, fileName: "Sample_Bank_Statement.pdf")
+            isProcessingFile = false
+        }
+    }
+
+    private func processStatement(url: URL) {
+        isProcessingFile = true
+        DispatchQueue.global(qos: .userInitiated).async {
+            let res = BankStatementCashflowParser.parse(url: url)
+            DispatchQueue.main.async {
+                applyExtractedResult(res, fileName: url.lastPathComponent)
+                isProcessingFile = false
+            }
+        }
+    }
+
+    private func applyExtractedResult(_ res: ExtractedCashflowResult, fileName: String) {
+        withAnimation {
+            uploadedFileName = fileName
+            rent = res.rent
+            groceries = res.groceries
+            utilities = res.utilities
+            dining = res.dining
+            transport = res.transport
+            shopping = res.shopping
+            entertainment = res.entertainment
+            misc = res.misc
+            extractionSuccessMessage = "Extracted \(res.transactionCount) transactions (\(res.detectedBank))"
         }
     }
 

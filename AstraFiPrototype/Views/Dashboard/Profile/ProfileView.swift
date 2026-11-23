@@ -7,6 +7,7 @@ struct ProfileView: View {
     @AppStorage("profileImageData") private var profileImageData: Data?
     @State private var selectedPhotoItem: PhotosPickerItem?
     @State private var showingSignOutAlert = false
+    @State private var showingSignIn = false
 
     private var profile: AstraUserProfile? { appState.currentProfile }
     private var basic: AstraBasicDetails? { profile?.basicDetails }
@@ -34,6 +35,41 @@ struct ProfileView: View {
     }
 
     var body: some View {
+        Group {
+            if appState.isAuthenticated {
+                authenticatedProfileBody
+            } else {
+                signInPrompt
+            }
+        }
+        .fullScreenCover(isPresented: $showingSignIn) {
+            NavigationStack {
+                AuthenticationFlowView()
+            }
+        }
+        .onChange(of: appState.isAuthenticated) { _, isAuthenticated in
+            if isAuthenticated {
+                showingSignIn = false
+            }
+        }
+    }
+
+    private var signInPrompt: some View {
+        ContentUnavailableView {
+            Label("Sign in to your profile", systemImage: "person.crop.circle")
+        } description: {
+            Text("Sign in to view your financial profile, account details, and security settings.")
+        } actions: {
+            Button("Sign In") {
+                showingSignIn = true
+            }
+            .buttonStyle(.borderedProminent)
+        }
+        .navigationTitle("Profile")
+        .navigationBarTitleDisplayMode(.inline)
+    }
+
+    private var authenticatedProfileBody: some View {
         Form {
             Section {
                 ProfileHeader(
@@ -113,11 +149,11 @@ struct ProfileView: View {
             }
 
             Section("General") {
-                NavigationLink(destination: ProfilePlaceholderView(title: "Help & Support", icon: "questionmark.circle", message: "Add support email, FAQs, and escalation details before App Store submission.")) {
+                NavigationLink(destination: ProfileInformationView(section: .support)) {
                     Label("Help & Support", systemImage: "questionmark.circle")
                 }
 
-                NavigationLink(destination: ProfilePlaceholderView(title: "Terms & Privacy Policy", icon: "doc.plaintext", message: "Add Terms, Privacy Policy, data disclosure, and educational-only disclaimer here.")) {
+                NavigationLink(destination: ProfileInformationView(section: .termsAndPrivacy)) {
                     Label("Terms & Privacy Policy", systemImage: "doc.plaintext")
                 }
             }
@@ -145,11 +181,15 @@ struct ProfileView: View {
         .navigationTitle("Profile")
         .scrollContentBackground(.hidden)
         .background(Color(uiColor: .systemGroupedBackground))
+        .onAppear {
+            appState.syncProfilePhotoToSupabaseIfNeeded()
+        }
         .onChange(of: selectedPhotoItem) { _, newItem in
             Task {
                 guard let data = try? await newItem?.loadTransferable(type: Data.self),
                       UIImage(data: data) != nil else { return }
                 profileImageData = data
+                appState.uploadProfilePhoto(data)
             }
         }
     }
@@ -290,15 +330,58 @@ private struct ProfileMetric: View {
     }
 }
 
-private struct ProfilePlaceholderView: View {
-    let title: String
-    let icon: String
-    let message: String
+private struct ProfileInformationView: View {
+    enum Page: Equatable {
+        case support
+        case termsAndPrivacy
+    }
+
+    let section: Page
+
+    private var title: String {
+        section == .support ? "Help & Support" : "Terms & Privacy Policy"
+    }
 
     var body: some View {
-        ContentUnavailableView(title, systemImage: icon, description: Text(message))
-            .navigationTitle(title)
-            .navigationBarTitleDisplayMode(.inline)
+        Form {
+            if section == .support {
+                Section {
+                    Label("AstraFi Help & Support", systemImage: "questionmark.circle")
+                        .font(.headline)
+                    Text("Find answers to common questions about your profile, financial records, and reports.")
+                        .foregroundStyle(.secondary)
+                }
+                Section("Using AstraFi") {
+                    LabeledContent("Update your details", value: "Profile")
+                    Text("Use the Profile and Tracker sections to review or update saved financial information.")
+                        .foregroundStyle(.secondary)
+                    LabeledContent("Review your reports", value: "Health Reports")
+                    Text("Assessment history can be opened from Health Reports. Use the delete control beside a report to remove that saved entry.")
+                        .foregroundStyle(.secondary)
+                }
+                Section {
+                    Text("For account access or data questions, use the Security and Privacy Controls sections in your profile.")
+                        .foregroundStyle(.secondary)
+                } header: {
+                    Text("Need more help?")
+                }
+            } else {
+                Section("Terms of Use") {
+                    Text("AstraFi provides tools to organize financial information and explore educational projections. Projections use assumptions and are not guarantees of future results.")
+                        .foregroundStyle(.secondary)
+                    Text("AstraFi does not provide individualized investment, tax, or legal advice. Consider your circumstances and consult a qualified professional before making financial decisions.")
+                        .foregroundStyle(.secondary)
+                }
+                Section("Privacy") {
+                    Text("Financial details, profile information, and assessment history are used to show the features and calculations in the app.")
+                        .foregroundStyle(.secondary)
+                    Text("Review Privacy Controls and Security in your profile to manage available privacy and account settings.")
+                        .foregroundStyle(.secondary)
+                }
+            }
+        }
+        .navigationTitle(title)
+        .navigationBarTitleDisplayMode(.inline)
     }
 }
 

@@ -59,16 +59,12 @@ struct AddNetWorthView: View {
             .toolbar {
                 ToolbarItem(placement: .navigationBarLeading) {
                     Button { dismiss() } label: {
-                        Image(systemName: "xmark")
-                            .font(.system(size: 16, weight: .bold))
-                            .foregroundColor(.red)
+                        Text("Cancel")
                     }
                 }
                 ToolbarItem(placement: .navigationBarTrailing) {
                     Button { saveAndDismiss() } label: {
-                        Image(systemName: "checkmark")
-                            .font(.system(size: 16, weight: .bold))
-                            .foregroundColor(.blue)
+                        Text("Done")
                     }
                 }
             }

@@ -540,16 +540,28 @@ struct InvestmentGrowthSectionView: View {
     }
 
     private func unavailableChartState(message: String) -> some View {
-        VStack(spacing: 8) {
+        HStack(spacing: 12) {
             Image(systemName: "chart.xyaxis.line")
-                .font(.system(size: 28))
-                .foregroundStyle(.secondary.opacity(0.5))
-            Text(message)
-                .font(.system(size: 13, weight: .medium, design: .rounded))
-                .foregroundStyle(.secondary)
+                .font(.system(size: 22, weight: .medium))
+                .foregroundStyle(AppTheme.auraIndigo.opacity(0.7))
+                .frame(width: 42, height: 42)
+                .background(AppTheme.auraIndigo.opacity(0.08), in: RoundedRectangle(cornerRadius: 12))
+
+            VStack(alignment: .leading, spacing: 4) {
+                Text(message)
+                    .font(.system(size: 13, weight: .semibold, design: .rounded))
+                    .foregroundStyle(.primary)
+                Text("No price history was returned for this selection and period. Current value and total return above use your saved investment details.")
+                    .font(.system(size: 11, design: .rounded))
+                    .foregroundStyle(.secondary)
+                    .fixedSize(horizontal: false, vertical: true)
+            }
+
+            Spacer(minLength: 0)
         }
-        .frame(maxWidth: .infinity)
-        .frame(height: 140)
+        .frame(maxWidth: .infinity, minHeight: 84, alignment: .leading)
+        .padding(12)
+        .background(Color(uiColor: .secondarySystemGroupedBackground), in: RoundedRectangle(cornerRadius: 14))
     }
 
     // MARK: - Helpers
