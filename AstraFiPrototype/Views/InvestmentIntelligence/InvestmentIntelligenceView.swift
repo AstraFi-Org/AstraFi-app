@@ -15,6 +15,7 @@ struct InvestmentIntelligenceView: View {
                     assetSection(title: "Stocks", subtitle: "Popular companies with live prices when available", assets: homeViewModel.stocks)
                     assetSection(title: "Mutual Funds", subtitle: "Popular categories from AMFI data", assets: homeViewModel.mutualFunds)
                     assetSection(title: "Gold ETFs", subtitle: "Indian listed Gold ETFs", assets: homeViewModel.goldETFs)
+                    InvestmentFAQAccordionSection(faqs: FAQService().faqs())
                     educationFooter
                 }
                 .padding(.horizontal, AppTheme.auraPadding)
@@ -259,10 +260,6 @@ struct InvestmentIntelligenceDetailView: View {
                 insights: snapshot?.insights ?? [],
                 recommendations: snapshot?.recommendations ?? []
             )
-
-
-
-            FAQTab(faqs: snapshot?.faqs ?? FAQService().faqs())
         }
     }
 }
@@ -917,38 +914,74 @@ private struct IntelligenceSection: View {
     }
 }
 
-private struct FAQTab: View {
+private struct InvestmentFAQAccordionSection: View {
     let faqs: [InvestmentFAQ]
     @State private var expandedIDs: Set<UUID> = []
 
     var body: some View {
-        DetailCard(title: "FAQ", systemImage: "questionmark.circle.fill") {
+        VStack(alignment: .leading, spacing: 14) {
+            HStack(spacing: 8) {
+                Image(systemName: "questionmark.circle.fill")
+                    .font(.system(size: 20, weight: .bold))
+                    .foregroundStyle(AppTheme.auraIndigo)
+                VStack(alignment: .leading, spacing: 2) {
+                    Text("FAQ")
+                        .font(.system(size: 21, weight: .bold))
+                    Text("Essential answers to navigate investing, taxes, and risks")
+                        .font(.system(size: 12))
+                        .foregroundStyle(.secondary)
+                }
+            }
+            .padding(.horizontal, 2)
+
             VStack(spacing: 10) {
                 ForEach(faqs) { faq in
-                    DisclosureGroup(
-                        isExpanded: Binding(
-                            get: { expandedIDs.contains(faq.id) },
-                            set: { isExpanded in
+                    let isExpanded = expandedIDs.contains(faq.id)
+                    VStack(alignment: .leading, spacing: 0) {
+                        Button {
+                            withAnimation(.spring(response: 0.35, dampingFraction: 0.8)) {
                                 if isExpanded {
-                                    expandedIDs.insert(faq.id)
-                                } else {
                                     expandedIDs.remove(faq.id)
+                                } else {
+                                    expandedIDs.insert(faq.id)
                                 }
                             }
-                        )
-                    ) {
-                        Text(faq.answer)
-                            .font(.system(size: 13))
-                            .foregroundStyle(.secondary)
-                            .padding(.top, 6)
-                            .fixedSize(horizontal: false, vertical: true)
-                    } label: {
-                        Text(faq.question)
-                            .font(.system(size: 14, weight: .bold))
+                        } label: {
+                            HStack(alignment: .center, spacing: 12) {
+                                Text(faq.question)
+                                    .font(.system(size: 15, weight: .semibold))
+                                    .foregroundStyle(AppTheme.auraIndigo)
+                                    .multilineTextAlignment(.leading)
+                                    .frame(maxWidth: .infinity, alignment: .leading)
+
+                                Image(systemName: "chevron.down")
+                                    .font(.system(size: 13, weight: .bold))
+                                    .foregroundStyle(AppTheme.auraIndigo)
+                                    .rotationEffect(.degrees(isExpanded ? 180 : 0))
+                            }
+                            .padding(16)
+                        }
+                        .buttonStyle(.plain)
+
+                        if isExpanded {
+                            VStack(alignment: .leading, spacing: 8) {
+                                Divider()
+                                    .padding(.horizontal, 16)
+                                Text(faq.answer)
+                                    .font(.system(size: 13.5))
+                                    .foregroundStyle(.secondary)
+                                    .lineSpacing(4)
+                                    .padding(.horizontal, 16)
+                                    .padding(.top, 10)
+                                    .padding(.bottom, 16)
+                                    .fixedSize(horizontal: false, vertical: true)
+                            }
+                            .transition(.opacity.combined(with: .move(edge: .top)))
+                        }
                     }
-                    .padding(13)
-                    .background(AppTheme.elevatedCardBackground)
-                    .clipShape(RoundedRectangle(cornerRadius: 14, style: .continuous))
+                    .background(AppTheme.cardBackground)
+                    .clipShape(RoundedRectangle(cornerRadius: 16, style: .continuous))
+                    .shadow(color: AppTheme.adaptiveShadow, radius: 8, x: 0, y: 3)
                 }
             }
         }
