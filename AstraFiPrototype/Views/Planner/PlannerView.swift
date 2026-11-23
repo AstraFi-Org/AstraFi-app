@@ -130,7 +130,6 @@ struct PlannerView: View {
                 actionButtonsSection
 
                 valueForecastSection
-                emergencyProjectionSection
 
                 //investment Forecast
                 //InvestmentForecast(appState: appState)
@@ -443,21 +442,6 @@ struct PlannerView: View {
         .shadow(color: AppTheme.adaptiveShadow, radius: 16, x: 0, y: 6)
     }
 
-    private var emergencyProjectionSection: some View {
-        VStack(alignment: .leading, spacing: 10) {
-            HStack(spacing: 8) {
-                Image(systemName: "chart.line.uptrend.xyaxis")
-                    .font(.system(size: 15, weight: .semibold))
-                    .foregroundStyle(AppTheme.auraIndigo)
-                Text("Emergency Fund Projection")
-                    .font(.system(size: 20, weight: .bold))
-            }
-            EmergencyFundSectionView(
-                state: emergencyFundState,
-                parts: [.projection]
-            )
-        }
-    }
     // MARK: - Action Buttons
     private var actionButtonsSection: some View {
         VStack(spacing: 10) {
@@ -471,7 +455,7 @@ struct PlannerView: View {
             ActionButton(
                 title: "Financial Simulators",
                 subtitle: "Fixed-Income Ladder, REITs & Retirement SWP",
-                icon: "slider.horizontal.2.square.badge.arrow.right",
+                icon: "slider.horizontal.3",
                 gradientColors: [Color(hex: "#BF5AF2"), Color(hex: "#5E5CE6")],
                 action: { showFinancialSimulators = true }
             )

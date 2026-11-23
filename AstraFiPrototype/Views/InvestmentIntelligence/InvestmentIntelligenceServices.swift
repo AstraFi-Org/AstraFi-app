@@ -701,16 +701,42 @@ final class InsightEngine {
 final class FAQService {
     func faqs() -> [InvestmentFAQ] {
         [
-            InvestmentFAQ(question: "When should I start investing?", answer: "Start after you understand your goal, time horizon, emergency fund, and risk capacity."),
-            InvestmentFAQ(question: "What happens if my investment falls?", answer: "Market-linked assets can fall. A fall is a prompt to review fundamentals, allocation, and time horizon."),
-            InvestmentFAQ(question: "Is SIP better than lump sum?", answer: "SIP spreads entry points over time. Lump sum depends more on valuation, timing, and your risk comfort."),
-            InvestmentFAQ(question: "Can I lose money?", answer: "Yes. Stocks, funds, and ETFs carry market risk and can lose value."),
-            InvestmentFAQ(question: "How long should I stay invested?", answer: "Equity-oriented assets generally need a multi-year horizon because earnings cycles take time."),
-            InvestmentFAQ(question: "Should I diversify?", answer: "Diversification reduces dependence on one company, sector, fund manager, or asset class."),
-            InvestmentFAQ(question: "Why do markets fall?", answer: "Markets fall due to earnings disappointments, rates, liquidity, policy changes, global events, and sentiment."),
-            InvestmentFAQ(question: "What is risk?", answer: "Risk is the possibility that outcomes differ from expectations, including loss of capital or lower returns."),
-            InvestmentFAQ(question: "What is CAGR?", answer: "CAGR is the smoothed annual growth rate over a period. It does not show year-to-year volatility."),
-            InvestmentFAQ(question: "What is NAV?", answer: "NAV is a fund's per-unit value after accounting for its portfolio assets and liabilities.")
+            InvestmentFAQ(
+                question: "SIP vs. Lump Sum — Which is better for me?",
+                answer: "A Systematic Investment Plan (SIP) is best for regular salary earners. It eliminates market timing anxiety and averages out purchase costs via Rupee Cost Averaging. Lump sum investing works well when you have idle surplus cash and valuations are reasonable, or right after major market corrections. If uncertain, park a lump sum in an Arbitrage/Liquid fund and set up a 6–12 month Systematic Transfer Plan (STP) into equity."
+            ),
+            InvestmentFAQ(
+                question: "What should I do when my investments fall or the market crashes?",
+                answer: "1. Stay calm and avoid panic selling: Corrections of 10%–20% happen periodically and are normal in compounding journeys.\n2. Keep your SIPs active: Market drops allow you to buy more units at lower NAVs, which accelerates returns when markets recover.\n3. Verify your safety net: As long as your emergency fund and insurance covers are in place, a market fall is a buying or rebalancing opportunity, not a loss until you exit."
+            ),
+            InvestmentFAQ(
+                question: "Direct Plans vs. Regular Plans — What's the impact?",
+                answer: "Direct mutual fund plans have zero distributor commissions, resulting in a 0.5%–1.2% lower Total Expense Ratio (TER) compared to Regular plans. Over a 15–20 year horizon, this seemingly small 1% annual savings can increase your final portfolio value by 15%–25% purely due to compounding without fees."
+            ),
+            InvestmentFAQ(
+                question: "How are Mutual Funds and Stocks taxed in India?",
+                answer: "• Equity Mutual Funds & Listed Stocks: Long-Term Capital Gains (LTCG, held >1 year) above ₹1.25 Lakh per financial year are taxed at 12.5%. Short-Term Capital Gains (STCG, held ≤1 year) are taxed at 20%.\n• Debt Mutual Funds: Capital gains are taxed at your personal income tax slab rate.\n• Gold ETFs: Capital gains are taxed based on your personal slab rate or long-term capital gains rules."
+            ),
+            InvestmentFAQ(
+                question: "How much of my monthly income should I invest?",
+                answer: "A proven baseline is the 50/30/20 budget framework: allocate 50% of take-home pay to Needs, 30% to Wants, and at least 20% to Investments. As your salary increases, aim to boost your investment rate toward 30%–40% and step up your SIP by 10% annually with each appraisal to beat inflation and achieve your financial goals years earlier."
+            ),
+            InvestmentFAQ(
+                question: "Why should I hold Gold ETFs along with Stocks & Mutual Funds?",
+                answer: "Gold has a low or negative correlation with equities. During market crashes, currency depreciation, or geopolitical crises, gold typically retains or gains value, smoothing your overall portfolio volatility. Allocating 5%–10% of your portfolio to Gold ETFs gives you pure 99.5% gold exposure without storage fees, making charges, or theft risks."
+            ),
+            InvestmentFAQ(
+                question: "What must I have in place before investing in equities?",
+                answer: "Before committing significant capital to market-linked assets, ensure two non-negotiable foundations:\n1. Emergency Reserve: 3–6 months of mandatory living expenses stored in high-liquidity FDs or sweep accounts.\n2. Protection: Standalone health insurance (covering hospitalization) and pure term life insurance (10–15x your annual income) so health or family emergencies never force you to sell equities at a loss."
+            ),
+            InvestmentFAQ(
+                question: "How long should I stay invested in Equity funds?",
+                answer: "Equities require a minimum horizon of 5–7 years to reliably absorb market cycles, corporate earnings phases, and macroeconomic shifts. Over rolling 7+ year periods, diversified Indian equity mutual funds have historically delivered inflation-beating double-digit returns with minimal probability of capital loss."
+            ),
+            InvestmentFAQ(
+                question: "When and how often should I rebalance my portfolio?",
+                answer: "Review your portfolio once or twice a year rather than tracking daily price fluctuations. Rebalance only when an asset class drifts by 5%–10% from your target allocation (e.g., strong equity gains push your stock allocation from 60% to 75%). Rebalance by directing new SIPs into lagging assets or booking profits to minimize tax hits."
+            )
         ]
     }
 }

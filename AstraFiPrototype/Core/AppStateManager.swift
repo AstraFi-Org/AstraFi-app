@@ -569,6 +569,14 @@ final class AppStateManager {
                     }
                 }
                 if profile != nil { recalculateFinancials() }
+                
+                // Sync profile photo with Supabase
+                if let localData = UserDefaults.standard.data(forKey: "profileImageData") {
+                    _ = try? await SupabaseRepository.shared.uploadAvatar(data: localData, userId: session.user.id)
+                } else if let remoteData = await SupabaseRepository.shared.fetchAvatar(userId: session.user.id) {
+                    UserDefaults.standard.set(remoteData, forKey: "profileImageData")
+                }
+                
                 print("⏱️ [STARTUP] background profile load done in \(String(format: "%.2f", Date().timeIntervalSince(startTime)))s")
             }
 
@@ -584,6 +592,24 @@ final class AppStateManager {
     
     func unlockApp() {
         isLockedByBiometric = false
+    }
+
+    func uploadProfilePhoto(_ data: Data) {
+        UserDefaults.standard.set(data, forKey: "profileImageData")
+        Task {
+            if let session = try? await supabase.auth.session {
+                _ = try? await SupabaseRepository.shared.uploadAvatar(data: data, userId: session.user.id)
+            }
+        }
+    }
+
+    func syncProfilePhotoToSupabaseIfNeeded() {
+        guard let localData = UserDefaults.standard.data(forKey: "profileImageData") else { return }
+        Task {
+            if let session = try? await supabase.auth.session {
+                _ = try? await SupabaseRepository.shared.uploadAvatar(data: localData, userId: session.user.id)
+            }
+        }
     }
 
     func signUp(name: String, email: String, password: String) async -> Bool {

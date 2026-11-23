@@ -34,7 +34,7 @@ struct FixedIncomeLadderInputView: View {
     }
 
     var body: some View {
-        ScrollView {
+        ScrollView(.vertical, showsIndicators: false) {
             VStack(spacing: 20) {
                 // Header card
                 headerCard
@@ -53,7 +53,10 @@ struct FixedIncomeLadderInputView: View {
             }
             .padding(.horizontal, 16)
             .padding(.vertical, 16)
+            .frame(maxWidth: .infinity)
         }
+        .frame(maxWidth: .infinity)
+        .scrollBounceBehavior(.basedOnSize)
         .background(AppTheme.appBackground(for: colorScheme))
         .navigationTitle("Fixed-Income Ladder")
         .navigationBarTitleDisplayMode(.inline)
@@ -278,38 +281,39 @@ private struct TrancheRowView: View {
 
     var body: some View {
         Button(action: onEdit) {
-            HStack(spacing: 12) {
+            HStack(spacing: 10) {
                 ZStack {
                     RoundedRectangle(cornerRadius: 10)
                         .fill(AppTheme.auraIndigo.opacity(0.1))
-                        .frame(width: 44, height: 44)
+                        .frame(width: 42, height: 42)
                     Text("\(entry.tenureYears)Y")
-                        .font(.system(size: 14, weight: .bold, design: .rounded))
+                        .font(.system(size: 13, weight: .bold, design: .rounded))
                         .foregroundStyle(AppTheme.auraIndigo)
                 }
 
-                VStack(alignment: .leading, spacing: 3) {
+                VStack(alignment: .leading, spacing: 2) {
                     Text(entry.instrumentName)
-                        .font(.system(size: 15, weight: .bold))
+                        .font(.system(size: 14, weight: .bold))
                         .foregroundStyle(.primary)
-                    Text("\(entry.instrumentType.shortName) • \(String(format: "%.2f", entry.annualInterestRatePct))% p.a. • \(entry.payoutFrequency.rawValue)")
+                        .lineLimit(1)
+                    Text("\(entry.instrumentType.shortName) • \(String(format: "%.1f", entry.annualInterestRatePct))%")
                         .font(.system(size: 12))
                         .foregroundStyle(.secondary)
                         .lineLimit(1)
                 }
+                .frame(maxWidth: .infinity, alignment: .leading)
 
-                Spacer()
-
-                VStack(alignment: .trailing, spacing: 3) {
+                VStack(alignment: .trailing, spacing: 2) {
                     Text(entry.allocatedAmount.toCurrency(compact: true))
-                        .font(.system(size: 15, weight: .bold, design: .rounded))
+                        .font(.system(size: 14, weight: .bold, design: .rounded))
                         .foregroundStyle(.primary)
 
                     Text(maturityActionSummary)
-                        .font(.system(size: 11, weight: .medium))
+                        .font(.system(size: 10, weight: .medium))
                         .foregroundStyle(entry.reinvestmentAction == .reinvestLadder ? AppTheme.auraGreen : .orange)
-                        .lineLimit(2)
+                        .lineLimit(1)
                 }
+                .fixedSize(horizontal: true, vertical: false)
 
                 Menu {
                     Button(action: onEdit) {

@@ -51,7 +51,7 @@ struct RetirementSWPInputView: View {
     }
 
     var body: some View {
-        ScrollView {
+        ScrollView(.vertical, showsIndicators: false) {
             VStack(spacing: 20) {
                 // Header card
                 headerCard
@@ -73,7 +73,10 @@ struct RetirementSWPInputView: View {
             }
             .padding(.horizontal, 16)
             .padding(.vertical, 16)
+            .frame(maxWidth: .infinity)
         }
+        .frame(maxWidth: .infinity)
+        .scrollBounceBehavior(.basedOnSize)
         .background(AppTheme.appBackground(for: colorScheme))
         .navigationTitle("Retirement SWP Simulator")
         .navigationBarTitleDisplayMode(.inline)
